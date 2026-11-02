@@ -8,3 +8,12 @@
 .al-ms-libraries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .al-ms-libraries li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--al-text-2); }
 .al-ms-libraries__name { overflow-wrap: anywhere; min-width: 0; }
+.al-ms-sync-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+.al-ms-sync { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--al-line-1); min-width: 0; }
+.al-ms-sync__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.al-ms-sync__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.al-ms-sync__error { color: var(--al-danger, var(--al-text-2)); overflow-wrap: anywhere; margin: 0; }
+.al-ms-sync-settings { display: flex; flex-direction: column; gap: 4px; max-width: 560px; }
+.al-ms-plugin-servers { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.al-ms-plugin-servers li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.al-wh-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }

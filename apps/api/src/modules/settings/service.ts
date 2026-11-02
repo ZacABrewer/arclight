@@ -44,6 +44,7 @@ import {
   TorrentSpeedSettings,
   TranscodeSettings,
   VpnSettings,
+  WatchHistorySettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
   type MusicMetadataSettingsResponse,
@@ -100,6 +101,9 @@ const sections = {
   // Owned by the media-servers module: the list of Jellyfin/Emby/Plex connections with per-feature
   // flags (availability, retention, refresh); routes under /mediaserver, apiKey masked there.
   mediaServers: MediaServersSettings,
+  // Owned by the watch-history module: catch-up sync interval, full-read interval and how long
+  // the play timeline is kept (routes under /settings/watchhistory).
+  watchHistory: WatchHistorySettings,
   // Owned by the solver module (built-in Cloudflare challenge solver; routes under /settings/solver).
   solver: SolverSettings,
   // Owned by the guides module (TRaSH-style format/score sync; routes under /settings/guides).

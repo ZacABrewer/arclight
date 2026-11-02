@@ -23,6 +23,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - Activity strip: downloading now (progress), recently imported, upcoming (next 24h)
 - VPN card: connected/IP/country/forwarded port 🔧 (in progress)
 - Library stats: series/movies/episodes/files/size, disk free per root folder
+- **Now playing** ✅ (admins): sessions the Jellyfin plugin reports as playing (title, user, device, client, position, transcoding)
 - Scheduled jobs table with "Run now"; recent runs table
 - Requests awaiting approval (admin) ⬜
 - Indexer/download-client status chips ⬜
@@ -47,6 +48,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - Header: fanart backdrop, poster, title/year, status, network, runtime, genres, ratings, certification, profile, path, size on disk, next/previous airing, monitored toggle
 - Action bar: refresh & scan, search monitored, preview rename, edit, delete, manual import
 - Tabs: **Seasons & episodes**, **Files**, **History**, **Search (interactive)**, **Subtitles** ⬜, **Requests** ⬜
+- Tab **Watched by** ✅ (admins): per user played state, last played, progress, favourite and episodes played (Jellyfin/Emby watch history)
 - Season accordion: season poster, monitored toggle, progress, season search, season pack search, episode table (number, title, air date, quality, status chip, file, actions: search auto/interactive, toggle monitored, details)
 - **Episode details drawer**: summary, file + media info, history, search results ⬜
 - **Edit series dialog** ✅; **Delete dialog** (delete files / add exclusion) ✅
@@ -55,6 +57,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 ### 3.4 Movie details ✅ 🔧
 - Header as above plus release dates (cinema/digital/physical), collection link, availability
 - Tabs: **Overview**, **Files**, **History**, **Search**, **Subtitles** ⬜, **Requests** ⬜
+- Tab **Watched by** ✅ (admins): per user played state, play count, last played, progress and favourite
 - Edit / delete dialogs ✅; collection view ⬜
 
 ### 3.5 Collections ⬜ (movies grouped by TMDB collection, monitor whole collection)
@@ -86,6 +89,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - **Queue** ✅: live table (title, item, quality, protocol, client, progress bar, ETA, size, status + status messages popover, tracked state), filters, remove dialog (remove from client / blocklist / skip redownload), bulk remove, manual import button for stuck items, "import blocked" reasons; kill-switch / VPN-down banner; per-row speed, peers (seeds) and a state-reason chip (why it is not moving); expandable row with live stats, pieces bar, engine peer list and the download timeline
 - **History** ✅: paged table, event type filter, date range, per-item details drawer (release data, indexer, client, scores), "mark as failed", "redownload"
 - **Blocklist** ✅: table, remove, clear all, add manually
+- **Watch history** ✅ (`/activity/watchhistory`): timeline of plays from Jellyfin/Emby, filter by user, paged; non-admins see their own. Also a **Watch history** pane on the Profile page
 - **Pending releases** (delayed by delay profiles): list with countdown, grab now, remove ⬜ (API exists)
 - **Manual import** wizard: path picker → file list with auto-mapping → map series/season/episodes or movie, quality, language, release group → import mode (move/copy) → results ⬜ (API exists)
 
@@ -114,6 +118,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - **Custom formats** ✅: list, editor with spec builder, test box, import/export JSON
 - **Indexers** ✅ (see §9) and **Indexer settings**: minimum age, retention, max size, RSS interval, flags ⬜
 - **Download clients** ✅: list, editor, test, remote path mappings, completed download handling, failed download handling, **built-in client** settings (listen port, limits, ratio/time, interface binding, queueing, encryption, DHT/PEX) ⬜
+- **Media servers** ✅: list with availability / retention / refresh / sign-in switches and **Sync watch history** (Jellyfin/Emby); per-server **Watch history** panel (status, last sync and full read, items tracked, linked accounts, Sync now, Full resync, Sync users, Accounts dialog); **Watch history** settings (sync interval, full read interval, days to keep plays); **Jellyfin plugin** card (repository URL, plugin keys, per-server connection)
 - **Import lists** (Trakt/TMDB lists/Plex watchlist/IMDb): list, editor, exclusions ⬜
 - **Notifications** ✅: connections list, editor with event flags + schema form, test
 - **Metadata** (TMDB key, language, region, image prefs) ✅ (under General)

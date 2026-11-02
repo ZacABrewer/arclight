@@ -93,13 +93,23 @@ private-tracker use, not to match every feature.
 |---|---|---|
 | Approved requests add the title directly to the Arclight library; there are no separate Radarr/Sonarr "server" targets as in Seerr. 4K is a second profile on the same item, not a second server. | Differs from `docs/spec/requests.md` section 9. | 09 |
 | The Approve button has no override options; set profile, root folder and tags by editing the pending request first. The API accepts overrides on approve (`POST /api/v1/request/:id/approve` with root folder, profile, tags, monitor option, minimum availability, seasons). | | 09 |
-| Out of scope in this build: a Plex library scanner for availability, voting, and the "Recently added" discover slider. By default availability comes from the Arclight library only; the optional "use media server availability" setting also asks Jellyfin or Emby connections (not Plex). | A title that exists on Plex but not in Arclight shows as not available. | 09 |
-| Sign-in through Jellyfin/Emby/Plex accounts is not built; users are local accounts created in Settings -> Security. | | 01, 09 |
+| Out of scope in this build: voting and the "Recently added" discover slider. By default availability comes from the Arclight library only; the optional "use media server availability" setting also asks your Jellyfin, Emby and Plex connections (Plex has no id search, so Arclight indexes its libraries). | A title that exists on the media server but not in Arclight shows as not available unless that setting is on. | 09 |
 | Seerr-style partial-request enforcement on the server for `partialRequestsEnabled` = false is unverified. | | 09 |
 | A failed subtitle or language request sends no notification; created, approved, declined and completed do. | The requester sees "Failed" in My requests only. | 09 |
 | Language requests have no entry in universal search. | Find them on the Requests page under "Subtitles & languages". | 09 |
 | The Wanted page shows no unreleased warning for season or series interactive searches. | The warning banner appears only when searching a single item. | 07 |
 | Movies on Wanted show the date that counts for their minimum availability rather than a single release-date column. | The cinema, digital and physical dates can differ from the one used for "Upcoming". | 07 |
+
+## Media server watch history and the Jellyfin plugin
+
+| Limitation | Effect | Where you notice it |
+|---|---|---|
+| Retention does not evaluate seasons: a series counts as watched when every present episode is played, and actions apply to the whole series. | A rule cannot remove only the watched seasons of a series. | 18 |
+| Music and audiobook favourites are not mirrored to the watchlist, because the watchlist holds movies and series only. | Favouriting an album in Jellyfin adds nothing to the Arclight watchlist. | 18 |
+| The incremental watch-history read sorts by last played date, so it cannot see an item marked unplayed or a favourite that changed. Both wait for the next full read (default every 24 hours) unless the Jellyfin plugin is installed, which reports them at once. | History or favourites look stale for up to a day. Use "Full resync" to force it. | 18 |
+| Plex watch history is not synced; retention still reads it live from Plex. Audiobookshelf is not synced either. | Plex plays do not appear in Activity > Watch history, "Watched by" or Now playing. | 18 |
+| Now playing and the play timeline's start, progress and stop events come from the Jellyfin plugin only. Without it the timeline holds the played and unplayed events the sync works out. | Now playing stays empty without the plugin. | 18 |
+| The Arclight Jellyfin plugin is a separate project; these checks need it installed in Jellyfin. | Plugin rows are skipped without it (use the `curl` rows to exercise the API). | 18 |
 
 ## User interface gaps
 

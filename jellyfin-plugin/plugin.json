@@ -1,0 +1,15 @@
+{
+  "guid": "a0751e21-86da-4afd-8e35-7da8b087febc",
+  "name": "Arclight",
+  "owner": "ZacABrewer",
+  "category": "General",
+  "overview": "Arclight for Jellyfin: watch-state sync, requests, status badges and watchlist from your Arclight server.",
+  "description": "Connects Jellyfin to a self-hosted Arclight media manager. Forwards playback, watched, library and user events to Arclight from every Jellyfin client, and adds Arclight search results, request buttons, download/request status badges, a watchlist button, problem reports and subtitle/audio language requests to Jellyfin Web. The Arclight API key stays on the Jellyfin server.",
+  "imageUrl": "https://arclight.moviemethat.com/jellyfin/icon.png",
+  "repository": "https://github.com/ZacABrewer/arclight",
+  "assembly": "Jellyfin.Plugin.Arclight.dll",
+  "targets": [
+    { "jellyfin": "12", "abiTag": "12", "targetAbi": "12.0.0.0", "framework": "net10.0" },
+    { "jellyfin": "10.11", "abiTag": "11", "targetAbi": "10.11.0.0", "framework": "net9.0" }
+  ]
+}

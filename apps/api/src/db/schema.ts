@@ -54,6 +54,7 @@ export * from '../modules/subtitles/schema.js';
 export * from '../modules/requests/schema.js';
 export * from '../modules/guides/schema.js';
 export * from '../modules/retention/schema.js';
+export * from '../modules/watch-history/schema.js';
 export * from '../modules/media-analysis/schema.js';
 export * from '../modules/library-hygiene/schema.js';
 export * from '../modules/health-scan/schema.js';

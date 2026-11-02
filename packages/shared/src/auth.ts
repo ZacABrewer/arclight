@@ -153,8 +153,11 @@ export const LoginRequest = z.object({
 });
 export type LoginRequest = z.input<typeof LoginRequest>;
 
-/** How the current request was authenticated. */
-export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass']);
+/**
+ * How the current request was authenticated. `plugin`: a Jellyfin plugin key, which may only
+ * call /api/v1/jellyfin/* (never admin, never another route).
+ */
+export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass', 'plugin']);
 export type AuthVia = z.infer<typeof AuthVia>;
 
 /** Response of POST /auth/login and GET /auth/me. `user` is null for API-key and bypass callers. */

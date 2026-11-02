@@ -18,6 +18,7 @@ import type {
   TitleExtras,
   TmdbListName,
   WatchProviderRef,
+  TitleWatchProviders,
   WatchRegion,
 } from '../types.js';
 import { mapMovieExtras, mapPerson, mapTvExtras } from './extras.js';
@@ -42,6 +43,7 @@ import {
   tmdbLanguagesSchema,
   tmdbPersonSearchResponseSchema,
   tmdbWatchProvidersSchema,
+  tmdbTitleWatchProvidersSchema,
   tmdbWatchRegionsSchema,
   tmdbCompanyDetailsSchema,
   tmdbConfigurationSchema,
@@ -160,6 +162,11 @@ export interface TmdbClient {
   /** Watch providers available in `region` (defaults to the client region), by display priority. */
   getWatchProviders(kind: MediaKind, region?: string): Promise<WatchProviderRef[]>;
   getWatchRegions(): Promise<WatchRegion[]>;
+  /**
+   * Where a title streams / rents / sells in `region` (default: the client region). Cached 12 h.
+   * Shown with the attribution "Data from JustWatch".
+   */
+  getTitleWatchProviders(kind: MediaKind, tmdbId: number, region?: string): Promise<TitleWatchProviders>;
   /** Certifications of one country (defaults to the client region), in TMDB order. */
   getCertifications(kind: MediaKind, country?: string): Promise<CertificationRef[]>;
   getLanguages(): Promise<LanguageRef[]>;
@@ -173,6 +180,7 @@ const DEFAULT_BASE_URL = 'https://api.themoviedb.org/3';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const CONFIGURATION_TTL_MS = 24 * 60 * 60 * 1000;
+const TITLE_PROVIDERS_TTL_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 /** The response cache never holds more than this many URLs (oldest first out). */
@@ -656,6 +664,24 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
           return { tmdbId: p.provider_id, name: p.provider_name, ...(logo ? { logo } : {}), displayPriority: p.display_priority ?? 999 };
         })
         .sort((a, b) => a.displayPriority - b.displayPriority || a.name.localeCompare(b.name));
+    },
+
+    async getTitleWatchProviders(kind, tmdbId, watchRegion) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/${kind}/${tmdbId}/watch/providers`, {}, tmdbTitleWatchProvidersSchema, TITLE_PROVIDERS_TTL_MS),
+      ]);
+      const offer = raw.results[(watchRegion ?? region).toUpperCase()];
+      const map = (list: { provider_id: number; provider_name: string; logo_path?: string | null | undefined; display_priority?: number | null | undefined }[]) =>
+        list
+          .map((p): WatchProviderRef => {
+            const logo = images('logo', p.logo_path ?? null);
+            return { tmdbId: p.provider_id, name: p.provider_name, ...(logo ? { logo } : {}), displayPriority: p.display_priority ?? 999 };
+          })
+          .sort((a, b) => a.displayPriority - b.displayPriority || a.name.localeCompare(b.name));
+      return offer
+        ? { link: offer.link ?? null, flatrate: map(offer.flatrate), rent: map(offer.rent), buy: map(offer.buy) }
+        : { link: null, flatrate: [], rent: [], buy: [] };
     },
 
     async getWatchRegions() {

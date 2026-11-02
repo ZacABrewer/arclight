@@ -217,6 +217,8 @@ Open a collection to see which movies are in your library and which are not ("No
 
 Watch history comes from your media servers. In **Settings > Media Servers**, switch on **Retention** for each Jellyfin, Emby or Plex server whose watch history should count. See [Media servers](media-servers.md).
 
+Where it can, retention reads Arclight's own stored copy of the history (see [Watch-history sync](media-servers.md#watch-history-sync)) instead of asking the server. A server is read from the stored copy when its watch-history sync is on, every account has had a full read and the last successful sync is recent (within twice the full-read interval, at least 6 hours). Any other server (Plex, sync off, first sync not finished, sync failing) is read live from the server, as before. If a server cannot answer, rules that need play state skip it and apply nothing, so an outage never looks like "nobody watched anything".
+
 ### Rules
 
 Click **Add rule**. A rule has:
@@ -232,6 +234,7 @@ Click **Add rule**. A rule has:
 | Grace period | 7 days | Days between staging a title and applying the action. 0 applies on the sweep that stages it. 0 to 3650. |
 | Keep if requested within | off | Skips titles someone requested in the last N days. |
 | Keep movies that belong to a collection | off | Movies only. |
+| Keep items a requester has not watched yet | off | Skips titles whose requester has not played them. A requester with no linked media server account, or no watch history, counts as not having watched. |
 | Dry run | on | "Stage and report, never apply on its own." |
 
 Conditions you can combine:
@@ -244,8 +247,11 @@ Conditions you can combine:
 | Added more than N days ago | 90 | Time since it was added to the library. |
 | Not watched in N days | 180 | Nobody played it in this time, and it was added longer ago than that. |
 | Larger than | 50 GB | The files take more space than this. |
+| Not watched by its requester in N days | 90 | Someone requested it more than N days ago and none of its requesters played it within N days. Titles without a request, or whose requesters have no watch history for them, never match. |
 
-A series counts as watched when every episode on the server is played.
+A series counts as watched when every episode present on the server is played. Rules decide per series; there is no season-level evaluation.
+
+**How people are matched.** Media server accounts that are linked to an Arclight user are merged into that user, so one person who watches on two servers counts once. In **Watched by these users**, a name matches the Arclight username, the display name or the media server account name. Accounts that are not linked stand alone under their server account name.
 
 Because **Dry run** starts on, a new rule only reports. Turn it off when you trust the results.
 

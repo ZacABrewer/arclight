@@ -12,6 +12,8 @@ export {
   requireSelfOrAdmin,
   installAuthHook,
   isPublicRoute,
+  isPluginRoute,
+  PLUGIN_ROUTE_PREFIX,
   isSetupBootstrapRoute,
   nonAdminMay,
   ADVANCED_REQUESTERS,
@@ -22,7 +24,7 @@ export {
   type PublicRoutePredicate,
   type RouteAccess,
 } from './hook.js';
-export { AuthService, AuthError, toUser, effectiveAppAccess, type RequestAuth, type ExternalLoginProvider, type LoginResult } from './service.js';
+export { AuthService, AuthError, toUser, effectiveAppAccess, type RequestAuth, type ExternalLoginProvider, type LoginResult, type PluginKeyRow } from './service.js';
 export { SetupService } from './setup.js';
 export { hashPassword, verifyPassword } from './password.js';
 export { isLocalAddress } from './network.js';

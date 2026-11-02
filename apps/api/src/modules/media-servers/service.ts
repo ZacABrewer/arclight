@@ -12,6 +12,8 @@ import {
 } from '@arclight/media-servers';
 import {
   isLoginCapableKind,
+  isMediaBrowserKind,
+  watchSyncEnabled,
   MediaServerInput,
   MediaServerTestRequest,
   SECRET_MASK,
@@ -146,7 +148,15 @@ export class MediaServersService {
     const current = servers.find((s) => s.id === id);
     if (!current) throw notFound(id);
     assertUniqueName(servers, input.name, id);
-    const next: MediaServerConfig = withLoginRules({ ...input, id, url: cleanUrl(input.url), apiKey: mergeKey(current, input) });
+    const url = cleanUrl(input.url);
+    const next: MediaServerConfig = withLoginRules({
+      ...input,
+      id,
+      url,
+      apiKey: mergeKey(current, input),
+      // The server's own id survives edits unless the connection now points elsewhere.
+      ...(current.remoteId && current.url === url && current.kind === input.kind ? { remoteId: current.remoteId } : {}),
+    });
     if (!next.apiKey) throw new MediaServersError('VALIDATION', 'apiKey is required');
     this.save(servers.map((s) => (s.id === id ? next : s)));
     return mask(next);
@@ -156,6 +166,26 @@ export class MediaServersService {
     const servers = this.stored();
     if (!servers.some((s) => s.id === id)) throw notFound(id);
     this.save(servers.filter((s) => s.id !== id));
+  }
+
+  /** Stores the server's own id (System/Info `Id`) when it is new or changed. */
+  rememberRemoteId(id: string, remoteId: string | undefined): void {
+    if (!remoteId) return;
+    const servers = this.stored();
+    const current = servers.find((s) => s.id === id);
+    if (!current || current.remoteId === remoteId) return;
+    this.save(servers.map((s) => (s.id === id ? { ...s, remoteId } : s)));
+  }
+
+  /** The Jellyfin/Emby connection whose server id is `remoteId` (the plugin's `serverId`). */
+  byRemoteId(remoteId: string): MediaServerConfig | undefined {
+    const want = remoteId.trim().toLowerCase().replace(/-/g, '');
+    return this.stored().find((s) => isMediaBrowserKind(s.kind) && s.remoteId !== undefined && s.remoteId.toLowerCase().replace(/-/g, '') === want);
+  }
+
+  /** Enabled Jellyfin/Emby connections whose play state the watch-history sync reads. */
+  watchSyncServers(): MediaServerConfig[] {
+    return this.stored().filter(watchSyncEnabled);
   }
 
   // ---- clients ---------------------------------------------------------------------------
@@ -220,7 +250,7 @@ export class MediaServersService {
   // ---- probes ----------------------------------------------------------------------------
 
   async test(id: string): Promise<MediaServerProbeResult> {
-    return this.probe(this.require(id));
+    return this.probe(this.require(id), true);
   }
 
   /** Tests an unsaved candidate; a masked key with `id` reuses the stored key. */
@@ -233,10 +263,11 @@ export class MediaServersService {
     return this.probe({ ...input, id: id ?? 'candidate', url: cleanUrl(input.url), apiKey });
   }
 
-  private async probe(config: MediaServerConfig): Promise<MediaServerProbeResult> {
+  private async probe(config: MediaServerConfig, stored = false): Promise<MediaServerProbeResult> {
     try {
       const client = this.clientFor(config);
       const info = await client.info();
+      if (stored) this.rememberRemoteId(config.id, info.id);
       const libraries = (await client.libraries()).map((l) => ({ id: l.id, name: l.name, type: l.type }));
       return { ok: true, serverName: info.name, ...(info.version ? { version: info.version } : {}), libraries };
     } catch (err) {
@@ -269,7 +300,12 @@ function notFound(id: string): MediaServersError {
 }
 
 function mask(config: MediaServerConfig): MediaServerResource {
-  return { ...config, apiKey: config.apiKey ? SECRET_MASK : '' };
+  return {
+    ...config,
+    apiKey: config.apiKey ? SECRET_MASK : '',
+    syncWatchHistory: watchSyncEnabled({ ...config, enabled: true }),
+    mirrorParentalControls: isMediaBrowserKind(config.kind) && config.mirrorParentalControls === true,
+  };
 }
 
 function parseInput(raw: MediaServerInputRaw): MediaServerInput {

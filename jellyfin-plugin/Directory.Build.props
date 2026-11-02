@@ -1,0 +1,42 @@
+<Project>
+  <!--
+    One source tree, one build per Jellyfin ABI line.
+      dotnet build                          -> Jellyfin 12.x  (net10.0, targetAbi 12.0.0.0)
+      dotnet build -p:JellyfinTarget=10.11  -> Jellyfin 10.11 (net9.0,  targetAbi 10.11.0.0)
+    The plugin version is <ArclightVersion>.<abi tag>, e.g. 1.0.0.12 / 1.0.0.11, so a repository
+    manifest can list both and every server picks the newest build its ABI accepts.
+  -->
+  <PropertyGroup>
+    <ArclightVersion Condition="'$(ArclightVersion)' == ''">1.0.0</ArclightVersion>
+    <JellyfinTarget Condition="'$(JellyfinTarget)' == ''">12</JellyfinTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(JellyfinTarget)' == '12'">
+    <TargetFramework>net10.0</TargetFramework>
+    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
+    <JellyfinTargetAbi>12.0.0.0</JellyfinTargetAbi>
+    <JellyfinAbiTag>12</JellyfinAbiTag>
+    <DefineConstants>$(DefineConstants);JELLYFIN_12</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(JellyfinTarget)' == '10.11'">
+    <TargetFramework>net9.0</TargetFramework>
+    <JellyfinPackageVersion>10.11.0</JellyfinPackageVersion>
+    <JellyfinTargetAbi>10.11.0.0</JellyfinTargetAbi>
+    <JellyfinAbiTag>11</JellyfinAbiTag>
+    <DefineConstants>$(DefineConstants);JELLYFIN_10_11</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>$(ArclightVersion).$(JellyfinAbiTag)</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Authors>Arclight contributors</Authors>
+    <Copyright>GPL-3.0-or-later</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+  </PropertyGroup>
+</Project>

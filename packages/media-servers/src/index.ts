@@ -15,7 +15,7 @@ import { PlexServerReadClient } from './plex.js';
 import { MEDIA_SERVER_KINDS, MediaServerError, type MediaServerClient, type MediaServerClientOptions, type MediaServerKind } from './types.js';
 
 export * from './types.js';
-export { MediaBrowserServerClient, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions } from './media-browser.js';
+export { MediaBrowserServerClient, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions, type MediaBrowserWatchItem, type MediaBrowserItemInfo, type WatchItemsOptions } from './media-browser.js';
 export { PlexServerReadClient, plexProviderIds, plexLibraryKind, pathIsInside, normalisePath, PLEX_OWNER_ACCOUNT_ID, type PlexServerOptions } from './plex.js';
 export { AudiobookshelfServerClient, audiobookshelfLibraryKind, audiobookshelfProviderIds, type AudiobookshelfServerOptions } from './audiobookshelf.js';
 export { normaliseBaseUrl, idsMatchQuery } from './http.js';

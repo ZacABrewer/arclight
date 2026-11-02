@@ -220,6 +220,16 @@ export class FakeTmdb {
         self.calls.push(`providers:${kind}:${region ?? ''}`);
         return [{ tmdbId: 8, name: 'Streamer', logo: 'https://img/streamer.png', displayPriority: 1 }];
       },
+      async getTitleWatchProviders(kind, tmdbId, region) {
+        self.calls.push(`titleProviders:${kind}:${tmdbId}:${region ?? ''}`);
+        if (region && region.toUpperCase() !== 'US') return { link: null, flatrate: [], rent: [], buy: [] };
+        return {
+          link: `https://www.themoviedb.org/${kind}/${tmdbId}/watch?locale=US`,
+          flatrate: [{ tmdbId: 8, name: 'Streamer', logo: 'https://img/streamer.png', displayPriority: 1 }],
+          rent: [{ tmdbId: 2, name: 'Rentals', displayPriority: 2 }],
+          buy: [],
+        };
+      },
       async getWatchRegions() {
         return [{ code: 'GB', name: 'United Kingdom' }, { code: 'US', name: 'United States' }];
       },

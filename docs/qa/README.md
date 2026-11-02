@@ -45,6 +45,7 @@ Row IDs are stable (`SET-01`, `LIB-12`, `FAIL-07`), so quote them in bug reports
 | [15-mobile-pwa-performance.md](15-mobile-pwa-performance.md) | Phone layout, PWA, performance smoke | MOB, PRF |
 | [16-security.md](16-security.md) | Authentication, roles, API key, local bypass | SEC |
 | [17-hardware-transcoding.md](17-hardware-transcoding.md) | Hardware acceleration pane, software fallback, GPU device access | HWT |
+| [18-watch-history-and-jellyfin-plugin.md](18-watch-history-and-jellyfin-plugin.md) | Jellyfin/Emby watch-history sync, user sync, Watch history views, retention with stored history, the Jellyfin plugin API | WHS, JFP |
 | [99-known-limitations.md](99-known-limitations.md) | Things that are known not to work; do not file bugs for these | n/a |
 
 Read [99-known-limitations.md](99-known-limitations.md) before you start. A row that exercises
@@ -119,7 +120,7 @@ hardlinks across the downloads and media shares, and long-running soak checks ar
 | A download client | Built-in engine (no extra install) or a local qBittorrent | Built-in engine (already registered); qBittorrent via `--profile qbittorrent` | Same as Docker | qBittorrent WebUI enabled; a usenet client (SABnzbd, NZBGet) is optional |
 | Usenet account + Newznab indexer | Optional | Optional | Optional | Only for the usenet rows in files 04, 05 and 06 |
 | Proton WireGuard key with port forwarding | Only for the Windows WireGuard rows (as a `.conf`) | Required for the gluetun stacks | Required for the gluetun stacks | account.proton.me -> VPN -> Downloads -> WireGuard configuration; enable NAT-PMP (port forwarding). Put the `PrivateKey` into `PROTON_WIREGUARD_KEY`. |
-| Media server (Jellyfin, Emby or Plex) | Optional | Optional | Recommended | For the refresh checks in files 06 and 10 |
+| Media server (Jellyfin, Emby or Plex) | Optional | Optional | Recommended | For the refresh checks in files 06 and 10; file 18 needs a Jellyfin or Emby test server with two accounts (and the Arclight Jellyfin plugin for the plugin rows) |
 | Discord webhook or similar | Recommended | Recommended | Recommended | A throwaway channel, for the notification checks |
 | Subtitle provider account (OpenSubtitles.com, Subdl) | Optional | Optional | Optional | Only for file 08 |
 | Trakt account, Plex token | Optional | Optional | Optional | Only for the Trakt and Plex rows in files 09 and 10 |

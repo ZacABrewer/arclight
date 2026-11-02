@@ -1411,7 +1411,13 @@ Module `apps/api/src/modules/media-servers`; contract `packages/shared/src/media
 clients `@arclight/media-servers`. A **list** of Jellyfin/Emby/Plex/Audiobookshelf connections stored in the
 `mediaServers` settings section (`MediaServersSettings {servers: MediaServerConfig[]}`), each
 `{id, kind: 'jellyfin'|'emby'|'plex'|'audiobookshelf', name, url, apiKey, enabled, usedForAvailability,
-usedForRetention, usedForRefresh, loginEnabled, createUsersOnLogin}`. `apiKey` is a Jellyfin/Emby API key, the Plex owner's
+usedForRetention, usedForRefresh, loginEnabled, createUsersOnLogin, syncWatchHistory?, mirrorParentalControls?, remoteId?}`. `mirrorParentalControls`
+(Jellyfin/Emby only, default off) makes `MediaServerUserSync` copy each linked account's Jellyfin `Policy.MaxParentalRating` into the
+user's `contentRestrictions` (mapping in `watch-history/parental.ts` and docs/using/media-servers.md); reads always return a boolean. `syncWatchHistory`
+(Jellyfin/Emby only) turns on the [watch-history sync](#watch-history); it defaults to on for new connections, and a connection
+stored before the option existed follows `usedForRetention` (reads always return the effective value, `false` for other kinds).
+`remoteId` is the server's own id (Jellyfin/Emby `System/Info` `Id`), stored on the first successful test or sync and read-only
+(a save keeps it); the [Jellyfin plugin](#jellyfin-plugin) names its server by it. `apiKey` is a Jellyfin/Emby API key, the Plex owner's
 X-Plex-Token or an Audiobookshelf API token (sent as `Authorization: Bearer`) and reads back as `********`; sending the mask (or omitting the key) on update keeps
 the stored key. Names are unique (case-insensitive); URLs are normalised (`host:port` gets
 `http://`, trailing slash dropped) and must be http(s).
@@ -1457,6 +1463,150 @@ the `book` libraries (paged `GET /api/libraries/{id}/items`), `findItems({mediaT
 (`mediaProgress`); video and music kinds list nothing. Errors are
 `MediaServerError` with a `code` (`unauthorized`, `network`, `timeout`, `notFound`, ...).
 
+### Watch history
+
+Module `apps/api/src/modules/watch-history`; contract `packages/shared/src/watch-history.ts`; tables
+`media_server_users` (every server account, linked or not), `watch_state` (current play state per
+account and item), `watch_events` (the timeline) and a per-server sync state. A read-only copy of
+Jellyfin/Emby play data, filled by two feeds: the `MediaServerWatchSync` job and the
+[Jellyfin plugin](#jellyfin-plugin)'s events. Arclight never writes to Jellyfin.
+
+**Catch-up sync.** The first run per account is a full read (paged `Users/{id}/Items`, `Movie` and
+`Episode` with `UserData`). Later runs are incremental: items sorted by `DatePlayed` descending,
+read until they are older than the last read minus 10 minutes. Every `fullSyncHours` (default 24)
+an account is read in full again, which catches "mark unplayed" and favourite changes the
+incremental read cannot see. Jellyfin's `MinDateLastSavedForUser` is deliberately not used: it
+filters on the item's `DateLastSaved` (metadata saves), not on the user data, so it would miss
+plays. `played` and `unplayed` events are synthesized when `Played` flips or the play count grows
+(event `source` is `sync`; the plugin's are `plugin`).
+
+**Accounts.** Server accounts map to Arclight users by Jellyfin user id against the user's
+`mediaServerLink.externalId`, never by name. History of unlinked accounts is kept and attaches when
+the account is linked or imported. `MediaServerUserSync` (hourly at :05) lists accounts: new ones
+are stored (an Arclight user is created only when the server has `loginEnabled` and
+`createUsersOnLogin`, the sign-in policy allows that kind and `newUsers` is `automatic`), renames
+update the link's username, disabled accounts are marked and linked users without a local password
+(media-server-only) have their sessions revoked, deleted accounts are marked and unlinked with
+their history kept. Sign-in through a disabled account is refused as before.
+
+**Settings.** Section `watchHistory` (`GET`/`PUT /settings/watchhistory`, admin):
+`{syncIntervalMinutes (5-1440, default 10), fullSyncHours (1-168, default 24), eventRetentionDays
+(7-3650, default 400)}`. A new interval reschedules `MediaServerWatchSync` at once.
+`WatchHistoryCleanup` (daily 04:45) prunes `watch_events` older than `eventRetentionDays`; play
+state is never pruned.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/watchhistory` | Portal route. `WatchEventPage` `{page, pageSize, totalRecords, records[]}`, newest first. Query: `userId`, `mediaServerUserId`, `serverId`, `movieId`, `seriesId`, `type` (`start`/`progress`/`stop`/`played`/`unplayed`), `includeProgress` (default false: progress events are left out), `page` (default 1), `pageSize` (1-200, default 50). Admins see everyone; other users always get only their own history whatever the query says |
+| GET | `/watchhistory/title/:mediaType/:id` | Admin. `:mediaType` `movie`/`series`, `:id` the library id. `WatchedByEntry[]` `{user {mediaServerUserId, name, arclightUserId, arclightUsername}, serverId, serverName, played, playCount, lastPlayedAt, positionMs, durationMs, favorite, episodes {total, played} \| null}` |
+| GET | `/watchhistory/nowplaying` | Admin. `NowPlayingEntry[]`: sessions with a start or progress event and no stop in the last 5 minutes (needs the plugin) |
+| GET | `/settings/watchhistory`, PUT | Admin. The `watchHistory` settings above |
+| GET | `/mediaserver/:id/sync` | `MediaServerSyncStatus` `{serverId, watchSyncEnabled, lastSyncAt, lastFullSyncAt, lastStatus (ok/failed/running), lastError, itemsTracked, lastUserSyncAt, lastUserSyncStatus, lastUserSyncError, lastEventAt, users, linkedUsers}`; 404 unknown server |
+| POST | `/mediaserver/:id/sync` | Body `{full?: boolean}` (default false). Runs the watch sync for this server now, as the `MediaServerWatchSync` task → `WatchSyncServerResult` `{serverId, name, status (ok/failed/skipped), users, changed, events, message?}`. 400 when sync is off or the server is not an enabled Jellyfin/Emby; 404 unknown; 409 when a watch sync is already running |
+| POST | `/mediaserver/:id/usersync` | Runs the user sync for this server now → `UserSyncServerResult` `{serverId, name, status, added, renamed, disabled, deleted, created, mirrored?, message?}` (`mirrored`: users whose content restrictions changed through `mirrorParentalControls`). 400 for other kinds; 404 unknown; 409 when a user sync is already running |
+| GET | `/mediaserver/:id/accounts` | `MediaServerAccountRow[]` `{id, serverId, externalId, name, isAdmin, disabled, deleted, lastActivityAt, firstSeenAt, arclightUserId, arclightUsername, lastWatchSyncAt}`; 404 unknown server |
+
+Errors are `{ error, code? }`.
+
+### Jellyfin plugin
+
+Module `apps/api/src/modules/jellyfin-plugin`; contract `packages/shared/src/jellyfin-plugin.ts`.
+The API the separate Arclight Jellyfin plugin calls, all under `/api/v1/jellyfin`. The plugin adds
+request status, requests, issues and a watchlist to the Jellyfin interface and sends plays to
+Arclight as they happen.
+
+**Authentication.** A **plugin key** goes in `X-Api-Key`. Admins create keys under Settings >
+Media servers > Jellyfin plugin (`POST /settings/jellyfinplugin/keys`); the key looks like
+`alj_...`, is stored hashed and shown once (table `plugin_api_keys`, `purpose` `jellyfin-plugin`).
+A request with a plugin key is authenticated `via: 'plugin'`, is not an admin, and may call
+`/api/v1/jellyfin/*` only: any other route answers 403. The admin API key and admin sessions can
+call the routes too, but not as a signed-in portal user (the routes have no portal access, so a
+user cannot act for another Jellyfin user).
+
+**Acting user.** Per-user routes carry `X-Arclight-Jellyfin-User: <Jellyfin user id>` (a GUID, with
+or without dashes). Arclight runs the call as the Arclight user linked to that Jellyfin or Emby
+account, through the same services as the request portal, so that user's permissions, request
+types, quotas and content caps apply. A missing header is `400 {code: 'missing_user'}`. An account
+with no linked user is `403 {code: 'not_linked'}`, unless an enabled server with `loginEnabled` and
+`createUsersOnLogin` is configured, the `signIn` policy allows that kind and `newUsers` is
+`automatic`: the account is then imported (a linked `user` with default permissions is created)
+and the call goes on. `ping`, `plugin` and `events` need no user header. A linked account whose Jellyfin/Emby
+account is marked disabled or deleted (`media_server_users`) is `403 {code: 'account_disabled'}`.
+
+**Access rules.** Every per-user route acts strictly as the linked Arclight account (a Jellyfin admin is not an
+Arclight admin):
+
+- Content caps (`contentRestrictions`, the portal's `CertificationGuard`): capped titles are **filtered out** of
+  `search`, `discover` and `upcoming`; `title` and `providers` answer `404 {code: 'content_restricted'}`; status badges of
+  capped titles not in the library answer only `{id, inLibrary: false}`; `request`, `language-request` and `issue`
+  answer `403 {code: 'content_restricted'}`.
+- `canRequest` / `canRequest4k` on search, discover and title items use the permission bits, the account's request
+  type filter (`settings.requestTypes`), the 4K switches of Settings > Requests, the title's library/request state and
+  the account's quota. When `canRequest` is false, `requestBlockedReason` says why: `available`, `requested`,
+  `permission`, `request_type`, `content_restricted` or `quota`. `qualityProfiles` is filled only with
+  `canRequestAdvanced`; `languages` only when subtitles or audio may be requested. `canRequestFutureSeasons` is always
+  false (Arclight has no "future seasons" request; new seasons follow the series' monitoring).
+- Other users' requests (`request` on status badges, `requests[]` on titles) are returned only to accounts with View
+  requests or Manage requests; `requestedBy` is the display name. `/jellyfin/requests` always lists only the caller's own.
+
+**Server id.** Events name the Jellyfin server by its `System/Info` `Id`. Arclight stores it as
+`remoteId` on the first successful connection test or sync of a Jellyfin/Emby media server; an
+unknown id is `404 {code: 'UNKNOWN_SERVER'}`.
+
+Errors are `{ error, code }`: 400 `VALIDATION` / `missing_user`, 401, 403 `not_linked`, `account_disabled`,
+`content_restricted` or a permission or quota failure from the request services (`FORBIDDEN`), 404 `NOT_FOUND` /
+`UNKNOWN_SERVER` / `content_restricted`, 409 `CONFLICT`, 429, 502 `UPSTREAM`, 503 `NOT_CONFIGURED` (no Jellyfin server,
+or no TMDB key for TMDB-backed routes).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/jellyfin/ping` | `{version, serverName, features[], linkedUsers}`. `features` lists `events`, `status`, `search`, `title`, `request`, `languageRequest`, `issue`, `watchlist`, `discover`, `upcoming`, `providers`, `requests`, `themes`; the plugin hides UI for missing ones. With a plugin key it records the key's last ping |
+| GET | `/jellyfin/plugin` | `{latestVersion, manifestUrl}` (manifest `https://arclight.moviemethat.com/jellyfin/manifest.json`) |
+| POST | `/jellyfin/events` | Body `{serverId, events[]}` (at most 500 events, 4 MB) → **202** `{accepted}` (valid events, duplicates included, so a resent batch is not an error). Event: `{type, at (ISO 8601), jellyfinUserId?, userName?, item? {id, type, name, providerIds, seriesProviderIds?, seasonNumber?, episodeNumber?, runTimeTicks?}, positionTicks?, played?, playCount?, isFavorite?, client?, deviceName?, playMethod? (DirectPlay/DirectStream/Transcode), sessionId?}`. `type` is `playbackStart`, `playbackProgress`, `playbackStop`, `userDataSaved` (played, play count and favourite changes as they happen), `itemAdded`, `userCreated`, `userUpdated` or `userDeleted`. Identical events (same session, type, time, user and item) are stored once; progress events of one session are stored at most once a minute (the resume point still moves). 404 `UNKNOWN_SERVER` |
+| GET | `/jellyfin/status?items=id1,id2` | Per-user. Up to 100 Jellyfin item ids; Arclight looks the ids up on the Jellyfin server (provider ids, and the series of episodes and seasons) and answers `{items: JellyfinItemStatus[]}`. 400 over 100; 502 `UPSTREAM` when Jellyfin cannot be read; 503 `NOT_CONFIGURED` with no enabled Jellyfin/Emby server |
+| POST | `/jellyfin/status` | Per-user. Body `{items: [{id, type, providerIds, seriesProviderIds?, seasonNumber?, episodeNumber?}]}` (1-100), no Jellyfin lookup → `{items: JellyfinItemStatus[]}`. Item: `{id, inLibrary, monitored?, request? {id, status, requestedBy, requestedAt, is4k}, download? {progress 0-1, etaSeconds?, status}, upcoming? {releaseDate}, missingEpisodes?}`. `type` `Movie`, `Series`, `Season` or `Episode`; others answer `inLibrary: false`. `requestedBy` is the requester's display name (username when none), filled only for the user's own requests or when the user may view all requests |
+| GET | `/jellyfin/search` | Per-user. `?q` (required), `type` (`movie`/`series`/`all`, default `all`), `page` (1-500) → `{page, totalPages, totalResults, results[]}`; result `{tmdbId, mediaType, title, year, posterUrl, overview, status, canRequest, canRequest4k, requestBlockedReason}`. `status` is `available`, `partial`, `requested`, `processing` or `none`. Capped titles are left out |
+| GET | `/jellyfin/discover` | Per-user. `?category` (`trending`, `popularMovies`, `popularSeries`, `upcomingMovies`, `upcomingSeries`), `page` (1-500) → the same page shape as `search`, from the discover service (trending: weekly, movies and series), capped titles left out |
+| GET | `/jellyfin/upcoming` | Per-user. `?days` (1-90, default 30) → `{days, items[]}`: monitored movies (by cinema/digital/physical release) and episodes from the calendar between now and now + `days`, oldest first. Item `{date, kind (movie/episode), releaseType, mediaType, tmdbId, title, year, posterUrl (remote URL or null), seasonNumber, episodeNumber, episodeTitle, hasFile}`. Calendar entries are library titles only; titles above the account's caps are left out |
+| GET | `/jellyfin/providers/:mediaType/:tmdbId` | Per-user. `?region` (2 letters, default `US`) → `{region, link, flatrate[], rent[], buy[], attribution: 'Data from JustWatch'}`, provider `{id, name, logoUrl}` (TMDB watch providers, cached 12 h; show the attribution). 404 `content_restricted` for capped titles; 503 without a TMDB key |
+| GET | `/jellyfin/requests` | Per-user. `?take` (1-100, default 20), `skip` → `{total, items[]}`: the caller's own media and language requests, newest first. Item `{kind (media/language), id, mediaType, tmdbId, title, year, posterUrl, status, is4k, seasons[], language {kind, language} \| null, createdAt, progress (0-1 while downloading) \| null, canCancel}`. `canCancel` is true for the caller's own pending requests (the portal's delete rule) |
+| DELETE | `/jellyfin/requests/:id` | Per-user. `?kind` (`media` default, or `language`). Cancels the caller's own pending request → 204; 404 for other users' requests or unknown ids, 403 once it is no longer pending |
+| GET | `/jellyfin/title/:mediaType/:tmdbId` | Per-user. `:mediaType` `movie`, `series` or `tv` (alias). `JellyfinTitle`: the search fields plus `backdropUrl`, `status4k`, `requestBlockedReason`, `canRequestFutureSeasons` (always false), `canRequestAdvanced`, `qualityProfiles[]`, `seasons[]` (series: `{seasonNumber, name, episodeCount, airDate, status, status4k}`), `requests[]` (others' only with View requests), `onWatchlist`, `canRequestSubtitles`, `canRequestAudio`, `languages[]`, `languageOptions`. 404 `content_restricted` when the title is over the user's content cap |
+| POST | `/jellyfin/request` | Per-user. Body `{mediaType, tmdbId, seasons? (number[] or "all", series only, default all), is4k? (default false), qualityProfileId? or its alias profileId? (only honoured for users who may request advanced)}` → **201** `MediaRequest`, or **202** `{message}` when the request is accepted but held (for example for approval windows). Same permissions, quotas, content caps and auto-approve rules as `POST /request`; 403 `content_restricted` for capped titles |
+| POST | `/jellyfin/language-request` | Per-user. The `POST /request/language` body without `userId` → **201** `LanguageRequest`. 403 `content_restricted` for capped titles |
+| POST | `/jellyfin/issue` | Per-user. Body `{mediaType, tmdbId, seasonNumber?, episodeNumber?, type (video, audio, subtitles or other), message}` (`message` 1-5000 characters) → **201** `Issue`. 403 `content_restricted` for capped titles |
+| GET | `/jellyfin/watchlist` | Per-user. `{items: [{id, mediaType, tmdbId, title, year, posterUrl, source, addedAt}]}` |
+| POST | `/jellyfin/watchlist` | Per-user. Body `{mediaType, tmdbId}` → **201** one item in the same shape, source `jellyfin` (no external id, so the favourites sync never removes it) |
+| DELETE | `/jellyfin/watchlist` | Per-user. `?id=` (watchlist item id) or `?mediaType=&tmdbId=` → 204. 400 without either; 404 not on the user's watchlist; 409 when the item is mirrored from another source (`this item is mirrored from plex; remove it there`) or is a Jellyfin favourite (unfavourite it in Jellyfin) |
+| DELETE | `/jellyfin/watchlist/:id` | Per-user. The same by id → 204 |
+
+Only manual and plugin-added watchlist items can be removed through the plugin. The favourites sync
+(`WatchlistSync`) mirrors Jellyfin/Emby favourites into the watchlist (a favourite episode counts for
+its series; music and audiobook favourites are not mirrored, because the watchlist holds movies and
+series only) and never removes items the plugin added.
+
+Admin routes (admin session or admin API key; plugin keys cannot call them):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings/jellyfinplugin` | `JellyfinPluginOverview` `{manifestUrl, latestVersion, keys[] {id, name, prefix, createdAt, lastUsedAt, lastPingAt}, lastPingAt, servers[] {serverId, name, remoteId, lastEventAt}}`; `remoteId` null means the connection has not been tested yet |
+| POST | `/settings/jellyfinplugin/keys` | Optional body `{name}` (1-100 characters, default `Jellyfin plugin`) → **201** the key row plus `key`, the secret, which is never shown again |
+| DELETE | `/settings/jellyfinplugin/keys/:id` | 204; the plugin using it is refused from then on; 404 unknown |
+
+### Jellyfin plugin: themes
+
+Module `apps/api/src/modules/jellyfin-plugin` (`theme-routes.ts`, generator `theme-css.ts`); contract
+`JellyfinThemes`, `JellyfinUserConfig` in `packages/shared/src/jellyfin-plugin.ts`. Same access as the
+other `/jellyfin` routes (plugin key, admin API key or admin session; portal users get 403). See
+[THEMES.md](THEMES.md#using-themes-in-jellyfin).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/jellyfin/themes` | `{defaultTheme, themes[] {id, name, version, dark}}`: installed packs (Tron left out; `defaultTheme` null when the default is Tron or missing) |
+| GET | `/jellyfin/theme/:themeId.css` | Jellyfin Web stylesheet generated from the pack's `--al-*` tokens and fonts (`text/css`; `ETag` from pack id + version + source + generator version; `If-None-Match` → 304; `Cache-Control: public, max-age=3600`). 404 `NOT_FOUND` for unknown packs and for `tron` |
+| GET | `/jellyfin/theme-fonts/:themeId/:file` | A `.woff2` font the pack ships (the stylesheet links it as `url(theme-fonts/<id>/<file>)`); 404 for anything else. Cached a week |
+| GET | `/jellyfin/userconfig` | Per user (`X-Arclight-Jellyfin-User`). `{theme, canRequestMovies, canRequestSeries, canRequest4k, canViewAllRequests}`; `theme` is the account's pick when user choice is on (or the account is an admin) and the pack is installed, else the server default, null for Tron. Request rights combine permission bits and the account's request type filter |
+
 ## retention
 
 Module `apps/api/src/modules/retention`; contract `packages/shared/src/retention.ts`; tables
@@ -1467,14 +1617,24 @@ graceDays, action, addExclusion, keepIfRequestedWithinDays, keepIfInCollection, 
 - `conditions` (all must hold): `watchedByAll` (every enabled user who can see the item),
   `watchedByAny`, `watchedByUsers {users: names}`, `addedOlderThanDays {days}`,
   `notWatchedWithinDays {days}` (no play in N days and added longer ago; never true for items
-  no server knows), `sizeAbove {bytes}`. Users are merged by name (case-insensitive) across all
-  enabled servers flagged `usedForRetention`.
+  no server knows), `sizeAbove {bytes}`, `notWatchedByRequesterWithinDays {days}` (a request for
+  the title is older than N days and none of its requesters played it within N days; never true
+  for items without a request, or whose requesters have no watch history for them).
+  Play state comes from the stored [watch history](#watch-history) for every server flagged
+  `usedForRetention` whose history is synced (sync on, every account had a full read, last
+  successful sync within max(2 x `fullSyncHours`, 6 h)); other servers (Plex, sync off, first sync
+  not finished, sync failing) are read live. Linked server accounts are merged into their Arclight
+  user; `watchedByUsers` matches the Arclight username, display name or server account name; live
+  reads merge by name (case-insensitive). A series is watched when every present episode is played;
+  rules evaluate per series, not per season.
 - `action`: `unmonitor`; `deleteFiles` (unmonitor, then each media file goes to the recycle bin
   and its row is removed); `deleteItem` (every file in the folder to the recycle bin, then the
   series/movie and its folder are deleted via the library service; `addExclusion` adds an
   import exclusion). Without a recycle bin files are deleted.
 - `keepIfRequestedWithinDays` (a request for the TMDB id that recent keeps it),
-  `keepIfInCollection` (movies in a TMDB collection), `dryRun` (default **true**: staged and
+  `keepIfInCollection` (movies in a TMDB collection), `keepIfRequesterHasNotWatched` (keeps items
+  with a requester who has not played them; a requester without a linked account or history counts
+  as not having watched), `dryRun` (default **true**: staged and
   notified, never applied automatically).
 
 `RetentionSweep` stages matches as `pending` candidates (`reasons`, `watchedBy`,
@@ -2445,7 +2605,10 @@ of them with `POST /jobs/run`.
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |
 | `RequestsDigest` | `0 * * * *` | requests | Hourly tick; once a day at `digestHour` (when `digestEnabled`) sends one notification summarising pending requests and open issues (nothing when both are empty) |
 | `ApplyTagRules` | `15 4 * * *` | tag-rules | Forgets ownership of deleted items, then runs every enabled tag rule over the library |
-| `RetentionSweep` | `30 3 * * *` | retention | Pulls play state from servers flagged `usedForRetention`, stages rule matches, applies candidates past their grace period, sends the `retention` summary |
+| `MediaServerWatchSync` | `*/10 * * * *` (from `watchHistory.syncIntervalMinutes`) | watch-history | Copies every account's play state and plays from Jellyfin/Emby servers with `syncWatchHistory` on: a full read the first time and every `fullSyncHours`, otherwise an incremental read; a failing server fails the job and the others are still synced |
+| `MediaServerUserSync` | `5 * * * *` | watch-history | Lists accounts on Jellyfin/Emby servers: records new, renamed, disabled and deleted accounts, creates Arclight users where the sign-in policy allows, revokes sessions of disabled media-server-only users |
+| `WatchHistoryCleanup` | `45 4 * * *` | watch-history | Deletes `watch_events` older than `eventRetentionDays` (play state is kept) |
+| `RetentionSweep` | `30 3 * * *` | retention | Reads play state (stored watch history for synced servers, live for the rest) from servers flagged `usedForRetention`, stages rule matches, applies candidates past their grace period, sends the `retention` summary |
 | `SubtitleSearchWanted` | `*/15 * * * *` | subtitles | Searches wanted subtitles, least recently searched first, up to `search.batchSize` items; adaptive backoff per language; stops when every provider is throttled |
 | `SubtitleUpgrade` | `30 3 * * *` | subtitles | Re-searches recent downloads (upgrade window) scoring below perfect; needs old score + 2 |
 | `SubtitleScan` | `0 4 * * 0` | subtitles | Re-indexes external and embedded subtitles of every file, prunes orphaned rows |

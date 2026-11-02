@@ -21,8 +21,9 @@ import { allUserRows, requestSettingsOf, userPermissions, userRow, type UserRow 
 
 // Watchlists (docs/spec/requests.md section 11): a per-user list, filled by hand or synced
 // from a media server. Sync providers are pluggable: Plex (plex.tv watchlist with the user's
-// own token) and Jellyfin/Emby (the linked account's favourite movies and series, read from
-// the server in Settings > Media server).
+// own token) and Jellyfin/Emby (the linked account's favourite movies, series and episodes, an
+// episode standing for its series, read from the server in Settings > Media server). Music and
+// audiobook favourites are not mirrored: the watchlist holds movies and series only.
 
 type ItemRow = typeof watchlistItems.$inferSelect;
 
@@ -248,14 +249,15 @@ export class WatchlistService {
     }
   }
 
-  async add(actor: Actor, raw: WatchlistCreate): Promise<WatchlistItem> {
+  /** Adds a title by hand (`manual`) or from the Jellyfin plugin (`jellyfin`, no external id: favourites sync leaves it alone). */
+  async add(actor: Actor, raw: WatchlistCreate, source: 'manual' | 'jellyfin' = 'manual'): Promise<WatchlistItem> {
     const input = WatchlistCreate.parse(raw);
     if (actor.userId === null) throw new RequestsError('VALIDATION', 'a watchlist belongs to a signed-in user');
     if (this.has(actor.userId, input.mediaType, input.tmdbId)) throw new RequestsError('CONFLICT', 'already on your watchlist');
     const meta = await this.titleOf(input.mediaType, input.tmdbId);
     const row = this.db
       .insert(watchlistItems)
-      .values({ userId: actor.userId, mediaType: input.mediaType, tmdbId: input.tmdbId, ...meta, source: 'manual', createdAt: this.requests.now().toISOString() })
+      .values({ userId: actor.userId, mediaType: input.mediaType, tmdbId: input.tmdbId, ...meta, source, createdAt: this.requests.now().toISOString() })
       .returning()
       .get();
     return this.toResources([row])[0]!;
@@ -324,13 +326,14 @@ export class WatchlistService {
           }
           if (await this.autoRequest(user, settings, item.mediaType, tmdbId)) result.requested++;
         }
-        // Items the provider no longer lists leave the mirror (manual items stay).
+        // Items the provider no longer lists leave the mirror. Manual items stay, and so do Jellyfin/Emby
+        // items without an external id (added through the Jellyfin plugin; favourites always carry one).
         const stale = this.db
           .select()
           .from(watchlistItems)
           .where(and(eq(watchlistItems.userId, user.id), eq(watchlistItems.source, provider.source)))
           .all()
-          .filter((r) => !seen.has(`${r.mediaType}:${r.tmdbId}`))
+          .filter((r) => (provider.source === 'plex' || r.externalId !== null) && !seen.has(`${r.mediaType}:${r.tmdbId}`))
           .map((r) => r.id);
         if (stale.length) this.db.delete(watchlistItems).where(inArray(watchlistItems.id, stale)).run();
       }

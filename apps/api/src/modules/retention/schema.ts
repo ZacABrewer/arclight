@@ -16,6 +16,7 @@ export const retentionRules = sqliteTable('retention_rules', {
   addExclusion: integer('add_exclusion', { mode: 'boolean' }).notNull().default(false),
   keepIfRequestedWithinDays: integer('keep_if_requested_within_days'),
   keepIfInCollection: integer('keep_if_in_collection', { mode: 'boolean' }).notNull().default(false),
+  keepIfRequesterHasNotWatched: integer('keep_if_requester_has_not_watched', { mode: 'boolean' }).notNull().default(false),
   dryRun: integer('dry_run', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),

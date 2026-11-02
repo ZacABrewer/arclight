@@ -1,0 +1,141 @@
+name: Jellyfin plugin
+
+# Arclight for Jellyfin (jellyfin-plugin/).
+#   Pushes / PRs touching jellyfin-plugin/**: build both Jellyfin ABI targets and run the unit tests.
+#   Tag jellyfin-plugin-v<x.y.z>:  build Release zips, create the GitHub Release with them, add the
+#     version to site/public/jellyfin/manifest.json on main, then start the Website workflow so
+#     https://arclight.moviemethat.com/jellyfin/manifest.json updates. Jellyfin servers with the
+#     repository added pick the update up through their daily "Update Plugins" task.
+#
+# The manifest commit is pushed with GITHUB_TOKEN; pushes made with that token never start other
+# workflows (and the message carries [skip ci] as a second guard), so there is no loop. If main is
+# protected and the push is refused, the job opens a pull request with the manifest change instead.
+
+on:
+  push:
+    branches: [main]
+    tags: ["jellyfin-plugin-v*"]
+    paths:
+      - "jellyfin-plugin/**"
+      - ".github/workflows/jellyfin-plugin.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "jellyfin-plugin/**"
+      - ".github/workflows/jellyfin-plugin.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: jellyfin-plugin-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: jellyfin-plugin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Unit tests (Jellyfin 12.x, net10.0)
+        run: dotnet test tests/Jellyfin.Plugin.Arclight.Tests/Jellyfin.Plugin.Arclight.Tests.csproj -c Release -p:JellyfinTarget=12 --nologo
+      - name: Unit tests (Jellyfin 10.11, net9.0)
+        run: dotnet test tests/Jellyfin.Plugin.Arclight.Tests/Jellyfin.Plugin.Arclight.Tests.csproj -c Release -p:JellyfinTarget=10.11 --nologo
+      - name: Script syntax
+        run: |
+          node --check src/Jellyfin.Plugin.Arclight/Web/arclight.js
+          for f in scripts/*.mjs integration/*.mjs; do node --check "$f"; done
+      - name: Manifest is valid
+        run: node scripts/manifest.mjs --check
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/jellyfin-plugin-v')
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write       # create the release, push the manifest commit
+      pull-requests: write  # fallback PR when main is protected
+      actions: write        # start the Website workflow
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Version from tag
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#jellyfin-plugin-v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::tag must be jellyfin-plugin-vX.Y.Z"; exit 1; fi
+          if ! grep -qx "## $VERSION" jellyfin-plugin/CHANGELOG.md; then echo "::error::jellyfin-plugin/CHANGELOG.md has no '## $VERSION' section"; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build from the tagged commit
+        run: |
+          git checkout --quiet "$GITHUB_SHA"
+          SKIP_TESTS=1 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)" bash jellyfin-plugin/scripts/build.sh "${{ steps.ver.outputs.version }}"
+          cp jellyfin-plugin/artifacts/release.json "$RUNNER_TEMP/release.json"
+          cp jellyfin-plugin/artifacts/*.zip jellyfin-plugin/artifacts/*.md5 "$RUNNER_TEMP/"
+          git checkout --quiet main
+
+      - name: Create GitHub Release
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          node -e "process.stdout.write(require(process.argv[1]).changelog)" "$RUNNER_TEMP/release.json" > "$RUNNER_TEMP/notes.md"
+          printf '\n\nInstall: add https://arclight.moviemethat.com/jellyfin/manifest.json under Dashboard > Plugins > Repositories, then install "Arclight". The .12 zip is for Jellyfin 12.x, the .11 zip for 10.11.x.\n' >> "$RUNNER_TEMP/notes.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP"/*.zip "$RUNNER_TEMP"/*.md5 --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/*.zip "$RUNNER_TEMP"/*.md5 \
+              --title "Arclight for Jellyfin $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+          fi
+
+      - name: Add the version to the repository manifest
+        run: node jellyfin-plugin/scripts/manifest.mjs --release "$RUNNER_TEMP/release.json"
+
+      - name: Commit manifest to main (or open a PR)
+        id: commit
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/public/jellyfin/manifest.json
+          if git diff --cached --quiet; then echo "manifest unchanged"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git commit -m "jellyfin-plugin: publish $VERSION to the plugin repository [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+            git pull --rebase origin main || break
+          done
+          BRANCH="jellyfin-plugin/manifest-$VERSION"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "jellyfin-plugin: publish $VERSION to the plugin repository" \
+            --body "Adds Arclight for Jellyfin $VERSION to site/public/jellyfin/manifest.json. The release assets are already published; merging this makes Jellyfin servers offer the update."
+          echo "pushed=false" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the website (serves the manifest)
+        if: steps.commit.outputs.pushed == 'true'
+        run: gh workflow run site.yml --ref main

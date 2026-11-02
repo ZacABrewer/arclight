@@ -87,6 +87,7 @@ import { CrossSeedSettingsPage } from './pages/settings/cross-seed/cross-seed-se
 import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
+import { WatchHistoryPage } from './features/watch-history/watch-history.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
@@ -279,6 +280,7 @@ export const routeTree = rootRoute.addChildren([
   page('/activity/pending', PendingReleasesPage),
   page('/activity/crossseed', CrossSeedActivityPage),
   page('/activity/transcode', TranscodeJobsPage),
+  page('/activity/watchhistory', WatchHistoryPage),
   manualImportRoute,
 
   sectionRedirect('/wanted', '/wanted/missing'),

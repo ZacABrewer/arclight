@@ -19,7 +19,7 @@ import {
 } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
-import { sessions, users } from '../../db/schema.js';
+import { pluginApiKeys, sessions, users } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
 import { dummyHash, hashPassword, needsRehash, verifyPassword } from './password.js';
 import { allLocal } from './network.js';
@@ -71,6 +71,8 @@ export interface RequestAuth {
   appAccess: readonly AppArea[];
   sessionId?: number;
   expiresAt?: string;
+  /** `via: 'plugin'`: the plugin key's id. */
+  pluginKeyId?: number;
 }
 
 /** The credentials a request carried, extracted by the hook. */
@@ -166,6 +168,16 @@ export function generateApiKey(): string {
   return randomBytes(16).toString('hex');
 }
 
+/** Plugin keys carry a recognisable prefix so they are not mistaken for the admin key. */
+export function generatePluginKey(): string {
+  return `alj_${randomBytes(24).toString('base64url')}`;
+}
+
+export type PluginKeyRow = typeof pluginApiKeys.$inferSelect;
+
+/** lastUsedAt is written at most this often per key (every event batch would otherwise write). */
+const PLUGIN_KEY_TOUCH_MS = 60_000;
+
 function permissionsFor(role: User['role'], requested: number | undefined): number {
   const base = requested ?? (role === 'admin' ? Permission.ADMIN : 0);
   return role === 'admin' ? base | Permission.ADMIN : base & ~Permission.ADMIN;
@@ -229,6 +241,48 @@ export class AuthService {
     if (!candidate) return false;
     const key = this.security().apiKey;
     return key !== undefined && safeEqual(candidate, key);
+  }
+
+  // -------------------------------------------------------------------------------------
+  // plugin keys (purpose-limited API keys)
+  // -------------------------------------------------------------------------------------
+
+  listPluginKeys(): PluginKeyRow[] {
+    return this.db.select().from(pluginApiKeys).orderBy(pluginApiKeys.id).all();
+  }
+
+  /** Creates a Jellyfin plugin key; the returned `key` is never stored or shown again. */
+  createPluginKey(name: string): { row: PluginKeyRow; key: string } {
+    const key = generatePluginKey();
+    const row = this.db
+      .insert(pluginApiKeys)
+      .values({ name, purpose: 'jellyfin-plugin', keyHash: hashToken(key), prefix: key.slice(0, 10), createdAt: this.now().toISOString() })
+      .returning()
+      .get();
+    return { row, key };
+  }
+
+  deletePluginKey(id: number): void {
+    const deleted = this.db.delete(pluginApiKeys).where(eq(pluginApiKeys.id, id)).returning().get();
+    if (!deleted) throw new AuthError('NOT_FOUND', `plugin key ${id} not found`);
+  }
+
+  /** The plugin key matching `candidate`, if any (its lastUsedAt is refreshed, throttled). */
+  verifyPluginKey(candidate: string | undefined): PluginKeyRow | null {
+    if (!candidate?.startsWith('alj_')) return null;
+    const row = this.db.select().from(pluginApiKeys).where(eq(pluginApiKeys.keyHash, hashToken(candidate))).get();
+    if (!row) return null;
+    const now = this.now();
+    if (!row.lastUsedAt || now.getTime() - Date.parse(row.lastUsedAt) > PLUGIN_KEY_TOUCH_MS) {
+      this.db.update(pluginApiKeys).set({ lastUsedAt: now.toISOString() }).where(eq(pluginApiKeys.id, row.id)).run();
+    }
+    return row;
+  }
+
+  /** GET /jellyfin/ping with a plugin key. */
+  markPluginPing(id: number): void {
+    const at = this.now().toISOString();
+    this.db.update(pluginApiKeys).set({ lastPingAt: at, lastUsedAt: at }).where(eq(pluginApiKeys.id, id)).run();
   }
 
   authSettings(): AuthSettings {
@@ -696,6 +750,11 @@ export class AuthService {
     }
     if (creds.apiKey && this.verifyApiKey(creds.apiKey)) {
       return { auth: { user: null, via: 'apikey', isAdmin: true, appAccess: APP_AREAS } };
+    }
+    const pluginKey = creds.apiKey ? this.verifyPluginKey(creds.apiKey) : null;
+    if (pluginKey) {
+      // Never admin and no app areas: the hook confines it to /api/v1/jellyfin/*.
+      return { auth: { user: null, via: 'plugin', isAdmin: false, appAccess: [], pluginKeyId: pluginKey.id } };
     }
     if (this.bypasses(creds.addresses)) {
       return { auth: { user: null, via: 'bypass', isAdmin: true, appAccess: APP_AREAS } };

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Arclight</title>
+</head>
+<body>
+    <div id="ArclightConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="ArclightConfigForm">
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Arclight</h2>
+                        <p class="fieldDescription">
+                            Connects this Jellyfin server to your Arclight server. Create an API key in
+                            Arclight under Settings &gt; Media servers, then paste it here.
+                        </p>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Connection</h3>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="url" id="ArclightUrl" label="Arclight URL" placeholder="https://arclight.example.com" />
+                            <div class="fieldDescription">The address Jellyfin uses to reach Arclight (from the Jellyfin server, not from your browser).</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="password" id="ArclightApiKey" label="API key" autocomplete="new-password" />
+                            <div class="fieldDescription" id="ArclightApiKeyHint">Stored on the Jellyfin server only and never sent to browsers. Leave empty to keep the current key.</div>
+                        </div>
+                        <label class="checkboxContainer emby-checkbox-label" style="margin-bottom:1em">
+                            <input is="emby-checkbox" type="checkbox" id="ArclightClearKey" />
+                            <span>Remove the saved API key</span>
+                        </label>
+                        <div>
+                            <button is="emby-button" type="button" id="ArclightTest" class="raised emby-button"><span>Test connection</span></button>
+                            <div id="ArclightTestResult" class="fieldDescription" style="margin-top:.6em" aria-live="polite"></div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Sync to Arclight (all Jellyfin apps)</h3>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableEventForwarding" /><span>Send events to Arclight</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Master switch for everything below.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnablePlaybackEvents" /><span>Playback (start, progress, stop)</span></label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableUserDataEvents" /><span>Watched / favourite changes</span></label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableLibraryEvents" /><span>New library items</span></label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableUserEvents" /><span>Jellyfin users created, changed or deleted</span></label>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="BatchIntervalSeconds" label="Send events every (seconds)" min="2" max="300" />
+                            <div class="fieldDescription">Events are batched; a batch is also sent early once 200 events are waiting.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="ProgressThrottleSeconds" label="Playback progress at most every (seconds)" min="10" max="600" />
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="MaxQueueSize" label="Maximum queued events while Arclight is unreachable" min="500" max="50000" />
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Jellyfin Web features</h3>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableWebInjection" /><span>Load the Arclight script in Jellyfin Web</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Adds the features below to Jellyfin Web and apps that embed it. Users may need to reload the page.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="PatchIndexHtmlOnDisk" /><span>Also write the script tag into index.html on disk (fallback)</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Only needed if the script does not load, e.g. when a reverse proxy serves Jellyfin Web files itself. Requires write access to the web folder; removed again when unchecked or on uninstall.</div>
+                        </div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableSearch" /><span>Arclight results in Jellyfin search</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableRequests" /><span>Request buttons</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableItemBadges" /><span>Status badges on item pages</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableWatchlist" /><span>Watchlist button</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableIssues" /><span>Report a problem</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableLanguageRequests" /><span>Subtitle / audio language requests</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableDiscover" /><span>Discover page (trending, popular, upcoming)</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableUpcoming" /><span>"Coming soon" row on the home screen</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableMyRequests" /><span>"My requests" page</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableProviders" /><span>"Also on" streaming services (data from JustWatch)</span></label></div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="ProvidersRegion" label="Streaming services region (two letters)" maxlength="2" />
+                            <div class="fieldDescription">For example US, GB, DE.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableLabels" /><span>Quality and audio labels on posters</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">4K / 1080p, HDR / Dolby Vision, Atmos / 5.1, read from Jellyfin's own media info. Loaded lazily for visible posters only.</div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Arclight themes in Jellyfin</h3>
+                        <div class="selectContainer">
+                            <select is="emby-select" id="DefaultTheme" label="Default Jellyfin theme"></select>
+                            <div class="fieldDescription">Applies an Arclight theme pack installed on your Arclight server to Jellyfin Web (colours, fonts and corners only). "Follow" uses each user's own Arclight theme.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="LetUsersChooseTheme" /><span>Let users choose their theme</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Adds a palette button to the Jellyfin header. Choices are saved per Jellyfin user and follow them to every device.</div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Status</h3>
+                        <div id="ArclightStatus" class="fieldDescription">Loading…</div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function () {
+                var pluginId = 'a0751e21-86da-4afd-8e35-7da8b087febc';
+                var page = document.querySelector('#ArclightConfigPage');
+                var checkboxes = ['EnableEventForwarding', 'EnablePlaybackEvents', 'EnableUserDataEvents', 'EnableLibraryEvents', 'EnableUserEvents',
+                    'EnableWebInjection', 'PatchIndexHtmlOnDisk', 'EnableSearch', 'EnableRequests', 'EnableItemBadges', 'EnableWatchlist', 'EnableIssues', 'EnableLanguageRequests',
+                    'EnableDiscover', 'EnableUpcoming', 'EnableMyRequests', 'EnableProviders', 'EnableLabels', 'LetUsersChooseTheme'];
+                var numbers = { BatchIntervalSeconds: [2, 300, 10], ProgressThrottleSeconds: [10, 600, 60], MaxQueueSize: [500, 50000, 5000] };
+
+                function $(id) { return page.querySelector('#' + id); }
+
+                function arclight(method, path, body) {
+                    var headers = { 'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"', 'Accept': 'application/json' };
+                    var init = { method: method, headers: headers };
+                    if (body !== undefined) { headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
+                    return fetch(ApiClient.getUrl('Arclight/' + path), init).then(function (res) {
+                        return res.text().then(function (text) {
+                            var data = null;
+                            try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+                            if (!res.ok) { throw new Error((data && data.code) || ('HTTP ' + res.status)); }
+                            return data;
+                        });
+                    });
+                }
+
+                function fillThemes(current) {
+                    var select = $('DefaultTheme');
+                    function option(value, text) { var o = document.createElement('option'); o.value = value; o.textContent = text; return o; }
+                    select.textContent = '';
+                    select.appendChild(option('', 'Off'));
+                    select.appendChild(option('follow', "Follow each user's Arclight theme"));
+                    if (current && current !== 'follow') select.appendChild(option(current, current));
+                    select.value = current || '';
+                    arclight('GET', 'Themes').then(function (data) {
+                        var packs = (data && data.themes && data.themes.themes) || [];
+                        packs.forEach(function (p) {
+                            var existing = select.querySelector('option[value="' + p.id + '"]');
+                            if (existing) { existing.textContent = p.name + (p.dark ? ' (dark)' : ' (light)'); return; }
+                            select.appendChild(option(p.id, p.name + (p.dark ? ' (dark)' : ' (light)')));
+                        });
+                        select.value = current || '';
+                    }, function () { /* Arclight unreachable: keep the stored value */ });
+                }
+
+                function when(v) { return v ? new Date(v).toLocaleString() : 'never'; }
+
+                function text(node, value) { node.textContent = value; }
+
+                function loadStatus() {
+                    arclight('GET', 'Admin/Status').then(function (s) {
+                        $('ArclightApiKeyHint').textContent = s.hasApiKey
+                            ? 'A key is saved (' + s.apiKeyHint + '). Stored on the Jellyfin server only; leave empty to keep it.'
+                            : 'No key saved yet. Stored on the Jellyfin server only and never sent to browsers.';
+                        var lines = [
+                            'Plugin version ' + s.version + (s.configured ? '' : ' (not configured)'),
+                            'Events: ' + s.queue.delivered + ' delivered, ' + s.queue.pending + ' waiting, ' + s.queue.dropped + ' dropped; last delivery ' + when(s.lastSuccess),
+                            s.lastError ? 'Last problem: ' + s.lastError : null,
+                            'Web script: index.html last injected ' + when(s.injection.lastInjected) + ', script last loaded ' + when(s.injection.lastScriptServed),
+                            s.injection.diskPatch ? 'On-disk patch: ' + s.injection.diskPatch : null,
+                            s.injection.lastError ? 'Injection problem: ' + s.injection.lastError : null
+                        ].filter(Boolean);
+                        var box = $('ArclightStatus');
+                        box.textContent = '';
+                        lines.forEach(function (l) { var d = document.createElement('div'); d.textContent = l; box.appendChild(d); });
+                    }, function (e) { text($('ArclightStatus'), 'Status unavailable: ' + e.message); });
+                }
+
+                page.addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        $('ArclightUrl').value = config.ArclightUrl || '';
+                        $('ArclightApiKey').value = '';
+                        $('ArclightClearKey').checked = false;
+                        checkboxes.forEach(function (k) { $(k).checked = !!config[k]; });
+                        Object.keys(numbers).forEach(function (k) { $(k).value = config[k] || numbers[k][2]; });
+                        $('ProvidersRegion').value = config.ProvidersRegion || 'US';
+                        fillThemes(config.DefaultTheme || '');
+                        Dashboard.hideLoadingMsg();
+                        loadStatus();
+                    });
+                });
+
+                $('ArclightTest').addEventListener('click', function () {
+                    var out = $('ArclightTestResult');
+                    text(out, 'Testing…');
+                    arclight('POST', 'Admin/TestConnection', { url: $('ArclightUrl').value.trim(), apiKey: $('ArclightApiKey').value.trim() }).then(function (r) {
+                        if (r.ok) {
+                            var p = r.ping || {};
+                            text(out, 'Connected to ' + (p.serverName || 'Arclight') + (p.version ? ' ' + p.version : '') +
+                                '. Linked users: ' + (p.linkedUsers !== undefined ? p.linkedUsers : '?') +
+                                (p.features && p.features.length ? '. Features: ' + p.features.join(', ') : '') + '.');
+                        } else {
+                            var reasons = { invalid_url: 'The URL is not a valid http(s) address.', missing_api_key: 'Enter an API key first.', unreachable: 'Arclight could not be reached from the Jellyfin server.', bad_api_key: 'Arclight rejected the API key.', not_arclight: 'That address did not answer like Arclight.', not_arclight_or_too_old: 'That address is not Arclight, or Arclight is too old for this plugin.' };
+                            text(out, 'Failed: ' + (reasons[r.error] || r.error || ('HTTP ' + r.status)));
+                        }
+                    }, function (e) { text(out, 'Failed: ' + e.message); });
+                });
+
+                page.querySelector('#ArclightConfigForm').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        config.ArclightUrl = $('ArclightUrl').value.trim();
+                        var region = $('ProvidersRegion').value.trim().toUpperCase();
+                        config.ProvidersRegion = /^[A-Z]{2}$/.test(region) ? region : 'US';
+                        config.DefaultTheme = $('DefaultTheme').value;
+                        checkboxes.forEach(function (k) { config[k] = $(k).checked; });
+                        Object.keys(numbers).forEach(function (k) {
+                            var n = parseInt($(k).value, 10);
+                            if (isNaN(n)) { n = numbers[k][2]; }
+                            config[k] = Math.min(numbers[k][1], Math.max(numbers[k][0], n));
+                        });
+                        var key = $('ArclightApiKey').value.trim();
+                        var keyStep = $('ArclightClearKey').checked ? arclight('POST', 'Admin/ApiKey', { apiKey: '' })
+                            : key ? arclight('POST', 'Admin/ApiKey', { apiKey: key }) : Promise.resolve();
+                        return keyStep.then(function () {
+                            return ApiClient.updatePluginConfiguration(pluginId, config);
+                        }).then(function (result) {
+                            $('ArclightApiKey').value = '';
+                            $('ArclightClearKey').checked = false;
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                            loadStatus();
+                        });
+                    }).catch(function (err) {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert({ message: 'Saving failed: ' + (err && err.message ? err.message : err) });
+                    });
+                    return false;
+                });
+            })();
+        </script>
+    </div>
+</body>
+</html>

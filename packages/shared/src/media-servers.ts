@@ -19,6 +19,20 @@ import { MediaServerKind } from './requests.js';
 export const MediaServerConnectionKind = z.enum([...MediaServerKind.options, 'audiobookshelf']);
 export type MediaServerConnectionKind = z.infer<typeof MediaServerConnectionKind>;
 
+/** Kinds whose play state the watch-history sync and the Jellyfin plugin read. */
+export function isMediaBrowserKind(kind: MediaServerConnectionKind): kind is 'jellyfin' | 'emby' {
+  return kind === 'jellyfin' || kind === 'emby';
+}
+
+/**
+ * Whether the watch-history sync reads this connection: enabled Jellyfin/Emby servers with
+ * `syncWatchHistory` on. Connections saved before the flag existed follow `usedForRetention`,
+ * so an upgrade only starts syncing servers that already fed retention.
+ */
+export function watchSyncEnabled(config: { kind: MediaServerConnectionKind; enabled: boolean; usedForRetention: boolean; syncWatchHistory?: boolean | undefined }): boolean {
+  return config.enabled && isMediaBrowserKind(config.kind) && (config.syncWatchHistory ?? config.usedForRetention);
+}
+
 /** Kinds that can be a sign-in provider (`loginEnabled`). */
 export function isLoginCapableKind(kind: MediaServerConnectionKind): kind is MediaServerKind {
   return kind !== 'audiobookshelf';
@@ -46,6 +60,23 @@ export const MediaServerConfig = z.object({
   loginEnabled: z.boolean().default(false),
   /** A first sign-in through this server creates a local account. */
   createUsersOnLogin: z.boolean().default(false),
+  /**
+   * Jellyfin/Emby only: the MediaServerWatchSync job copies every user's play state into
+   * Arclight's watch history. Absent on connections saved before the option existed: those
+   * follow `usedForRetention` (see `watchSyncEnabled`). New connections default to on.
+   */
+  syncWatchHistory: z.boolean().optional(),
+  /**
+   * Jellyfin/Emby only: MediaServerUserSync copies each linked account's parental control
+   * (Policy.MaxParentalRating) into the Arclight user's content restrictions, overwriting manual
+   * edits while on. Mapping: `parentalRatingToCaps` (apps/api watch-history/parental.ts). Absent = off.
+   */
+  mirrorParentalControls: z.boolean().optional(),
+  /**
+   * The server's own id (Jellyfin/Emby System/Info `Id`), stored on the first successful call.
+   * The Jellyfin plugin names its server by this id.
+   */
+  remoteId: z.string().max(128).optional(),
 });
 export type MediaServerConfig = z.infer<typeof MediaServerConfig>;
 
@@ -55,7 +86,10 @@ export const MediaServersSettings = z.object({
 });
 export type MediaServersSettings = z.infer<typeof MediaServersSettings>;
 
-/** GET /mediaserver, /mediaserver/:id. `apiKey` is SECRET_MASK when one is stored, '' otherwise. */
+/**
+ * GET /mediaserver, /mediaserver/:id. `apiKey` is SECRET_MASK when one is stored, '' otherwise;
+ * `syncWatchHistory` is always present (the effective value for Jellyfin/Emby, false otherwise).
+ */
 export const MediaServerResource = MediaServerConfig;
 export type MediaServerResource = MediaServerConfig;
 
@@ -74,6 +108,10 @@ export const MediaServerInput = z.object({
   usedForRefresh: z.boolean().default(false),
   loginEnabled: z.boolean().default(false),
   createUsersOnLogin: z.boolean().default(false),
+  /** Jellyfin/Emby only (ignored for other kinds). */
+  syncWatchHistory: z.boolean().default(true),
+  /** Jellyfin/Emby only: mirror Jellyfin parental controls into content restrictions (default off). */
+  mirrorParentalControls: z.boolean().default(false),
 });
 export type MediaServerInput = z.infer<typeof MediaServerInput>;
 export type MediaServerInputRaw = z.input<typeof MediaServerInput>;

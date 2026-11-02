@@ -45,7 +45,8 @@ describe('MediaBrowserServerClient (Jellyfin/Emby)', () => {
     const { c } = client({ 'GET /jellyfin/Users': jf.users });
     const users = await c.users();
     expect(users).toHaveLength(3);
-    expect(users[0]).toEqual({ id: 'u-alice', name: 'alice', isAdmin: true, isDisabled: false, lastActivityAt: '2026-10-20T21:14:05.000Z' });
+    expect(users[0]).toMatchObject({ id: 'u-alice', name: 'alice', isAdmin: true, isDisabled: false, lastActivityAt: '2026-10-20T21:14:05.000Z' });
+    expect(users[0]!.parental).toEqual({ maxRating: null, maxSubRating: null, blockUnrated: [] });
     expect(users[1]!.lastActivityAt).toBeNull();
     expect(users[2]!.isDisabled).toBe(true);
   });
@@ -198,5 +199,75 @@ describe('MediaBrowserServerClient (Jellyfin/Emby)', () => {
     await expect(c.listItems('movie')).rejects.toMatchObject({ code: 'remoteError' });
     fail = false;
     expect(await c.listItems('movie')).toHaveLength(2);
+  });
+
+  describe('watch items', () => {
+    const row = (id: string, played: string | null, extra: Record<string, unknown> = {}) => ({
+      Id: id,
+      Name: id,
+      Type: 'Movie',
+      ProviderIds: { Tmdb: '1' },
+      RunTimeTicks: 72_000_000_000,
+      UserData: { Played: played !== null, PlayCount: played ? 2 : 0, LastPlayedDate: played, PlaybackPositionTicks: 600_000_000, IsFavorite: id === 'a' },
+      ...extra,
+    });
+
+    it('pages a full read of present movies and episodes with user data', async () => {
+      const { c, calls } = client(
+        {
+          'GET /jellyfin/Users/u1/Items': (call: { url: URL }) => {
+            const start = Number(call.url.searchParams.get('StartIndex'));
+            const items =
+              start === 0
+                ? [row('a', '2026-01-02T00:00:00Z'), row('b', null)]
+                : [row('e', null, { Type: 'Episode', SeriesId: 's', SeasonId: 'ss', ParentIndexNumber: 1, IndexNumber: 3 }), row('v', null, { LocationType: 'Virtual' })];
+            return { json: { Items: items, TotalRecordCount: 4 } };
+          },
+        },
+        'jellyfin',
+        2,
+      );
+      const items = await c.watchItems('u1');
+      expect(items.map((i) => i.id)).toEqual(['a', 'b', 'e']);
+      expect(items[0]).toMatchObject({ type: 'Movie', played: true, playCount: 2, positionMs: 60_000, durationMs: 7_200_000, favorite: true, lastPlayedAt: '2026-01-02T00:00:00.000Z' });
+      expect(items[2]).toMatchObject({ type: 'Episode', seriesId: 's', seasonId: 'ss', seasonNumber: 1, episodeNumber: 3 });
+      expect(calls[0]!.url.searchParams.get('IncludeItemTypes')).toBe('Movie,Episode');
+      expect(calls[0]!.url.searchParams.get('EnableUserData')).toBe('true');
+      expect(calls[0]!.url.searchParams.has('MinDateLastSavedForUser')).toBe(false);
+    });
+
+    it('reads incrementally by DatePlayed and stops at the first older item', async () => {
+      const { c, calls } = client(
+        {
+          'GET /jellyfin/Users/u1/Items': () => ({
+            json: { Items: [row('new', '2026-03-02T00:00:00Z'), row('mid', '2026-03-01T00:00:00Z'), row('old', '2026-01-01T00:00:00Z')], TotalRecordCount: 50 },
+          }),
+        },
+        'jellyfin',
+        3,
+      );
+      const items = await c.watchItems('u1', { playedSince: '2026-02-01T00:00:00.000Z' });
+      expect(items.map((i) => i.id)).toEqual(['new', 'mid']);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.url.searchParams.get('SortBy')).toBe('DatePlayed');
+      expect(calls[0]!.url.searchParams.get('SortOrder')).toBe('Descending');
+    });
+
+    it('looks items up by id with their series and numbers', async () => {
+      const { c, calls } = client({
+        'GET /jellyfin/Items': {
+          Items: [
+            { Id: 'e1', Name: 'Pilot', Type: 'Episode', SeriesId: 's1', ParentIndexNumber: 1, IndexNumber: 1, ProviderIds: {} },
+            { Id: 'se', Name: 'Season 2', Type: 'Season', SeriesId: 's1', IndexNumber: 2 },
+          ],
+        },
+      });
+      const items = await c.itemsByIds(['e1', 'se']);
+      expect(items).toEqual([
+        { id: 'e1', type: 'Episode', name: 'Pilot', ids: { tmdbId: null, tvdbId: null, imdbId: null }, seriesId: 's1', seasonNumber: 1, episodeNumber: 1 },
+        { id: 'se', type: 'Season', name: 'Season 2', ids: { tmdbId: null, tvdbId: null, imdbId: null }, seriesId: 's1', seasonNumber: 2, episodeNumber: null },
+      ]);
+      expect(calls[0]!.url.searchParams.get('Ids')).toBe('e1,se');
+    });
   });
 });

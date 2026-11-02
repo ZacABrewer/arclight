@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { Permission } from '@arclight/shared';
 import { Button, EmptyState, ErrorBlock, PageHeader, Pane, SectionLabel, Skeleton, StatusChip, Trail } from '../arclight/index.js';
 import { useAuth } from '../auth/auth-context.js';
+import { NowPlayingPane } from '../features/watch-history/watch-history.js';
 import { usePermissions } from '../features/requests/status.js';
 import { useQueue } from '../hooks/activity.js';
 import { useGenerateSummary, useLatestSummary } from '../hooks/alerts.js';
@@ -478,6 +479,7 @@ export function DashboardPage() {
       <div className="dash-lower" data-admin={isAdmin || undefined}>
         {isAdmin ? <QueuePane /> : null}
         <div className="dash-side">
+          <NowPlayingPane />
           <RequestsPane />
           {isAdmin ? <SummaryPane /> : null}
         </div>

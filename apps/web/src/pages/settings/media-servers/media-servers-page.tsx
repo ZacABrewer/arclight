@@ -23,6 +23,7 @@ import { formatDateTime } from '../../../lib/ui-preferences.js';
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
+import { JellyfinPluginSection, WatchHistorySection } from './watch-sync.js';
 import './media-servers.css';
 import { t } from '../../../i18n/index.js';
 
@@ -55,7 +56,7 @@ const URL_PLACEHOLDERS: Record<MediaServerConnectionKind, string> = {
   audiobookshelf: 'http://audiobookshelf.lan:13378',
 };
 
-type Flag = 'enabled' | 'usedForAvailability' | 'usedForRetention' | 'usedForRefresh' | 'loginEnabled' | 'createUsersOnLogin';
+type Flag = 'enabled' | 'usedForAvailability' | 'usedForRetention' | 'usedForRefresh' | 'loginEnabled' | 'createUsersOnLogin' | 'syncWatchHistory' | 'mirrorParentalControls';
 
 export const FLAG_ROWS: ReadonlyArray<{ key: Flag; label: string; caption: string }> = [
   { key: 'enabled', get label() { return t('common.enabled'); }, get caption() { return t('settings.mediaServers.offKeepsTheConnectionBut'); } },
@@ -64,6 +65,8 @@ export const FLAG_ROWS: ReadonlyArray<{ key: Flag; label: string; caption: strin
   { key: 'usedForRefresh', get label() { return t('settings.mediaServers.libraryRefresh'); }, get caption() { return t('settings.mediaServers.rescanThisServerAfterImports'); } },
   { key: 'loginEnabled', get label() { return t('settings.mediaServers.signIn'); }, get caption() { return t('settings.mediaServers.usersMaySignInWith'); } },
   { key: 'createUsersOnLogin', get label() { return t('settings.mediaServers.createUsersOnSignIn'); }, get caption() { return t('settings.mediaServers.aFirstSignInCreates'); } },
+  { key: 'syncWatchHistory', get label() { return t('settings.mediaServers.syncWatchHistory'); }, get caption() { return t('settings.mediaServers.syncWatchHistoryCaption'); } },
+  { key: 'mirrorParentalControls', get label() { return t('settings.mediaServers.mirrorParentalControls'); }, get caption() { return t('settings.mediaServers.mirrorParentalControlsCaption'); } },
 ];
 
 /**
@@ -71,7 +74,9 @@ export const FLAG_ROWS: ReadonlyArray<{ key: Flag; label: string; caption: strin
  * retention or sign-in, just "enabled" and the refresh after audiobook imports.
  */
 export function flagRowsFor(kind: MediaServerConnectionKind): ReadonlyArray<{ key: Flag; label: string; caption: string }> {
-  if (isLoginCapableKind(kind)) return FLAG_ROWS;
+  // Watch-history sync reads Jellyfin/Emby only.
+  // Watch-history sync and parental-control mirroring read Jellyfin/Emby only.
+  if (isLoginCapableKind(kind)) return kind === 'plex' ? FLAG_ROWS.filter((f) => f.key !== 'syncWatchHistory' && f.key !== 'mirrorParentalControls') : FLAG_ROWS;
   return FLAG_ROWS.filter((f) => f.key === 'enabled' || f.key === 'usedForRefresh').map((f) =>
     f.key === 'usedForRefresh' ? { key: f.key, label: t('settings.mediaServers.refreshAfterImports'), caption: t('settings.mediaServers.absRefreshCaption') } : f,
   );
@@ -80,7 +85,7 @@ export function flagRowsFor(kind: MediaServerConnectionKind): ReadonlyArray<{ ke
 /** Switching kinds: Audiobookshelf drops the video-only uses and is refreshed after imports by default. */
 export function withKind(v: MediaServerInputRaw, kind: MediaServerConnectionKind): MediaServerInputRaw {
   if (isLoginCapableKind(kind)) return { ...v, kind };
-  return { ...v, kind, usedForAvailability: false, usedForRetention: false, loginEnabled: false, createUsersOnLogin: false, usedForRefresh: true };
+  return { ...v, kind, usedForAvailability: false, usedForRetention: false, loginEnabled: false, createUsersOnLogin: false, syncWatchHistory: false, mirrorParentalControls: false, usedForRefresh: true };
 }
 
 /** Chips naming what a server is used for: "Availability", "Retention", "Refresh", "Sign-in". */
@@ -135,11 +140,14 @@ function blankServer(): MediaServerInputRaw {
     usedForRefresh: false,
     loginEnabled: false,
     createUsersOnLogin: false,
+    syncWatchHistory: true,
+    mirrorParentalControls: false,
   };
 }
 
 function toInput(s: MediaServerResource): MediaServerInputRaw {
-  const { id: _id, ...rest } = s;
+  // remoteId is learned by the api, never sent back.
+  const { id: _id, remoteId: _remoteId, ...rest } = s;
   return rest;
 }
 
@@ -559,6 +567,8 @@ export function MediaServersPage() {
           </>
         )}
       </SettingsSection>
+      <WatchHistorySection servers={list.data ?? []} />
+      <JellyfinPluginSection />
       <SignInSection servers={list.data ?? []} />
       {editing ? <ServerEditor server={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
       {accounts ? <AccountsDialog server={accounts} onClose={() => setAccounts(null)} /> : null}

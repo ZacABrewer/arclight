@@ -64,6 +64,7 @@ export {
   type PersonSearchResult,
   type TmdbListName,
   type WatchProviderRef,
+  type TitleWatchProviders,
   type WatchRegion,
 } from './types.js';
 

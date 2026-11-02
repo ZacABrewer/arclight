@@ -249,6 +249,15 @@ export interface WatchProviderRef {
   displayPriority: number;
 }
 
+/** Where one title streams in one region (TMDB /{movie|tv}/{id}/watch/providers, data from JustWatch). */
+export interface TitleWatchProviders {
+  /** TMDB's watch page for the title in that region. */
+  link: string | null;
+  flatrate: WatchProviderRef[];
+  rent: WatchProviderRef[];
+  buy: WatchProviderRef[];
+}
+
 export interface WatchRegion {
   /** ISO-3166-1 code. */
   code: string;

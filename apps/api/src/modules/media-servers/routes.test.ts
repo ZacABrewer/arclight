@@ -49,6 +49,8 @@ describe('media-servers routes', () => {
       usedForRefresh: false,
       loginEnabled: false,
       createUsersOnLogin: false,
+      syncWatchHistory: true,
+      mirrorParentalControls: false,
     });
     expect(JSON.stringify((await app.inject({ method: 'GET', url: '/api/v1/mediaserver' })).json())).not.toContain('top-secret');
     expect(getSection(db, 'mediaServers').servers[0]!.apiKey).toBe('top-secret');

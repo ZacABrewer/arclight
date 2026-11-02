@@ -60,6 +60,11 @@ export interface MediaServerUser {
   isDisabled: boolean;
   /** ISO-8601, when the server reports it. */
   lastActivityAt: string | null;
+  /**
+   * Jellyfin/Emby parental control (Policy): `maxRating` is MaxParentalRating (a rating score,
+   * null = no limit), `blockUnrated` the BlockUnratedItems kinds. Absent for other servers.
+   */
+  parental?: { maxRating: number | null; maxSubRating: number | null; blockUnrated: string[] };
 }
 
 export interface MediaServerItem {

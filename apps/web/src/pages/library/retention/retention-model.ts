@@ -23,6 +23,7 @@ export const CONDITION_OPTIONS: ReadonlyArray<{ value: ConditionType; label: str
   { value: 'addedOlderThanDays', get label() { return t('library.retention.addedMoreThanNDays'); } },
   { value: 'notWatchedWithinDays', get label() { return t('library.retention.notWatchedInNDays'); } },
   { value: 'sizeAbove', get label() { return t('library.retention.largerThan'); } },
+  { value: 'notWatchedByRequesterWithinDays', get label() { return t('library.retention.notWatchedByRequesterInNDays'); } },
 ];
 
 export const ACTION_OPTIONS: ReadonlyArray<{ value: RetentionAction; label: string }> = [
@@ -52,6 +53,8 @@ export function defaultCondition(type: ConditionType): RetentionCondition {
       return { type, days: 180 };
     case 'sizeAbove':
       return { type, bytes: 50 * GIB };
+    case 'notWatchedByRequesterWithinDays':
+      return { type, days: 90 };
   }
 }
 
@@ -70,6 +73,8 @@ export function conditionLabel(c: RetentionCondition): string {
       return t('library.retention.notWatchedInDays', { days: c.days });
     case 'sizeAbove':
       return t('library.retention.largerThanBytes', { bytes: formatBytes(c.bytes) });
+    case 'notWatchedByRequesterWithinDays':
+      return t('library.retention.notWatchedByRequesterInDays', { days: c.days });
   }
 }
 
@@ -94,6 +99,7 @@ export function emptyRule(): RetentionRuleInput {
     addExclusion: false,
     keepIfRequestedWithinDays: null,
     keepIfInCollection: false,
+    keepIfRequesterHasNotWatched: false,
     dryRun: true,
   };
 }
@@ -113,10 +119,10 @@ export function validateRule(input: RetentionRuleInput, existingNames: readonly 
   if (input.conditions.length === 0) errors.push(t('library.retention.addAtLeastOneCondition'));
   for (const c of input.conditions) {
     if (c.type === 'watchedByUsers' && c.users.length === 0) errors.push(t('library.retention.nameAtLeastOneUser'));
-    if ((c.type === 'addedOlderThanDays' || c.type === 'notWatchedWithinDays' || c.type === 'sizeAbove') && !Number.isFinite(c.type === 'sizeAbove' ? c.bytes : c.days)) {
+    if ((c.type === 'addedOlderThanDays' || c.type === 'notWatchedWithinDays' || c.type === 'notWatchedByRequesterWithinDays' || c.type === 'sizeAbove') && !Number.isFinite(c.type === 'sizeAbove' ? c.bytes : c.days)) {
       errors.push(t('library.retention.conditionlabelNeedsANumber', { conditionLabel: conditionLabel(c) }));
     }
-    if (c.type === 'notWatchedWithinDays' && c.days < 1) errors.push(t('library.retention.notWatchedInNDays2'));
+    if ((c.type === 'notWatchedWithinDays' || c.type === 'notWatchedByRequesterWithinDays') && c.days < 1) errors.push(t('library.retention.notWatchedInNDays2'));
   }
   if (input.scope.type === 'tags' && input.scope.tagIds.length === 0) errors.push(t('library.retention.pickAtLeastOneTag'));
   if (input.scope.type === 'rootFolders' && input.scope.paths.length === 0) errors.push(t('library.retention.pickAtLeastOneRoot'));

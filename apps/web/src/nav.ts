@@ -104,6 +104,7 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('common.pending'); }, to: '/activity/pending' },
       { get label() { return t('nav.crossSeeds'); }, to: '/activity/crossseed' },
       { get label() { return t('nav.transcodeJobs'); }, to: '/activity/transcode' },
+      { get label() { return t('nav.watchHistory'); }, to: '/activity/watchhistory' },
       { get label() { return t('common.manualImport'); }, to: '/activity/manual-import' },
     ],
   },

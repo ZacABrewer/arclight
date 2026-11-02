@@ -11,6 +11,7 @@ import { DeviceNotifications } from '../features/mobile/device-notifications.js'
 import { MobileAppSection } from '../features/mobile/mobile-app-section.js';
 import { isInApp, shell } from '../lib/native-app.js';
 import { MediaServerLinkPanel } from '../features/requests/media-server-link.js';
+import { WatchHistoryTable } from '../features/watch-history/watch-history.js';
 import '../components/media/media-kit.css';
 import { t } from '../i18n/index.js';
 
@@ -129,6 +130,9 @@ export function ProfilePage() {
         </Pane>
         <Pane title={t('profile.notificationsAndWatchlist')}>
           <UserRequestSettingsForm userId={user.id} />
+        </Pane>
+        <Pane title={t('profile.watchHistory')} aria-label={t('profile.watchHistory')}>
+          <WatchHistoryTable userId={user.id} showUser={false} />
         </Pane>
       </div>
       <ChangePasswordDialog open={changingPassword} onClose={() => setChangingPassword(false)} />

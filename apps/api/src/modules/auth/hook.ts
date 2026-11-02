@@ -58,6 +58,13 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 /** Route prefixes that answer without credentials; the setup routes guard themselves. */
 export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
 
+/** Routes a Jellyfin plugin key may call (decided on the matched route pattern). */
+export const PLUGIN_ROUTE_PREFIX = `${API_PREFIX}/jellyfin/`;
+
+export function isPluginRoute(routeUrl: string | undefined): boolean {
+  return routeUrl?.startsWith(PLUGIN_ROUTE_PREFIX) ?? false;
+}
+
 /** Decided on the matched route pattern, so encoded or dotted paths cannot sneak through. */
 export function isPublicRoute(routeUrl: string | undefined): boolean {
   if (!routeUrl?.startsWith(API_PREFIX)) return false;
@@ -150,7 +157,8 @@ export interface AuthHookOptions {
  * 1. no admin account yet: 403 SETUP_REQUIRED, except the setup bootstrap routes;
  * 2. resolve `req.auth` (session cookie, Basic, API key, local bypass);
  * 3. public routes answer; anonymous callers elsewhere get 401;
- * 4. admins (and API-key / bypass callers) pass; anyone else needs the route's
+ * 4. a Jellyfin plugin key passes on /api/v1/jellyfin/* and gets 403 anywhere else;
+ * 5. admins (and API-key / bypass callers) pass; anyone else needs the route's
  *    `config.access` to admit them for this method (nonAdminMay), else 403.
  */
 export function requireAuth(service: AuthService, options: AuthHookOptions | PublicRoutePredicate = {}) {
@@ -183,6 +191,10 @@ export function requireAuth(service: AuthService, options: AuthHookOptions | Pub
       if (when && when(req)) return;
     }
     if (!req.auth) return unauthorized(reply, service.security().method === 'basic');
+    if (req.auth.via === 'plugin') {
+      if (isPluginRoute(routeUrl)) return;
+      return reply.code(403).send({ error: 'this key may only call /api/v1/jellyfin/*', code: 'FORBIDDEN' });
+    }
     if (req.auth.isAdmin) return;
     if (!nonAdminMay(req.auth, req.method, req.routeOptions.config?.access)) {
       return reply.code(403).send({ error: 'admin only', code: 'FORBIDDEN' });

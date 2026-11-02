@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import type { RetentionEvent, RetentionLine } from '@arclight/notifications';
@@ -27,6 +27,11 @@ import { retentionCandidates, retentionRules, type RetentionCandidateRow, type R
 // applied once their grace period is over, unless an admin kept them. Rules that need play
 // state are skipped (candidates untouched, nothing applied) whenever a server cannot answer,
 // so an outage never looks like "nobody watched anything".
+//
+// Play state comes from the stored watch history (watch-history module) for every server whose
+// history is synced and fresh; servers without it (Plex, sync off, first sync not finished yet)
+// are read live as before. Linked server accounts are merged into their Arclight user by account
+// id; unlinked accounts stand alone (stored) or are merged by name (live read).
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Lines per list in the summary notification. */
@@ -44,8 +49,28 @@ export class RetentionError extends Error {
   }
 }
 
+/** Stored play state (watch-history module); retention reads it instead of the servers where it can. */
+export interface RetentionWatchSource {
+  /** Server ids whose stored state is complete and fresh. */
+  covered(): Set<string>;
+  rows(
+    mediaType: MediaKind,
+    serverIds: ReadonlySet<string>,
+  ): Array<{ libraryId: number; account: { id: number; name: string }; owner: LinkedOwner | null; played: boolean; lastPlayedAt: string | null }>;
+  /** Arclight users by `kind:externalId` (normalised), for the live read. */
+  links(): Map<string, LinkedOwner>;
+}
+
+export interface LinkedOwner {
+  id: number;
+  username: string;
+  displayName: string | null;
+}
+
 export interface RetentionServiceOptions {
   db: Db;
+  /** Stored watch history; absent: every server is read live. */
+  watchSource?: () => RetentionWatchSource;
   /** Clients for the servers flagged `usedForRetention` (fresh per call). */
   servers: () => ConfiguredClient[];
   apply: ApplyAction;
@@ -62,6 +87,7 @@ type WatchMap = Map<number, WatchFacts>;
 export class RetentionService {
   private readonly db: Db;
   private readonly servers: () => ConfiguredClient[];
+  private readonly watchSource: (() => RetentionWatchSource) | undefined;
   private readonly applyAction: ApplyAction;
   private readonly notify: ((event: RetentionEvent) => Promise<unknown>) | undefined;
   private readonly now: () => Date;
@@ -73,6 +99,7 @@ export class RetentionService {
   constructor(opts: RetentionServiceOptions) {
     this.db = opts.db;
     this.servers = opts.servers;
+    this.watchSource = opts.watchSource;
     this.applyAction = opts.apply;
     this.notify = opts.notify;
     this.now = opts.now ?? (() => new Date());
@@ -276,7 +303,8 @@ export class RetentionService {
       const matched = new Set<number>();
       for (const item of items.get(rule.mediaType) ?? []) {
         const facts: WatchFacts | null = watchMap ? (watchMap.get(item.id) ?? { found: false, users: [], lastPlayedAt: null }) : null;
-        const ev = evaluateRule(ruleInput, item, { now, watch: facts, lastRequestedAt: requested.get(rule.mediaType)?.get(item.tmdbId) ?? null });
+        const reqs = requested.get(rule.mediaType)?.get(item.tmdbId);
+        const ev = evaluateRule(ruleInput, item, { now, watch: facts, lastRequestedAt: reqs?.last ?? null, requesters: reqs?.requesters ?? [] });
         if (!ev.match) continue;
         matched.add(item.id);
         const preview: RetentionSweepPreview = {
@@ -451,23 +479,28 @@ export class RetentionService {
       .map((r) => ({ ...base(r), mediaType: 'movie' as const, tvdbId: null, inCollection: r.collection !== null && r.collection !== undefined }));
   }
 
-  /** Latest request date per TMDB id. */
-  private lastRequests(mediaType: MediaKind): Map<number, string> {
-    const out = new Map<number, string>();
+  /** Latest request date and the requesters (oldest request per user; declined ones left out) per TMDB id. */
+  private lastRequests(mediaType: MediaKind): Map<number, { last: string; requesters: Array<{ userId: number; requestedAt: string }> }> {
+    const out = new Map<number, { last: string; requesters: Array<{ userId: number; requestedAt: string }> }>();
     for (const r of this.db
-      .select({ tmdbId: mediaRequests.tmdbId, createdAt: mediaRequests.createdAt })
+      .select({ tmdbId: mediaRequests.tmdbId, createdAt: mediaRequests.createdAt, userId: mediaRequests.requestedById })
       .from(mediaRequests)
-      .where(eq(mediaRequests.type, mediaType))
+      .where(and(eq(mediaRequests.type, mediaType), ne(mediaRequests.status, 'declined')))
+      .orderBy(asc(mediaRequests.createdAt))
       .all()) {
-      const prev = out.get(r.tmdbId);
-      if (!prev || r.createdAt > prev) out.set(r.tmdbId, r.createdAt);
+      const entry = out.get(r.tmdbId) ?? { last: r.createdAt, requesters: [] };
+      if (r.createdAt > entry.last) entry.last = r.createdAt;
+      if (!entry.requesters.some((q) => q.userId === r.userId)) entry.requesters.push({ userId: r.userId, requestedAt: r.createdAt });
+      out.set(r.tmdbId, entry);
     }
     return out;
   }
 
   /**
-   * Who watched what, merged across servers by user name. Returns null when any server
-   * failed (the caller skips watch rules then); errors are appended to `errors`.
+   * Who watched what, merged across servers: stored history for covered servers, a live read for
+   * the rest. Linked accounts merge into their Arclight user (by account id), unlinked live users
+   * by name. Returns null when any live read failed (the caller skips watch rules then); errors are
+   * appended to `errors`.
    */
   private async watchFacts(
     mediaType: MediaKind,
@@ -485,27 +518,52 @@ export class RetentionService {
       (ids.tmdbId !== null ? byKey.get(`tmdb:${ids.tmdbId}`) : undefined) ??
       (ids.tvdbId !== null ? byKey.get(`tvdb:${ids.tvdbId}`) : undefined) ??
       (ids.imdbId !== null ? byKey.get(`imdb:${ids.imdbId.toLowerCase()}`) : undefined);
+    const known = new Set(items.map((i) => i.id));
 
     const merged = new Map<number, { found: boolean; users: Map<string, UserWatch>; lastPlayedAt: string | null }>();
+    const note = (id: number, key: string, who: Omit<UserWatch, 'played' | 'lastPlayedAt'>, played: boolean, lastPlayedAt: string | null) => {
+      let entry = merged.get(id);
+      if (!entry) {
+        entry = { found: true, users: new Map(), lastPlayedAt: null };
+        merged.set(id, entry);
+      }
+      const watch: UserWatch = entry.users.get(key) ?? { ...who, played: false, lastPlayedAt: null, aliases: [] };
+      for (const alias of who.aliases ?? []) if (!watch.aliases!.includes(alias)) watch.aliases!.push(alias);
+      watch.played ||= played;
+      watch.lastPlayedAt = later(watch.lastPlayedAt, lastPlayedAt);
+      entry.users.set(key, watch);
+      entry.lastPlayedAt = later(entry.lastPlayedAt, lastPlayedAt);
+    };
+    const ownerWho = (o: LinkedOwner, accountName: string) => ({
+      name: o.username,
+      userId: o.id,
+      aliases: [o.displayName, accountName].filter((n): n is string => typeof n === 'string' && n !== '' && n !== o.username),
+    });
+
+    const source = this.watchSource?.();
+    const covered = source?.covered() ?? new Set<string>();
+    const storedIds = new Set(servers.filter((s) => covered.has(s.config.id)).map((s) => s.config.id));
+    if (source && storedIds.size > 0) {
+      for (const r of source.rows(mediaType, storedIds)) {
+        if (!known.has(r.libraryId)) continue;
+        if (r.owner) note(r.libraryId, `u:${r.owner.id}`, ownerWho(r.owner, r.account.name), r.played, r.lastPlayedAt);
+        else note(r.libraryId, `ms:${r.account.id}`, { name: r.account.name, userId: null }, r.played, r.lastPlayedAt);
+      }
+    }
+
+    const links = source?.links() ?? new Map<string, LinkedOwner>();
     let ok = true;
     for (const { config, client } of servers) {
+      if (storedIds.has(config.id)) continue;
       try {
         const users = (await client.users()).filter((u) => !u.isDisabled);
         for (const user of users) {
+          const owner = links.get(`${config.kind}:${user.id.toLowerCase().replace(/-/g, '')}`);
           for (const { item, state } of await client.listPlayStates(user.id, mediaType)) {
             const id = lookup(item.ids);
             if (id === undefined) continue;
-            let entry = merged.get(id);
-            if (!entry) {
-              entry = { found: true, users: new Map(), lastPlayedAt: null };
-              merged.set(id, entry);
-            }
-            const key = user.name.toLowerCase();
-            const watch = entry.users.get(key) ?? { name: user.name, played: false, lastPlayedAt: null };
-            watch.played ||= state.played;
-            watch.lastPlayedAt = later(watch.lastPlayedAt, state.lastPlayedAt);
-            entry.users.set(key, watch);
-            entry.lastPlayedAt = later(entry.lastPlayedAt, state.lastPlayedAt);
+            if (owner) note(id, `u:${owner.id}`, ownerWho(owner, user.name), state.played, state.lastPlayedAt);
+            else note(id, `name:${user.name.toLowerCase()}`, { name: user.name, userId: null }, state.played, state.lastPlayedAt);
           }
         }
       } catch (err) {
@@ -543,8 +601,8 @@ export class RetentionService {
   }
 }
 
-function needsWatch(rule: Pick<RetentionRuleRow, 'conditions'>): boolean {
-  return rule.conditions.some((c) => WATCH_CONDITIONS.has(c.type));
+function needsWatch(rule: Pick<RetentionRuleRow, 'conditions' | 'keepIfRequesterHasNotWatched'>): boolean {
+  return rule.keepIfRequesterHasNotWatched || rule.conditions.some((c) => WATCH_CONDITIONS.has(c.type));
 }
 
 function later(a: string | null, b: string | null): string | null {
@@ -576,6 +634,7 @@ function toRule(row: RetentionRuleRow): RetentionRule {
     addExclusion: row.addExclusion,
     keepIfRequestedWithinDays: row.keepIfRequestedWithinDays,
     keepIfInCollection: row.keepIfInCollection,
+    keepIfRequesterHasNotWatched: row.keepIfRequesterHasNotWatched,
     dryRun: row.dryRun,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

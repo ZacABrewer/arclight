@@ -52,6 +52,8 @@ export * from './operations.js';
 export * from './profile-migration.js';
 export * from './media-servers.js';
 export * from './retention.js';
+export * from './watch-history.js';
+export * from './jellyfin-plugin.js';
 export * from './project.js';
 export * from './discord-bot.js';
 export * from './transcode.js';

@@ -383,6 +383,34 @@ export const tmdbCollectionSchema = z
   })
   .loose();
 
+const tmdbProviderEntry = z
+  .object({
+    provider_id: z.number(),
+    provider_name: z.string().default(''),
+    logo_path: nullableString,
+    display_priority: nullableNumber,
+  })
+  .loose();
+
+/** /movie/{id}/watch/providers and /tv/{id}/watch/providers: per-region offers. */
+export const tmdbTitleWatchProvidersSchema = z
+  .object({
+    results: z
+      .record(
+        z.string(),
+        z
+          .object({
+            link: nullableString,
+            flatrate: z.array(tmdbProviderEntry).default([]),
+            rent: z.array(tmdbProviderEntry).default([]),
+            buy: z.array(tmdbProviderEntry).default([]),
+          })
+          .loose(),
+      )
+      .default({}),
+  })
+  .loose();
+
 export const tmdbWatchProvidersSchema = z
   .object({
     results: z

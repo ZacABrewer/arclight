@@ -49,6 +49,8 @@ import { authModule, installAuth } from './modules/auth/index.js';
 import { guidesModule } from './modules/guides/index.js';
 import { mediaServersModule } from './modules/media-servers/index.js';
 import { retentionModule } from './modules/retention/index.js';
+import { watchHistoryModule } from './modules/watch-history/index.js';
+import { jellyfinPluginModule } from './modules/jellyfin-plugin/index.js';
 import { mediaAnalysisModule } from './modules/media-analysis/index.js';
 import { libraryHygieneModule } from './modules/library-hygiene/index.js';
 import { healthScanModule } from './modules/health-scan/index.js';
@@ -183,6 +185,10 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // "Add additional…" languages, over subtitles, releases and the library.
     additionalLanguagesModule,
     requestsModule,
+    // Watch history from Jellyfin/Emby (catch-up and account sync, timeline); creates linked users through requests.
+    watchHistoryModule,
+    // /jellyfin/*: the Arclight Jellyfin plugin's API over requests, discover and the watch history.
+    jellyfinPluginModule,
     // Slash commands and request channel posts over the requests service.
     discordBotModule,
     calendarModule,

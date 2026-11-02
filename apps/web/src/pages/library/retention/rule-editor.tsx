@@ -48,12 +48,12 @@ function ConditionRow({ index, value, onChange, onRemove, canRemove }: { index: 
           onChange(next);
         }}
       />
-      {value.type === 'addedOlderThanDays' || value.type === 'notWatchedWithinDays' ? (
+      {value.type === 'addedOlderThanDays' || value.type === 'notWatchedWithinDays' || value.type === 'notWatchedByRequesterWithinDays' ? (
         <>
           <label className="al-sr-only" htmlFor={valueId}>
             {t('library.retention.ruleEditor.conditionValueDays', { value: index + 1 })}
           </label>
-          <Input id={valueId} type="number" mono min={value.type === 'notWatchedWithinDays' ? 1 : 0} end="days" value={value.days} onChange={(e) => onChange({ ...value, days: Math.round(Number(e.currentTarget.value)) })} />
+          <Input id={valueId} type="number" mono min={value.type === 'addedOlderThanDays' ? 0 : 1} end="days" value={value.days} onChange={(e) => onChange({ ...value, days: Math.round(Number(e.currentTarget.value)) })} />
         </>
       ) : value.type === 'sizeAbove' ? (
         <>
@@ -251,6 +251,11 @@ export function RuleEditor({ open, rule, otherNames, onClose }: RuleEditorProps)
               }}
             />
           </Field>
+          <Checkbox
+            label={t('library.retention.ruleEditor.keepIfRequesterHasNotWatched')}
+            checked={draft.keepIfRequesterHasNotWatched ?? false}
+            onChange={(e) => set('keepIfRequesterHasNotWatched', e.currentTarget.checked)}
+          />
           {draft.mediaType === 'movie' ? (
             <Checkbox label={t('library.retention.ruleEditor.keepMoviesThatBelongTo')} checked={draft.keepIfInCollection} onChange={(e) => set('keepIfInCollection', e.currentTarget.checked)} />
           ) : null}

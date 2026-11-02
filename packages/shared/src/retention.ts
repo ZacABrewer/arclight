@@ -19,10 +19,12 @@ export const RetentionScope = z.discriminatedUnion('type', [
 export type RetentionScope = z.infer<typeof RetentionScope>;
 
 /**
- * One condition. A rule's conditions must all hold. Users are matched by name
- * (case-insensitive) across every server flagged `usedForRetention`; a user counts as having
- * watched an item when any of those servers says so. A series is watched when every episode
- * on the server is played.
+ * One condition. A rule's conditions must all hold. Play state comes from the stored watch
+ * history (Jellyfin/Emby servers with watch-history sync, users matched by their server account
+ * id and merged into the linked Arclight user) and, for servers without synced history yet, from
+ * a live read (users merged by name). `watchedByUsers` names match the Arclight username, its
+ * display name or the server account name (case-insensitive). A user counts as having watched an
+ * item when any server says so. A series is watched when every episode on the server is played.
  */
 export const RetentionCondition = z.discriminatedUnion('type', [
   /** Every enabled server user has watched it. */
@@ -37,11 +39,23 @@ export const RetentionCondition = z.discriminatedUnion('type', [
   z.object({ type: z.literal('notWatchedWithinDays'), days: z.number().int().min(1) }),
   /** Files on disk are larger than `bytes` in total. */
   z.object({ type: z.literal('sizeAbove'), bytes: z.number().int().min(0) }),
+  /**
+   * Someone requested it more than `days` ago and none of its requesters (linked to a media
+   * server account) played it within `days`. Items without a request, or whose requesters have
+   * no watch history for it, never match.
+   */
+  z.object({ type: z.literal('notWatchedByRequesterWithinDays'), days: z.number().int().min(1) }),
 ]);
 export type RetentionCondition = z.infer<typeof RetentionCondition>;
 
 /** Conditions that need play state from the media servers. */
-export const WATCH_CONDITIONS: ReadonlySet<RetentionCondition['type']> = new Set(['watchedByAll', 'watchedByAny', 'watchedByUsers', 'notWatchedWithinDays']);
+export const WATCH_CONDITIONS: ReadonlySet<RetentionCondition['type']> = new Set([
+  'watchedByAll',
+  'watchedByAny',
+  'watchedByUsers',
+  'notWatchedWithinDays',
+  'notWatchedByRequesterWithinDays',
+]);
 
 /**
  * `unmonitor`: stop searching. `deleteFiles`: move the files to the recycle bin and unmonitor
@@ -66,6 +80,11 @@ export const RetentionRuleInput = z.object({
   keepIfRequestedWithinDays: z.number().int().min(1).nullable().default(null),
   /** Movies only: keep movies that belong to a collection. */
   keepIfInCollection: z.boolean().default(false),
+  /**
+   * Keep items a requester has not played yet (requesters without a linked media server
+   * account or without watch history count as not having watched).
+   */
+  keepIfRequesterHasNotWatched: z.boolean().default(false),
   /** Stage and report candidates, never apply them automatically. */
   dryRun: z.boolean().default(true),
 });

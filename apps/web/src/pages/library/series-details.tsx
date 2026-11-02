@@ -72,6 +72,8 @@ import { SceneMappingPanel } from './scene-mapping/scene-mapping-panel.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
 import { ItemHealthPanel, useCanSeeHealth } from './item-health.js';
+import { useAuth } from '../../auth/auth-context.js';
+import { WatchedByPanel } from '../../features/watch-history/watch-history.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { EpisodeVersionFiles, VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
@@ -108,6 +110,7 @@ export function seasonSummary(season: Season, episodes: readonly Episode[] | und
 
 export function SeriesDetailsPage() {
   const canSeeHealth = useCanSeeHealth();
+  const { isAdmin } = useAuth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const series = useSeries(id);
@@ -224,6 +227,7 @@ export function SeriesDetailsPage() {
           { id: 'scenemapping', label: t('library.sceneMapping.tab'), content: <SceneMappingPanel seriesId={s.id} /> },
           { id: 'subtitles', label: t('common.subtitles'), content: <SubtitlesTab scope={{ seriesId: s.id }} episodes={episodes.data} /> },
           { id: 'requests', label: t('common.requests'), content: <RequestsTable kind="tv" tmdbId={s.tmdbId} /> },
+          ...(isAdmin ? [{ id: 'watchedby', label: t('watchHistory.watchedBy'), content: <WatchedByPanel mediaType="series" id={s.id} /> }] : []),
         ]}
       />
 

@@ -98,6 +98,32 @@ describe('MediaBrowserClient (Jellyfin/Emby)', () => {
     expect(srv.calls.every((c) => c.headers['X-Emby-Token'] === 'user-token')).toBe(true);
   });
 
+  it('lists the series of a favourite episode once, next to series favourites', async () => {
+    const srv = fakeServer((c) => {
+      if (c.url.pathname !== '/Users/u1/Items') return undefined;
+      const ids = c.url.searchParams.get('Ids');
+      if (ids) {
+        expect(ids).toBe('s2');
+        return { json: { Items: [{ Id: 's2', Name: 'Other show', Type: 'Series', ProviderIds: { Tmdb: '77' } }] } };
+      }
+      expect(c.url.searchParams.get('IncludeItemTypes')).toBe('Movie,Series,Episode');
+      return {
+        json: {
+          Items: [
+            { Id: 's1', Name: 'Show', Type: 'Series', ProviderIds: { Tvdb: '81189' } },
+            { Id: 'e1', Name: 'Pilot', Type: 'Episode', SeriesId: 's1' },
+            { Id: 'e2', Name: 'Finale', Type: 'Episode', SeriesId: 's2' },
+            { Id: 'e3', Name: 'Again', Type: 'Episode', SeriesId: 's2' },
+          ],
+          TotalRecordCount: 4,
+        },
+      };
+    });
+    const items = await new MediaBrowserClient({ kind: 'jellyfin', url: 'http://jf', apiKey: 'key', fetch: srv.fetch }).favorites('u1');
+    expect(items.map((i) => i.id)).toEqual(['s1', 's2']);
+    expect(items[1]).toMatchObject({ mediaType: 'series', ids: { tmdbId: 77 } });
+  });
+
   it('finds a series by provider id and counts present episodes per season', async () => {
     const srv = fakeServer((c) => {
       if (c.url.pathname !== '/Items') return undefined;

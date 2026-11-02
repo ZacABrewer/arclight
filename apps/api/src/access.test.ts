@@ -174,6 +174,8 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'PUT /api/v1/issuecomment/:id': 'portal',
   'DELETE /api/v1/issuecomment/:id': 'portal',
   'GET /api/v1/watchlist': 'portal',
+  // Own watch history (the query scopes non-admins to their linked accounts).
+  'GET /api/v1/watchhistory': 'portal',
   'POST /api/v1/watchlist': 'portal',
   'DELETE /api/v1/watchlist/:id': 'portal',
 

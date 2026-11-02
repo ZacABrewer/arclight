@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, asc } from 'drizzle-orm';
-import type { DiscoverOptions, MediaKind, MovieMetadata, PagedResults, SearchResult, SeriesMetadata, TmdbClient, TmdbListName } from '@arclight/metadata';
+import type { DiscoverOptions, MediaKind, MovieMetadata, PagedResults, SearchResult, SeriesMetadata, TitleWatchProviders, TmdbClient, TmdbListName } from '@arclight/metadata';
 import {
   BUILT_IN_SLIDERS,
   CollectionRequestInput,
@@ -392,6 +392,13 @@ export class DiscoverService {
     const r = (region ?? this.locale().region).toUpperCase();
     const list = await this.cached(`providers:${kind}:${r}`, STATIC_TTL_MS, (c) => c.getWatchProviders(kind, r));
     return list.map((p) => ({ id: p.tmdbId, name: p.name, imageUrl: p.logo ?? null }));
+  }
+
+  /** Where one title streams, rents or sells in a region (TMDB watch providers, data from JustWatch). Cached 12 h. */
+  async titleProviders(type: MediaType, tmdbId: number, region?: string): Promise<TitleWatchProviders> {
+    const r = (region ?? this.locale().region).toUpperCase();
+    const kind = type === 'movie' ? 'movie' : 'tv';
+    return this.cached(`titleProviders:${kind}:${tmdbId}:${r}`, 12 * 60 * 60 * 1000, (c) => c.getTitleWatchProviders(kind, tmdbId, r));
   }
 
   /** Name (and logo) of a studio, network or keyword for a grid page header. */

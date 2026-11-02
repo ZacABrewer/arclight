@@ -53,6 +53,52 @@ export interface MediaBrowserServerOptions {
   pageSize?: number;
 }
 
+/**
+ * One movie or episode with one user's play state (the watch-history sync). Episodes carry their
+ * series and season ids and numbers so the caller can resolve them against its own library.
+ */
+export interface MediaBrowserWatchItem {
+  id: string;
+  type: 'Movie' | 'Episode';
+  name: string;
+  ids: ProviderIds;
+  seriesId: string | null;
+  seasonId: string | null;
+  seasonNumber: number | null;
+  episodeNumber: number | null;
+  durationMs: number | null;
+  played: boolean;
+  /** Raw play count (a server-side "mark played" may leave it at 0). */
+  playCount: number;
+  lastPlayedAt: string | null;
+  positionMs: number;
+  favorite: boolean;
+}
+
+/** Any item by id (status lookups): type, provider ids and, for episodes and seasons, the series. */
+export interface MediaBrowserItemInfo {
+  id: string;
+  type: string;
+  name: string;
+  ids: ProviderIds;
+  seriesId: string | null;
+  seasonNumber: number | null;
+  episodeNumber: number | null;
+}
+
+export interface WatchItemsOptions {
+  /**
+   * Incremental read: only items whose last play is at or after this ISO time, newest first,
+   * stopping at the first older one. Without it every present movie and episode is listed.
+   *
+   * Jellyfin's `MinDateLastSavedForUser` filter is not used: despite its name the server compares
+   * it with the item's own DateLastSaved (metadata saves), not the user's data, so plays would be
+   * missed. Sorting by DatePlayed catches plays and progress; un-played and favourite changes
+   * only show up in a full read.
+   */
+  playedSince?: string | null;
+}
+
 /** 100-nanosecond ticks to milliseconds. */
 export function ticksToMs(value: unknown): number {
   const n = num(value);
@@ -202,6 +248,11 @@ export class MediaBrowserServerClient implements MediaServerClient {
           isAdmin: policy['IsAdministrator'] === true,
           isDisabled: policy['IsDisabled'] === true,
           lastActivityAt: isoDate(u['LastActivityDate']),
+          parental: {
+            maxRating: typeof policy['MaxParentalRating'] === 'number' ? policy['MaxParentalRating'] : null,
+            maxSubRating: typeof policy['MaxParentalSubRating'] === 'number' ? policy['MaxParentalSubRating'] : null,
+            blockUnrated: list(policy['BlockUnratedItems']).flatMap((k) => (typeof k === 'string' ? [k] : [])),
+          },
         },
       ];
     });
@@ -297,6 +348,63 @@ export class MediaBrowserServerClient implements MediaServerClient {
     });
   }
 
+  /** Movies and episodes with the user's play state (see WatchItemsOptions). */
+  async watchItems(userId: string, opts: WatchItemsOptions = {}): Promise<MediaBrowserWatchItem[]> {
+    const path = `Users/${encodeURIComponent(userId)}/Items`;
+    const query: Record<string, string> = {
+      Recursive: 'true',
+      IncludeItemTypes: 'Movie,Episode',
+      IsMissing: 'false',
+      EnableUserData: 'true',
+      Fields: 'ProviderIds',
+    };
+    if (!opts.playedSince) {
+      // A stable order so paging does not skip or repeat items while the library changes.
+      return (await this.paged(path, { ...query, SortBy: 'SortName', SortOrder: 'Ascending' })).filter(isPresent).flatMap((r) => toWatchItem(r) ?? []);
+    }
+    const since = opts.playedSince;
+    const out: MediaBrowserWatchItem[] = [];
+    for (let start = 0; start < 1_000_000; start += this.pageSize) {
+      const body = rec(await this.get(path, { ...query, SortBy: 'DatePlayed', SortOrder: 'Descending', StartIndex: String(start), Limit: String(this.pageSize) }));
+      const rows = list(body['Items']).map(rec);
+      let older = false;
+      for (const row of rows) {
+        const item = toWatchItem(row);
+        if (!item) continue;
+        if (!item.lastPlayedAt || item.lastPlayedAt < since) {
+          older = true;
+          break;
+        }
+        if (isPresent(row)) out.push(item);
+      }
+      const total = num(body['TotalRecordCount']) ?? rows.length;
+      if (older || rows.length < this.pageSize || start + this.pageSize >= total) break;
+    }
+    return out;
+  }
+
+  /** Items by Jellyfin/Emby id, any type (unknown ids are left out). */
+  async itemsByIds(ids: readonly string[]): Promise<MediaBrowserItemInfo[]> {
+    const out: MediaBrowserItemInfo[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const body = rec(await this.get('Items', { Ids: ids.slice(i, i + 100).join(','), Fields: 'ProviderIds' }));
+      for (const r of list(body['Items']).map(rec)) {
+        const id = str(r['Id']);
+        if (!id) continue;
+        out.push({
+          id,
+          type: str(r['Type']) ?? 'Unknown',
+          name: str(r['Name']) ?? id,
+          ids: mediaBrowserProviderIds(r['ProviderIds']),
+          seriesId: str(r['SeriesId']),
+          seasonNumber: str(r['Type']) === 'Season' ? num(r['IndexNumber']) : num(r['ParentIndexNumber']),
+          episodeNumber: str(r['Type']) === 'Episode' ? num(r['IndexNumber']) : null,
+        });
+      }
+    }
+    return out;
+  }
+
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {
     if (options.path) {
       await this.post('Library/Media/Updated', { Updates: [{ Path: options.path, UpdateType: options.updateType ?? 'Modified' }] });
@@ -308,6 +416,30 @@ export class MediaBrowserServerClient implements MediaServerClient {
 
 function isPresent(ep: Record<string, unknown>): boolean {
   return ep['LocationType'] !== 'Virtual' && ep['IsMissing'] !== true;
+}
+
+function toWatchItem(r: Record<string, unknown>): MediaBrowserWatchItem | null {
+  const type = str(r['Type']);
+  const id = str(r['Id']);
+  if ((type !== 'Movie' && type !== 'Episode') || !id) return null;
+  const data = rec(r['UserData']);
+  const duration = ticksToMs(r['RunTimeTicks']);
+  return {
+    id,
+    type,
+    name: str(r['Name']) ?? id,
+    ids: mediaBrowserProviderIds(r['ProviderIds']),
+    seriesId: type === 'Episode' ? str(r['SeriesId']) : null,
+    seasonId: type === 'Episode' ? str(r['SeasonId']) : null,
+    seasonNumber: type === 'Episode' ? num(r['ParentIndexNumber']) : null,
+    episodeNumber: type === 'Episode' ? num(r['IndexNumber']) : null,
+    durationMs: duration > 0 ? duration : null,
+    played: data['Played'] === true,
+    playCount: num(data['PlayCount']) ?? 0,
+    lastPlayedAt: isoDate(data['LastPlayedDate']),
+    positionMs: ticksToMs(data['PlaybackPositionTicks']),
+    favorite: data['IsFavorite'] === true,
+  };
 }
 
 function toItem(r: Record<string, unknown>): MediaServerItem | null {

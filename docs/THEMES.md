@@ -259,6 +259,38 @@ For a picture behind the app, ship it in `images/` and put it on a backdrop shap
 Keep images small (WebP at about 2000 px wide is usually under 200 KB). Otherwise draw
 backgrounds with gradients, `box-shadow` and the backdrop shapes.
 
+## Using themes in Jellyfin
+
+With the [Arclight for Jellyfin](https://github.com/ZacABrewer/arclight/tree/main/jellyfin-plugin) plugin, Jellyfin Web can wear the
+same theme packs. It is opt-in: the plugin's settings have **Default Jellyfin theme** (Off or any
+installed pack) and **Let users choose**; users then pick Off, "Follow my Arclight theme" or a pack.
+
+Arclight does not hand Jellyfin the pack's own stylesheet (that one targets Arclight's markup).
+`GET /api/v1/jellyfin/theme/<id>.css` **generates** a Jellyfin stylesheet at request time from the
+pack's design tokens: the `--al-*` variables of its `[data-theme="<id>"]` block (tokens a pack
+leaves out get the same kind of fallbacks the web app derives) and its `@font-face` rules.
+
+What is styled: page and backdrop tint, header and side drawer, tabs, cards (radius, overlay,
+text levels), list and detail panels, buttons (raised, primary, flat, links), inputs, selects and
+checkboxes, dialogs and action sheets, the player OSD gradient, progress bars and sliders,
+played/count indicators, scrollbars, selection and focus rings, and the plugin's own UI (through
+its `--arclight-*` variables). Only colours, fonts, corner radii, borders and shadows change:
+nothing is hidden, moved or resized, so Jellyfin's layout stays exactly as it is.
+
+- **Fonts** come only from the pack: each `@font-face` points at
+  `GET /api/v1/jellyfin/theme-fonts/<id>/<file>.woff2` (a relative `url(theme-fonts/...)`, which
+  the plugin proxies). A font the pack does not ship falls back to the system stack. No font CDN
+  is ever used.
+- **Caching**: the stylesheet carries an `ETag` built from the pack id, version, source and the
+  generator version, and `Cache-Control: public, max-age=3600`; `If-None-Match` answers 304.
+  Bump a pack's `version` and Jellyfin picks the change up within the hour.
+- **Private packs** work the same way: any pack installed on the server (bundled, synced or copied
+  into `<config>/themes`) is offered. Nothing is copied into the plugin.
+- Tron, the built-in look, has no tokens to map and is not offered (`tron.css` answers 404).
+- Limitations: backdrop images, glow and chamfer effects of a pack are not carried over;
+  Jellyfin clients that do not use Jellyfin Web (native TV and mobile apps) are not themed; heavily
+  customised Jellyfin CSS (Dashboard > General > Custom CSS) can win over the theme.
+
 ## Testing locally
 
 **With a dev server.** Put the folder in the repository's `themes/` and start `pnpm dev` from

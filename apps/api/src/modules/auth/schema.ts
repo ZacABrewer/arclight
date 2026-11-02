@@ -58,3 +58,24 @@ export const sessions = sqliteTable(
   },
   (t) => [uniqueIndex('sessions_token_hash_idx').on(t.tokenHash), index('sessions_user_idx').on(t.userId)],
 );
+
+/**
+ * API keys with a purpose narrower than the install-wide admin key (which lives in the `security`
+ * settings section). `jellyfin-plugin` keys may call /api/v1/jellyfin/* and nothing else (the
+ * auth hook enforces it). Only the sha256 of a key is stored; the key is shown once.
+ */
+export const pluginApiKeys = sqliteTable(
+  'plugin_api_keys',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    purpose: text('purpose').$type<'jellyfin-plugin'>().notNull().default('jellyfin-plugin'),
+    keyHash: text('key_hash').notNull(),
+    /** First characters of the key, to tell keys apart in the UI. */
+    prefix: text('prefix').notNull(),
+    createdAt: text('created_at').notNull(),
+    lastUsedAt: text('last_used_at'),
+    lastPingAt: text('last_ping_at'),
+  },
+  (t) => [uniqueIndex('plugin_api_keys_hash_idx').on(t.keyHash)],
+);

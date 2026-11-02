@@ -259,3 +259,38 @@ describe('createTmdbClient endpoints', () => {
     expect(tvCall?.url.searchParams.get('first_air_date_year')).toBe('2021');
   });
 });
+
+describe('getTitleWatchProviders', () => {
+  it('returns one region\'s offers sorted by priority, with logo urls, and caches them', async () => {
+    const fake = createFakeFetch((url) => {
+      if (url.pathname === '/3/movie/603/watch/providers') {
+        return jsonResponse({
+          id: 603,
+          results: {
+            US: {
+              link: 'https://www.themoviedb.org/movie/603/watch?locale=US',
+              flatrate: [
+                { provider_id: 9, provider_name: 'Later', logo_path: '/b.png', display_priority: 5 },
+                { provider_id: 8, provider_name: 'Streamer', logo_path: '/a.png', display_priority: 1 },
+              ],
+              rent: [{ provider_id: 2, provider_name: 'Rentals', logo_path: null, display_priority: 3 }],
+            },
+            GB: { link: 'https://gb', buy: [{ provider_id: 3, provider_name: 'Shop', logo_path: '/c.png', display_priority: 1 }] },
+          },
+        });
+      }
+      return defaultRoute(url);
+    });
+    const client = makeClient(fake);
+    const us = await client.getTitleWatchProviders('movie', 603, 'us');
+    expect(us.link).toContain('locale=US');
+    expect(us.flatrate.map((p) => p.name)).toEqual(['Streamer', 'Later']);
+    expect(us.flatrate[0]!.logo).toMatch(/\/a\.png$/);
+    expect(us.rent[0]).toEqual({ tmdbId: 2, name: 'Rentals', displayPriority: 3 });
+    expect(us.buy).toEqual([]);
+    const gb = await client.getTitleWatchProviders('movie', 603, 'GB');
+    expect(gb.buy.map((p) => p.name)).toEqual(['Shop']);
+    expect(await client.getTitleWatchProviders('movie', 603, 'DE')).toEqual({ link: null, flatrate: [], rent: [], buy: [] });
+    expect(fake.paths().filter((p) => p === '/3/movie/603/watch/providers')).toHaveLength(1);
+  });
+});

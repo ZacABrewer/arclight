@@ -182,18 +182,25 @@ export class MediaBrowserClient {
     return list(await this.getJson('Users')).map(accountOf).filter((a) => a.id !== '');
   }
 
-  /** The user's favourite movies and series (their watchlist). */
+  /**
+   * The user's favourite movies and series (their watchlist). A favourite episode stands for its
+   * series: the series is looked up once and listed (deduplicated with series favourites).
+   * Music and audiobook favourites are not read (the watchlist holds movies and series only).
+   */
   async favorites(userId: string, token?: string): Promise<MediaServerItem[]> {
     const out: MediaServerItem[] = [];
+    const seen = new Set<string>();
+    const episodeSeries = new Set<string>();
+    const path = `Users/${encodeURIComponent(userId)}/Items`;
     for (let start = 0; start < 10_000; start += PAGE) {
       const body = rec(
         await this.getJson(
-          `Users/${encodeURIComponent(userId)}/Items`,
+          path,
           {
             Filters: 'IsFavorite',
             Recursive: 'true',
-            IncludeItemTypes: 'Movie,Series',
-            Fields: 'ProviderIds,ProductionYear',
+            IncludeItemTypes: 'Movie,Series,Episode',
+            Fields: 'ProviderIds,ProductionYear,SeriesId',
             StartIndex: String(start),
             Limit: String(PAGE),
           },
@@ -202,11 +209,32 @@ export class MediaBrowserClient {
       );
       const items = list(body['Items']);
       for (const raw of items) {
+        if (rec(raw)['Type'] === 'Episode') {
+          const seriesId = str(rec(raw)['SeriesId']);
+          if (seriesId) episodeSeries.add(seriesId);
+          continue;
+        }
         const item = itemOf(raw);
-        if (item) out.push(item);
+        if (item && !seen.has(item.id)) {
+          seen.add(item.id);
+          out.push(item);
+        }
       }
       const total = num(body['TotalRecordCount']) ?? items.length;
       if (items.length < PAGE || start + PAGE >= total) break;
+    }
+    const missing = [...episodeSeries].filter((id) => !seen.has(id));
+    for (let i = 0; i < missing.length; i += 50) {
+      const body = rec(
+        await this.getJson(path, { Ids: missing.slice(i, i + 50).join(','), Fields: 'ProviderIds,ProductionYear' }, token ?? this.apiKey),
+      );
+      for (const raw of list(body['Items'])) {
+        const item = itemOf(raw);
+        if (item && item.mediaType === 'series' && !seen.has(item.id)) {
+          seen.add(item.id);
+          out.push(item);
+        }
+      }
     }
     return out;
   }

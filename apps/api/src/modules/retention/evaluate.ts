@@ -27,17 +27,21 @@ export interface LibraryItemFacts {
 }
 
 export interface UserWatch {
-  /** Display name as the server reports it. */
+  /** The Arclight username for linked accounts, else the name the server reports. */
   name: string;
   played: boolean;
   lastPlayedAt: string | null;
+  /** Arclight user id when the server account is linked to one. */
+  userId?: number | null;
+  /** Other names `watchedByUsers` matches (display name, server account names). */
+  aliases?: string[];
 }
 
 /** What the retention servers know about one item. */
 export interface WatchFacts {
   /** The item was matched on at least one server. */
   found: boolean;
-  /** One entry per user (merged by lower-cased name) who can see the item. */
+  /** One entry per user who can see the item (linked accounts merged into their Arclight user). */
   users: UserWatch[];
   /** Latest play by anyone. */
   lastPlayedAt: string | null;
@@ -49,12 +53,15 @@ export interface EvaluationContext {
   watch: WatchFacts | null;
   /** Latest request for the item (ISO-8601), if any. */
   lastRequestedAt: string | null;
+  /** Who requested the item and when (declined requests left out). */
+  requesters?: Array<{ userId: number; requestedAt: string }>;
 }
 
 export type RuleForEvaluation = Pick<
   RetentionRuleInput,
   'mediaType' | 'scope' | 'conditions' | 'action' | 'keepIfRequestedWithinDays' | 'keepIfInCollection'
->;
+> &
+  Partial<Pick<RetentionRuleInput, 'keepIfRequesterHasNotWatched'>>;
 
 export interface Evaluation {
   match: boolean;
@@ -125,7 +132,8 @@ export function checkCondition(condition: RetentionCondition, item: LibraryItemF
       return watchers.length > 0 ? `watched by ${names(watchers)}` : null;
     case 'watchedByUsers': {
       if (!watch?.found) return null;
-      const byName = new Map(watch.users.map((u) => [u.name.toLowerCase(), u]));
+      const byName = new Map<string, UserWatch>();
+      for (const u of watch.users) for (const n of [u.name, ...(u.aliases ?? [])]) byName.set(n.toLowerCase(), u);
       const ok = condition.users.every((n) => byName.get(n.toLowerCase())?.played === true);
       return ok ? `watched by ${names(condition.users)}` : null;
     }
@@ -144,6 +152,17 @@ export function checkCondition(condition: RetentionCondition, item: LibraryItemF
     }
     case 'sizeAbove':
       return item.sizeBytes > condition.bytes ? `${formatSize(item.sizeBytes)} on disk (over ${formatSize(condition.bytes)})` : null;
+    case 'notWatchedByRequesterWithinDays': {
+      const due = (ctx.requesters ?? []).filter((r) => daysBetween(r.requestedAt, ctx.now) > condition.days);
+      if (!watch || due.length === 0) return null;
+      const states = due.map((r) => watch.users.find((u) => u.userId === r.userId));
+      // A requester the history knows nothing about is no evidence either way.
+      if (states.some((u) => u === undefined)) return null;
+      const recent = states.some((u) => u!.lastPlayedAt !== null && daysBetween(u!.lastPlayedAt, ctx.now) <= condition.days);
+      if (recent) return null;
+      const who = names(states.map((u) => u!.name));
+      return `requested by ${who}, not watched by them in ${condition.days} days`;
+    }
   }
 }
 
@@ -159,6 +178,10 @@ export function evaluateRule(rule: RuleForEvaluation, item: LibraryItemFacts, ct
   if (rule.keepIfRequestedWithinDays && ctx.lastRequestedAt) {
     const age = daysBetween(ctx.lastRequestedAt, ctx.now);
     if (age < rule.keepIfRequestedWithinDays) return { match: false, reasons, keptBy: `requested ${age} days ago`, watchedBy };
+  }
+  if (rule.keepIfRequesterHasNotWatched && (ctx.requesters ?? []).length > 0) {
+    const waiting = (ctx.requesters ?? []).filter((r) => !ctx.watch?.users.some((u) => u.userId === r.userId && u.played));
+    if (waiting.length > 0) return { match: false, reasons, keptBy: 'a requester has not watched it yet', watchedBy };
   }
   if (rule.keepIfInCollection && item.mediaType === 'movie' && item.inCollection) {
     return { match: false, reasons, keptBy: 'part of a collection', watchedBy };

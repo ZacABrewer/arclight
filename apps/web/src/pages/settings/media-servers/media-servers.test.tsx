@@ -237,7 +237,10 @@ describe('Settings → Media servers', () => {
 describe('Audiobookshelf helpers', () => {
   it('limits the flags and resets video-only uses', () => {
     expect(flagRowsFor('audiobookshelf').map((f) => f.key)).toEqual(['enabled', 'usedForRefresh']);
-    expect(flagRowsFor('jellyfin')).toHaveLength(6);
+    expect(flagRowsFor('jellyfin')).toHaveLength(8);
+    expect(flagRowsFor('jellyfin').map((f) => f.key)).toContain('mirrorParentalControls');
+    expect(flagRowsFor('plex').map((f) => f.key)).not.toContain('syncWatchHistory');
+    expect(flagRowsFor('plex').map((f) => f.key)).not.toContain('mirrorParentalControls');
     expect(withKind({ kind: 'jellyfin', name: 'A', url: 'x', loginEnabled: true, usedForAvailability: true }, 'audiobookshelf')).toMatchObject({
       kind: 'audiobookshelf',
       loginEnabled: false,

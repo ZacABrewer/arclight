@@ -29,6 +29,8 @@ import { InteractiveSearchModal } from './interactive-search.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
 import { ItemHealthPanel, useCanSeeHealth } from './item-health.js';
+import { useAuth } from '../../auth/auth-context.js';
+import { WatchedByPanel } from '../../features/watch-history/watch-history.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { SearchTab } from './series-details.js';
 import { VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
@@ -63,6 +65,7 @@ export function releaseDates(m: Pick<Movie, 'inCinemas' | 'digitalRelease' | 'ph
 
 export function MovieDetailsPage() {
   const canSeeHealth = useCanSeeHealth();
+  const { isAdmin } = useAuth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const movie = useMovie(id);
@@ -191,6 +194,7 @@ export function MovieDetailsPage() {
           { id: 'search', label: t('common.search'), content: <SearchTab target={{ movieId: m.id }} /> },
           { id: 'subtitles', label: t('common.subtitles'), content: <SubtitlesTab scope={{ movieId: m.id }} /> },
           { id: 'requests', label: t('common.requests'), content: <RequestsTable kind="movie" tmdbId={m.tmdbId} /> },
+          ...(isAdmin ? [{ id: 'watchedby', label: t('watchHistory.watchedBy'), content: <WatchedByPanel mediaType="movie" id={m.id} /> }] : []),
         ]}
       />
 
