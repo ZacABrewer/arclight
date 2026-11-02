@@ -239,6 +239,26 @@ public class ProxyTests
     }
 
     [Fact]
+    public async Task Genre_endpoints_forward_and_validate()
+    {
+        var c = Controller();
+        await c.Genres("series", CancellationToken.None);
+        await c.DiscoverGenre("movie", 28, "rating", 3, CancellationToken.None);
+        await c.Discover("topRatedSeries", 1, CancellationToken.None);
+        var sent = _handler.Requests.Select(r => r.Request.RequestUri!.PathAndQuery).ToList();
+        Assert.Equal(new[]
+        {
+            "/api/v1/jellyfin/genres/series",
+            "/api/v1/jellyfin/discover/genre/movie/28?sort=rating&page=3",
+            "/api/v1/jellyfin/discover?category=topRatedSeries&page=1",
+        }, sent);
+        Assert.IsType<BadRequestObjectResult>(await c.DiscoverGenre("movie", 28, "random", 1, CancellationToken.None));
+        Assert.IsType<BadRequestObjectResult>(await c.DiscoverGenre("music", 28, null, 1, CancellationToken.None));
+        Assert.IsType<BadRequestObjectResult>(await c.Genres("anime", CancellationToken.None));
+        Assert.Equal(3, _handler.Requests.Count);
+    }
+
+    [Fact]
     public async Task New_endpoints_validate_and_respect_toggles()
     {
         var c = Controller();

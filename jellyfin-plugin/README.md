@@ -6,7 +6,17 @@ A Jellyfin server plugin that connects your existing Jellyfin to your [Arclight]
 - **Request from Jellyfin.** Jellyfin Web search gets an "Arclight" section with titles you don't have yet. Each one has a Request button, and for series you can pick seasons and ask for 4K.
 - **Status on item pages.** Movie, series, season and episode pages show chips such as "Requested by Sam", "Downloading 45% · ETA 12m", "Coming Mar 18" or "3 missing episodes", plus a "Request missing" button.
 - **Watchlist, problem reports and language requests.** Item pages get buttons to add to your Arclight watchlist, report a problem, and request subtitles or an audio language (when Arclight allows it).
-- **Discover and My requests.** A Discover page (Coming soon, Trending, Popular movies and series, Upcoming movies and series) and a My requests page with status, download progress and Cancel for pending requests.
+- **Title pages.** Titles you don't have yet open a full page:
+  - backdrop and poster, runtime, rating and TMDB score;
+  - genres (each opens its genre page), overview, cast with photos, director or creators, networks and studios;
+  - trailer (opens YouTube or Vimeo in a new tab, never embedded), release dates, and seasons with episode counts and status;
+  - "Also on", request status with the request dialog, watchlist, and "More like this".
+  Titles already in your Jellyfin open Jellyfin's own page instead, and library item pages get a "View in Arclight" link.
+- **Discover, genres and My requests.**
+  - Discover rows: Recommended for you (from your Arclight watch history; trending when there is none yet), Trending (today / this week), Coming soon, Popular movies and series, Top rated movies and series, In cinemas now, Upcoming movies, Airing today, On the air.
+  - Genre chips for movies and series. Every row has "See all", a grid that loads more as you scroll.
+  - Genre pages sort by popularity, rating, release date or title, and switch between movies and series.
+  - My requests shows status, download progress, and Cancel for pending requests.
 - **Coming soon on the home screen.** A row of monitored movies and episodes releasing in the next 30 days.
 - **Also on.** Item pages and the request dialog show where else a title streams, rents or sells in your region (data from JustWatch, via TMDB).
 - **Quality labels.** Posters and item pages show 4K/1080p/720p/SD, Dolby Vision/HDR, Atmos/5.1, audio languages and file size, read from Jellyfin's own media info.
@@ -125,7 +135,12 @@ The second approach is available as an opt-in fallback, **Also write the script 
 
 If injection can't happen at all, the plugin carries on as normal. Syncing and the `/Arclight` API keep working, and only the Jellyfin Web UI is missing. The plugin's settings page shows when `index.html` was last served with the script and when a browser last loaded the script, so you can tell whether injection is working. If your reverse proxy serves Jellyfin Web files itself, either turn on the on-disk fallback or add the tag above to the proxy's copy of `index.html`.
 
-**Pages and links.** Discover and My requests are full-page views the script draws over Jellyfin's current page when the address contains `?arclight=discover` or `?arclight=requests`, for example `#/home?arclight=discover`. Jellyfin's router treats that as its normal home page, so this works in both shells without registering routes, and Back closes the view. Links are added in three places: the classic drawer's `.customMenuOptions` slot (10.11 default layout), the 12.x app bar next to Favorites and libraries (desktop), and the 12.x MUI drawer (narrow screens), cloned from Jellyfin's own entries so they match. The Coming soon row is inserted into the home sections. Quality labels are fetched for visible posters only (IntersectionObserver), batched (≤ 100 ids per call, 250 ms debounce) and cached, so browsing stays fast.
+**Pages and links.** Discover, My requests, title pages, See all grids and genre pages are full-page views the script draws over Jellyfin's current page when the address contains `?arclight=...`:
+- `#/home?arclight=discover`
+- `?arclight=requests`
+- `?arclight=title&type=movie&id=603`
+- `?arclight=grid&category=topRatedMovies`
+- `?arclight=genre&type=series&genre=10765&name=...&sort=rating` Jellyfin's router treats that as its normal home page, so this works in both shells without registering routes, and Back closes the view. Links are added in three places: the classic drawer's `.customMenuOptions` slot (10.11 default layout), the 12.x app bar next to Favorites and libraries (desktop), and the 12.x MUI drawer (narrow screens), cloned from Jellyfin's own entries so they match. The Coming soon row is inserted into the home sections. Quality labels are fetched for visible posters only (IntersectionObserver), batched (≤ 100 ids per call, 250 ms debounce) and cached, so browsing stays fast.
 
 **Themes.** The palette button (12.x app bar or classic header) offers Server default, Off, Follow my Arclight theme, and every installed pack. The script adds `<link rel="stylesheet" href="/Arclight/Theme.css?theme=<pack>">`, swaps it live without a flash, and removes it for Off. "Follow" is re-resolved on every page load. Arclight generates the stylesheet from the pack's design tokens (see Arclight's THEMES.md, "Using themes in Jellyfin"). It changes colours, fonts, radii, borders and shadows only, never layout, and fonts come from Arclight itself, never a font CDN.
 
@@ -192,7 +207,9 @@ These endpoints are called by the web script, and any client may use them with a
 | `GET / POST / DELETE /Arclight/Watchlist` | `GET / POST / DELETE /api/v1/jellyfin/watchlist` |
 | `GET /Arclight/Item/{jellyfinItemId}` | `POST /api/v1/jellyfin/status`. Returns `{ item: { id, type, mediaType, tmdbId, seasonNumber, episodeNumber }, status }`. The item must be visible to the caller. |
 | `POST /Arclight/Status` `{ itemIds: [...≤100] }` | `POST /api/v1/jellyfin/status` |
-| `GET /Arclight/Discover?category=trending\|popularMovies\|popularSeries\|upcomingMovies\|upcomingSeries&page=` | `GET /api/v1/jellyfin/discover` |
+| `GET /Arclight/Discover?category=<row>&page=` (`recommended`, `trending`, `trendingDay`, `trendingWeek`, `popularMovies`, `popularSeries`, `topRatedMovies`, `topRatedSeries`, `nowPlaying`, `upcomingMovies`, `upcomingSeries`, `airingToday`, `onTheAir`) | `GET /api/v1/jellyfin/discover` |
+| `GET /Arclight/Genres/{movie\|series}` | `GET /api/v1/jellyfin/genres/:mediaType` |
+| `GET /Arclight/DiscoverGenre/{movie\|series}/{genreId}?sort=popularity\|rating\|releaseDate\|title&page=` | `GET /api/v1/jellyfin/discover/genre/:mediaType/:genreId` |
 | `GET /Arclight/Upcoming?days=30` | `GET /api/v1/jellyfin/upcoming`, then movies and episodes this Jellyfin already has are removed (library index refreshed every 10 minutes; missing/virtual episodes stay). |
 | `GET /Arclight/Providers/{movie\|series}/{tmdbId}` | `GET /api/v1/jellyfin/providers/...?region=<setting>` |
 | `GET /Arclight/Requests?take=&skip=`, `DELETE /Arclight/Requests/{id}?kind=media\|language` | `GET /api/v1/jellyfin/requests`, `DELETE /api/v1/jellyfin/requests/:id` |
@@ -202,6 +219,8 @@ These endpoints are called by the web script, and any client may use them with a
 | `GET /Arclight/Theme.css?theme=<pack>`, `GET /Arclight/theme-fonts/{pack}/{file}.woff2` | `GET /api/v1/jellyfin/theme/:id.css`, `/theme-fonts/:id/:file`. Anonymous (stylesheet links carry no token), ids validated. The plugin caches each file for an hour (so Arclight sees at most one fetch per pack per hour); browsers revalidate the stylesheet on every load with ETag/304 and keep fonts for a week. |
 | `GET /Arclight/web/arclight.js`, `arclight.css` | (none) Static, no authentication, contains no secrets. |
 | `GET /Arclight/Admin/Status`, `POST /Arclight/Admin/ApiKey`, `POST /Arclight/Admin/TestConnection` | (none / `ping`) Administrators only. |
+
+Search, Discover, genre pages, title pages (and their recommendations) and My requests responses are annotated with `jellyfinId` for titles this Jellyfin already has, from the same library index as Coming soon. The web UI uses it to open Jellyfin's own item page.
 
 The proxy validates every input (media type, positive TMDB id, query length ≤ 200, page 1-500, season numbers, issue type `video|audio|subtitles|other`, message ≤ 5000 characters, language 2-64 characters, ≤ 100 item ids). It rebuilds request bodies from known fields only, so nothing the browser sends is passed through as-is. Arclight's JSON responses are passed through, including `403 { code: "not_linked" }`. A `401` from Arclight (wrong API key) is returned as `502 { code: "arclight_auth_failed" }`, because Jellyfin clients treat a 401 as "your Jellyfin session expired". API-key callers that have no Jellyfin user get `403 user_required`.
 

@@ -18,7 +18,13 @@ namespace Jellyfin.Plugin.Arclight.Api;
 /// <summary>Discover, upcoming, providers, my requests, labels and themes.</summary>
 public partial class ArclightController
 {
-    private static readonly string[] DiscoverCategories = { "trending", "popularMovies", "popularSeries", "upcomingMovies", "upcomingSeries" };
+    private static readonly string[] DiscoverCategories =
+    {
+        "recommended", "trending", "trendingDay", "trendingWeek", "popularMovies", "popularSeries", "topRatedMovies", "topRatedSeries",
+        "nowPlaying", "upcomingMovies", "upcomingSeries", "airingToday", "onTheAir",
+    };
+
+    private static readonly string[] GenreSorts = { "popularity", "rating", "releaseDate", "title" };
 
     /// <summary>A Discover row (same item shape as search).</summary>
     /// <param name="category">trending, popularMovies, popularSeries, upcomingMovies or upcomingSeries.</param>
@@ -40,8 +46,77 @@ public partial class ArclightController
             return Invalid("invalid_query");
         }
 
-        return await Forward(HttpMethod.Get, "discover?category=" + category + "&page=" + p.ToString(CultureInfo.InvariantCulture), null, ct).ConfigureAwait(false);
+        return await ForwardLinked(HttpMethod.Get, "discover?category=" + category + "&page=" + p.ToString(CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
     }
+
+    /// <summary>TMDB genres for movies or series.</summary>
+    /// <param name="mediaType">movie or series.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Arclight response.</returns>
+    [HttpGet("Genres/{mediaType}")]
+    [Authorize]
+    public async Task<ActionResult> Genres([FromRoute] string mediaType, CancellationToken ct)
+    {
+        if (!_settings.Config.EnableDiscover)
+        {
+            return Disabled();
+        }
+
+        return ProxyValidation.IsMediaType(mediaType)
+            ? await Forward(HttpMethod.Get, "genres/" + mediaType, null, ct).ConfigureAwait(false)
+            : Invalid("invalid_media_type");
+    }
+
+    /// <summary>Browse one genre.</summary>
+    /// <param name="mediaType">movie or series.</param>
+    /// <param name="genreId">TMDB genre id.</param>
+    /// <param name="sort">popularity, rating, releaseDate or title.</param>
+    /// <param name="page">Page (1-500).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Arclight page.</returns>
+    [HttpGet("DiscoverGenre/{mediaType}/{genreId:int}")]
+    [Authorize]
+    public async Task<ActionResult> DiscoverGenre([FromRoute] string mediaType, [FromRoute] int genreId, [FromQuery] string? sort, [FromQuery] int? page, CancellationToken ct)
+    {
+        if (!_settings.Config.EnableDiscover)
+        {
+            return Disabled();
+        }
+
+        var s = string.IsNullOrEmpty(sort) ? "popularity" : sort;
+        var p = page ?? 1;
+        if (!ProxyValidation.IsMediaType(mediaType) || genreId <= 0 || !GenreSorts.Contains(s, StringComparer.Ordinal) || p is < 1 or > 500)
+        {
+            return Invalid("invalid_query");
+        }
+
+        return await ForwardLinked(
+            HttpMethod.Get,
+            "discover/genre/" + mediaType + "/" + genreId.ToString(CultureInfo.InvariantCulture) + "?sort=" + s + "&page=" + p.ToString(CultureInfo.InvariantCulture),
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Forwards a GET and marks titles this Jellyfin has with their item id.</summary>
+    internal async Task<ActionResult> ForwardLinked(HttpMethod method, string path, CancellationToken ct)
+    {
+        var userId = await CurrentUserIdAsync().ConfigureAwait(false);
+        if (userId == Guid.Empty)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { code = "user_required" });
+        }
+
+        var response = await _client.SendAsync(method, path, null, userId, ct).ConfigureAwait(false);
+        var (status, text) = ProxyValidation.ToBrowser(response.StatusCode, response.Body);
+        if (status is >= 200 and < 300)
+        {
+            text = LibraryLinks.Annotate(text, LibraryItemId);
+        }
+
+        return new ContentResult { StatusCode = status, Content = text, ContentType = "application/json" };
+    }
+
+    private Guid? LibraryItemId(string mediaType, int tmdbId)
+        => mediaType == "movie" ? _upcomingIndex.MovieItemId(tmdbId) : _upcomingIndex.SeriesItemId(tmdbId);
 
     /// <summary>Upcoming releases ("Coming soon").</summary>
     /// <param name="days">1-90 (default 30).</param>
@@ -123,7 +198,7 @@ public partial class ArclightController
             return Invalid("invalid_query");
         }
 
-        return await Forward(HttpMethod.Get, "requests?take=" + t.ToString(CultureInfo.InvariantCulture) + "&skip=" + s.ToString(CultureInfo.InvariantCulture), null, ct).ConfigureAwait(false);
+        return await ForwardLinked(HttpMethod.Get, "requests?take=" + t.ToString(CultureInfo.InvariantCulture) + "&skip=" + s.ToString(CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
     }
 
     /// <summary>Cancels one of the caller's own pending requests (when Arclight allows it).</summary>

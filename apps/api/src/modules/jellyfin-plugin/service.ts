@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { MediaBrowserServerClient, mediaBrowserProviderIds } from '@arclight/media-servers';
 import {
   isMediaBrowserKind,
@@ -14,7 +14,12 @@ import {
   JellyfinRequestDeleteQuery,
   JellyfinRequestsQuery,
   JellyfinUpcomingQuery,
+  JellyfinGenreDiscoverQuery,
   type CalendarItem,
+  type JellyfinGenres,
+  type JellyfinGenreSort,
+  type TitleDetail,
+  type TitleVideo,
   type DiscoverItem,
   type DiscoverPage,
   type JellyfinMyRequest,
@@ -43,6 +48,7 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, movies, qualityProfiles, seasons, series, watchlistItems } from '../../db/schema.js';
+import { watchState } from '../watch-history/schema.js';
 import { CalendarService } from '../calendar/index.js';
 import type { MediaServersService } from '../media-servers/index.js';
 import type { RequestsServices } from '../requests/index.js';
@@ -108,6 +114,8 @@ export class JellyfinPluginService {
   private readonly accounts: () => AccountsPort;
   private readonly queue: () => QueueSummaryItem[];
   private readonly now: () => Date;
+  /** "Recommended for you" per Arclight user, rebuilt every 30 minutes. */
+  private readonly recommendedCache = new Map<number, { at: number; items: DiscoverItem[] }>();
 
   constructor(opts: JellyfinPluginServiceOptions) {
     this.db = opts.db;
@@ -435,17 +443,121 @@ export class JellyfinPluginService {
     return this.toPage(user, page);
   }
 
-  /** GET /jellyfin/discover: trending, popular and upcoming rows, filtered by the account's caps. */
+  /** GET /jellyfin/discover: Discover rows, filtered by the account's caps. */
   async discover(user: PluginUser, raw: unknown): Promise<JellyfinSearchPage> {
     const q = JellyfinDiscoverQuery.parse(raw);
     const d = this.requests().discover;
-    const page =
-      q.category === 'trending'
-        ? await d.trending({ page: q.page, mediaType: 'all', timeWindow: 'week' })
-        : await d.list(
-            ({ popularMovies: 'popularMovies', popularSeries: 'popularTv', upcomingMovies: 'upcomingMovies', upcomingSeries: 'upcomingTv' } as const)[q.category],
-            { page: q.page },
-          );
+    switch (q.category) {
+      case 'recommended':
+        return this.recommended(user);
+      case 'trending':
+      case 'trendingWeek':
+        return this.toPage(user, await d.trending({ page: q.page, mediaType: 'all', timeWindow: 'week' }));
+      case 'trendingDay':
+        return this.toPage(user, await d.trending({ page: q.page, mediaType: 'all', timeWindow: 'day' }));
+      default: {
+        const list = (
+          {
+            popularMovies: 'popularMovies',
+            popularSeries: 'popularTv',
+            topRatedMovies: 'topRatedMovies',
+            topRatedSeries: 'topRatedTv',
+            nowPlaying: 'nowPlaying',
+            upcomingMovies: 'upcomingMovies',
+            upcomingSeries: 'upcomingTv',
+            airingToday: 'airingToday',
+            onTheAir: 'onTheAir',
+          } as const
+        )[q.category];
+        return this.toPage(user, await d.list(list, { page: q.page }));
+      }
+    }
+  }
+
+  /** TMDB ids (movie / series) this account has watched, most recent first, from Arclight's watch history. */
+  watchedTitles(user: PluginUser): { type: MediaType; tmdbId: number; at: string }[] {
+    const link = ((user.row.settings ?? {}) as Record<string, unknown>)['mediaServerLink'] as { externalId?: unknown } | undefined;
+    const externalId = typeof link?.externalId === 'string' ? normaliseExternalId(link.externalId) : null;
+    if (!externalId) return [];
+    const accountIds = this.db
+      .select({ id: mediaServerUsers.id, externalId: mediaServerUsers.externalId })
+      .from(mediaServerUsers)
+      .all()
+      .filter((a) => normaliseExternalId(a.externalId) === externalId)
+      .map((a) => a.id);
+    if (accountIds.length === 0) return [];
+    const rows = this.db
+      .select({ itemType: watchState.itemType, tmdbId: watchState.tmdbId, played: watchState.played, positionMs: watchState.positionMs, lastPlayedAt: watchState.lastPlayedAt, updatedAt: watchState.updatedAt })
+      .from(watchState)
+      .where(inArray(watchState.mediaServerUserId, accountIds))
+      .all();
+    const best = new Map<string, { type: MediaType; tmdbId: number; at: string }>();
+    for (const r of rows) {
+      if (!r.tmdbId || !(r.played || r.positionMs > 0 || r.lastPlayedAt)) continue;
+      const type: MediaType | null = r.itemType === 'movie' ? 'movie' : r.itemType === 'episode' || r.itemType === 'season' || r.itemType === 'series' ? 'series' : null;
+      if (!type) continue;
+      const at = r.lastPlayedAt ?? r.updatedAt;
+      const key = `${type}:${r.tmdbId}`;
+      const prev = best.get(key);
+      if (!prev || prev.at < at) best.set(key, { type, tmdbId: r.tmdbId, at });
+    }
+    return [...best.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  }
+
+  /**
+   * "Recommended for you": TMDB recommendations of the five titles this account watched most
+   * recently, merged round-robin, without duplicates, library titles or titles already watched.
+   * Falls back to the weekly trending list when there is no history (or nothing is left).
+   */
+  async recommended(user: PluginUser): Promise<JellyfinSearchPage> {
+    const nowMs = this.now().getTime();
+    const hit = this.recommendedCache.get(user.row.id);
+    let items = hit && nowMs - hit.at < 30 * 60_000 ? hit.items : null;
+    if (!items) {
+      const watched = this.watchedTitles(user);
+      const seen = new Set(watched.map((w) => `${w.type}:${w.tmdbId}`));
+      const lists = await Promise.all(
+        watched.slice(0, 5).map(async (w) => {
+          try {
+            const detail = await this.requests().discover.title(user.actor, w.type, w.tmdbId);
+            return detail.recommendations.length > 0 ? detail.recommendations : detail.similar;
+          } catch {
+            return [] as DiscoverItem[];
+          }
+        }),
+      );
+      const merged: DiscoverItem[] = [];
+      const taken = new Set<string>();
+      for (let i = 0; lists.some((l) => i < l.length); i++) {
+        for (const list of lists) {
+          const d = list[i];
+          if (!d) continue;
+          const key = `${d.mediaType}:${d.tmdbId}`;
+          // Library titles (libraryId / a library status) and titles already watched are not "new to you".
+          if (taken.has(key) || seen.has(key) || d.libraryId != null || d.mediaStatus === 'available' || d.mediaStatus === 'partiallyAvailable') continue;
+          taken.add(key);
+          merged.push(d);
+        }
+      }
+      items = merged.slice(0, 40);
+      // An empty result (no history yet) is not cached, so the first plays count straight away.
+      if (items.length > 0) this.recommendedCache.set(user.row.id, { at: nowMs, items });
+      if (this.recommendedCache.size > 1000) this.recommendedCache.clear();
+    }
+    if (items.length === 0) return this.toPage(user, await this.requests().discover.trending({ page: 1, mediaType: 'all', timeWindow: 'week' }));
+    return this.toPage(user, { page: 1, totalPages: 1, totalResults: items.length, results: items });
+  }
+
+  /** GET /jellyfin/genres/:mediaType. */
+  async genres(mediaType: MediaType): Promise<JellyfinGenres> {
+    const list = await this.requests().discover.genres(mediaType === 'series' ? 'tv' : 'movie');
+    return { mediaType, genres: list.map((g) => ({ id: g.id, name: g.name })) };
+  }
+
+  /** GET /jellyfin/discover/genre/:mediaType/:genreId. */
+  async genreDiscover(user: PluginUser, mediaType: MediaType, genreId: number, raw: unknown): Promise<JellyfinSearchPage> {
+    const q = JellyfinGenreDiscoverQuery.parse(raw);
+    const page = await this.requests().discover.genreBrowse(mediaType === 'series' ? 'tv' : 'movie', genreId, q.sort as JellyfinGenreSort, q.page);
     return this.toPage(user, page);
   }
 
@@ -454,7 +566,13 @@ export class JellyfinPluginService {
     await this.assertVisible(user, mediaType, tmdbId);
     const detail = await s.discover.title(user.actor, mediaType, tmdbId);
     const ctx = this.requestContext(user);
-    const reason = detail.canRequest ? this.blockReason(user, ctx, mediaType, false, detail.mediaStatus) : (this.blockReason(user, ctx, mediaType, false, detail.mediaStatus) ?? 'requested');
+    // A series with seasons nobody has requested or downloaded yet stays requestable (the dialog
+    // only offers those seasons), even when other seasons are already requested.
+    const openSeasons =
+      mediaType === 'series' &&
+      detail.seasons.some((x) => x.seasonNumber > 0 && x.status === 'unknown' && (!x.requestStatus || x.requestStatus === 'declined'));
+    const requestStatus: MediaStatus = openSeasons && detail.mediaStatus !== 'available' ? 'unknown' : detail.mediaStatus;
+    const reason = detail.canRequest ? this.blockReason(user, ctx, mediaType, false, requestStatus) : (this.blockReason(user, ctx, mediaType, false, requestStatus) ?? 'requested');
     const advanced = canRequestAdvanced(user.actor.permissions) && detail.canRequestAdvanced;
     const options = s.languages.options(user.actor, { mediaType, tmdbId });
     const canSubtitles = options.canRequest && options.canRequestSubtitles;
@@ -506,6 +624,38 @@ export class JellyfinPluginService {
       canRequestAudio: canAudio,
       languages,
       languageOptions: options,
+      ...(await this.titlePage(user, ctx, detail)),
+    };
+  }
+
+  /** The title-page fields of /jellyfin/title (plugin 1.2). Recommendations go through the account's caps. */
+  private async titlePage(user: PluginUser, ctx: { settings: RequestsSettings; quota: QuotaStatus }, detail: TitleDetail): Promise<Partial<JellyfinTitle>> {
+    const crewNamed = (jobs: string[]) => [...new Set(detail.crew.filter((c) => jobs.includes(c.job)).map((c) => c.name))];
+    const series = detail.mediaType === 'series';
+    const creators = series ? (detail.creators && detail.creators.length > 0 ? detail.creators : crewNamed(['Creator'])) : [];
+    const recsSource = detail.recommendations.length > 0 ? detail.recommendations : detail.similar;
+    const recs = await this.guard().filter(user.actor, recsSource.filter((d) => d.mediaType === 'movie' || d.mediaType === 'series'));
+    return {
+      inLibrary: detail.libraryId != null,
+      tagline: detail.tagline ?? null,
+      runtimeMinutes: detail.runtimeMinutes ?? null,
+      certification: detail.certification ?? null,
+      voteAverage: detail.rating ?? null,
+      genres: detail.genres.map((g) => ({ id: g.id, name: g.name })),
+      cast: detail.cast.slice(0, 15).map((c) => ({ name: c.name, character: c.character ?? null, profileUrl: c.profileUrl ?? null })),
+      directors: series ? [] : crewNamed(['Director']),
+      creators,
+      networks: series ? detail.companies.map((c) => c.name) : [],
+      studios: series ? [] : detail.companies.map((c) => c.name),
+      trailer: pickTrailer(detail.videos),
+      releaseDates: {
+        cinema: detail.releaseDates?.inCinemas ?? null,
+        digital: detail.releaseDates?.digital ?? null,
+        physical: detail.releaseDates?.physical ?? null,
+        firstAirDate: detail.firstAirDate ?? null,
+        lastAirDate: detail.lastAirDate ?? null,
+      },
+      recommendations: recs.slice(0, 20).map((d) => this.toSearchItem(user, ctx, d)),
     };
   }
 
@@ -762,6 +912,20 @@ function idsToRecord(ids: { tmdbId: number | null; tvdbId: number | null; imdbId
   if (ids.tvdbId) out['Tvdb'] = String(ids.tvdbId);
   if (ids.imdbId) out['Imdb'] = ids.imdbId;
   return out;
+}
+
+/** The main trailer: an official YouTube trailer, else any trailer, else a teaser (YouTube or Vimeo). */
+export function pickTrailer(videos: readonly TitleVideo[]): { site: string; key: string; url: string } | null {
+  const known = videos.filter((v) => /^(youtube|vimeo)$/i.test(v.site));
+  const isType = (v: TitleVideo, t: string) => v.type.toLowerCase() === t;
+  const pick =
+    known.find((v) => isType(v, 'trailer') && /youtube/i.test(v.site)) ??
+    known.find((v) => isType(v, 'trailer')) ??
+    known.find((v) => isType(v, 'teaser')) ??
+    null;
+  if (!pick) return null;
+  const url = /youtube/i.test(pick.site) ? `https://www.youtube.com/watch?v=${encodeURIComponent(pick.key)}` : `https://vimeo.com/${encodeURIComponent(pick.key)}`;
+  return { site: pick.site, key: pick.key, url };
 }
 
 function safe<T>(fn: () => T, fallback: T): T {

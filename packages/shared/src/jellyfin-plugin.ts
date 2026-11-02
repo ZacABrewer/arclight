@@ -17,7 +17,7 @@ export const JELLYFIN_USER_HEADER = 'x-arclight-jellyfin-user';
 /** Plugin repository manifest users add to Jellyfin (Dashboard > Plugins > Repositories). */
 export const JELLYFIN_PLUGIN_MANIFEST_URL = 'https://arclight.moviemethat.com/jellyfin/manifest.json';
 /** Latest plugin version this Arclight release knows of (static until the manifest is read). */
-export const JELLYFIN_PLUGIN_LATEST_VERSION = '1.0.0.0';
+export const JELLYFIN_PLUGIN_LATEST_VERSION = '1.2.0.0';
 
 /** Features GET /jellyfin/ping advertises; the plugin hides UI for features that are missing. */
 export const JELLYFIN_PLUGIN_FEATURES = [
@@ -252,6 +252,9 @@ export const JellyfinMediaType = z.enum(['movie', 'series', 'tv']).transform((t)
 export const JellyfinTitleParams = z.object({ mediaType: JellyfinMediaType, tmdbId: z.coerce.number().int().positive() });
 export type JellyfinTitleParams = z.input<typeof JellyfinTitleParams>;
 
+export const JellyfinGenre = z.object({ id: z.number().int(), name: z.string() });
+export type JellyfinGenre = z.infer<typeof JellyfinGenre>;
+
 export const JellyfinTitleSeason = z.object({
   seasonNumber: z.number().int(),
   name: z.string().nullable(),
@@ -293,6 +296,39 @@ export const JellyfinTitle = z.object({
   languages: z.array(SubtitleLanguageOption),
   /** What the title already has (in the library) and open language requests. */
   languageOptions: LanguageRequestOptions,
+
+  // ---- title page (plugin 1.2): optional so older Arclight answers still parse ----
+  /** The title is in Arclight's library (movie or series row). */
+  inLibrary: z.boolean().optional(),
+  tagline: z.string().nullable().optional(),
+  runtimeMinutes: z.number().int().nullable().optional(),
+  /** US certification (PG-13, TV-MA, ...), null when unknown. */
+  certification: z.string().nullable().optional(),
+  /** TMDB score 0-10. */
+  voteAverage: z.number().nullable().optional(),
+  genres: z.array(JellyfinGenre).optional(),
+  /** Top-billed cast, at most 15. */
+  cast: z.array(z.object({ name: z.string(), character: z.string().nullable(), profileUrl: z.string().nullable() })).optional(),
+  /** Movies: directors. */
+  directors: z.array(z.string()).optional(),
+  /** Series: creators. */
+  creators: z.array(z.string()).optional(),
+  /** Series: networks; movies: production companies (studios). */
+  networks: z.array(z.string()).optional(),
+  studios: z.array(z.string()).optional(),
+  /** The main trailer, opened in a new tab (never embedded). */
+  trailer: z.object({ site: z.string(), key: z.string(), url: z.string() }).nullable().optional(),
+  releaseDates: z
+    .object({
+      cinema: z.string().nullable(),
+      digital: z.string().nullable(),
+      physical: z.string().nullable(),
+      firstAirDate: z.string().nullable(),
+      lastAirDate: z.string().nullable(),
+    })
+    .optional(),
+  /** TMDB recommendations (search item shape), capped titles left out. */
+  recommendations: z.array(JellyfinSearchItem).optional(),
 });
 export type JellyfinTitle = z.infer<typeof JellyfinTitle>;
 
@@ -365,7 +401,26 @@ export type JellyfinErrorResponse = z.infer<typeof JellyfinErrorResponse>;
 // Discover rows, upcoming, watch providers, my requests (per user)
 // ---------------------------------------------------------------------------------------
 
-export const JellyfinDiscoverCategory = z.enum(['trending', 'popularMovies', 'popularSeries', 'upcomingMovies', 'upcomingSeries']);
+/**
+ * Discover rows. `trending` = `trendingWeek`. `recommended`: TMDB recommendations of the user's five
+ * most recently watched titles (Arclight watch history), deduplicated, without titles that are in the
+ * library; falls back to trending when there is no history.
+ */
+export const JellyfinDiscoverCategory = z.enum([
+  'recommended',
+  'trending',
+  'trendingDay',
+  'trendingWeek',
+  'popularMovies',
+  'popularSeries',
+  'topRatedMovies',
+  'topRatedSeries',
+  'nowPlaying',
+  'upcomingMovies',
+  'upcomingSeries',
+  'airingToday',
+  'onTheAir',
+]);
 export type JellyfinDiscoverCategory = z.infer<typeof JellyfinDiscoverCategory>;
 
 /** GET /jellyfin/discover: same page shape as /jellyfin/search, filtered by the account's content caps. */
@@ -493,3 +548,26 @@ export const JellyfinThemes = z.object({
   themes: z.array(JellyfinThemeInfo),
 });
 export type JellyfinThemes = z.infer<typeof JellyfinThemes>;
+
+// ---------------------------------------------------------------------------------------
+// Genres (plugin 1.2): GET /jellyfin/genres/:mediaType, GET /jellyfin/discover/genre/:mediaType/:genreId
+// ---------------------------------------------------------------------------------------
+
+export const JellyfinGenreParams = z.object({ mediaType: JellyfinMediaType });
+export type JellyfinGenreParams = z.input<typeof JellyfinGenreParams>;
+
+export const JellyfinGenres = z.object({ mediaType: MediaType, genres: z.array(JellyfinGenre) });
+export type JellyfinGenres = z.infer<typeof JellyfinGenres>;
+
+export const JellyfinGenreSort = z.enum(['popularity', 'rating', 'releaseDate', 'title']);
+export type JellyfinGenreSort = z.infer<typeof JellyfinGenreSort>;
+
+export const JellyfinGenreDiscoverParams = z.object({ mediaType: JellyfinMediaType, genreId: z.coerce.number().int().positive() });
+export type JellyfinGenreDiscoverParams = z.input<typeof JellyfinGenreDiscoverParams>;
+
+/** GET /jellyfin/discover/genre/:mediaType/:genreId → JellyfinSearchPage (content caps applied). */
+export const JellyfinGenreDiscoverQuery = z.object({
+  sort: JellyfinGenreSort.default('popularity'),
+  page: z.coerce.number().int().min(1).max(500).default(1),
+});
+export type JellyfinGenreDiscoverQuery = z.input<typeof JellyfinGenreDiscoverQuery>;

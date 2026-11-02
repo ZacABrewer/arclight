@@ -198,6 +198,8 @@ export interface TitleExtras {
   keywords: Keyword[];
   /** Production companies (movies) or networks (series). */
   companies: CompanyRef[];
+  /** Series: the show's creators (TMDB created_by). */
+  creators?: string[];
   cast: CreditPerson[];
   crew: CreditPerson[];
   videos: VideoRef[];

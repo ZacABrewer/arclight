@@ -122,7 +122,48 @@
       themeDefault: 'Server default ({name})',
       themeSaved: 'Theme saved',
       close2: 'Close',
-      size: '{size}'
+      size: '{size}',
+      recommended: 'Recommended for you',
+      trendingTitle: 'Trending',
+      today: 'Today',
+      thisWeek: 'This week',
+      topRatedMovies: 'Top rated movies',
+      topRatedSeries: 'Top rated series',
+      nowPlaying: 'In cinemas now',
+      airingToday: 'Airing today',
+      onTheAir: 'On the air',
+      trendingDay: 'Trending today',
+      trendingWeek: 'Trending this week',
+      seeAll: 'See all',
+      movieGenres: 'Movie genres',
+      seriesGenres: 'Series genres',
+      movies: 'Movies',
+      series: 'Series',
+      sortBy: 'Sort by',
+      sortPopularity: 'Popularity',
+      sortRating: 'Rating',
+      sortReleaseDate: 'Release date',
+      sortTitle: 'Title',
+      cast: 'Cast',
+      directedBy: 'Director',
+      createdBy: 'Created by',
+      networks: 'Networks',
+      studios: 'Studios',
+      releaseDates: 'Release',
+      inCinemas: 'Cinemas {date}',
+      digitalRelease: 'Digital {date}',
+      physicalRelease: 'Disc {date}',
+      firstAired: 'First aired {date}',
+      lastAired: 'Last aired {date}',
+      seasonsHeading: 'Seasons',
+      episodes: '{n} episodes',
+      moreLikeThis: 'More like this',
+      trailer: 'Trailer',
+      openInJellyfin: 'Open in Jellyfin',
+      viewInArclight: 'View in Arclight',
+      reportNeedsLibrary: 'Available once the title is in the library',
+      runtime: '{n} min',
+      score: '★ {n}'
     }
   };
 
@@ -386,6 +427,20 @@
       state.watchlistAt = Date.now();
       return set;
     });
+  }
+
+  // ------------------------------------------------------------------ navigation
+  function pageHref(name, params) {
+    var q = new URLSearchParams();
+    q.set('arclight', name);
+    Object.keys(params || {}).forEach(function (k) { if (params[k] !== undefined && params[k] !== null && params[k] !== '') q.set(k, params[k]); });
+    return '#/home?' + q.toString();
+  }
+
+  /** Library titles open Jellyfin's own page; everything else opens the Arclight title page. */
+  function titleHref(mediaType, tmdbId, jellyfinId) {
+    if (jellyfinId) return '#/details?id=' + jellyfinId;
+    return pageHref('title', { type: mediaType, id: tmdbId });
   }
 
   // ------------------------------------------------------------------ request rules
@@ -804,6 +859,14 @@
         actions.appendChild(actionButton(t('reportProblem'), 'report_problem', function () { openIssueDialog(info); }));
       }
 
+      if (isTitleLevel && f.discover) {
+        // The Arclight title page: cast, recommendations, request status in one place.
+        actions.appendChild(el('a', { class: 'emby-button arclight-action', href: pageHref('title', { type: info.mediaType, id: info.tmdbId }) }, [
+          el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'open_in_new' }),
+          el('span', { class: 'arclight-action-label', text: t('viewInArclight') })
+        ]));
+      }
+
       if (f.languageRequests) {
         call('GET', 'Title/' + info.mediaType + '/' + info.tmdbId).then(function (title) {
           if (!bar.isConnected || !title) return;
@@ -837,9 +900,10 @@
       : el('div', { class: 'arclight-poster-empty material-icons', 'aria-hidden': 'true', text: r.mediaType === 'series' ? 'tv' : 'movie' });
     var label = statusLabel(r.status);
     var footer = el('div', { class: 'arclight-card-footer' });
+    var href = r.tmdbId ? titleHref(r.mediaType, r.tmdbId, r.jellyfinId) : null;
     var card = el('div', { class: 'arclight-card', title: r.overview || '' }, [
-      el('div', { class: 'arclight-poster' }, [poster, label ? el('span', { class: 'arclight-chip arclight-chip-' + r.status + ' arclight-poster-chip', text: label }) : null]),
-      el('div', { class: 'arclight-card-title', text: r.title || '' }),
+      el(href ? 'a' : 'div', { class: 'arclight-poster arclight-card-link', href: href }, [poster, label ? el('span', { class: 'arclight-chip arclight-chip-' + r.status + ' arclight-poster-chip', text: label }) : null]),
+      el(href ? 'a' : 'div', { class: 'arclight-card-title arclight-card-link', href: href, text: r.title || '' }),
       el('div', { class: 'arclight-card-meta', text: r.year ? String(r.year) : '' }),
       footer
     ]);
@@ -1075,9 +1139,10 @@
     var sub = u.kind === 'episode'
       ? t('episodeCode', { s: u.seasonNumber, e: u.episodeNumber }) + (u.episodeTitle ? ' · ' + u.episodeTitle : '')
       : ({ cinema: t('releaseCinema'), digital: t('releaseDigital'), physical: t('releasePhysical') })[u.releaseType] || '';
+    var href = u.tmdbId ? titleHref(u.mediaType, u.tmdbId, u.jellyfinId) : null;
     return el('div', { class: 'arclight-card' }, [
-      el('div', { class: 'arclight-poster' }, [poster, el('span', { class: 'arclight-chip arclight-chip-upcoming arclight-poster-chip', text: formatDate(u.date) })]),
-      el('div', { class: 'arclight-card-title', text: u.title || '' }),
+      el(href ? 'a' : 'div', { class: 'arclight-poster arclight-card-link', href: href }, [poster, el('span', { class: 'arclight-chip arclight-chip-upcoming arclight-poster-chip', text: formatDate(u.date) })]),
+      el(href ? 'a' : 'div', { class: 'arclight-card-title arclight-card-link', href: href, text: u.title || '' }),
       el('div', { class: 'arclight-card-meta', text: sub })
     ]);
   }
@@ -1128,29 +1193,315 @@
     return overlay;
   }
 
-  function renderDiscoverPage() {
-    var page = openOverlay('discover');
+  function discoverCards(category, page) {
+    return call('GET', 'Discover?category=' + category + '&page=' + (page || 1));
+  }
+
+  function seeAllLink(category) {
+    return el('a', { class: 'button-link arclight-section-link', href: pageHref('grid', { category: category }), text: t('seeAll') + ' ›' });
+  }
+
+  /** A row whose content can be reloaded (used by the trending day/week toggle). */
+  function loadRow(holder, title, load, header) {
+    holder.textContent = '';
+    holder.appendChild(el('div', { class: 'arclight-muted', text: title + ' · ' + t('loading') }));
+    load().then(function (cards) {
+      if (!holder.isConnected) return;
+      holder.textContent = '';
+      holder.appendChild(scroller(title, cards.length ? cards : [el('div', { class: 'arclight-muted', text: t('nothingHere') })], header));
+    }, function (err) {
+      if (!holder.isConnected) return;
+      holder.textContent = '';
+      holder.appendChild(scroller(title, [el('div', { class: 'arclight-muted', text: errorMessage(err) })], header));
+    });
+  }
+
+  function genreStrip(mediaType, title) {
+    var strip = el('div', { class: 'arclight-genre-strip' });
+    var section = el('div', { class: 'verticalSection arclight-section' }, [
+      el('div', { class: 'sectionTitleContainer arclight-section-head' }, [el('h2', { class: 'sectionTitle arclight-section-title', text: title })]),
+      strip
+    ]);
+    call('GET', 'Genres/' + mediaType).then(function (d) {
+      ((d && d.genres) || []).forEach(function (g) {
+        strip.appendChild(el('a', { class: 'arclight-chip arclight-genre-chip', href: pageHref('genre', { type: mediaType, genre: g.id, name: g.name }), text: g.name }));
+      });
+      if (!strip.childNodes.length) section.remove();
+    }, function () { section.remove(); });
+    return section;
+  }
+
+  function renderDiscoverPage(key) {
+    var page = openOverlay(key);
     if (!page) return;
     var inner = el('div', { class: 'arclight-page-inner padded-left padded-right' }, [el('h1', { class: 'arclight-page-title', text: t('discover') })]);
     page.appendChild(inner);
-    var rows = [];
-    if (features().upcoming) rows.push({ title: t('comingSoon'), load: function () { return loadUpcoming().then(function (items) { return items.map(upcomingCard); }); } });
-    ['trending', 'popularMovies', 'popularSeries', 'upcomingMovies', 'upcomingSeries'].forEach(function (cat) {
-      rows.push({ title: t(cat), load: function () { return call('GET', 'Discover?category=' + cat + '&page=1').then(function (d) { return ((d && d.results) || []).map(resultCard); }); } });
-    });
-    rows.forEach(function (r) {
-      var holder = el('div', {}, [el('div', { class: 'arclight-muted', text: r.title + ' · ' + t('loading') })]);
-      inner.appendChild(holder);
-      r.load().then(function (cards) {
-        if (!holder.isConnected) return;
-        holder.textContent = '';
-        holder.appendChild(scroller(r.title, cards.length ? cards : [el('div', { class: 'arclight-muted', text: t('nothingHere') })]));
-      }, function (err) {
-        if (!holder.isConnected) return;
-        holder.textContent = '';
-        holder.appendChild(scroller(r.title, [el('div', { class: 'arclight-muted', text: errorMessage(err) })]));
+    var cards = function (category) { return function () { return discoverCards(category, 1).then(function (d) { return ((d && d.results) || []).map(resultCard); }); }; };
+
+    // Recommended for you
+    var rec = el('div');
+    inner.appendChild(rec);
+    loadRow(rec, t('recommended'), cards('recommended'), seeAllLink('recommended'));
+
+    // Trending with a day/week toggle
+    var trending = el('div');
+    inner.appendChild(trending);
+    var windowNow = 'trendingDay';
+    function trendingHeader() {
+      var toggle = el('div', { class: 'arclight-toggle', role: 'group' });
+      [['trendingDay', t('today')], ['trendingWeek', t('thisWeek')]].forEach(function (o) {
+        toggle.appendChild(el('button', {
+          type: 'button',
+          class: 'emby-button arclight-toggle-btn' + (o[0] === windowNow ? ' arclight-toggle-on' : ''),
+          'aria-pressed': String(o[0] === windowNow),
+          text: o[1],
+          onclick: function () { windowNow = o[0]; loadRow(trending, t('trendingTitle'), cards(windowNow), trendingHeader()); }
+        }));
       });
+      return el('span', { class: 'arclight-row-tools' }, [toggle, seeAllLink(windowNow)]);
+    }
+    loadRow(trending, t('trendingTitle'), cards(windowNow), trendingHeader());
+
+    if (features().upcoming) {
+      var soon = el('div');
+      inner.appendChild(soon);
+      loadUpcoming().then(function (items) {
+        if (!soon.isConnected) return;
+        if (!items.length) { soon.remove(); return; } // nothing coming: no empty row
+        soon.appendChild(scroller(t('comingSoon'), items.map(upcomingCard)));
+      }, function () { soon.remove(); });
+    }
+
+    inner.appendChild(genreStrip('movie', t('movieGenres')));
+    inner.appendChild(genreStrip('series', t('seriesGenres')));
+
+    ['popularMovies', 'popularSeries', 'topRatedMovies', 'topRatedSeries', 'nowPlaying', 'upcomingMovies', 'airingToday', 'onTheAir'].forEach(function (cat) {
+      var holder = el('div');
+      inner.appendChild(holder);
+      loadRow(holder, t(cat), cards(cat), seeAllLink(cat));
     });
+  }
+
+  /** A grid that loads further pages when its end scrolls into view. */
+  function pagedGrid(container, loadPage) {
+    var grid = el('div', { class: 'arclight-grid arclight-grid-page' });
+    var sentinel = el('div', { class: 'arclight-sentinel arclight-muted', text: t('loading') });
+    container.appendChild(grid);
+    container.appendChild(sentinel);
+    var page = 0;
+    var total = 1;
+    var busyLoading = false;
+    var seen = {};
+    function next() {
+      if (busyLoading || page >= total || !grid.isConnected) return;
+      busyLoading = true;
+      loadPage(page + 1).then(function (d) {
+        busyLoading = false;
+        page = (d && d.page) || page + 1;
+        total = Math.min((d && d.totalPages) || 1, 500);
+        ((d && d.results) || []).forEach(function (r) {
+          var k = r.mediaType + ':' + r.tmdbId;
+          if (seen[k]) return;
+          seen[k] = true;
+          grid.appendChild(resultCard(r));
+        });
+        if (page >= total) {
+          sentinel.textContent = grid.childNodes.length ? '' : t('nothingHere');
+          if (observer) observer.disconnect();
+        }
+      }, function (err) {
+        busyLoading = false;
+        sentinel.textContent = errorMessage(err);
+        total = 0;
+      });
+    }
+    var observer = 'IntersectionObserver' in window
+      ? new IntersectionObserver(function (entries) { if (entries.some(function (e) { return e.isIntersecting; })) next(); }, { root: overlay, rootMargin: '600px' })
+      : null;
+    if (observer) observer.observe(sentinel);
+    next();
+  }
+
+  function renderGridPage(key, category) {
+    var page = openOverlay(key);
+    if (!page) return;
+    var inner = el('div', { class: 'arclight-page-inner padded-left padded-right' }, [
+      el('a', { class: 'button-link arclight-back', href: pageHref('discover'), text: '‹ ' + t('discover') }),
+      el('h1', { class: 'arclight-page-title', text: t(category) })
+    ]);
+    page.appendChild(inner);
+    pagedGrid(inner, function (n) { return discoverCards(category, n); });
+  }
+
+  function renderGenrePage(key, mediaType, genreId, name, sort) {
+    var page = openOverlay(key);
+    if (!page) return;
+    sort = sort || 'popularity';
+    var typeToggle = el('div', { class: 'arclight-toggle', role: 'group' });
+    [['movie', t('movies')], ['series', t('series')]].forEach(function (o) {
+      typeToggle.appendChild(el('button', {
+        type: 'button',
+        class: 'emby-button arclight-toggle-btn' + (o[0] === mediaType ? ' arclight-toggle-on' : ''),
+        'aria-pressed': String(o[0] === mediaType),
+        text: o[1],
+        onclick: function () {
+          if (o[0] === mediaType) return;
+          // Movie and series genre ids differ: switch to the genre with the same name, else the first one.
+          call('GET', 'Genres/' + o[0]).then(function (d) {
+            var list = (d && d.genres) || [];
+            var wanted = String(name || '').toLowerCase();
+            // TMDB names some genres differently for series ("Sci-Fi & Fantasy", "Action & Adventure").
+            var alias = { 'science fiction': 'sci-fi & fantasy', 'fantasy': 'sci-fi & fantasy', 'action': 'action & adventure', 'adventure': 'action & adventure', 'war': 'war & politics',
+              'sci-fi & fantasy': 'science fiction', 'action & adventure': 'action', 'war & politics': 'war', 'kids': 'family' }[wanted];
+            var byName = function (n) { return list.filter(function (g) { return g.name.toLowerCase() === n; })[0]; };
+            var match = byName(wanted) || (alias && byName(alias)) || list[0];
+            if (match) location.hash = pageHref('genre', { type: o[0], genre: match.id, name: match.name, sort: sort });
+          });
+        }
+      }));
+    });
+    var sortSelect = el('select', { class: 'arclight-input emby-select arclight-sort', 'aria-label': t('sortBy') },
+      [['popularity', t('sortPopularity')], ['rating', t('sortRating')], ['releaseDate', t('sortReleaseDate')], ['title', t('sortTitle')]].map(function (o) {
+        return el('option', { value: o[0], text: o[1] });
+      }));
+    sortSelect.value = sort;
+    sortSelect.addEventListener('change', function () {
+      location.hash = pageHref('genre', { type: mediaType, genre: genreId, name: name, sort: sortSelect.value });
+    });
+    var inner = el('div', { class: 'arclight-page-inner padded-left padded-right' }, [
+      el('a', { class: 'button-link arclight-back', href: pageHref('discover'), text: '‹ ' + t('discover') }),
+      el('h1', { class: 'arclight-page-title', text: name || t('discover') }),
+      el('div', { class: 'arclight-grid-tools' }, [typeToggle, el('label', { class: 'arclight-sort-label' }, [el('span', { text: t('sortBy') }), sortSelect])])
+    ]);
+    page.appendChild(inner);
+    pagedGrid(inner, function (n) { return call('GET', 'DiscoverGenre/' + mediaType + '/' + genreId + '?sort=' + sort + '&page=' + n); });
+  }
+
+  // ------------------------------------------------------------------ title page (titles not in Jellyfin)
+  function fact(label, value) {
+    return value ? el('div', { class: 'arclight-fact' }, [el('span', { class: 'arclight-fact-label', text: label }), el('span', { text: value })]) : null;
+  }
+
+  function renderTitlePage(key, mediaType, tmdbId) {
+    var page = openOverlay(key);
+    if (!page) return;
+    var inner = el('div', { class: 'arclight-title-page' }, [el('div', { class: 'arclight-muted padded-left', text: t('loading') })]);
+    page.appendChild(inner);
+    function load() {
+      call('GET', 'Title/' + mediaType + '/' + tmdbId).then(function (d) { if (inner.isConnected) fill(d); }, function (err) {
+        if (!inner.isConnected) return;
+        inner.textContent = '';
+        inner.appendChild(el('div', { class: 'arclight-page-inner padded-left padded-right' }, [el('p', { class: 'arclight-blocked', text: errorMessage(err) })]));
+      });
+    }
+    function fill(d) {
+      inner.textContent = '';
+      var hero = el('div', { class: 'arclight-hero' });
+      if (d.backdropUrl) hero.style.backgroundImage = 'url("' + encodeURI(d.backdropUrl) + '")';
+      var poster = d.posterUrl
+        ? el('img', { class: 'arclight-hero-poster', src: d.posterUrl, alt: '', referrerpolicy: 'no-referrer' })
+        : el('div', { class: 'arclight-hero-poster arclight-poster-empty material-icons', 'aria-hidden': 'true', text: mediaType === 'series' ? 'tv' : 'movie' });
+      var meta = [d.year, d.runtimeMinutes ? t('runtime', { n: d.runtimeMinutes }) : null, d.certification, d.voteAverage ? t('score', { n: Number(d.voteAverage).toFixed(1) }) : null].filter(Boolean).join(' · ');
+      var genres = el('div', { class: 'arclight-genre-strip' }, (d.genres || []).map(function (g) {
+        return el('a', { class: 'arclight-chip arclight-genre-chip', href: pageHref('genre', { type: mediaType, genre: g.id, name: g.name }), text: g.name });
+      }));
+
+      var actions = el('div', { class: 'arclight-actions arclight-title-actions' });
+      var statusText = statusLabel(d.status);
+      if (statusText) actions.appendChild(chip(statusText, d.status));
+      if (d.jellyfinId) actions.appendChild(el('a', { class: 'emby-button raised arclight-action', href: '#/details?id=' + d.jellyfinId }, [el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'play_arrow' }), el('span', { class: 'arclight-action-label', text: t('openInJellyfin') })]));
+      if (features().requests && d.canRequest) {
+        actions.appendChild(el('button', { type: 'button', class: 'emby-button raised button-submit arclight-action', onclick: function () {
+          openRequestDialog({ mediaType: mediaType, tmdbId: tmdbId, title: d.title, canRequest4k: d.canRequest4k }, load);
+        } }, [el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'add' }), el('span', { class: 'arclight-action-label', text: t('request') })]));
+      } else if (d.requestBlockedReason && d.requestBlockedReason !== 'available' && d.requestBlockedReason !== 'requested') {
+        actions.appendChild(el('span', { class: 'arclight-blocked', text: blockedText(d.requestBlockedReason, mediaType) }));
+      }
+      if (features().watchlist) {
+        var on = !!d.onWatchlist;
+        var wl = actionButton(on ? t('watchlistRemove') : t('watchlistAdd'), on ? 'bookmark' : 'bookmark_border', function () {
+          busy(wl, true);
+          (on ? call('DELETE', 'Watchlist?mediaType=' + mediaType + '&tmdbId=' + tmdbId) : call('POST', 'Watchlist', { mediaType: mediaType, tmdbId: tmdbId })).then(function () {
+            on = !on;
+            state.watchlist = null;
+            toast(on ? t('watchlistAdded') : t('watchlistRemoved'));
+            wl.querySelector('.arclight-icon').textContent = on ? 'bookmark' : 'bookmark_border';
+            wl.querySelector('.arclight-action-label').textContent = on ? t('watchlistRemove') : t('watchlistAdd');
+            wl.classList.toggle('arclight-action-on', on);
+          }, function (err) { toast(errorMessage(err), true); }).then(function () { busy(wl, false); });
+        }, on);
+        actions.appendChild(wl);
+      }
+      if (d.trailer && /^https:\/\/(www\.youtube\.com|vimeo\.com)\//.test(d.trailer.url)) {
+        actions.appendChild(el('a', { class: 'emby-button arclight-action', href: d.trailer.url, target: '_blank', rel: 'noopener noreferrer' }, [el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'smart_display' }), el('span', { class: 'arclight-action-label', text: t('trailer') })]));
+      }
+      if (features().issues) {
+        var issueBtn = actionButton(t('reportProblem'), 'report_problem', function () {
+          openIssueDialog({ mediaType: mediaType, tmdbId: tmdbId, name: d.title });
+        });
+        if (!d.inLibrary) { issueBtn.disabled = true; issueBtn.title = t('reportNeedsLibrary'); }
+        actions.appendChild(issueBtn);
+      }
+
+      var rd = d.releaseDates || {};
+      var dates = [
+        rd.cinema ? t('inCinemas', { date: formatDate(rd.cinema) }) : null,
+        rd.digital ? t('digitalRelease', { date: formatDate(rd.digital) }) : null,
+        rd.physical ? t('physicalRelease', { date: formatDate(rd.physical) }) : null,
+        rd.firstAirDate ? t('firstAired', { date: formatDate(rd.firstAirDate) }) : null,
+        rd.lastAirDate ? t('lastAired', { date: formatDate(rd.lastAirDate) }) : null
+      ].filter(Boolean).join(' · ');
+      var facts = el('div', { class: 'arclight-facts' }, [
+        fact(t('directedBy'), (d.directors || []).join(', ')),
+        fact(t('createdBy'), (d.creators || []).join(', ')),
+        fact(t('networks'), (d.networks || []).join(', ')),
+        fact(t('studios'), (d.studios || []).slice(0, 4).join(', ')),
+        fact(t('releaseDates'), dates)
+      ]);
+
+      hero.appendChild(el('div', { class: 'arclight-hero-inner padded-left padded-right' }, [
+        poster,
+        el('div', { class: 'arclight-hero-info' }, [
+          el('h1', { class: 'arclight-hero-title', text: d.title }),
+          meta ? el('div', { class: 'arclight-hero-meta', text: meta }) : null,
+          genres,
+          d.tagline ? el('div', { class: 'arclight-tagline', text: d.tagline }) : null,
+          actions,
+          d.overview ? el('p', { class: 'arclight-overview', text: d.overview }) : null,
+          facts
+        ])
+      ]));
+      inner.appendChild(hero);
+
+      var body = el('div', { class: 'arclight-page-inner padded-left padded-right' });
+      inner.appendChild(body);
+      if (mediaType === 'series' && (d.seasons || []).length) {
+        var seasonList = el('div', { class: 'arclight-season-list' });
+        d.seasons.forEach(function (sn) {
+          var label = statusLabel(sn.status);
+          seasonList.appendChild(el('div', { class: 'arclight-season' }, [
+            el('span', { class: 'arclight-season-name', text: sn.name || seasonLabel(sn.seasonNumber) }),
+            el('span', { class: 'arclight-muted', text: t('episodes', { n: sn.episodeCount }) + (sn.airDate ? ' · ' + formatDate(sn.airDate) : '') }),
+            label ? chip(label, sn.status) : el('span')
+          ]));
+        });
+        body.appendChild(el('div', { class: 'verticalSection arclight-section' }, [el('h2', { class: 'sectionTitle arclight-section-title', text: t('seasonsHeading') }), seasonList]));
+      }
+      if ((d.cast || []).length) {
+        body.appendChild(scroller(t('cast'), d.cast.map(function (c) {
+          return el('div', { class: 'arclight-person' }, [
+            c.profileUrl ? el('img', { class: 'arclight-person-img', src: c.profileUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('div', { class: 'arclight-person-img arclight-poster-empty material-icons', 'aria-hidden': 'true', text: 'person' }),
+            el('div', { class: 'arclight-card-title', text: c.name }),
+            el('div', { class: 'arclight-card-meta', text: c.character || '' })
+          ]);
+        })));
+      }
+      var providers = el('div', { class: 'arclight-section' });
+      body.appendChild(providers);
+      appendProviders(providers, mediaType, tmdbId);
+      if ((d.recommendations || []).length) body.appendChild(scroller(t('moreLikeThis'), d.recommendations.map(resultCard)));
+    }
+    load();
   }
 
   function requestStatusText(s) {
@@ -1159,8 +1510,8 @@
     return v === key ? String(s || '') : v;
   }
 
-  function renderRequestsPage() {
-    var page = openOverlay('requests');
+  function renderRequestsPage(key) {
+    var page = openOverlay(key);
     if (!page) return;
     var list = el('div', { class: 'arclight-request-list' });
     var more = el('button', { type: 'button', class: 'emby-button raised arclight-btn hide', text: t('loadMore') });
@@ -1180,7 +1531,7 @@
       var node = el('div', { class: 'arclight-req' }, [
         poster,
         el('div', { class: 'arclight-req-main' }, [
-          el('div', { class: 'arclight-card-title', text: r.title + (r.year ? ' (' + r.year + ')' : '') }),
+          el('a', { class: 'arclight-card-title arclight-card-link', href: titleHref(r.mediaType, r.tmdbId, r.jellyfinId), text: r.title + (r.year ? ' (' + r.year + ')' : '') }),
           detail ? el('div', { class: 'arclight-card-meta', text: detail }) : null,
           el('div', { class: 'arclight-chips' }, [chip(requestStatusText(r.status), r.status === 'pending' ? 'requested' : r.status === 'declined' || r.status === 'failed' ? 'missing' : 'processing')]),
           progress
@@ -1404,8 +1755,17 @@
       if (!themeState.loaded && features().themes) loadTheme();
       scanCards();
       var arclightPage = hp.params.get('arclight');
-      if (arclightPage === 'discover' && features().discover) { renderDiscoverPage(); return; }
-      if (arclightPage === 'requests' && features().myRequests) { renderRequestsPage(); return; }
+      if (overlay && overlay.__place) overlay.__place();
+      var key = location.hash;
+      var p = hp.params;
+      if (arclightPage === 'discover' && features().discover) { renderDiscoverPage(key); return; }
+      if (arclightPage === 'requests' && features().myRequests) { renderRequestsPage(key); return; }
+      if (arclightPage === 'grid' && features().discover && /^[a-zA-Z]{3,20}$/.test(p.get('category') || '')) { renderGridPage(key, p.get('category')); return; }
+      if (arclightPage === 'genre' && features().discover && /^(movie|series)$/.test(p.get('type') || '') && /^\d+$/.test(p.get('genre') || '')) {
+        renderGenrePage(key, p.get('type'), p.get('genre'), (p.get('name') || '').slice(0, 60), /^(popularity|rating|releaseDate|title)$/.test(p.get('sort') || '') ? p.get('sort') : 'popularity');
+        return;
+      }
+      if (arclightPage === 'title' && /^(movie|series)$/.test(p.get('type') || '') && /^\d+$/.test(p.get('id') || '')) { renderTitlePage(key, p.get('type'), p.get('id')); return; }
       closeOverlay();
       if (hp.path === '/home' || hp.path === '/home.html' || hp.path === '') renderHomeRow();
       if (hp.path.indexOf('details') >= 0) {

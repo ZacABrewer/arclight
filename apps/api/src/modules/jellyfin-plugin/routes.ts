@@ -29,6 +29,10 @@ import {
   JellyfinWatchlistDeleteQuery,
   JellyfinWatchlistItem,
   JellyfinDiscoverQuery,
+  JellyfinGenreDiscoverParams,
+  JellyfinGenreDiscoverQuery,
+  JellyfinGenreParams,
+  JellyfinGenres,
   JellyfinMyRequests,
   JellyfinProviders,
   JellyfinProvidersQuery,
@@ -139,6 +143,17 @@ export function jellyfinPluginRoutes(
 
     app.get('/jellyfin/discover', { schema: { querystring: JellyfinDiscoverQuery, response: { 200: JellyfinSearchPage, ...errors } } }, async (req) =>
       service.discover(await user(req), req.query),
+    );
+
+    app.get('/jellyfin/genres/:mediaType', { schema: { params: JellyfinGenreParams, response: { 200: JellyfinGenres, ...errors } } }, async (req) => {
+      await user(req); // per-user like the other discover routes (linked, active account)
+      return service.genres(req.params.mediaType);
+    });
+
+    app.get(
+      '/jellyfin/discover/genre/:mediaType/:genreId',
+      { schema: { params: JellyfinGenreDiscoverParams, querystring: JellyfinGenreDiscoverQuery, response: { 200: JellyfinSearchPage, ...errors } } },
+      async (req) => service.genreDiscover(await user(req), req.params.mediaType, req.params.genreId, req.query),
     );
 
     app.get('/jellyfin/upcoming', { schema: { querystring: JellyfinUpcomingQuery, response: { 200: JellyfinUpcoming, ...errors } } }, async (req) =>

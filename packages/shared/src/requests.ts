@@ -1064,6 +1064,8 @@ export const TitleDetail = DiscoverItem.extend({
   genres: z.array(DiscoverGenre),
   keywords: z.array(DiscoverGenre),
   companies: z.array(TitleCompany),
+  /** Series: the show's creators. */
+  creators: z.array(z.string()).optional(),
   cast: z.array(CastMember),
   crew: z.array(CrewMember),
   videos: z.array(TitleVideo),

@@ -71,6 +71,15 @@ describe('title extras', () => {
     expect(extras.tagline).toBe('Welcome to the Real World.');
   });
 
+  it('maps series creators (created_by) and networks', async () => {
+    const tv = { id: 1396, networks: [{ id: 174, name: 'AMC' }], created_by: [{ id: 66633, name: 'Vince Gilligan' }, { id: 1, name: '' }] };
+    const { tmdb } = client((url) => (url.pathname === '/3/tv/1396' ? jsonResponse(tv) : defaultRoute(url)));
+    const extras = await tmdb.getSeriesExtras(1396);
+    expect(extras.creators).toEqual(['Vince Gilligan']);
+    expect(extras.companies.map((c) => c.name)).toEqual(['AMC']);
+    expect((await tmdb.getMovieExtras(603).catch(() => null))?.creators).toBeUndefined();
+  });
+
   it('maps a person with de-duplicated, newest-first credits', async () => {
     const { tmdb } = client((url) => (url.pathname === '/3/person/6384' ? jsonResponse(person) : defaultRoute(url)));
     const p = await tmdb.getPerson(6384);

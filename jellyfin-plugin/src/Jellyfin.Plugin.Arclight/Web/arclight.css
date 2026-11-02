@@ -78,6 +78,7 @@
   border-radius: 999px !important;
 }
 
+a.arclight-action { text-decoration: none; }
 .arclight-action {
   display: inline-flex !important;
   align-items: center;
@@ -329,6 +330,67 @@ html.arclight-page-open .mainAnimatedPages { visibility: hidden; }
 .arclight-progress { height: 0.35em; border-radius: 999px; background: rgba(128, 128, 128, 0.3); overflow: hidden; max-width: 20em; }
 .arclight-progress-bar { height: 100%; background: var(--arclight-accent); }
 
+/* ---------- links, toggles, genre chips ---------- */
+a.arclight-card-link { color: inherit; text-decoration: none; display: block; }
+a.arclight-card-link:hover .arclight-poster-img, a.arclight-card-link:focus-visible .arclight-poster-img { filter: brightness(1.12); }
+a.arclight-card-title:hover { text-decoration: underline; }
+.arclight-row-tools { display: inline-flex; align-items: center; gap: 0.8em; flex-wrap: wrap; }
+.arclight-toggle { display: inline-flex; border-radius: 999px; overflow: hidden; background: rgba(128, 128, 128, 0.18); }
+.arclight-toggle-btn { margin: 0 !important; padding: 0.3em 0.9em !important; border-radius: 0 !important; background: transparent !important; color: inherit !important; font-size: 0.85em; }
+.arclight-toggle-on { background: var(--arclight-accent) !important; color: #fff !important; }
+.arclight-genre-strip { display: flex; flex-wrap: wrap; gap: 0.45em; padding: 0.3em 0 0.6em; }
+a.arclight-genre-chip { color: inherit; text-decoration: none; cursor: pointer; }
+a.arclight-genre-chip:hover, a.arclight-genre-chip:focus-visible { background: rgba(128, 128, 128, 0.32); }
+.arclight-back { display: inline-block; margin-top: 0.4em; }
+.arclight-grid-page { grid-template-columns: repeat(auto-fill, minmax(9em, 1fr)); }
+.arclight-sentinel { text-align: center; padding: 1.5em 0 2em; min-height: 1em; }
+.arclight-grid-tools { display: flex; flex-wrap: wrap; gap: 1em; align-items: center; margin-bottom: 0.6em; }
+.arclight-sort-label { display: inline-flex; align-items: center; gap: 0.5em; }
+.arclight-sort { width: auto; }
+
+/* ---------- title page ---------- */
+.arclight-title-page { padding-bottom: 3em; }
+.arclight-hero {
+  position: relative;
+  background-size: cover;
+  background-position: center top;
+  background-color: rgba(128, 128, 128, 0.12);
+}
+.arclight-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.7) 45%, rgba(0, 0, 0, 0.45) 100%), linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent 45%);
+}
+.arclight-hero-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(8em, 15em) 1fr;
+  gap: 2em;
+  padding-top: 2em;
+  padding-bottom: 2em;
+  color: #fff;
+}
+.arclight-hero-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--arclight-radius); box-shadow: 0 0.6em 2em rgba(0, 0, 0, 0.5); font-size: 4em; }
+.arclight-hero-info { display: flex; flex-direction: column; gap: 0.6em; min-width: 0; }
+.arclight-hero-title { margin: 0; font-size: 2.2em; line-height: 1.15; }
+.arclight-hero-meta { opacity: 0.85; }
+.arclight-tagline { font-style: italic; opacity: 0.85; }
+.arclight-overview { margin: 0.2em 0; max-width: 60em; line-height: 1.5; }
+.arclight-title-actions { margin: 0.3em 0; }
+.arclight-hero .arclight-action { background: rgba(255, 255, 255, 0.16) !important; color: #fff !important; text-decoration: none; }
+.arclight-hero .arclight-action.button-submit { background: var(--arclight-accent) !important; }
+.arclight-action[disabled] { opacity: 0.5; cursor: not-allowed; }
+.arclight-hero .arclight-genre-chip { color: #fff; border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.12); }
+.arclight-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.25em 1em; font-size: 0.92em; }
+.arclight-fact { display: contents; }
+.arclight-fact-label { opacity: 0.7; }
+.arclight-season-list { display: flex; flex-direction: column; gap: 0.35em; max-width: 44em; }
+.arclight-season { display: grid; grid-template-columns: 1fr auto auto; gap: 1em; align-items: center; padding: 0.45em 0.7em; border-radius: var(--arclight-radius); background: rgba(128, 128, 128, 0.1); }
+.arclight-season-name { font-weight: 600; }
+.arclight-person { display: flex; flex-direction: column; min-width: 0; }
+.arclight-person-img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--arclight-radius); background: rgba(128, 128, 128, 0.2); font-size: 2.5em; display: flex; align-items: center; justify-content: center; }
+
 @media (max-width: 40em) {
   .arclight-grid { grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr)); gap: 1em 0.7em; }
   .arclight-action-label { display: none; }
@@ -337,6 +399,11 @@ html.arclight-page-open .mainAnimatedPages { visibility: hidden; }
   .arclight-row-scroller { grid-auto-columns: minmax(7em, 8em); }
   .arclight-req { grid-template-columns: 3em 1fr; }
   .arclight-req-actions { grid-column: 1 / -1; }
+  .arclight-hero-inner { grid-template-columns: 1fr; gap: 1em; }
+  .arclight-hero-poster { width: 9em; }
+  .arclight-hero-title { font-size: 1.6em; }
+  .arclight-grid-page { grid-template-columns: repeat(auto-fill, minmax(7em, 1fr)); }
+  .arclight-season { grid-template-columns: 1fr auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

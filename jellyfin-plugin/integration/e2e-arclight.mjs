@@ -8,7 +8,11 @@
 //   docker build -f docker/Dockerfile -t arclight:e2e .          (repo root)
 //   node integration/e2e-arclight.mjs --zip artifacts/arclight-jellyfin_1.0.0.12.zip
 //        [--arclight-image arclight:e2e] [--jellyfin-image jellyfin/jellyfin:12.4]
-//        [--jf-port 18096] [--al-port 27878] [--work <dir>] [--keep]
+//        [--jf-port 18096] [--al-port 27878] [--work <dir>] [--keep] [--tmdb-env <path to .env>]
+//
+// --tmdb-env reads a TMDB API key (variable *TMDB_API_KEY*) from a local .env file at runtime and
+// hands it to the throwaway Arclight as a container environment variable only. The key is never
+// printed, logged or written anywhere by this script. With it, the TMDB-backed checks run for real.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -30,6 +34,17 @@ const NET = 'arclight-e2e-net';
 const AL = 'arclight-e2e-al';
 const JFC = 'arclight-e2e-jf';
 const work = resolve(String(args.work ?? mkdtempSync(join(tmpdir(), 'arclight-e2e-'))));
+function readTmdbKey(file) {
+  if (!file) return null;
+  try {
+    const line = readFileSync(String(file), 'utf8').split(/\r?\n/).find((l) => /^\s*[A-Z0-9_]*TMDB_API_KEY\s*=/.test(l));
+    const value = line ? line.slice(line.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '') : '';
+    return value.length > 10 ? value : null;
+  } catch {
+    return null;
+  }
+}
+const TMDB_KEY = readTmdbKey(args['tmdb-env']);
 const JF = `http://localhost:${JF_PORT}`;
 const ALU = `http://localhost:${AL_PORT}/api/v1`;
 const PLUGIN_ID = 'a0751e21-86da-4afd-8e35-7da8b087febc';
@@ -127,7 +142,10 @@ async function main() {
   docker('network', 'create', NET);
 
   // ------------------------------------------------------------------ containers
-  docker('run', '-d', '--name', AL, '--network', NET, '-p', `${AL_PORT}:7878`, '-e', 'TZ=UTC', '-v', `${join(work, 'al-config')}:/config`, AL_IMAGE);
+  // The TMDB key goes in as an environment variable of the throwaway container only (never logged).
+  const tmdbEnv = TMDB_KEY ? ['-e', `ARCLIGHT_TMDB_API_KEY=${TMDB_KEY}`] : [];
+  docker('run', '-d', '--name', AL, '--network', NET, '-p', `${AL_PORT}:7878`, '-e', 'TZ=UTC', ...tmdbEnv, '-v', `${join(work, 'al-config')}:/config`, AL_IMAGE);
+  console.log(TMDB_KEY ? 'TMDB: key provided (real TMDB checks on)' : 'TMDB: no key (TMDB-backed calls are expected to answer 503)');
   docker('run', '-d', '--name', JFC, '--network', NET, '-p', `${JF_PORT}:8096`, '-v', `${join(work, 'jf-config')}:/config`, JF_IMAGE);
 
   await waitFor('Arclight ping', async () => (await http('GET', `${ALU}/system/ping`)).status === 200, 180000, 2000);
@@ -324,7 +342,9 @@ async function main() {
   r = await proxy('DELETE', 'Watchlist?mediaType=movie&tmdbId=603');
   const wlDel = r.status;
   const wlAfter = ((await proxy('GET', 'Watchlist')).json?.items ?? []).some((w) => w.tmdbId === 603);
-  if (!wlAdded && wlStatus === 503) {
+  if (TMDB_KEY) {
+    check('watchlist add through the proxy (TMDB)', wlAdded && wlHas && wlDel === 200 && !wlAfter, { wlAdded, wlHas, wlDel, wlAfter });
+  } else if (!wlAdded && wlStatus === 503) {
     check('watchlist add without TMDB fails cleanly (503 NOT_CONFIGURED passed through)', wlCode === 'NOT_CONFIGURED', wlCode);
   } else {
     check('watchlist add / list / remove through the proxy', wlAdded && wlHas && wlDel === 200 && !wlAfter, { wlAdded, wlHas, wlDel, wlAfter });
@@ -344,6 +364,53 @@ async function main() {
   r = await proxy('POST', 'LanguageRequest', { kind: 'subtitle', mediaType: 'movie', tmdbId: 550, language: 'es' });
   note(`language request -> HTTP ${r.status} ${r.body.slice(0, 300)}`);
 
+  // ------------------------------------------------------------------ real TMDB data (only with --tmdb-env)
+  if (TMDB_KEY) {
+    r = await proxy('GET', 'Search?q=the%20matrix&type=all&page=1');
+    check('TMDB search: The Matrix (603) found', r.status === 200 && (r.json?.results ?? []).some((x) => x.tmdbId === 603 && x.mediaType === 'movie'), r.body.slice(0, 300));
+    r = await proxy('GET', 'Search?q=fight%20club&type=movie&page=1');
+    const fc550 = (r.json?.results ?? []).find((x) => x.tmdbId === 550);
+    check('library title in search carries jellyfinId (opens Jellyfin\'s own page)', fc550?.jellyfinId === fightClub.Id.replace(/-/g, ''), fc550);
+    r = await proxy('GET', 'Title/movie/550');
+    const t550 = r.json ?? {};
+    check('title page data: cast (≤15, with characters), director, genres, runtime, certification, score', r.status === 200 && t550.cast?.length >= 5 && t550.cast.length <= 15 && t550.cast.some((c) => c.character) && (t550.directors ?? []).includes('David Fincher') && t550.genres?.length > 0 && t550.runtimeMinutes > 100 && !!t550.certification && t550.voteAverage > 5, { cast: t550.cast?.length, directors: t550.directors, genres: t550.genres?.map((g) => g.name), runtime: t550.runtimeMinutes, cert: t550.certification, vote: t550.voteAverage });
+    check('title page data: recommendations, trailer, backdrop, release dates', (t550.recommendations ?? []).length > 0 && !!t550.backdropUrl && !!t550.releaseDates && (!t550.trailer || /^https:\/\/(www\.youtube\.com|vimeo\.com)\//.test(t550.trailer.url)), { recs: t550.recommendations?.length, trailer: t550.trailer?.url, backdrop: !!t550.backdropUrl });
+    note(`Fight Club: ${t550.cast?.length} cast, ${t550.recommendations?.length} recommendations, trailer ${t550.trailer ? 'yes' : 'none'}, cert ${t550.certification}`);
+    r = await proxy('GET', 'Title/series/1396');
+    check('series title page: creators, networks, seasons with episode counts', r.status === 200 && (r.json?.creators ?? []).length > 0 && (r.json?.networks ?? []).length > 0 && (r.json?.seasons ?? []).some((x) => x.episodeCount > 0), { creators: r.json?.creators, networks: r.json?.networks, seasons: r.json?.seasons?.length });
+    for (const cat of ['trendingDay', 'trendingWeek', 'popularMovies', 'popularSeries', 'topRatedMovies', 'topRatedSeries', 'nowPlaying', 'upcomingMovies', 'airingToday', 'onTheAir', 'recommended']) {
+      r = await proxy('GET', `Discover?category=${cat}&page=1`);
+      check(`discover row ${cat}: results`, r.status === 200 && (r.json?.results ?? []).length > 0, `${r.status} ${r.body.slice(0, 160)}`);
+    }
+    r = await proxy('GET', 'Genres/movie');
+    const action = (r.json?.genres ?? []).find((g) => g.name === 'Action');
+    check('movie genres listed (Action present)', r.status === 200 && (r.json?.genres ?? []).length >= 10 && !!action, r.json?.genres?.length);
+    const g1 = await proxy('GET', `DiscoverGenre/movie/${action?.id ?? 28}?sort=popularity&page=1`);
+    const g2 = await proxy('GET', `DiscoverGenre/movie/${action?.id ?? 28}?sort=popularity&page=2`);
+    const ids1 = new Set((g1.json?.results ?? []).map((x) => x.tmdbId));
+    check('genre browse pages (page 2 differs from page 1)', g1.status === 200 && g2.status === 200 && ids1.size > 0 && (g2.json?.results ?? []).some((x) => !ids1.has(x.tmdbId)) && g1.json?.totalPages > 1, { p1: ids1.size, p2: g2.json?.results?.length, total: g1.json?.totalPages });
+    r = await proxy('GET', `DiscoverGenre/movie/${action?.id ?? 28}?sort=rating&page=1`);
+    check('genre browse sorted by rating', r.status === 200 && (r.json?.results ?? []).length > 0, r.status);
+    r = await proxy('GET', 'Genres/series');
+    check('series genres listed', r.status === 200 && (r.json?.genres ?? []).length >= 5, r.status);
+
+    r = await proxy('POST', 'Request', { mediaType: 'movie', tmdbId: 13 });
+    note(`movie request -> HTTP ${r.status} ${r.body.slice(0, 220)}`);
+    check('movie request created (201/202)', [201, 202].includes(r.status), r.body.slice(0, 300));
+    r = await proxy('POST', 'Request', { mediaType: 'series', tmdbId: 1399, seasons: [1] });
+    note(`series request -> HTTP ${r.status} ${r.body.slice(0, 220)}`);
+    check('series request created (201/202)', [201, 202].includes(r.status), r.body.slice(0, 300));
+    r = await proxy('GET', 'Title/series/1399');
+    check('series with only season 1 requested can still be requested (other seasons)', r.json?.canRequest === true && r.json?.seasons?.find((x) => x.seasonNumber === 1)?.status === 'requested', { canRequest: r.json?.canRequest, reason: r.json?.requestBlockedReason });
+    r = await proxy('GET', 'Requests?take=20&skip=0');
+    check('My requests lists both requests', (r.json?.items ?? []).some((x) => x.tmdbId === 13) && (r.json?.items ?? []).some((x) => x.tmdbId === 1399), r.json?.items?.map((x) => `${x.mediaType}:${x.tmdbId}:${x.status}`));
+    r = await proxy('POST', 'Watchlist', { mediaType: 'movie', tmdbId: 680 });
+    const wlOk = r.status === 201;
+    const wlList = ((await proxy('GET', 'Watchlist')).json?.items ?? []).some((x) => x.tmdbId === 680);
+    const wlDel = (await proxy('DELETE', 'Watchlist?mediaType=movie&tmdbId=680')).status;
+    check('watchlist add / list / remove with TMDB', wlOk && wlList && wlDel === 200, { wlOk, wlList, wlDel });
+  }
+
   // ------------------------------------------------------------------ new endpoints against the real backend
   r = await proxy('GET', 'Upcoming?days=30');
   check('upcoming: 200 with items[] (empty library)', r.status === 200 && Array.isArray(r.json?.items), r.body);
@@ -351,9 +418,11 @@ async function main() {
   check('my requests: 200 with total/items', r.status === 200 && typeof r.json?.total === 'number' && Array.isArray(r.json?.items), r.body);
   note(`my requests -> ${r.body.slice(0, 200)}`);
   r = await proxy('GET', 'Discover?category=trending&page=1');
-  check('discover without TMDB: clean 503 NOT_CONFIGURED', r.status === 503 && r.json?.code === 'NOT_CONFIGURED', r.body);
+  if (TMDB_KEY) check('discover trending (TMDB)', r.status === 200 && (r.json?.results ?? []).length > 0, r.status);
+  else check('discover without TMDB: clean 503 NOT_CONFIGURED', r.status === 503 && r.json?.code === 'NOT_CONFIGURED', r.body);
   r = await proxy('GET', 'Providers/movie/550');
-  check('providers without TMDB: clean JSON error', r.status >= 400 && typeof r.json?.code === 'string', r.body);
+  if (TMDB_KEY) check('providers (TMDB, JustWatch attribution)', r.status === 200 && r.json?.attribution === 'Data from JustWatch', r.body.slice(0, 200));
+  else check('providers without TMDB: clean JSON error', r.status >= 400 && typeof r.json?.code === 'string', r.body);
   note(`providers -> HTTP ${r.status} ${r.body.slice(0, 160)}`);
   r = await proxy('GET', `Labels?ids=${fightClub.Id}`);
   check('labels from Jellyfin media info', r.status === 200 && r.json?.items?.[0]?.resolution === 'SD', r.body);
@@ -400,6 +469,19 @@ async function main() {
   const kidLogin = await jfLogin('e2ekid', 'e2e-kid-1');
   r = await proxy('GET', 'Watchlist', undefined, kidLogin.AccessToken);
   check('linked kid account works through the proxy before disabling', r.status === 200, r.body);
+  if (TMDB_KEY) {
+    // Fight Club is rated R: above the kid's PG cap.
+    r = await proxy('GET', 'Search?q=fight%20club&type=movie&page=1', undefined, kidLogin.AccessToken);
+    check('capped user: R-rated Fight Club absent from search', r.status === 200 && !(r.json?.results ?? []).some((x) => x.tmdbId === 550), (r.json?.results ?? []).map((x) => x.tmdbId).slice(0, 10));
+    r = await proxy('GET', 'Title/movie/550', undefined, kidLogin.AccessToken);
+    check('capped user: title page 404 content_restricted', r.status === 404 && r.json?.code === 'content_restricted', `${r.status} ${r.body.slice(0, 120)}`);
+    r = await proxy('POST', 'Request', { mediaType: 'movie', tmdbId: 550 }, kidLogin.AccessToken);
+    check('capped user: request refused 403 content_restricted', r.status === 403 && r.json?.code === 'content_restricted', `${r.status} ${r.body.slice(0, 120)}`);
+    r = await proxy('GET', 'Title/movie/862', undefined, kidLogin.AccessToken); // Toy Story (G)
+    check('capped user: a G-rated title still opens', r.status === 200 && r.json?.tmdbId === 862, `${r.status}`);
+    const adminSearch = await proxy('GET', 'Search?q=fight%20club&type=movie&page=1');
+    check('uncapped admin still sees Fight Club', (adminSearch.json?.results ?? []).some((x) => x.tmdbId === 550));
+  }
   r = await http('POST', `${JF}/Users/${kidId}/Policy`, { jf: jfTok, body: { ...kidPolicy, MaxParentalRating: 10, IsDisabled: true } });
   await http('POST', `${ALU}/mediaserver/${serverId}/usersync`, { al: AL_KEY });
   r = await http('GET', `${ALU}/jellyfin/watchlist`, { al: PLUGIN_KEY, headers: { 'X-Arclight-Jellyfin-User': N(kidId) } });

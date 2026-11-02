@@ -398,6 +398,24 @@ async function main() {
   check('Theme.css 404 for an unknown pack', missing.status === 404, missing.status);
   await proxy('POST', 'Themes/Choice', { choice: '' });
 
+  // ---- plugin 1.2: title page data, genres, library links
+  r = await proxy('GET', 'Search?q=fight&type=all&page=1');
+  const fcHit = (r.json?.results ?? []).find((x) => x.tmdbId === 550);
+  check('search marks library titles with jellyfinId (opens Jellyfin\'s own page)', fcHit?.jellyfinId === movie.Id.replace(/-/g, '') && !(r.json?.results ?? []).find((x) => x.tmdbId === 603)?.jellyfinId, fcHit);
+  r = await proxy('GET', 'Title/movie/155');
+  check('title page passes the new fields through', r.status === 200 && r.json?.cast?.[0]?.name === 'Actor One' && r.json?.trailer?.url?.startsWith('https://www.youtube.com/') && r.json?.directors?.[0] === 'Some Director', r.json && { cast: r.json.cast, trailer: r.json.trailer });
+  check('title recommendations: library title gets jellyfinId, others not', r.json?.recommendations?.[0]?.jellyfinId === movie.Id.replace(/-/g, '') && !r.json?.recommendations?.[1]?.jellyfinId, r.json?.recommendations);
+  r = await proxy('GET', 'Genres/movie');
+  c = await lastCall('/api/v1/jellyfin/genres/movie');
+  check('GET /Arclight/Genres/movie', r.status === 200 && r.json?.genres?.length === 2 && !!c, r.json);
+  r = await proxy('GET', 'DiscoverGenre/movie/878?sort=rating&page=2');
+  c = await lastCall('/api/v1/jellyfin/discover/genre/movie/878');
+  check('GET /Arclight/DiscoverGenre forwards sort and page', r.status === 200 && r.json?.page === 2 && c?.query.sort === 'rating' && c?.query.page === '2', c?.query);
+  r = await proxy('GET', 'DiscoverGenre/movie/878?sort=random');
+  check('DiscoverGenre rejects unknown sorts', r.status === 400, r.status);
+  r = await proxy('GET', 'Discover?category=airingToday&page=1');
+  check('new discover categories accepted (airingToday)', r.status === 200, r.status);
+
   // ---- Cinema Mode intro
   const intros = async (id) => ((await http('GET', `${JF}/Items/${id}/Intros?userId=${adminId}`, { token })).json?.Items ?? []);
   const isOurs = (i) => /arclight-intro/i.test(`${i.Name ?? ''} ${i.Path ?? ''}`);

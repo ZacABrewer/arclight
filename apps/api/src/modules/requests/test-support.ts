@@ -42,6 +42,11 @@ export interface FakeSeries extends FakeMovie {
   seasons: number[];
 }
 
+/** A TMDB search result for a fake title (for extras overrides in tests). */
+export function fakeSearchResult(kind: 'movie' | 'series', m: FakeMovie): SearchResult {
+  return result(kind, m);
+}
+
 function result(kind: 'movie' | 'series', m: FakeMovie): SearchResult {
   const base = {
     tmdbId: m.tmdbId,
@@ -58,6 +63,8 @@ function result(kind: 'movie' | 'series', m: FakeMovie): SearchResult {
 
 export class FakeTmdb {
   movies = new Map<number, FakeMovie>();
+  /** Per-title extras overrides, keyed `movie:<id>` / `series:<id>` (cast, crew, videos, recommendations...). */
+  extrasOverride = new Map<string, Partial<TitleExtras>>();
   series = new Map<number, FakeSeries>();
   calls: string[] = [];
   /** Collection id → movie ids (parts). */
@@ -86,7 +93,7 @@ export class FakeTmdb {
   }
 
   private extras(kind: 'movie' | 'series', m: FakeMovie): TitleExtras {
-    return {
+    const base: TitleExtras = {
       tmdbId: m.tmdbId,
       mediaType: kind,
       tagline: 'A tagline',
@@ -99,6 +106,7 @@ export class FakeTmdb {
       similar: [...(kind === 'movie' ? this.movies : this.series).values()].filter((x) => x.tmdbId !== m.tmdbId).map((x) => result(kind, x)),
       recommendations: [],
     };
+    return { ...base, ...(this.extrasOverride.get(`${kind}:${m.tmdbId}`) ?? {}) };
   }
 
   page(results: SearchResult[]) {
@@ -161,8 +169,8 @@ export class FakeTmdb {
         self.calls.push(`discover:${kind}:${JSON.stringify(opts)}`);
         return kind === 'movie' ? self.page([...self.movies.values()].map((m) => result('movie', m))) : self.page([...self.series.values()].map((s) => result('series', s)));
       },
-      async getTrending(kind) {
-        self.calls.push(`trending:${kind}`);
+      async getTrending(kind, window) {
+        self.calls.push(`trending:${kind}:${window ?? ''}`);
         return self.page([...[...self.movies.values()].map((m) => result('movie', m)), ...[...self.series.values()].map((s) => result('series', s))]);
       },
       async searchMulti(query) {

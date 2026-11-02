@@ -441,6 +441,32 @@ export class DiscoverService {
     return this.page(results, name ? { title: name } : {});
   }
 
+  /**
+   * A genre's titles with a chosen order. `rating` needs at least 200 votes so a handful of
+   * perfect scores do not top the list; `releaseDate` is newest first, up to today.
+   */
+  async genreBrowse(kind: MediaKind, id: number, sort: 'popularity' | 'rating' | 'releaseDate' | 'title', page = 1): Promise<DiscoverPage> {
+    const today = localDate(this.requests.now());
+    const opts: DiscoverOptions = { page, withGenres: String(id) };
+    switch (sort) {
+      case 'rating':
+        opts.sortBy = 'vote_average.desc';
+        opts.voteCountGte = 200;
+        break;
+      case 'releaseDate':
+        opts.sortBy = kind === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc';
+        opts.releaseDateGte = '1900-01-01';
+        opts.releaseDateLte = today;
+        break;
+      case 'title':
+        opts.sortBy = kind === 'movie' ? 'original_title.asc' : 'name.asc';
+        break;
+      default:
+        opts.sortBy = 'popularity.desc';
+    }
+    return this.page(await this.discoverCall(kind, opts));
+  }
+
   async keyword(id: number, raw: DiscoverKindQuery): Promise<DiscoverPage> {
     const q = DiscoverKindQuery.parse(raw);
     return this.page(await this.discoverCall(q.mediaType, { page: q.page, withKeywords: String(id) }));
@@ -635,6 +661,7 @@ export class DiscoverService {
       genres: extras.genres.map((g) => ({ id: g.tmdbId, name: g.name })),
       keywords: extras.keywords.map((k) => ({ id: k.tmdbId, name: k.name })),
       companies: extras.companies.map((c) => ({ id: c.tmdbId, name: c.name, logoUrl: c.logo ?? null })),
+      ...(extras.creators && extras.creators.length > 0 ? { creators: extras.creators } : {}),
       cast: extras.cast.map((c) => ({ tmdbId: c.tmdbId, name: c.name, ...(c.character ? { character: c.character } : {}), profileUrl: c.profile ?? null })),
       crew: extras.crew.map((c) => ({
         tmdbId: c.tmdbId,

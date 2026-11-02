@@ -105,6 +105,7 @@ export function mapTvExtras(raw: TmdbTvExtras, images: ImageUrlBuilder): TitleEx
     genres: (raw.genres ?? []).map((g) => ({ tmdbId: g.id, name: g.name })),
     keywords: (raw.keywords?.results ?? []).map((k) => ({ tmdbId: k.id, name: k.name })),
     companies: mapCompanies(raw.networks, images),
+    creators: (raw.created_by ?? []).map((c) => c.name).filter((n) => n.length > 0),
     ...mapCredits(raw.credits, images),
     videos: mapVideos(raw.videos?.results),
     similar: (raw.similar?.results ?? []).map((i) => mapTvSearchItem(i, images)),

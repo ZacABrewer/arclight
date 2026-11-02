@@ -155,7 +155,7 @@ public partial class ArclightController : ControllerBase
         }
 
         var path = ProxyValidation.SearchPath(q, type, page);
-        return path is null ? Invalid("invalid_query") : await Forward(HttpMethod.Get, path, null, ct).ConfigureAwait(false);
+        return path is null ? Invalid("invalid_query") : await ForwardLinked(HttpMethod.Get, path, ct).ConfigureAwait(false);
     }
 
     /// <summary>Title details (seasons, request options, languages).</summary>
@@ -172,7 +172,7 @@ public partial class ArclightController : ControllerBase
             return Invalid("invalid_title");
         }
 
-        return await Forward(HttpMethod.Get, "title/" + mediaType + "/" + tmdbId.ToString(CultureInfo.InvariantCulture), null, ct).ConfigureAwait(false);
+        return await ForwardLinked(HttpMethod.Get, "title/" + mediaType + "/" + tmdbId.ToString(CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
     }
 
     /// <summary>Requests a title.</summary>

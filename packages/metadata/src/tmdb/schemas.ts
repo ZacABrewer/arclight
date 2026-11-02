@@ -322,6 +322,7 @@ export const tmdbTvExtrasSchema = z
     tagline: nullableString,
     genres: z.array(tmdbGenreSchema).optional(),
     networks: z.array(tmdbCompanySchema).optional(),
+    created_by: z.array(z.object({ name: z.string() }).loose()).optional(),
     credits: tmdbCreditsSchema.optional(),
     similar: tmdbPagedTvSchema.optional(),
     recommendations: tmdbPagedTvSchema.optional(),

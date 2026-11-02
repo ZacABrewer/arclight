@@ -73,7 +73,19 @@ const server = createServer((req, res) => {
     }
 
     switch (`${req.method} ${route.split('/')[0]}`) {
+      case 'GET genres':
+        return send(res, 200, { mediaType: route.split('/')[1], genres: [{ id: 28, name: 'Action' }, { id: 878, name: 'Science Fiction' }] });
       case 'GET discover': {
+        if (route.startsWith('discover/genre/')) {
+          const [, , type, genreId] = route.split('/');
+          const page = Number(url.searchParams.get('page') ?? 1);
+          return send(res, 200, {
+            page, totalPages: 3, totalResults: 60,
+            results: Array.from({ length: 20 }, (_, i) => ({ tmdbId: Number(genreId) * 1000 + page * 100 + i, mediaType: type, title: `Genre ${genreId} p${page} #${i}`, year: 2020, posterUrl: null, overview: '', status: 'none', canRequest: true, canRequest4k: false, requestBlockedReason: null }))
+              .concat(page === 1 ? [{ tmdbId: 550, mediaType: 'movie', title: 'Fight Club', year: 1999, posterUrl: null, overview: '', status: 'available', canRequest: false, canRequest4k: false, requestBlockedReason: 'available' }] : []),
+            sort: url.searchParams.get('sort'),
+          });
+        }
         const cat = url.searchParams.get('category');
         const mk = (i, mediaType, status = 'none') => ({ tmdbId: 9000 + i, mediaType, title: `${cat} ${i + 1}`, year: 2026, posterUrl: null, overview: 'Fake discover item.', status, canRequest: status === 'none', canRequest4k: false, requestBlockedReason: status === 'none' ? null : status === 'available' ? 'available' : 'requested' });
         const type = cat === 'popularSeries' || cat === 'upcomingSeries' ? 'series' : 'movie';
@@ -151,7 +163,14 @@ const server = createServer((req, res) => {
         return send(res, 200, {
           mediaType: route.split('/')[1],
           tmdbId: Number(route.split('/')[2]),
-          seasons: [{ seasonNumber: 1, status: 'available' }, { seasonNumber: 2, status: 'none' }, { seasonNumber: 3, status: 'requested' }],
+          seasons: [{ seasonNumber: 1, status: 'available', episodeCount: 7, name: 'Season 1' }, { seasonNumber: 2, status: 'none', episodeCount: 13, name: 'Season 2' }, { seasonNumber: 3, status: 'requested', episodeCount: 13, name: 'Season 3' }],
+          title: 'Fake Title', year: 2008, overview: 'Fake overview.', posterUrl: null, backdropUrl: null, status: 'none', canRequest: true,
+          inLibrary: false, runtimeMinutes: 120, certification: 'PG-13', voteAverage: 7.9, genres: [{ id: 28, name: 'Action' }],
+          cast: [{ name: 'Actor One', character: 'Lead', profileUrl: null }], directors: ['Some Director'], creators: [], networks: [], studios: ['Studio'],
+          trailer: { site: 'YouTube', key: 'abc', url: 'https://www.youtube.com/watch?v=abc' },
+          releaseDates: { cinema: '2008-07-18', digital: null, physical: null, firstAirDate: null, lastAirDate: null },
+          recommendations: [{ tmdbId: 550, mediaType: 'movie', title: 'Fight Club', year: 1999, posterUrl: null, overview: '', status: 'available', canRequest: false, canRequest4k: false, requestBlockedReason: 'available' },
+            { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: 2008, posterUrl: null, overview: '', status: 'none', canRequest: true, canRequest4k: false, requestBlockedReason: null }],
           canRequest4k: true,
           canRequestSubtitles: true,
           canRequestAudio: true,

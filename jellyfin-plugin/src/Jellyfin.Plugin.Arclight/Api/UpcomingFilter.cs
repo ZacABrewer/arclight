@@ -72,7 +72,7 @@ public sealed class LibraryTmdbIndex
     private readonly ILibraryManager _library;
     private readonly object _gate = new();
     private DateTime _builtAt = DateTime.MinValue;
-    private HashSet<int> _movies = new();
+    private Dictionary<int, Guid> _movies = new();
     private Dictionary<int, List<Series>> _series = new();
 
     /// <summary>Initializes a new instance of the <see cref="LibraryTmdbIndex"/> class.</summary>
@@ -85,7 +85,25 @@ public sealed class LibraryTmdbIndex
     public bool HasMovie(int tmdbId)
     {
         Refresh();
-        return _movies.Contains(tmdbId);
+        return _movies.ContainsKey(tmdbId);
+    }
+
+    /// <summary>The Jellyfin item id of the library movie with this TMDB id.</summary>
+    /// <param name="tmdbId">TMDB id.</param>
+    /// <returns>Item id or null.</returns>
+    public Guid? MovieItemId(int tmdbId)
+    {
+        Refresh();
+        return _movies.TryGetValue(tmdbId, out var id) ? id : null;
+    }
+
+    /// <summary>The Jellyfin item id of the library series with this TMDB id.</summary>
+    /// <param name="tmdbId">TMDB id.</param>
+    /// <returns>Item id or null.</returns>
+    public Guid? SeriesItemId(int tmdbId)
+    {
+        Refresh();
+        return _series.TryGetValue(tmdbId, out var list) && list.Count > 0 ? list[0].Id : null;
     }
 
     /// <summary>True when the series with this TMDB id has this episode as a real file.</summary>
@@ -116,7 +134,7 @@ public sealed class LibraryTmdbIndex
                 return;
             }
 
-            var movies = new HashSet<int>();
+            var movies = new Dictionary<int, Guid>();
             var series = new Dictionary<int, List<Series>>();
             // One indexed database query (BaseItemKind lives in Jellyfin.Data.Enums on 10.11 and 12.x alike).
             var query = new InternalItemsQuery
@@ -135,7 +153,7 @@ public sealed class LibraryTmdbIndex
 
                 if (item is Movie)
                 {
-                    movies.Add(id);
+                    movies.TryAdd(id, item.Id);
                 }
                 else if (item is Series show)
                 {

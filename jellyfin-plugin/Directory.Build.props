@@ -7,7 +7,7 @@
     manifest can list both and every server picks the newest build its ABI accepts.
   -->
   <PropertyGroup>
-    <ArclightVersion Condition="'$(ArclightVersion)' == ''">1.1.0</ArclightVersion>
+    <ArclightVersion Condition="'$(ArclightVersion)' == ''">1.2.0</ArclightVersion>
     <JellyfinTarget Condition="'$(JellyfinTarget)' == ''">12</JellyfinTarget>
   </PropertyGroup>
 

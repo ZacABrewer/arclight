@@ -3,6 +3,21 @@
 Release notes for Arclight for Jellyfin. The section for a version is copied into the plugin
 repository manifest, which Jellyfin shows in Dashboard > Plugins.
 
+## 1.2.0
+
+- Title pages for titles you don't have yet. Any search result, Discover title, Coming soon entry, request or recommendation opens a full page with:
+  - backdrop, poster, runtime, rating and TMDB score;
+  - genres, overview, cast with photos, director or creators, networks and studios;
+  - trailer (opens in a new tab), release dates, and seasons with episode counts and status;
+  - "Also on", request status with the request dialog, watchlist, and "More like this".
+  Titles already in Jellyfin open Jellyfin's own page. Library item pages get a "View in Arclight" link.
+- A bigger Discover:
+  - rows: Recommended for you (from your watch history), Trending (today / this week), Popular, Top rated, In cinemas now, Upcoming, Airing today, On the air;
+  - genre chips for movies and series;
+  - "See all" grids that load more as you scroll;
+  - genre pages with sorting (popularity, rating, release date, title) and a movies/series switch.
+- The title page data, the new Discover rows and genres need an Arclight release newer than 0.18.2. With older Arclight versions the plugin keeps working, and rows Arclight doesn't know yet show an error instead of titles.
+
 ## 1.1.0
 
 - Coming soon only lists what is not here yet: Arclight leaves out releases it already has, and the plugin also drops movies and episodes this Jellyfin already holds. Missing (placeholder) episodes still show.
