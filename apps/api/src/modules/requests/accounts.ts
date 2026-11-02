@@ -243,6 +243,18 @@ export class MediaServerAccounts implements ExternalLoginProvider {
     return this.requests.requestSettings(actor, userId);
   }
 
+  /**
+   * The plex.tv account id a user's own Plex token belongs to, or null when plex.tv cannot say
+   * (bad token, offline). Never throws and never logs the token.
+   */
+  async plexAccountId(token: string): Promise<string | null> {
+    try {
+      return (await this.plexTv.account(token)).id;
+    } catch {
+      return null;
+    }
+  }
+
   private async plexLink(token: string): Promise<MediaServerLink> {
     const account = await this.plexTv.account(token).catch((err: unknown) => {
       throw toRequestsError(err, 'plex.tv account');

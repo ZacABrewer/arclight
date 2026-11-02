@@ -1,7 +1,9 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { Permission } from '@arclight/shared';
+import { users } from '../../db/schema.js';
 import { authServiceFor, installAuth } from '../auth/index.js';
 import { MediaServersService, setMediaServersService } from '../media-servers/index.js';
 import { requestsModuleWith } from '../requests/index.js';
@@ -19,13 +21,27 @@ const KID = 'kkkkkkkk1111kkkk1111kkkkkkkkkkkk';
 const ADULT = 'aaaaaaaa2222aaaa2222aaaaaaaaaaaa';
 const link = (externalId: string, username: string) => ({ kind: 'jellyfin', externalId, username, linkedAt: '2026-01-01T00:00:00.000Z' });
 
-async function build() {
-  const h = await setup();
+/** plex.tv in tests: the token 'plex-token-adult' belongs to plex.tv account 9001; anything else is refused. */
+const plexTvCalls: string[] = [];
+const plexTv = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  const u = String(url);
+  plexTvCalls.push(u);
+  const headers = new Headers(init?.headers);
+  if (u.startsWith('http://plextv.test/api/v2/user') && headers.get('X-Plex-Token') === 'plex-token-adult') {
+    return new Response(JSON.stringify({ id: 9001, username: 'adult-plex' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  return new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } });
+};
+
+async function build(opts: { plex?: boolean } = {}) {
+  const h = await setup({ extra: { fetch: plexTv, plexTvUrl: 'http://plextv.test' } });
   const fake = new FakeJellyfin();
-  const servers = new MediaServersService({ db: h.db, fetch: fake.fetch, newId: () => 'jf1' });
+  const ids = ['jf1', 'px1'];
+  const servers = new MediaServersService({ db: h.db, fetch: fake.fetch, newId: () => ids.shift() ?? 'extra' });
   setMediaServersService(h.ctx, servers);
   servers.create({ kind: 'jellyfin', name: 'Den', url: 'http://jellyfin.test', apiKey: fake.apiKey, loginEnabled: true });
   servers.rememberRemoteId('jf1', fake.serverId);
+  if (opts.plex) servers.create({ kind: 'plex', name: 'Lounge', url: 'http://plex.test', apiKey: 'plex-server-token' });
   addUser(h.db, { role: 'admin', username: 'owner' });
   const app = Fastify().withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
@@ -233,6 +249,70 @@ describe('Jellyfin plugin: Discover rows', () => {
     expect(ids).not.toContain(5); // in the library
     expect(ids).not.toContain(1); // watched
     expect(ids).not.toContain(4); // watched
+  });
+
+  it('recommended: also from the Plex watch history of their own Plex account', async () => {
+    const t = await build({ plex: true });
+    seed(t);
+    // The adult keeps their Jellyfin link and adds their own Plex token (request settings).
+    const row = t.db.select().from(users).where(eq(users.id, t.adult.id)).get()!;
+    t.db
+      .update(users)
+      .set({ settings: { ...(row.settings as Record<string, unknown>), plexToken: 'plex-token-adult' } })
+      .where(eq(users.id, t.adult.id))
+      .run();
+    const now = '2026-10-01T00:00:00.000Z';
+    const plexAccount = t.db.insert(mediaServerUsers).values({ serverId: 'px1', externalId: '9001', name: 'adult-plex', firstSeenAt: now, updatedAt: now }).returning().get();
+    // Someone else's Plex account on the same server: their plays never count for the adult.
+    const other = t.db.insert(mediaServerUsers).values({ serverId: 'px1', externalId: '9002', name: 'neighbour', firstSeenAt: now, updatedAt: now }).returning().get();
+    const play = (accountId: number, tmdbId: number) =>
+      t.db
+        .insert(watchState)
+        .values({
+          serverId: 'px1',
+          mediaServerUserId: accountId,
+          jellyfinItemId: `px-${accountId}-${tmdbId}`,
+          itemType: 'movie',
+          itemKey: `plex:px-${accountId}-${tmdbId}`,
+          tmdbId,
+          title: `Movie ${tmdbId}`,
+          played: true,
+          playCount: 1,
+          lastPlayedAt: '2026-10-02T00:00:00.000Z',
+          updatedAt: '2026-10-02T00:00:00.000Z',
+        })
+        .run();
+    play(plexAccount.id, 1); // recommends 2, 3, 5
+    play(other.id, 4);
+
+    plexTvCalls.length = 0;
+    t.tmdb.calls.length = 0;
+    const ids = (await t.get(ADULT, 'discover?category=recommended')).json().results.map((r: { tmdbId: number }) => r.tmdbId);
+    expect(t.tmdb.calls).not.toContain('trending:all:week');
+    expect(ids).toContain(2);
+    expect(ids).toContain(3);
+    expect(ids).not.toContain(1); // watched on Plex
+    expect(plexTvCalls.filter((u) => u.includes('/api/v2/user'))).toHaveLength(1);
+
+    // The kid has no Plex token: the Plex plays are not theirs, so trending it is.
+    t.tmdb.calls.length = 0;
+    await t.get(KID, 'discover?category=recommended');
+    expect(t.tmdb.calls).toContain('trending:all:week');
+  });
+
+  it('recommended: a Plex token plex.tv refuses falls back quietly', async () => {
+    const t = await build({ plex: true });
+    seed(t);
+    const row = t.db.select().from(users).where(eq(users.id, t.adult.id)).get()!;
+    t.db
+      .update(users)
+      .set({ settings: { ...(row.settings as Record<string, unknown>), plexToken: 'revoked' } })
+      .where(eq(users.id, t.adult.id))
+      .run();
+    t.tmdb.calls.length = 0;
+    const res = await t.get(ADULT, 'discover?category=recommended');
+    expect(res.statusCode).toBe(200);
+    expect(t.tmdb.calls).toContain('trending:all:week');
   });
 
   it('genres list and genre browse with sort, paging and caps', async () => {

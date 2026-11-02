@@ -116,6 +116,8 @@ export class JellyfinPluginService {
   private readonly now: () => Date;
   /** "Recommended for you" per Arclight user, rebuilt every 30 minutes. */
   private readonly recommendedCache = new Map<number, { at: number; items: DiscoverItem[] }>();
+  /** The plex.tv id of each user's own Plex token (null: plex.tv did not know it). */
+  private readonly plexIdCache = new Map<number, { token: string; id: string | null }>();
 
   constructor(opts: JellyfinPluginServiceOptions) {
     this.db = opts.db;
@@ -474,16 +476,31 @@ export class JellyfinPluginService {
     }
   }
 
-  /** TMDB ids (movie / series) this account has watched, most recent first, from Arclight's watch history. */
-  watchedTitles(user: PluginUser): { type: MediaType; tmdbId: number; at: string }[] {
-    const link = ((user.row.settings ?? {}) as Record<string, unknown>)['mediaServerLink'] as { externalId?: unknown } | undefined;
-    const externalId = typeof link?.externalId === 'string' ? normaliseExternalId(link.externalId) : null;
-    if (!externalId) return [];
+  /**
+   * TMDB ids (movie / series) this user has watched, most recent first, from Arclight's watch
+   * history: the linked Jellyfin/Emby account on Jellyfin/Emby servers, plus their own Plex
+   * account (plex.tv ids from `plexAccountIds`) on Plex servers. Both land in the same tables.
+   */
+  watchedTitles(user: PluginUser, plexAccountIds: readonly string[] = []): { type: MediaType; tmdbId: number; at: string }[] {
+    const link = ((user.row.settings ?? {}) as Record<string, unknown>)['mediaServerLink'] as { kind?: unknown; externalId?: unknown } | undefined;
+    const linkId = typeof link?.externalId === 'string' ? normaliseExternalId(link.externalId) : null;
+    const linkKind = typeof link?.kind === 'string' ? link.kind : null;
+    const plexIds = new Set(plexAccountIds.map(normaliseExternalId));
+    if (linkKind === 'plex' && linkId) plexIds.add(linkId);
+    const mediaBrowserId = linkKind !== 'plex' ? linkId : null;
+    if (!mediaBrowserId && plexIds.size === 0) return [];
+    const kinds = new Map(this.servers.stored().map((s) => [s.id, s.kind]));
     const accountIds = this.db
-      .select({ id: mediaServerUsers.id, externalId: mediaServerUsers.externalId })
+      .select({ id: mediaServerUsers.id, serverId: mediaServerUsers.serverId, externalId: mediaServerUsers.externalId })
       .from(mediaServerUsers)
       .all()
-      .filter((a) => normaliseExternalId(a.externalId) === externalId)
+      .filter((a) => {
+        const kind = kinds.get(a.serverId);
+        const id = normaliseExternalId(a.externalId);
+        // Accounts on a server that is gone keep matching by id, as before.
+        if (kind === 'plex') return plexIds.has(id);
+        return mediaBrowserId !== null && id === mediaBrowserId;
+      })
       .map((a) => a.id);
     if (accountIds.length === 0) return [];
     const rows = this.db
@@ -504,6 +521,19 @@ export class JellyfinPluginService {
     return [...best.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   }
 
+  /** plex.tv ids proven by the user's own Plex token, cached per user while the token is unchanged. */
+  private async plexAccountIds(user: PluginUser): Promise<string[]> {
+    const token = ((user.row.settings ?? {}) as Record<string, unknown>)['plexToken'];
+    if (typeof token !== 'string' || token === '') return [];
+    if (!this.servers.stored().some((s) => s.kind === 'plex')) return [];
+    const hit = this.plexIdCache.get(user.row.id);
+    if (hit && hit.token === token) return hit.id ? [hit.id] : [];
+    const id = await this.requests().accounts.plexAccountId(token);
+    this.plexIdCache.set(user.row.id, { token, id });
+    if (this.plexIdCache.size > 1000) this.plexIdCache.clear();
+    return id ? [id] : [];
+  }
+
   /**
    * "Recommended for you": TMDB recommendations of the five titles this account watched most
    * recently, merged round-robin, without duplicates, library titles or titles already watched.
@@ -514,7 +544,7 @@ export class JellyfinPluginService {
     const hit = this.recommendedCache.get(user.row.id);
     let items = hit && nowMs - hit.at < 30 * 60_000 ? hit.items : null;
     if (!items) {
-      const watched = this.watchedTitles(user);
+      const watched = this.watchedTitles(user, await this.plexAccountIds(user));
       const seen = new Set(watched.map((w) => `${w.type}:${w.tmdbId}`));
       const lists = await Promise.all(
         watched.slice(0, 5).map(async (w) => {
