@@ -10,7 +10,7 @@ import licenses from '../generated/licenses.json';
 import { appBuild, isNative, openExternal, type Runtime } from '../platform/capacitor.js';
 import { biometricAvailable, verifyBiometric } from '../platform/handlers.js';
 import type { Route } from './route.js';
-import { Icon, Mark, Notice, TopBar, haptic } from './ui.js';
+import { Icon, Mark, Notice, TopBar, Wordmark, haptic } from './ui.js';
 
 interface Nav {
   go: (r: Route) => void;
@@ -212,6 +212,7 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
       {!hasServers && !editing && (
         <div className="center" style={{ flex: 'none', paddingTop: 8 }}>
           <Mark />
+          <Wordmark height={22} />
           <p className="muted">Arclight is a remote for your own self-hosted Arclight server. Enter its address, or scan the pairing code from the server's settings.</p>
         </div>
       )}
@@ -435,7 +436,9 @@ export function AboutScreen({ go }: Nav) {
       <TopBar title="About" onBack={() => go({ name: 'settings' })} />
       <div className="center" style={{ flex: 'none' }}>
         <Mark />
-        <h1 className="brand">ARCLIGHT</h1>
+        <h1>
+          <Wordmark height={26} />
+        </h1>
         <p className="muted">
           Version {APP_VERSION}
           {build ? ` (${build})` : ''}
@@ -484,7 +487,7 @@ export function LicensesScreen({ go }: Nav) {
           Software Foundation, version 3 of the License or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see the{' '}
           <ExternalLink href={LINKS.license}>GNU GPL v3.0</ExternalLink> for details. Source: <ExternalLink href={LINKS.source}>GitHub</ExternalLink>.
         </p>
-        <p className="small muted">Chakra Petch font: SIL Open Font License 1.1.</p>
+        <p className="small muted">Chakra Petch font and the Michroma letterforms of the wordmark: SIL Open Font License 1.1.</p>
       </section>
       <section className="card">
         <h2>JavaScript packages</h2>

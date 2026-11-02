@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { useHotkey } from '../hooks/use-hotkey.js';
 import { LiveDot } from '../components/Progress.js';
+import { Wordmark } from '../components/Wordmark.js';
 import { t } from '../../i18n/index.js';
 
 export interface TopBarProps {
@@ -95,7 +96,7 @@ export function TopBar({
       <span className="al-topbar__runner" aria-hidden="true">
         <i className="al-runner al-runner--h" />
       </span>
-      <div className="al-wordmark">{t('common.arclight')}</div>
+      <Wordmark height={16} label={t('common.arclight')} />
       {onSearch ? (
         <button type="button" className="al-topbar__search" onClick={onSearch} aria-label={t('arclight.chrome.topBar.searchPress')} aria-keyshortcuts="/">
           <span>{searchPlaceholder}</span>

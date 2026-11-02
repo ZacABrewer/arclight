@@ -78,6 +78,9 @@
   /* the accent used as text (links, counts); a light pack whose accent fill is too pale for text sets it darker */
   --al-cyan-text: var(--al-accent-text);
   --al-label: #8fb3bd; --al-placeholder: #6f939b; --al-rail-ink: #5d8790; --al-text-6: #3f5e66;
+  /* Light Slice wordmark (Wordmark): letters run from -> to, the line in the cut is --al-wordmark-line.
+     Tron uses the brand's dark-background lockup: the mark's blue into the accent. */
+  --al-wordmark-from: var(--al-mark-from, #2f7bff); --al-wordmark-to: var(--al-mark-to, var(--al-cyan)); --al-wordmark-line: var(--al-cyan);
   /* focus and field rings */
   --al-focus-danger: 0 0 0 2px #000, 0 0 0 4px rgba(255,90,70,.7);
   --al-field-focus: 0 0 0 3px rgba(110,246,255,.12); --al-field-invalid: 0 0 0 3px rgba(255,90,70,.1);

@@ -14,6 +14,10 @@
   --danger: #ff6b7d;
   --warn: #ffc56e;
   --ok: #6effa8;
+  /* Light Slice wordmark (Wordmark in ui.tsx): the brand's dark-background lockup */
+  --wordmark-from: var(--primary);
+  --wordmark-to: var(--accent);
+  --wordmark-line: var(--accent);
   --radius: 14px;
   /* Android (Capacitor SystemBars) sets --safe-area-inset-*; iOS provides env(). */
   --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
@@ -43,7 +47,7 @@ body {
   overscroll-behavior: none;
 }
 
-h1, h2, h3, .brand {
+h1, h2, h3 {
   font-family: 'Chakra Petch', -apple-system, system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -72,6 +76,7 @@ a { color: var(--accent); }
 
 .mark { width: 84px; height: 84px; }
 .mark.small { width: 36px; height: 36px; }
+.wordmark { display: block; flex: none; overflow: visible; max-width: 100%; height: auto; }
 
 .card {
   background: var(--card);

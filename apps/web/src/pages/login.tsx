@@ -4,7 +4,7 @@ import type { LoginMethod, MediaServerKind } from '@arclight/shared';
 import { useRouter, useRouterState } from '@tanstack/react-router';
 import { ApiError, errorMessage } from '../api/client.js';
 import { authApi } from '../api/auth.js';
-import { Backdrop, Banner, Button, Checkbox, Field, Input, Mark, Pane, Segmented } from '../arclight/index.js';
+import { Backdrop, Banner, Button, Checkbox, Field, Input, Mark, Pane, Segmented, Wordmark } from '../arclight/index.js';
 import { authKeys, safeRedirect } from '../auth/guard.js';
 import { usePlexPinFlow } from '../features/requests/plex-pin.js';
 import { t } from '../i18n/index.js';
@@ -87,9 +87,7 @@ export function LoginPage() {
           <form className="login-form" onSubmit={(e) => void onSubmit(e)} noValidate aria-labelledby="login-title">
             <div className="login-brand">
               <Mark size={44} />
-              <span className="login-wordmark" aria-hidden="true">
-                {t('common.arclight')}
-              </span>
+              <Wordmark height={26} label={t('common.arclight')} className="login-wordmark" />
               <h1 id="login-title" className="al-sr-only">
                 {t('login.signIn')}
               </h1>

@@ -22,6 +22,8 @@
   -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
   overflow-y: auto; scrollbar-width: none; }
 .al-rail__mark { flex: none; margin-bottom: 22px; }
+/* the wordmark beside the mark: only the wide, labelled rail of theme packs shows it (packs.css) */
+.al-rail .al-rail__word { display: none; }
 .al-rail__list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .al-rail__item { position: relative; width: 60px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   color: var(--al-rail-ink); background: transparent; border: 0; border-radius: var(--al-radius-inner); padding: 0; cursor: pointer; text-decoration: none;
@@ -55,7 +57,8 @@
   background: var(--al-topbar-bg);
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
   font-size: 14px; color: var(--al-text-3); }
-.al-wordmark { font-family: var(--al-display); font-stretch: 125%; font-weight: 600; font-size: 15px; letter-spacing: .14em; color: var(--al-text-1); white-space: nowrap; }
+.al-wordmark { display: inline-flex; flex: none; align-items: center; line-height: 0; }
+.al-wordmark > svg { display: block; overflow: visible; }
 .al-topbar__search { flex: 1; max-width: 420px; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
   border: 0; border-bottom: 1px solid var(--al-line-a25); border-radius: var(--al-radius-control); background: transparent; color: var(--al-placeholder); font: 14px var(--al-font); text-align: left; cursor: text;
   transition: border-color var(--t-fast); }

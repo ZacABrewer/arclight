@@ -65,6 +65,9 @@
   /* text extras */
   --al-label: var(--al-text-4); --al-placeholder: var(--al-text-5); --al-rail-ink: var(--al-text-3); --al-text-6: var(--al-text-5);
   --al-accent-text: var(--al-cyan);
+  /* Light Slice wordmark: the pack's main text into its accent-as-text colour (dark text into the
+     accent on light packs, like the brand's light-background lockup), the line in the accent text colour */
+  --al-wordmark-from: var(--al-text-1); --al-wordmark-to: var(--al-accent-text); --al-wordmark-line: var(--al-accent-text);
   /* focus, field rings */
   --al-focus: 0 0 0 2px var(--al-void), 0 0 0 4px var(--al-cyan);
   --al-focus-danger: 0 0 0 2px var(--al-void), 0 0 0 4px var(--al-danger);
@@ -137,7 +140,6 @@
 [data-theme] .al-modal__title, [data-theme] .al-drawer__title, [data-theme] .wiz-head__title, [data-theme] .nf__title { font-stretch: normal; }
 [data-theme] .al-modal__title, [data-theme] .al-drawer__title, [data-theme] .wiz-head__title, [data-theme] .nf__title, [data-theme] .portal-title {
   font-family: var(--al-display); font-weight: var(--al-display-weight, 600); text-transform: var(--al-display-case, none); letter-spacing: var(--al-display-tracking, normal); }
-[data-theme] .al-wordmark, [data-theme] .login-wordmark { font-stretch: normal; letter-spacing: var(--al-display-tracking, normal); font-weight: var(--al-display-weight, 600); }
 [data-theme] .al-label { font-weight: 600; }
 [data-theme] .al-table th, [data-theme] .al-datepicker__wd, [data-theme] .cal-weekday {
   font-family: var(--al-label-font); font-size: var(--al-label-size, 12px); font-weight: 600; letter-spacing: var(--al-label-tracking, .04em); text-transform: var(--al-label-case, none); }
@@ -145,9 +147,11 @@
 /* rail: wide, labelled (code badge + the item's title), icon-only on tablets */
 [data-theme] .al-rail { align-items: stretch; gap: 4px; padding: 20px 14px; border-right: var(--al-border-width) solid var(--al-line-1);
   background: var(--al-rail-bg); -webkit-backdrop-filter: blur(var(--al-blur)); backdrop-filter: blur(var(--al-blur)); }
-[data-theme] .al-rail__mark { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 0 10px; color: var(--al-text-1); text-decoration: none; }
-[data-theme] .al-rail__mark::after { content: "Arclight"; font: var(--al-display-weight, 600) 20px/1 var(--al-display); text-transform: var(--al-display-case, none);
-  letter-spacing: var(--al-display-tracking, normal); color: var(--al-text-1); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+[data-theme] .al-rail__mark { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 0 10px; color: var(--al-text-1); text-decoration: none; }
+[data-theme] .al-rail .al-rail__word { display: inline-flex; flex: 0 1 auto; min-width: 0; }
+[data-theme] .al-rail__word > svg { width: 100%; height: auto; }
+/* the rail used to print "Arclight" as ::after text; packs synced before the wordmark may still set it */
+:root[data-theme] .al-rail__mark::after { content: none; }
 [data-theme] .al-mark { flex: none; }
 [data-theme] .al-rail__list { align-items: stretch; gap: 2px; }
 [data-theme] .al-rail__item { width: 100%; height: 42px; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px;
@@ -161,7 +165,7 @@
 @media (min-width: 768px) and (max-width: 1279.98px) {
   [data-theme] .al-rail { padding: 18px 10px; align-items: center; }
   [data-theme] .al-rail__mark { padding: 0; justify-content: center; }
-  [data-theme] .al-rail__mark::after, [data-theme] .al-rail__item::after { display: none; }
+  [data-theme] .al-rail .al-rail__word, [data-theme] .al-rail__item::after { display: none; }
   [data-theme] .al-rail__item { width: 60px; padding: 0; justify-content: center; }
   [data-theme] .al-rail__code { width: 34px; height: 26px; font-size: 12px; }
 }
@@ -179,7 +183,7 @@
 [data-theme] .al-avatar:hover { border-color: var(--al-line-3); background: var(--al-tone-people); }
 @media (max-width: 767.98px) {
   [data-theme] .al-topbar { padding: 0 16px; gap: 10px; }
-  [data-theme] .al-topbar > .al-wordmark { display: block; font-size: 18px; }
+  [data-theme] .al-topbar > .al-wordmark { display: inline-flex; }
   [data-theme] .al-avatar { width: 44px; height: 44px; }
   [data-theme] .portal-title { font-size: 18px; }
   [data-theme] .portal-head .al-btn { padding: 0 10px; white-space: nowrap; }

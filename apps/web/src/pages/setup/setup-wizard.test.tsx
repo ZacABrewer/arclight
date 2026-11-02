@@ -107,6 +107,8 @@ describe('setup wizard (Page 08)', () => {
     expect(screen.getByText(/Step/).textContent).toBe('Step 4 of 7');
     // One chamfered card per step.
     expect(document.querySelectorAll('[data-chamfer]')).toHaveLength(1);
+    // The header carries the Light Slice wordmark.
+    expect(within(document.querySelector('.wiz-bar') as HTMLElement).getByRole('img', { name: /^arclight$/i })).toBeTruthy();
   });
 
   it('adds root folders from the path picker and blocks Continue until one exists', async () => {
