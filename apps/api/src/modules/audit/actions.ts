@@ -17,6 +17,12 @@ const ACTION_OVERRIDES: Readonly<Record<string, string>> = {
 const SKIPPED: ReadonlySet<string> = new Set([
   // Recorded by the auth service itself (login.success / login.failed).
   'POST /auth/login',
+  'POST /auth/login/2fa',
+  'POST /auth/passkey/login',
+  // Prompts only (no change); the follow-up is recorded.
+  'POST /auth/passkey/options',
+  'POST /user/me/passkeys/options',
+  'POST /user/me/2fa/totp/setup',
   // Plex PIN polling (every few seconds while the sign-in dialog is open).
   'POST /auth/plex/pin',
   'POST /auth/plex/poll',

@@ -8,9 +8,11 @@ const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:7878';
 
 export default defineConfig({
   plugins: [react()],
-  // Absolute asset URLs so deep links (/system/tasks) served by the api's SPA fallback
-  // still resolve /assets/* from the root.
-  base: '/',
+  // Relative URLs so one build works under any base path chosen at runtime (ARCLIGHT_BASE_PATH):
+  // the api's SPA fallback rewrites index.html's "./" URLs to "<base>/" (apps/api/src/spa.ts),
+  // so deep links (/system/tasks) still load /assets/*; chunks and CSS resolve relative to
+  // their own files.
+  base: './',
   server: {
     port: 5173,
     proxy: {

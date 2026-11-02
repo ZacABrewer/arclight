@@ -39,6 +39,7 @@ to set it up, what can go wrong.
 | [First-run wizard](getting-started/first-run-wizard.md) | Admin account, TMDB key, folders, indexers, client, VPN |
 | [Folders and hard links](getting-started/folders-and-hardlinks.md) | The one-share layout and why it matters |
 | [Exposing it outside your home](getting-started/exposing-outside-home.md) | Reverse proxy, Cloudflare Tunnel, Tailscale |
+| [Hosting under a sub-path](getting-started/sub-path-hosting.md) | `ARCLIGHT_BASE_PATH`, e.g. `https://example.com/arclight/` with Nginx, Caddy, Traefik |
 | [Updating](getting-started/updating.md) | Self-update vs notify-only, channels, rollback |
 | [Backup and restore](getting-started/backup-restore.md) | What is backed up and how to restore |
 | [Moving from Sonarr, Radarr, Prowlarr, Bazarr, Overseerr](getting-started/migrating.md) | The importer |
@@ -70,6 +71,7 @@ These pages follow the app's navigation.
 | Mobile app (pairing, phone notifications) | [mobile-app.md](using/mobile-app.md) |
 | Media servers (Jellyfin, Emby, Plex) and the Arclight for Jellyfin plugin | [media-servers.md](using/media-servers.md) |
 | Users and security | [users-and-security.md](using/users-and-security.md) |
+| Single sign-on (OpenID Connect, forward-auth), two-factor, passkeys, API keys | [single-sign-on.md](using/single-sign-on.md) |
 | System (health, tasks, logs, metrics, config as code) | [system.md](using/system.md) |
 
 ## When something goes wrong

@@ -43,6 +43,12 @@ export function isAdminOnlyPath(pathname: string, access: Access = PORTAL_ACCESS
   return !canOpenAppPath(access, pathname);
 }
 
+/**
+ * Where an admin goes while "Require two-factor for admins" blocks them (Session
+ * twoFactorSetupRequired): the profile, which then shows only its two-factor setup.
+ */
+export const TWO_FACTOR_SETUP_PATH = '/profile';
+
 /** A redirect target taken from the query string: same-origin app paths only. */
 export function safeRedirect(target: unknown): string {
   if (typeof target !== 'string' || !target.startsWith('/') || target.startsWith('//')) return '/';
@@ -79,6 +85,8 @@ export function resolveAuthRedirect(
     return '/setup';
   }
   if (pathname === '/setup') return '/';
+  // Every other api call answers 403 until this admin sets up a second factor.
+  if (status.authenticated && status.session?.twoFactorSetupRequired) return pathname === TWO_FACTOR_SETUP_PATH ? null : TWO_FACTOR_SETUP_PATH;
   // Public pages stay put for everyone (signed-in users may still look at the portal).
   if (isPublicPath(pathname)) return null;
   if (!status.authenticated) return pathname === '/login' ? null : loginHref(href);

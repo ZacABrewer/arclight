@@ -13,6 +13,7 @@ import { formatDateTime, relativeTime } from '../../../lib/format.js';
 import { SettingsPage, useDraft } from '../settings-layout.js';
 import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { ApiKeyControls, useSecuritySettings } from './api-key.js';
+import { AllApiKeysSection, ForwardAuthSection, IdentityProvidersSection, SignInPolicySection, useIdentitySettingsForm } from '../../../features/identity/identity-settings.js';
 import './security.css';
 import { t } from '../../../i18n/index.js';
 
@@ -21,6 +22,28 @@ const METHOD_OPTIONS = [
   { value: 'basic', get label() { return t('settings.security.browserPromptHttpBasic'); } },
   { value: 'none', get label() { return t('settings.security.noneOnTheLocalNetwork'); } },
 ];
+
+/** How a session was opened ("password", "oidc:<provider>", "passkey", …) as a short label. */
+export function sessionMethodLabel(method: string | undefined): string | null {
+  if (!method) return null;
+  if (method.startsWith('oidc:')) return t('settings.security.sessionMethod.oidc', { provider: method.slice(5) });
+  switch (method) {
+    case 'password':
+      return t('settings.security.sessionMethod.password');
+    case 'passkey':
+      return t('settings.security.sessionMethod.passkey');
+    case 'setup':
+      return t('settings.security.sessionMethod.setup');
+    case 'jellyfin':
+      return t('common.jellyfin');
+    case 'emby':
+      return t('common.emby');
+    case 'plex':
+      return t('common.plex');
+    default:
+      return method;
+  }
+}
 
 /** Mono timestamp: relative text, full date on hover. */
 function When({ iso, empty = t('common.never') }: { iso: string | null | undefined; empty?: string }) {
@@ -377,6 +400,7 @@ function SessionsSection() {
           <span className="al-ua" title={s.userAgent}>
             {s.userAgent ?? t('settings.security.unknownBrowser')}
           </span>
+          {sessionMethodLabel(s.method) ? <span className="al-sub">{sessionMethodLabel(s.method)}</span> : null}
           {s.current ? <Chip tone="accent">{t('settings.security.thisSession')}</Chip> : null}
         </>
       ),
@@ -434,26 +458,36 @@ function SessionsSection() {
 
 export function SecurityPage() {
   const auth = useAuthSettingsForm();
+  const identity = useIdentitySettingsForm();
   return (
     <SettingsPage
       title={t('common.security')}
       description={t('settings.security.howPeopleSignInWho')}
       save={{
-        count: auth.draft.changes,
-        onDiscard: auth.draft.discard,
-        onSave: () => {
-          if (auth.draft.value && auth.daysValid) auth.save.mutate(auth.draft.value);
+        count: auth.draft.changes + identity.draft.changes,
+        onDiscard: () => {
+          auth.draft.discard();
+          identity.draft.discard();
         },
-        saving: auth.save.isPending,
-        disabled: !auth.daysValid,
+        onSave: () => {
+          if (!auth.daysValid || !identity.valid) return;
+          if (auth.draft.dirty && auth.draft.value) auth.save.mutate(auth.draft.value);
+          if (identity.draft.dirty && identity.draft.value) identity.save.mutate(identity.draft.value);
+        },
+        saving: auth.save.isPending || identity.save.isPending,
+        disabled: !auth.daysValid || !identity.valid,
       }}
     >
       <AuthSettingsSection form={auth} />
+      <SignInPolicySection form={identity} />
+      <IdentityProvidersSection form={identity} />
+      <ForwardAuthSection form={identity} />
       <SettingsSection label={t('settings.security.apiKeys')}>
         <FormRow label={t('settings.security.adminApiKey')} htmlFor="security-api-key" caption={t('settings.security.appsAndScriptsSendThis')}>
           <ApiKeyControls id="security-api-key" />
         </FormRow>
       </SettingsSection>
+      <AllApiKeysSection />
       <UsersSection />
       <SessionsSection />
     </SettingsPage>

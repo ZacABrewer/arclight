@@ -1,7 +1,9 @@
 import type { z } from 'zod';
 import { ErrorResponse } from '@arclight/shared';
+import { withBase } from '../lib/base-path.js';
 
-export const API_BASE = '/api/v1';
+/** The REST api below this page's base path (ARCLIGHT_BASE_PATH, lib/base-path.ts): "/api/v1" at the root. */
+export const API_BASE = withBase('/api/v1');
 
 /** A non-2xx response from the api. `code` comes from the shared ErrorResponse body when present. */
 export class ApiError extends Error {
@@ -44,8 +46,19 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 }
 
 function triggersSignIn(path: string): boolean {
-  // A wrong current password answers 401 too; that is a form error, not a lost session.
-  return !path.startsWith('/auth/') && !path.startsWith('/setup/') && path !== '/user/me/password';
+  // A wrong current password (or two-factor code) answers 401 too; that is a form error, not a lost session.
+  return !path.startsWith('/auth/') && !path.startsWith('/setup/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa');
+}
+
+let onTwoFactorSetupRequired: (() => void) | null = null;
+
+/**
+ * Called when a request answers 403 TWO_FACTOR_SETUP_REQUIRED ("Require two-factor for
+ * admins" is on and this admin has none yet). main.tsx sends the browser to the profile's
+ * two-factor setup.
+ */
+export function setTwoFactorSetupHandler(handler: (() => void) | null): void {
+  onTwoFactorSetupRequired = handler;
 }
 
 export type QueryParams = Record<string, string | number | boolean | null | undefined>;
@@ -80,7 +93,11 @@ export async function request(path: string, schema: z.ZodType | null, init: Requ
   const res = await fetch(url, { credentials: 'same-origin', ...rest, headers: finalHeaders, body });
 
   if (res.status === 401 && onUnauthorized && triggersSignIn(path)) onUnauthorized(path);
-  if (!res.ok) throw await toApiError(res, path);
+  if (!res.ok) {
+    const err = await toApiError(res, path);
+    if (err.status === 403 && err.code === 'TWO_FACTOR_SETUP_REQUIRED') onTwoFactorSetupRequired?.();
+    throw err;
+  }
   if (schema === null || res.status === 204) return undefined;
 
   const data: unknown = await res.json();

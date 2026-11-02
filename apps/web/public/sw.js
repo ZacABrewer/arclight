@@ -4,10 +4,15 @@
    - Page navigations: network-first, falling back to /offline.html when the server is unreachable.
    Push: shows the notification a push carries ({ title, body, url, tag }) and opens its deep
    link on click, focusing an open Arclight tab when there is one.
-   Bump VERSION to drop old caches. Registered from main.tsx (register-sw.ts) in production builds only. */
+   Bump VERSION to drop old caches. Registered from main.tsx (register-sw.ts) in production builds only.
+   Sub-path hosting (ARCLIGHT_BASE_PATH): every path above is relative to the folder this file is
+   served from, e.g. /arclight/assets/* when it is /arclight/sw.js; BASE is that folder ("/" at the root). */
 const VERSION = 'arclight-v3';
 const STATIC_CACHE = VERSION + '-static';
-const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/favicon.ico', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/badge-96.png'];
+const BASE = new URL('./', self.location.href).pathname;
+const PRECACHE = ['offline.html', 'manifest.webmanifest', 'favicon.ico', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/badge-96.png'].map((p) => BASE + p);
+/** An app path ("/requests/5") below BASE ("/arclight/requests/5"). */
+const appPath = (path) => BASE + path.replace(/^\/+/, '');
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,7 +33,8 @@ self.addEventListener('activate', (event) => {
 });
 
 function isStatic(url) {
-  return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/favicon.ico' || url.pathname === '/manifest.webmanifest';
+  const p = url.pathname;
+  return p.startsWith(BASE + 'assets/') || p.startsWith(BASE + 'icons/') || p === BASE + 'favicon.ico' || p === BASE + 'manifest.webmanifest';
 }
 
 async function cacheFirst(request) {
@@ -56,7 +62,7 @@ async function navigate(request) {
     return await fetch(request);
   } catch {
     const cache = await caches.open(STATIC_CACHE);
-    return (await cache.match('/offline.html')) || Response.error();
+    return (await cache.match(BASE + 'offline.html')) || Response.error();
   }
 }
 
@@ -66,7 +72,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   // The /api/v1/events WebSocket upgrade never reaches the service worker.
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname.startsWith(BASE + 'api/')) {
     event.respondWith(apiNetworkOnly(request));
     return;
   }
@@ -89,9 +95,10 @@ self.addEventListener('push', (event) => {
   const title = typeof data.title === 'string' && data.title ? data.title : 'Arclight';
   const options = {
     body: typeof data.body === 'string' ? data.body : '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/badge-96.png',
-    data: { url: typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/' },
+    icon: BASE + 'icons/icon-192.png',
+    badge: BASE + 'icons/badge-96.png',
+    // Pushes carry app paths ("/requests/5"); they open below the base path.
+    data: { url: appPath(typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/') },
   };
   if (typeof data.tag === 'string' && data.tag) {
     options.tag = data.tag;
@@ -102,7 +109,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const path = (event.notification.data && event.notification.data.url) || '/';
+  const path = (event.notification.data && event.notification.data.url) || BASE;
   const target = new URL(path, self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { QuotaInfo } from '@arclight/shared';
-import { displayNameOf, useAuth } from '../auth/auth-context.js';
-import { Button, Chip, EmptyState, KeyValue, Meter, PageHeader, Pane, Skeleton } from '../arclight/index.js';
+import { displayNameOf, useAuth, viaLabel } from '../auth/auth-context.js';
+import { useRouterState } from '@tanstack/react-router';
+import { Banner, Button, Chip, EmptyState, KeyValue, Meter, PageHeader, Pane, Skeleton } from '../arclight/index.js';
 import { ChangePasswordDialog } from './change-password.js';
 import { quotaSummary, UserPolicyEditor, UserRequestSettingsForm } from '../features/requests/user-editors.js';
 import { DiscordLinkPanel } from '../features/requests/discord-link.js';
@@ -14,6 +15,8 @@ import { MediaServerLinkPanel } from '../features/requests/media-server-link.js'
 import { WatchHistoryTable } from '../features/watch-history/watch-history.js';
 import { PersonalDestinations } from '../features/notifications/personal-destinations.js';
 import { MyStatsPanel } from '../features/watch-stats/playback-stats.js';
+import { ApiKeysPanel, LinkedSignInsPanel, PasskeysPanel, TwoFactorPanel } from '../features/identity/security-panels.js';
+import { ssoErrorMessage } from '../features/identity/sign-in.js';
 import '../components/media/media-kit.css';
 import { t } from '../i18n/index.js';
 
@@ -43,6 +46,41 @@ function QuotaRow({ label, info }: { label: string; info: QuotaInfo }) {
 }
 
 /**
+ * Profile > Security: two-factor, passkeys, linked identity-provider sign-ins and personal API
+ * keys. `setupOnly`: "Require two-factor for admins" blocks this admin until a factor is set up.
+ */
+export function ProfileSecurity({ setupOnly = false }: { setupOnly?: boolean }) {
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const linked = typeof search['linked'] === 'string' ? search['linked'] : null;
+  const ssoError = typeof search['ssoError'] === 'string' ? search['ssoError'] : null;
+  return (
+    <section id="security" className="mk-stack" aria-label={t('identity.security.title')}>
+      {setupOnly ? <Banner tone="warn">{t('identity.security.setupRequired')}</Banner> : null}
+      {linked ? <Banner tone="info">{t('identity.linked.linkedBanner')}</Banner> : null}
+      {ssoError ? <Banner tone="danger">{ssoErrorMessage(ssoError)}</Banner> : null}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20 }}>
+        <Pane title={t('identity.twoFactor.paneTitle')} aria-label={t('identity.twoFactor.paneTitle')}>
+          <TwoFactorPanel />
+        </Pane>
+        <Pane title={t('identity.passkeys.title')} aria-label={t('identity.passkeys.title')}>
+          <PasskeysPanel />
+        </Pane>
+      </div>
+      {setupOnly ? null : (
+        <>
+          <Pane title={t('identity.linked.title')} aria-label={t('identity.linked.title')}>
+            <LinkedSignInsPanel />
+          </Pane>
+          <Pane title={t('identity.apiKeys.title')} aria-label={t('identity.apiKeys.title')}>
+            <ApiKeysPanel />
+          </Pane>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * The signed-in user's own page (reachable by role `user`; it is not under /settings):
  * account facts, request quota meters and personal notification / Plex watchlist settings.
  */
@@ -57,7 +95,17 @@ export function ProfilePage() {
     return (
       <>
         <PageHeader title={t('common.profile')} />
-        <EmptyState title={t('profile.noUserAccount')}>{t('profile.youAreSignedInVia', { value: session?.via ?? t('profile.anUnknownMethod') })}</EmptyState>
+        <EmptyState title={t('profile.noUserAccount')}>{t('profile.youAreSignedInVia', { value: session ? viaLabel(session.via) : t('profile.anUnknownMethod') })}</EmptyState>
+      </>
+    );
+  }
+
+  // Everything but the two-factor setup answers 403 until it is done.
+  if (session?.twoFactorSetupRequired) {
+    return (
+      <>
+        <PageHeader title={t('common.profile')} subtitle={displayNameOf(user, session)} />
+        <ProfileSecurity setupOnly />
       </>
     );
   }
@@ -104,6 +152,7 @@ export function ProfilePage() {
             )}
           </Pane>
         </div>
+        <ProfileSecurity />
         <Pane title={t('profile.mediaServerAccount')} aria-label={t('profile.mediaServerAccount')}>
           <MediaServerLinkPanel userId={user.id} isAdmin={session?.isAdmin ?? false} />
         </Pane>

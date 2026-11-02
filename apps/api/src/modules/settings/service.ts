@@ -36,6 +36,7 @@ import {
   SECRET_MASK,
   SecuritySettings,
   SignInSettings,
+  IdentitySettings,
   SolverSettings,
   SubtitleSettings,
   SeedingRulesSettings,
@@ -73,6 +74,9 @@ const sections = {
   security: SecuritySettings,
   // Owned by the auth module: how non-admins sign in (routes under /settings/signin).
   signIn: SignInSettings,
+  // Owned by the auth module: identity providers (OpenID Connect), the password form, the admin
+  // two-factor requirement and forward-auth (routes under /settings/identity; secrets masked there).
+  identity: IdentitySettings,
   // Owned by the import-lists module (sync interval, clean library; routes under /settings/importlists).
   importLists: ImportListSettings,
   // Owned by the subtitles module (routes under /subtitle/settings; provider secrets masked there).

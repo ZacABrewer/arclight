@@ -7,6 +7,7 @@ import { Banner, Button, Chip, ErrorBlock, Skeleton } from '../../arclight/index
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { copyText } from '../../lib/clipboard.js';
 import { relativeTime } from '../../lib/format.js';
+import { appOrigin } from '../../lib/base-path.js';
 import { encodeQr, qrPath } from '../../lib/qr.js';
 import { t } from '../../i18n/index.js';
 import './mobile.css';
@@ -20,8 +21,8 @@ export const mobileKeys = {
   devices: (all: boolean) => ['mobile', 'devices', all ? 'all' : 'mine'] as const,
 };
 
-/** The base URL the app should connect to: the Application URL when set, else this page's origin. */
-export function pairingServerUrl(serverUrl: string | null | undefined, origin: string = window.location.origin): string {
+/** The base URL the app should connect to: the Application URL when set, else this page's origin (plus the base path). */
+export function pairingServerUrl(serverUrl: string | null | undefined, origin: string = appOrigin()): string {
   return (serverUrl?.trim() || origin).replace(/\/+$/, '');
 }
 

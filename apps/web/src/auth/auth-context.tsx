@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthStatus, Session, User } from '@arclight/shared';
+import type { AuthStatus, AuthVia, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
 import { ADMIN_ACCESS, accessOf, type Access } from './access.js';
@@ -97,4 +97,24 @@ export function displayNameOf(user: User | null, session: Session | null): strin
   if (session?.via === 'apikey') return t('common.apiKey');
   if (session?.via === 'bypass') return t('auth.context.localAccess');
   return t('auth.authContext.guest');
+}
+
+/** How the current request was authenticated, for people ("Personal API key", "Reverse proxy sign-in"). */
+export function viaLabel(via: AuthVia): string {
+  switch (via) {
+    case 'session':
+      return t('auth.via.session');
+    case 'apikey':
+      return t('common.apiKey');
+    case 'basic':
+      return t('auth.via.basic');
+    case 'bypass':
+      return t('auth.context.localAccess');
+    case 'plugin':
+      return t('auth.via.plugin');
+    case 'userkey':
+      return t('auth.via.userkey');
+    case 'forward':
+      return t('auth.via.forward');
+  }
 }

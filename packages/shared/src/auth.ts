@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MediaType } from './library.js';
 import { MediaServerKind, Permission } from './requests.js';
+import { SignInOptions, TwoFactorChallenge } from './identity.js';
 
 // Authentication, users and first-run setup. Behaviour: docs/API.md "Authentication".
 // Users carry a `permissions` bitfield and a free-form `settings` record now so that the
@@ -155,9 +156,10 @@ export type LoginRequest = z.input<typeof LoginRequest>;
 
 /**
  * How the current request was authenticated. `plugin`: a Jellyfin plugin key, which may only
- * call /api/v1/jellyfin/* (never admin, never another route).
+ * call /api/v1/jellyfin/* (never admin, never another route). `userkey`: a per-user API key
+ * (alu_…, limited by its scope). `forward`: a trusted reverse proxy's user header.
  */
-export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass', 'plugin']);
+export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass', 'plugin', 'userkey', 'forward']);
 export type AuthVia = z.infer<typeof AuthVia>;
 
 /** Response of POST /auth/login and GET /auth/me. `user` is null for API-key and bypass callers. */
@@ -166,8 +168,16 @@ export const Session = z.object({
   via: AuthVia,
   isAdmin: z.boolean(),
   expiresAt: z.string().optional(),
+  /** "Require two-factor for admins" is on and this admin has none: only the 2FA setup answers. */
+  twoFactorSetupRequired: z.boolean().optional(),
+  /** `userkey`: the key's scope. */
+  apiKeyScope: z.enum(['read', 'requests', 'admin']).optional(),
 });
 export type Session = z.infer<typeof Session>;
+
+/** POST /auth/login: a session, or the second step when the account has two-factor on. */
+export const LoginResponse = z.union([TwoFactorChallenge, Session]);
+export type LoginResponse = z.infer<typeof LoginResponse>;
 
 /** GET /api/v1/auth/status: public; what the web needs to route before anything else. */
 export const AuthStatus = z.object({
@@ -182,6 +192,8 @@ export const AuthStatus = z.object({
   session: Session.nullable(),
   /** Media-server sign-in offered on the login page: the first enabled server with loginEnabled, else null. */
   mediaServerLogin: z.object({ kind: MediaServerKind, name: z.string().optional() }).nullable().optional(),
+  /** Identity-provider buttons, hidden password form, passkeys. */
+  signIn: SignInOptions.optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 
@@ -194,6 +206,8 @@ export const SessionRecord = z.object({
   userAgent: z.string().optional(),
   ip: z.string().optional(),
   current: z.boolean(),
+  /** How the session was opened: password, oidc:<provider>, passkey, media server, setup. */
+  method: z.string().optional(),
 });
 export type SessionRecord = z.infer<typeof SessionRecord>;
 

@@ -94,6 +94,7 @@ import { PlaybackStatsPage } from './features/watch-stats/playback-stats.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
+import { basePath } from './lib/base-path.js';
 import type { PortalDocument } from '@arclight/shared';
 import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
@@ -150,9 +151,14 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   // `expired` comes from the 401 handler in main.tsx and shows the "session expired" banner.
-  validateSearch: (search: Record<string, unknown>): { redirect?: string; expired?: true } => ({
+  // `ssoError` + `returnTo` come back from a failed identity-provider sign-in; `local=1` is
+  // the break-glass password form when the admin hid it.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; expired?: true; ssoError?: string; returnTo?: string; local?: true } => ({
     ...(typeof search.redirect === 'string' ? { redirect: search.redirect } : {}),
     ...(search.expired === true || search.expired === 1 || search.expired === '1' ? { expired: true as const } : {}),
+    ...(typeof search.ssoError === 'string' ? { ssoError: search.ssoError } : {}),
+    ...(typeof search.returnTo === 'string' ? { returnTo: search.returnTo } : {}),
+    ...(search.local === true || search.local === 1 || search.local === '1' ? { local: true as const } : {}),
   }),
   component: LoginPage,
 });
@@ -356,11 +362,14 @@ export const routeTree = rootRoute.addChildren([
   page('/design', DesignRoute),
 ]);
 
-export function createAppRouter(queryClient: QueryClient, portal: PortalDocument | null = null) {
+/** `base`: the sub-path this page was served under (lib/base-path.ts); "" at the root. */
+export function createAppRouter(queryClient: QueryClient, portal: PortalDocument | null = null, base: string = basePath()) {
   const rewrite = portalRewrite(portal);
   return createRouter({
     routeTree,
     context: { queryClient, portal },
+    // The base path is stripped before the portal mapping and added back after it.
+    ...(base ? { basepath: base } : {}),
     ...(rewrite ? { rewrite } : {}),
     defaultPreload: 'intent',
     defaultPendingComponent: PendingPage,
