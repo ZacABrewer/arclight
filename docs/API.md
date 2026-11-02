@@ -2543,6 +2543,78 @@ book) with the `library` app area, `queue` and `history` with `activity`; every 
 Manage requests or View requests (else their own), every issue with Manage issues or View
 issues (else their own). Settings entities, users, tags and tasks are admin only.
 
+## Player (music and audiobooks)
+
+Contract: `packages/shared/src/playback.ts`; module `apps/api/src/modules/playback`. The built-in
+player streams the library's music and audiobooks to the web UI and the companion apps; no media
+server is involved. Everything is off until an admin turns it on (`PUT /settings/player`) and
+gives users access (`settings.player` `{allowed, allowRemote, maxBitrateKbps}` on
+`PUT /user/:id`; users cannot change it through `PUT /user/me`).
+
+Access: every `/playback/*` route except `/playback/me`, and every stream, answers `403` with
+`PLAYER_DISABLED` (the player is off), `PLAYER_NOT_ALLOWED` (the user lacks
+`settings.player.allowed`) or `REMOTE_NOT_ALLOWED` (a remote request while `allowRemote` is off
+server-wide or for the user). Admins and the API key always have access. Per-user routes
+(progress, queue, bookmarks, playlists, continue) need a signed-in user: API-key callers get
+`400 NO_USER`. Browse routes answer `404 SECTION_OFF` when the feature (music, audiobooks) is off.
+
+Item keys are `track:<id>` or `audiobook:<id>`. A track plays its one file; an audiobook is every
+file of the book on one timeline (ordered by part, disc and track number, then path; each part's
+`startMs` is where the previous one ended). Chapters come from the book's stored chapters, else
+the chapter marks embedded in the files (offset by each file's start), else one chapter per file
+(its title tag, else `Part n`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours}` (admin) |
+| PUT | `/settings/player` | Save `PlayerSettings` (admin) |
+| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) and the `sections` the caller may open. Any signed-in user |
+| GET | `/playback/item/:itemKey` | `PlayableItem`: title, subtitle (artist or authors), context (album, or `Series, book N`), artwork URL, parts, chapters, ReplayGain. `404` when unknown or without a file |
+| POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads) |
+| GET, HEAD | `/stream/audio/:fileId` | The audio. `?format=original\|aac\|opus\|mp3&bitrateKbps=&startMs=` (below) |
+| GET | `/playback/artwork/:kind/:id` | `album`, `artist` or `book`: a cover image in the folder (cover/folder/front, artist/folder/poster), else the picture embedded in the first file, else a `302` to the catalogue image, else `404` |
+| PUT | `/playback/progress/:itemKey` | `ProgressReport` `{event, positionMs, durationMs, deviceId, clientTime, speed?, ...}`; answers the stored `PlaybackProgress` |
+| POST | `/playback/progress/beacon` | The same report plus `itemKey`, sent with `navigator.sendBeacon` (a `text/plain` JSON body is accepted on this route only); `204` |
+| PATCH | `/playback/progress/:itemKey` | `ProgressUpdate` `{played?, favorite?, prefs?}`. `played: true` counts a play and moves to the end; `false` resets to the start |
+| GET | `/playback/progress?itemKeys=a,b` | Effective progress for up to 200 keys (own merged with a linked media-server account) |
+| GET | `/playback/continue` | Up to 20 unfinished items with something to resume, newest first, each with its `PlayableItem` |
+| GET, PUT | `/playback/queue` | The caller's `PlayQueue` `{items, index, positionMs, shuffle, order, repeat, source, deviceId, updatedAt}`. Last write wins: a PUT older than the stored `updatedAt` changes nothing and answers the stored queue |
+| GET | `/playback/bookmarks?itemKey=` | The caller's bookmarks (for one item when given) |
+| POST | `/playback/bookmarks` | `{itemKey, positionMs, note?}`; `201` |
+| PUT, DELETE | `/playback/bookmarks/:id` | Move it or change the note (`BookmarkUpdate`); delete (`204`). Another user's bookmark is `404` |
+| GET, POST | `/playback/playlists` | The caller's playlists; create `UserPlaylistInput` `{name, description?, trackIds?}` (`201`; unknown tracks are dropped, order and repeats kept) |
+| GET, PUT, DELETE | `/playback/playlists/:id` | One playlist with its tracks; replace it; delete. Another user's playlist is `404` |
+| GET | `/playback/music/home` | Recently played tracks, jump back in, recently added, the caller's playlists, on this day |
+| GET | `/playback/music/albums`, `/artists`, `/tracks` | `BrowseQuery` `{search, sort, desc, genre, letter, page, pageSize}`; only items with files. Albums carry a format label (`FLAC 24/96`, `MP3 320`) |
+| GET | `/playback/music/albums/:id`, `/artists/:id` | An album with its tracks and disc count; an artist with albums and top tracks (by the caller's plays) |
+| GET | `/playback/audiobooks/home` | Continue listening, recently added, series (books in reading order), finished |
+| GET | `/playback/audiobooks`, `/audiobooks/:id` | Browse books (authors, narrators, series, duration, the caller's progress); one book with its chapters |
+| GET | `/playback/search?q=` | Tracks, albums, artists and audiobooks in the sections the caller may open; ranked like the universal search |
+
+Streams: the original file is served with `Accept-Ranges: bytes`, a strong `ETag` and
+`Last-Modified`; one byte range per request (`206`; suffix ranges work; a range past the end is
+`416` with `Content-Range: bytes */<size>`), `If-None-Match`/`If-Modified-Since` (`304`) and
+`If-Range`. `HEAD` answers the same headers without a body. Any other `format` is transcoded by
+ffmpeg on the fly (no ranges; `X-Arclight-Transcode: <format>/<kbps>`), starting at `startMs`. At
+most 6 transcodes run at once (`503 TRANSCODE_BUSY` with `Retry-After`; `503 FFMPEG_MISSING`
+without ffmpeg), and each stops when the client disconnects. A remote original above the
+caller's cap is sent as Opus at the cap; an asked-for bitrate is clamped to it.
+
+Signed links (`?u=&exp=&sig=`, HMAC-SHA256 over file, user and expiry with a key derived from the
+install's API key) let the stream route work without a cookie. A link is refused with `403`:
+`LINK_MALFORMED`, `LINK_BAD_SIGNATURE` (tampered, or for another file), `LINK_EXPIRED`,
+`LINK_REVOKED` (the user is gone or has no active session or API key left), or one of the access
+codes above when the user has lost player access.
+
+Progress rules: a report whose `clientTime` is older than the stored update is ignored (offline
+queues send late; future times count as now). Reaching 90 % (`PLAYED_THRESHOLD`) marks the item
+played and counts one play per listen (logged in `playback_plays`); starting again under 2 %
+(`RESUME_MIN`) clears played. `speed` is remembered per item. Effective progress merges the
+caller's own row with a linked media-server account's (`settings.mediaServerLink`): the newest
+wins, except that a played row from the last 5 minutes beats a newer unplayed one; play count
+and last played take the highest; favourite and prefs come from the caller's own row when there
+is one.
+
 ## notifications (connections, templates, delivery log, personal destinations)
 
 Contract: `packages/shared/src/notifications.ts`. Connection routes are admin only. Secrets
