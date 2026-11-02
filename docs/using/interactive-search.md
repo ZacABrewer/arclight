@@ -26,7 +26,7 @@ Arclight asks every indexer that has interactive search enabled. This can take s
 | Column | What it shows |
 | --- | --- |
 | Source | The protocol: torrent or usenet. |
-| Title | The release name. If the indexer gave a link, the title opens its info page. |
+| Title | The release name. If the indexer gave a link, the title opens its info page. Season packs show what they cover under the name, for example "S01-S03, 36 episodes, 24 wanted" (wanted = missing, or monitored and worth upgrading). See [Season packs](media-management.md#season-packs). |
 | Indexer | Which indexer returned it. |
 | Age | How old the release is (days, hours or minutes). |
 | Size | File size. |
@@ -78,7 +78,7 @@ Common reasons you will see, in plain words:
 | Older than configured retention | Usenet retention setting. |
 | Sample / Hardcoded subs found | The release looks like a sample, or has burned-in subtitles. |
 | Waiting for better quality release | A delay profile is holding the grab. See [Activity > Pending](activity.md#pending). |
-| Season pack upgrades only X of Y episodes | A season pack would only improve some episodes. |
+| Pack upgrades only X of Y wanted episodes | A season pack would only improve some of the episodes you want. See [Season packs](media-management.md#season-packs). |
 | The quality or format already on disk is as good or better | Several "cutoff met" and "not an upgrade" messages. Nothing to gain. |
 
 The wording comes from Arclight's decision engine, so you may see other messages for rarer cases.

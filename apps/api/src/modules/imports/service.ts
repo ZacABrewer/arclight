@@ -9,7 +9,7 @@ import {
   getSamples,
   type NamingFile,
 } from '@arclight/organizer';
-import { parsePath, parseRelease, type ParsedQuality, type ParsedRelease } from '@arclight/parser';
+import { parsePath, parseRelease, seriesPackKind, type ParsedQuality, type ParsedRelease } from '@arclight/parser';
 import { scoreRelease } from '@arclight/profiles-engine';
 import {
   MediaManagementSettings,
@@ -57,6 +57,8 @@ import type { DownloadClientsService, TrackedDownload } from '../download-client
 import { releaseAudioLanguages, slotLanguageFit } from '../additional-languages/audio.js';
 import { isVersioned, libraryService, pickVersion, profileIdForSlot, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
+import { mapSeriesEpisodes, withSeasonWords } from '../releases/matcher.js';
+import { loadSceneRules } from '../scene-mapping/service.js';
 import { getSection, setSection } from '../settings/service.js';
 import {
   evaluate,
@@ -333,9 +335,9 @@ export class ImportsService {
     }
 
     const clientParsed = safeParseRelease(item.title, target.mediaType);
-    if (target.mediaType === 'series' && clientParsed?.series?.isMultiSeason) {
-      return this.block(item, result, ['Multi-season download, unable to import automatically']);
-    }
+    // Series packs (season, multi-season, complete series, Part/Vol, ranges) import file by
+    // file: each file maps to its own episodes; unwanted and no-better files are skipped.
+    const packKind = target.mediaType === 'series' ? packKindOf(clientParsed, scan.videos.length) : null;
 
     const items = await this.buildItems(scan.videos, target, {
       grab,
@@ -343,7 +345,7 @@ export class ImportsService {
       clientTitle: item.title,
       videoCount: scan.videos.length,
     });
-    const decisions = await this.decide(items, { grab, downloadId: item.downloadId, addedAt: item.added });
+    const decisions = await this.decide(items, { grab, downloadId: item.downloadId, addedAt: item.added, pack: packKind !== null });
     const mode: 'move' | 'copy' = item.canMoveFiles ? 'move' : 'copy';
     result.outcomes = await this.execute(decisions, {
       mode,
@@ -353,6 +355,7 @@ export class ImportsService {
       folderImport: !scan.isFile,
       nonSampleVideos: scan.videos.filter((v) => !isSampleByName(v.path)).length,
       grabOverride: grab?.grabOverride ?? null,
+      ...(packKind ? { releaseType: packKind } : {}),
     });
 
     // Verification (spec 3.4.1).
@@ -367,9 +370,48 @@ export class ImportsService {
     const expected = target.mediaType === 'series' ? Math.max(1, item.episodeIds?.length ?? 0) : 1;
     let verified = target.mediaType === 'series' ? importedEpisodes.size >= expected : importedAny;
     if (!verified && !importedAny) verified = this.previouslyImported(item);
+    // A pack is done once every file was imported or skipped for good: what it could improve
+    // is in the library, and each skipped file is in History with its reasons.
+    let skipped: ImportOutcome[] = [];
+    if (!verified && packKind && isSettledPack(result.outcomes, importedAny)) {
+      verified = true;
+      skipped = result.outcomes.filter((o) => o.status === 'rejected');
+    }
 
     if (verified) {
       result.verified = true;
+      if (skipped.length > 0) {
+        // Episodes the grab expected that no file of the pack holds (still wanted; searched later).
+        const inPack = new Set(decisions.flatMap((d) => d.item.episodes.map((e) => e.id)));
+        const missing = (item.episodeIds ?? []).filter((id) => !inPack.has(id)).length;
+        const lines = [`Imported ${result.outcomes.length - skipped.length} of ${result.outcomes.length} files; ${skipped.length} skipped`];
+        if (missing > 0) lines.push(`${missing} expected ${missing === 1 ? 'episode is' : 'episodes are'} not in the release`);
+        for (const o of [...skipped].sort((a, b) => a.path.localeCompare(b.path))) {
+          lines.push(`${basename(o.path)}: ${o.rejections.map((r) => r.message).join(', ')}`);
+        }
+        result.messages = [{ title: item.title, messages: lines }];
+        this.log?.info({ id: item.id, title: item.title, skipped: skipped.length, missing }, 'pack imported partially');
+        for (const o of skipped) {
+          const d = decisions.find((x) => x.item.path === o.path);
+          // Samples are not worth a History row.
+          if (!d || !target.series || o.rejections.every((r) => r.reason === 'sample')) continue;
+          void this.callHook(() =>
+            this.deps.history?.recordImportSkipped?.({
+              downloadId: item.downloadId,
+              sourceTitle: item.title,
+              seriesId: d.item.series?.id ?? target.series!.id,
+              episodeIds: d.item.episodes.map((e) => e.id),
+              path: o.path,
+              quality: d.item.quality,
+              languages: d.item.languages,
+              releaseGroup: d.item.releaseGroup,
+              sizeBytes: d.item.sizeBytes,
+              reasons: o.rejections.map((r) => ({ reason: r.reason, message: r.message })),
+              releaseType: packKind!,
+            }),
+          );
+        }
+      }
       if (mode === 'move' && !scan.isFile) await this.cleanupSourceFolder(path, settings, item.id);
       await this.downloads.markImported(item.id);
       return result;
@@ -673,28 +715,33 @@ export class ImportsService {
     return all.find((m) => isUnder(path, m.path));
   }
 
+  /**
+   * Episodes one file holds. Scene rules first (an anime pack numbered by its fansub group,
+   * "S2 - 01" for a season the guide numbers differently), then plain season/episode numbers,
+   * then absolute numbers (library numbers, or derived in order for anime). A name that holds
+   * no episode numbers (a whole-season file) maps to nothing; the specs reject it.
+   */
   private episodesFor(series: Series, parsed: ParsedRelease | null): { episodes: Episode[]; parsedCount: number } {
-    const info = parsed?.series;
+    let info = parsed?.series;
     if (!info) return { episodes: [], parsedCount: 0 };
     const all = libraryService.listEpisodes(this.db, { seriesId: series.id });
-    if (info.airDate) {
-      const hits = all.filter((e) => e.airDate === info.airDate);
+    const airDate = info.airDate;
+    if (airDate) {
+      const hits = all.filter((e) => e.airDate === airDate);
       return { episodes: hits.slice(0, 1), parsedCount: 1 };
     }
-    const season = info.seasons[0];
-    if (season !== undefined && info.episodes.length > 0 && !(series.seriesType === 'anime' && info.absoluteEpisodes.length > 0)) {
-      const hits = info.episodes
-        .map((n) => all.find((e) => e.seasonNumber === season && e.episodeNumber === n))
-        .filter((e): e is Episode => e !== undefined);
-      return { episodes: dedupeEpisodes(hits), parsedCount: new Set(info.episodes).size };
-    }
-    if (info.absoluteEpisodes.length > 0) {
-      const hits = info.absoluteEpisodes
-        .map((n) => all.find((e) => e.absoluteEpisodeNumber === n))
-        .filter((e): e is Episode => e !== undefined);
-      return { episodes: dedupeEpisodes(hits), parsedCount: new Set(info.absoluteEpisodes).size };
-    }
-    return { episodes: [], parsedCount: 0 };
+    // "[Group] Title 2nd Season - 03.mkv": the season words name the season of the number.
+    const seasoned = withSeasonWords(parsed!, series, all);
+    info = seasoned.series!;
+    if (info.episodes.length === 0 && info.absoluteEpisodes.length === 0) return { episodes: [], parsedCount: 0 };
+    const mapped = mapSeriesEpisodes(seasoned, series, all, loadSceneRules(this.db, this.log));
+    if (mapped.fullSeason) return { episodes: [], parsedCount: 0 };
+    const byAbsolute = info.absoluteEpisodes.length > 0 && (info.episodes.length === 0 || series.seriesType === 'anime');
+    // Scene rules can turn one parsed number into another count of episodes (double episodes).
+    const parsedCount = mapped.sceneSource && mapped.sceneSource !== 'absolute'
+      ? mapped.episodes.length
+      : new Set(byAbsolute ? info.absoluteEpisodes : info.episodes).size;
+    return { episodes: dedupeEpisodes(mapped.episodes), parsedCount };
   }
 
   private filesOf(target: { seriesId?: number; movieId?: number }): MediaFile[] {
@@ -905,7 +952,7 @@ export class ImportsService {
 
   private async decide(
     items: readonly LocalItem[],
-    opts: { grab: GrabbedInfo | null; downloadId?: string | undefined; addedAt?: string | undefined },
+    opts: { grab: GrabbedInfo | null; downloadId?: string | undefined; addedAt?: string | undefined; pack?: boolean },
   ): Promise<ImportDecision[]> {
     const settings = this.getMediaManagement();
     const naming = this.getNaming();
@@ -941,6 +988,7 @@ export class ImportsService {
         libraryPaths,
         platform: this.platform,
         now: this.now(),
+        ...(opts.pack ? { pack: true } : {}),
       };
       out.push(evaluate(item, ctx));
     }
@@ -978,6 +1026,7 @@ export class ImportsService {
       folderImport: boolean;
       nonSampleVideos: number;
       grabOverride?: GrabOverride | null;
+      releaseType?: string;
     },
   ): Promise<ImportOutcome[]> {
     const outcomes: ImportOutcome[] = [];
@@ -1085,6 +1134,8 @@ export class ImportsService {
       nonSampleVideos: number;
       /** "Grab anyway" override of the grab, stored on the new file (pauses its upgrades). */
       grabOverride?: GrabOverride | null;
+      /** Series packs: the pack kind, recorded as the history row's release type. */
+      releaseType?: string;
     },
   ): Promise<{ file: MediaFile; replacedFileIds: number[] }> {
     const settings = this.getMediaManagement();
@@ -1233,6 +1284,7 @@ export class ImportsService {
       isUpgrade: allReplaced.length > 0,
       importMode: transfer === 'none' ? 'move' : transfer,
       manual: opts.manual,
+      ...(opts.releaseType ? { releaseType: opts.releaseType } : {}),
     };
     await this.callHook(() => this.deps.history?.recordImport(event));
     await this.callHook(() => this.deps.notifications?.onImported(event));
@@ -1833,3 +1885,42 @@ function failureMessage(err: unknown, mediaType: MediaType): string {
   if (err instanceof ImportsError) return err.message;
   return `Failed to import ${what}: ${errorMessage(err)}`;
 }
+
+/**
+ * The pack kind of a series download, or null for a single release. A folder of several
+ * videos whose title names a season is a pack even when the parser saw only the season.
+ */
+export function packKindOf(clientParsed: ParsedRelease | null, videoCount: number): string | null {
+  const info = clientParsed?.series;
+  if (!info) return null;
+  const kind = seriesPackKind(info);
+  if (kind) return kind;
+  return videoCount > 1 && info.episodes.length === 0 && info.absoluteEpisodes.length === 0 && info.seasons.length > 0 ? 'season' : null;
+}
+
+/**
+ * Every file of a pack has its final outcome: imported, or rejected for good (no temporary
+ * rejection, no failed transfer). At least one file must have imported, unless every file was
+ * skipped because the library already has it as good or nobody wants it.
+ */
+export function isSettledPack(outcomes: readonly ImportOutcome[], importedAny: boolean): boolean {
+  if (outcomes.length === 0) return false;
+  for (const o of outcomes) {
+    if (o.status === 'failed') return false;
+    if (o.status === 'rejected' && (o.rejections.length === 0 || o.rejections.some((r) => r.type === 'temporary'))) return false;
+  }
+  if (importedAny) return true;
+  return outcomes.every((o) => o.status === 'imported' || o.rejections.every((r) => NOTHING_TO_DO.has(r.reason)));
+}
+
+/** Rejections that mean the library needs nothing from the file. */
+const NOTHING_TO_DO = new Set<string>([
+  'packNotUpgrade',
+  'notWanted',
+  'notQualityUpgrade',
+  'notRevisionUpgrade',
+  'notCustomFormatUpgrade',
+  'alreadyImported',
+  'sameFile',
+  'existingFileHasMoreEpisodes',
+]);

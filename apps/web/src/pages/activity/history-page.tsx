@@ -34,6 +34,7 @@ const EVENT_TONES: Record<string, ChipTone> = {
   fileDeleted: 'warn',
   fileRenamed: 'neutral',
   downloadIgnored: 'neutral',
+  importSkipped: 'warn',
 };
 
 export const eventLabel = historyEventLabel;

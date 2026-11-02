@@ -21,6 +21,7 @@ import { AudioImportSection } from './audio-import-section.js';
 import { MusicReleasesSection } from './music-releases-section.js';
 import { AudiobookReleasesSection } from './audiobook-releases-section.js';
 import { ReleaseSearchSection } from './release-search-section.js';
+import { SeasonPacksSection } from './season-packs-section.js';
 import {
   useAddRootFolder,
   useDeleteRootFolder,
@@ -482,6 +483,7 @@ export function MediaManagementPage() {
       <RootFoldersSection />
       <AudioImportSection />
       <ReleaseSearchSection />
+      <SeasonPacksSection />
       <MusicReleasesSection />
       <AudiobookReleasesSection />
 

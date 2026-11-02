@@ -240,6 +240,40 @@ describe('recording events', () => {
     ).toEqual([]);
   });
 
+  it('records skipped pack files per episode, or once for the series when no episode matched', () => {
+    const rows = f.history.recordImportSkipped({
+      target: tv(f.ep.s1e1, f.ep.s1e2),
+      sourceTitle: 'Zeta.Show.S01.1080p.WEB-DL-GRP',
+      quality: quality('WEBDL-1080p'),
+      languages: ['en'],
+      downloadId: 'HASH9',
+      droppedPath: '/downloads/Zeta.Show.S01/Zeta.Show.S01E01E02.mkv',
+      reasons: [
+        { reason: 'packNotUpgrade', message: 'Existing file is as good' },
+        { reason: 'notWanted', message: 'Not monitored' },
+      ],
+      releaseType: 'season',
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ eventType: 'importSkipped', downloadId: 'HASH9', sourceTitle: 'Zeta.Show.S01.1080p.WEB-DL-GRP' });
+    expect(rows[0]!.data).toMatchObject({
+      reasons: 'packNotUpgrade,notWanted',
+      message: 'Existing file is as good; Not monitored',
+      droppedPath: '/downloads/Zeta.Show.S01/Zeta.Show.S01E01E02.mkv',
+      releaseType: 'season',
+    });
+    const none = f.history.recordImportSkipped({
+      target: tv(),
+      sourceTitle: 'Zeta.Show.S01',
+      quality: quality('SDTV'),
+      languages: [],
+      droppedPath: '/x/extras.mkv',
+      reasons: [{ reason: 'invalidSeasonOrEpisode', message: 'Invalid season or episode' }],
+    });
+    expect(none).toHaveLength(1);
+    expect(none[0]!.episodeId).toBeNull();
+  });
+
   it('publishes one history bus event per record call', () => {
     const events: ServerEvent[] = [];
     f.bus.subscribe((e) => events.push(e));

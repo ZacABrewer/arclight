@@ -25,6 +25,7 @@ export const history = sqliteTable(
         'profileChanged',
         'profileReplaced',
         'additionalLanguage',
+        'importSkipped',
       ],
     }).notNull(),
     // 'music' and 'audiobook' are TS-only (Drizzle does not enforce enums on SQLite).

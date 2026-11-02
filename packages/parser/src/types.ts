@@ -33,6 +33,14 @@ export interface ParsedSeriesInfo {
   releaseVersion: number;
   /** Anime: the [SubGroup] prefix. */
   subGroup: string | null;
+  /**
+   * The episodes were written as a range ("S01E01-E06", "E01-E24", "001-024"), so the release
+   * is a pack of separate files rather than one multi-episode file. Optional so existing
+   * literals stay valid; absent means false.
+   */
+  isEpisodeRange?: boolean;
+  /** "Complete Series" with no season numbers: every season of the show. */
+  isCompleteSeries?: boolean;
 }
 
 export interface SeriesTitleInfo {

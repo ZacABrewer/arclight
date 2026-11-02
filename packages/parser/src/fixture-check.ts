@@ -4,7 +4,7 @@ import { parseRelease, parsePath, normalizeImdbId } from './index.js';
 import { normalizeTitle } from './normalize.js';
 import { parseLanguages } from './language.js';
 import { parseReleaseGroup } from './group.js';
-import { parseSeasonTitle } from './series.js';
+import { parseSeasonTitle, seriesPackKind } from './series.js';
 import { isHashedRelease } from './hash.js';
 import { parseAudioPath, parseMusicRelease } from './music.js';
 import { parseAudiobookRelease } from './audiobook.js';
@@ -234,6 +234,9 @@ export function checkCase(file: string, c: FixtureCase): CaseResult {
     expectField('isSplitEpisode', s.isSplitEpisode);
     expectField('isMiniSeries', s.isMiniSeries);
     expectField('seasonPart', s.seasonPart);
+    expectField('isEpisodeRange', s.isEpisodeRange ?? false);
+    expectField('isCompleteSeries', s.isCompleteSeries ?? false);
+    expectField('packKind', seriesPackKind(s));
     expectField('isPossibleSpecialEpisode', s.special || (s.seasons[0] === 0) || (s.episodes.length === 0 && s.absoluteEpisodes.length === 0 && !s.fullSeason && !s.airDate));
     return { ok: problems.length === 0, problems };
   }

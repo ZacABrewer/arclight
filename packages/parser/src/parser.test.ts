@@ -44,6 +44,7 @@ const THRESHOLDS: Record<string, number> = {
   'series/mini-series.json': 100,
   'series/misc.json': 100,
   'series/multi-episode.json': 100,
+  'series/season-packs.json': 100,
   'series/normalize-title.json': 100,
   'series/single-episode.json': 99,
   'series/special.json': 100,

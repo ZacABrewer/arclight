@@ -19,6 +19,7 @@ export const HISTORY_EVENT_TYPES = [
   'profileChanged',
   'profileReplaced',
   'additionalLanguage',
+  'importSkipped',
 ] as const;
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
 
@@ -52,6 +53,9 @@ export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
   },
   get additionalLanguage() {
     return t('api.history.additionalLanguage');
+  },
+  get importSkipped() {
+    return t('api.history.importSkipped');
   },
 };
 

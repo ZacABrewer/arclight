@@ -60,6 +60,11 @@ export const ImportRejectionReason = z.enum([
   'unknownBook',
   /** The files' total duration is outside the tolerance around the book's runtime. */
   'durationMismatch',
+  // Season packs: files skipped because they would not improve the library.
+  /** The file is no better than the one in the library (packs import only upgrades). */
+  'packNotUpgrade',
+  /** None of the file's episodes is monitored (packs import only wanted episodes). */
+  'notWanted',
 ]);
 export type ImportRejectionReason = z.infer<typeof ImportRejectionReason>;
 

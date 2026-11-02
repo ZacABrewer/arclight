@@ -18,6 +18,7 @@ import { useGrabRelease, useInteractiveSearch, type ReleaseSearchTarget } from '
 import './library.css';
 import { versionColumn } from './versions/versions-editor.js';
 import { GrabButton } from './grab-button.js';
+import { packCoverageLabel } from './pack-coverage.js';
 import { useReleaseFilters } from './release-filter-bar.js';
 import { UnreleasedSearchNotice, type ReleaseState } from '../../components/media/release-state.js';
 import { t } from '../../i18n/index.js';
@@ -45,8 +46,8 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
       key: 'title',
       header: t('common.title'),
       sortValue: (r) => r.title,
-      cell: (r) =>
-        r.infoUrl ? (
+      cell: (r) => {
+        const title = r.infoUrl ? (
           <a className="mk-release-title" href={r.infoUrl} target="_blank" rel="noreferrer noopener" title={r.title}>
             {r.title}
           </a>
@@ -54,7 +55,16 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
           <span className="mk-release-title" title={r.title}>
             {r.title}
           </span>
-        ),
+        );
+        const coverage = packCoverageLabel(r.pack);
+        if (!coverage) return title;
+        return (
+          <>
+            {title}
+            <span className="mk-release-pack">{coverage}</span>
+          </>
+        );
+      },
     },
     { key: 'indexer', header: t('common.indexer'), sortValue: (r) => r.indexerName, cell: (r) => r.indexerName, muted: true },
     { key: 'age', header: t('library.interactiveSearch.age'), sortValue: (r) => r.ageMinutes, cell: formatAge, mono: true, align: 'right' },
