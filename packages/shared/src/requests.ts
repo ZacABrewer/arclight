@@ -1276,7 +1276,7 @@ export const DEFAULT_PORTAL_PATH = '/portal';
  */
 export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
   // app pages (apps/web/src/router.tsx)
-  'activity', 'calendar', 'design', 'discover', 'docs', 'indexers', 'issues', 'library', 'login', 'podcasts', 'portal',
+  'activity', 'calendar', 'design', 'discover', 'docs', 'indexers', 'issues', 'library', 'login', 'player', 'podcasts', 'portal',
   'profile', 'requests', 'search', 'settings', 'setup', 'subtitles', 'system', 'wanted', 'watchlist',
   // server routes and static files
   'api', 'assets', 'icons', 'metrics', 'ping', 'initialize.json', 'initialize.js', 'sw.js', 'manifest.webmanifest',

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Menu, Pane, Popover, Skeleton, buttonClass, isTypingTarget, type MenuItem } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
@@ -9,6 +9,7 @@ import { usePlaybackCapabilities } from '../api.js';
 import { BOOK_SKIP_MS } from '../engine/media-session.js';
 import { PlayerProvider, usePlayer } from '../player-context.js';
 import { MiniPlayer } from './mini-player.js';
+import { BrowsePlayerContext, type BrowsePlayerActions } from '../browse/player-hooks.js';
 import '../player.css';
 
 // Layout of every /player page: header (mark, sections, search, account), the page, and the
@@ -39,6 +40,17 @@ function sectionOf(pathname: string): string | null {
   return null;
 }
 
+/** Gives the browse pages (features/player/browse) the actions they use from the shared player. */
+function BrowsePlayerBridge({ children }: { children: ReactNode }) {
+  const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
+  const currentItemKey = state.current?.itemKey ?? null;
+  const value = useMemo<BrowsePlayerActions>(
+    () => ({ currentItemKey, playing: state.playing, playItems, playItem: (key) => playItem(key), playNext, addToQueue, toggle }),
+    [currentItemKey, state.playing, playItems, playItem, playNext, addToQueue, toggle],
+  );
+  return <BrowsePlayerContext.Provider value={value}>{children}</BrowsePlayerContext.Provider>;
+}
+
 /** Guard + chrome. */
 export function PlayerLayout() {
   const { status, user } = useAuth();
@@ -54,9 +66,11 @@ export function PlayerLayout() {
   else if (caps.data && caps.data.enabled && caps.data.allowed) {
     return (
       <PlayerProvider capabilities={caps.data}>
-        <PlayerShell>
-          <Outlet />
-        </PlayerShell>
+        <BrowsePlayerBridge>
+          <PlayerShell>
+            <Outlet />
+          </PlayerShell>
+        </BrowsePlayerBridge>
         <PlayerShortcuts />
       </PlayerProvider>
     );

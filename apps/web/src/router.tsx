@@ -268,7 +268,20 @@ const playerNowPlayingRoute = createRoute({
  * each `createRoute({ getParentRoute: () => playerRoute, path: 'music', ... })` with a lazy
  * component, so they render inside PlayerLayout (header, mini-player, the shared engine).
  */
-const playerSectionRoutes = [] as const;
+const playerBrowse = (path: string, load: () => Promise<Record<string, unknown>>, name: string) =>
+  createRoute({ getParentRoute: () => playerRoute, path, component: lazyRouteComponent(load as never, name as never) });
+const playerSectionRoutes = [
+  playerBrowse('music', () => import('./features/player/browse/music-home.js'), 'MusicHomePage'),
+  playerBrowse('music/albums', () => import('./features/player/browse/library.js'), 'AlbumsPage'),
+  playerBrowse('music/artists', () => import('./features/player/browse/library.js'), 'ArtistsPage'),
+  playerBrowse('music/album/$albumId', () => import('./features/player/browse/album-page.js'), 'AlbumPage'),
+  playerBrowse('music/artist/$artistId', () => import('./features/player/browse/artist-page.js'), 'ArtistPage'),
+  playerBrowse('music/playlists', () => import('./features/player/browse/playlists.js'), 'PlaylistsPage'),
+  playerBrowse('music/playlist/$playlistId', () => import('./features/player/browse/playlists.js'), 'PlaylistPage'),
+  playerBrowse('books', () => import('./features/player/browse/books.js'), 'BooksHomePage'),
+  playerBrowse('books/$bookId', () => import('./features/player/browse/book-page.js'), 'BookPage'),
+  playerBrowse('search', () => import('./features/player/browse/search-page.js'), 'PlayerSearchPage'),
+];
 
 // Notification deep links: /requests/:id?action=approve|decline.
 const requestDeepLinkRoute = createRoute({

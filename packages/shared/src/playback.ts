@@ -225,6 +225,7 @@ export type RepeatMode = z.infer<typeof RepeatMode>;
 /** GET/PUT /playback/queue. `order` is the shuffled play order (indexes into `items`) when shuffled. */
 export const PlayQueue = z.object({
   items: z.array(ItemKey).max(5000),
+  /** Index into `items` (not into `order`) of the item playing now. */
   index: z.number().int().min(0),
   positionMs: z.number().int().min(0),
   shuffle: z.boolean(),

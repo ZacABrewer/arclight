@@ -2,16 +2,8 @@ import { createContext, useContext } from 'react';
 
 // The browse pages talk to the global player only through this adapter.
 //
-// TEMPORARY: the player core (features/player/player-context.tsx, usePlayer()) is built in
-// parallel. Until it lands, the browse pages read a small local context so they render and
-// test on their own. At merge, replace the body of usePlayerActions() with a mapping from
-// usePlayer():
-//
-//   const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
-//   return { currentItemKey: state.current?.itemKey ?? null, playing: state.playing,
-//            playItems, playItem, playNext, addToQueue, toggle };
-//
-// and drop BrowsePlayerContext (tests can keep providing it, or mock usePlayer instead).
+// Inside the /player layout, PlayerLayout provides BrowsePlayerContext from usePlayer() (see
+// BrowsePlayerBridge in ui/player-layout.tsx). Tests provide the context directly.
 
 export interface PlayItemsOptions {
   /** Index into `itemKeys` to start at (a clicked track). */
