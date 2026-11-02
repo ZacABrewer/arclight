@@ -163,7 +163,7 @@ describe('summary routes', () => {
     const saved = await server.inject({ method: 'PUT', url: '/api/v1/settings/alerts', payload: body });
     expect(saved.statusCode).toBe(200);
     expect(saved.json()).toMatchObject(body);
-    expect(changed).toEqual([body]);
+    expect(changed).toEqual([{ ...body, personalDestinations: true }]);
     expect((await server.inject({ method: 'PUT', url: '/api/v1/settings/alerts', payload: { ...body, dailySummary: { enabled: true, time: '25:00' } } })).statusCode).toBe(400);
   });
 });

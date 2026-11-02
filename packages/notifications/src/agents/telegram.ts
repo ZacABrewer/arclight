@@ -1,4 +1,3 @@
-import { formatEvent } from '../format.js';
 import { httpRequest, readJson } from '../http.js';
 import type { TelegramSettings } from '../settings.js';
 import { NotificationError, type NotificationEvent } from '../types.js';
@@ -37,10 +36,15 @@ export class TelegramAgent extends BaseAgent {
   }
 
   buildPayload(event: NotificationEvent): TelegramPayload {
-    const formatted = formatEvent(event);
-    const lines = [`*${escapeMarkdownV2(formatted.title)}*`, escapeMarkdownV2(formatted.subject)];
-    for (const field of formatted.fields) {
-      lines.push(`${escapeMarkdownV2(field.name)}: ${escapeMarkdownV2(field.value)}`);
+    const formatted = this.format(event);
+    const lines = [`*${escapeMarkdownV2(formatted.title)}*`];
+    if (formatted.templated?.body) {
+      lines.push(escapeMarkdownV2(formatted.body));
+    } else {
+      lines.push(escapeMarkdownV2(formatted.subject));
+      for (const field of formatted.fields) {
+        lines.push(`${escapeMarkdownV2(field.name)}: ${escapeMarkdownV2(field.value)}`);
+      }
     }
     if (formatted.actions && formatted.actions.length > 0) {
       lines.push(formatted.actions.map((a) => `[${escapeMarkdownV2(a.label)}](${escapeLinkUrl(a.url)})`).join(' \\| '));

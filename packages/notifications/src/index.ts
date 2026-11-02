@@ -20,6 +20,25 @@ import { PlexAgent } from './agents/plex.js';
 import { PushoverAgent } from './agents/pushover.js';
 import { TelegramAgent } from './agents/telegram.js';
 import { WebhookAgent } from './agents/webhook.js';
+import { SlackAgent } from './agents/slack.js';
+import { TeamsAgent } from './agents/teams.js';
+import { MatrixAgent } from './agents/matrix.js';
+import { MattermostAgent } from './agents/mattermost.js';
+import { RocketChatAgent } from './agents/rocketchat.js';
+import { GoogleChatAgent } from './agents/googlechat.js';
+import { SignalAgent } from './agents/signal.js';
+import { PushbulletAgent } from './agents/pushbullet.js';
+import { ProwlAgent } from './agents/prowl.js';
+import { BarkAgent } from './agents/bark.js';
+import { JoinAgent } from './agents/join.js';
+import { SimplePushAgent } from './agents/simplepush.js';
+import { HomeAssistantAgent } from './agents/homeassistant.js';
+import { MqttAgent } from './agents/mqtt.js';
+import { TwilioAgent } from './agents/twilio.js';
+import { AppriseAgent } from './agents/apprise.js';
+import { NotifiarrAgent } from './agents/notifiarr.js';
+import { LunaSeaAgent } from './agents/lunasea.js';
+
 import { agentSettingsSchemas, type AgentSettingsInputMap, type AgentSettingsMap } from './settings.js';
 import { NOTIFICATION_AGENT_KINDS, NotificationError, type NotificationAgent, type NotificationAgentKind } from './types.js';
 
@@ -73,6 +92,29 @@ export { type FetchLike } from './http.js';
 export { sendMail, connectSmtp, SmtpReplyParser, type SmtpConnect, type SmtpConnection, type SmtpReply } from './smtp.js';
 export { type AgentDeps, testEvent, ALL_EVENTS, MESSAGE_EVENTS, LIBRARY_EVENTS } from './agents/base.js';
 export { DiscordAgent, TelegramAgent, WebhookAgent, EmailAgent, CustomScriptAgent, NtfyAgent, GotifyAgent, PushoverAgent, MediaBrowserAgent, PlexAgent };
+export {
+  SlackAgent,
+  TeamsAgent,
+  MatrixAgent,
+  MattermostAgent,
+  RocketChatAgent,
+  GoogleChatAgent,
+  SignalAgent,
+  PushbulletAgent,
+  ProwlAgent,
+  BarkAgent,
+  JoinAgent,
+  SimplePushAgent,
+  HomeAssistantAgent,
+  MqttAgent,
+  TwilioAgent,
+  AppriseAgent,
+  NotifiarrAgent,
+  LunaSeaAgent,
+};
+export * from './template.js';
+export { sampleEvent } from './samples.js';
+export { redactSecrets, collectSecrets, SECRET_SETTING_KEYS, SECRET_RECORD_KEYS, SECRET_LIST_KEYS, REDACTED } from './redact.js';
 
 export const NotificationAgentKindSchema = z.enum(NOTIFICATION_AGENT_KINDS);
 
@@ -128,6 +170,42 @@ export function createAgent<K extends NotificationAgentKind>(
       return new MediaBrowserAgent('emby', parseAgentSettings('emby', settings), deps);
     case 'plex':
       return new PlexAgent(parseAgentSettings('plex', settings), deps);
+    case 'slack':
+      return new SlackAgent(parseAgentSettings('slack', settings), deps);
+    case 'teams':
+      return new TeamsAgent(parseAgentSettings('teams', settings), deps);
+    case 'matrix':
+      return new MatrixAgent(parseAgentSettings('matrix', settings), deps);
+    case 'mattermost':
+      return new MattermostAgent(parseAgentSettings('mattermost', settings), deps);
+    case 'rocketchat':
+      return new RocketChatAgent(parseAgentSettings('rocketchat', settings), deps);
+    case 'googlechat':
+      return new GoogleChatAgent(parseAgentSettings('googlechat', settings), deps);
+    case 'signal':
+      return new SignalAgent(parseAgentSettings('signal', settings), deps);
+    case 'pushbullet':
+      return new PushbulletAgent(parseAgentSettings('pushbullet', settings), deps);
+    case 'prowl':
+      return new ProwlAgent(parseAgentSettings('prowl', settings), deps);
+    case 'bark':
+      return new BarkAgent(parseAgentSettings('bark', settings), deps);
+    case 'join':
+      return new JoinAgent(parseAgentSettings('join', settings), deps);
+    case 'simplepush':
+      return new SimplePushAgent(parseAgentSettings('simplepush', settings), deps);
+    case 'homeassistant':
+      return new HomeAssistantAgent(parseAgentSettings('homeassistant', settings), deps);
+    case 'mqtt':
+      return new MqttAgent(parseAgentSettings('mqtt', settings), deps);
+    case 'twilio':
+      return new TwilioAgent(parseAgentSettings('twilio', settings), deps);
+    case 'apprise':
+      return new AppriseAgent(parseAgentSettings('apprise', settings), deps);
+    case 'notifiarr':
+      return new NotifiarrAgent(parseAgentSettings('notifiarr', settings), deps);
+    case 'lunasea':
+      return new LunaSeaAgent(parseAgentSettings('lunasea', settings), deps);
   }
   // Every kind is handled above; TypeScript narrows `kind` to never here.
   throw new NotificationError('webhook', 'invalidSettings', `Unhandled agent kind "${String(kind)}"`);

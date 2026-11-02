@@ -1,20 +1,36 @@
-import { asc, count, eq, inArray, lt } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import {
+  applyTemplate,
   createAgent,
+  formatEvent,
+  NOTIFICATION_EVENT_TYPES,
   NotificationError,
   parseAgentSettings,
+  redactSecrets,
+  sampleEvent,
+  TEMPLATE_KEYS,
+  TEMPLATE_VARIABLES,
+  templateContext,
   testEvent,
+  validateTemplate,
+  type MessageTemplates,
   type NotificationAgent,
   type NotificationAgentKind,
   type NotificationEvent,
+  type NotificationEventType,
 } from '@arclight/notifications';
 import {
   NOTIFICATION_TRIGGERS,
   NotificationInput,
   NotificationTestRequest,
   type NotificationConnection,
+  type NotificationDelivery,
+  type NotificationPreview,
+  type NotificationPreviewRequest,
+  type NotificationTemplateMeta,
+  type NotificationTemplates,
   type NotificationInputRaw,
   type NotificationSchema,
   type NotificationTestAllResult,
@@ -27,7 +43,8 @@ import { tags as tagsTable } from '../../db/schema.js';
 import { getSection } from '../settings/service.js';
 import { allSchemas, capabilitiesFrom, maskSettings, supportedEventsFor, TRIGGER_EVENT, unmaskSettings } from './fields.js';
 import { bypassesQuietHours, isQuietAt } from './quiet-hours.js';
-import { notificationHeld, notifications, type NotificationRow } from './schema.js';
+import { notificationHeld, notifications, type HeldReason, type NotificationRow } from './schema.js';
+import { DeliveryLog, passesFilters, RateLimiter, realSleep, sendWithRetry, targetKey, type Sleep } from './delivery.js';
 
 export type NotificationsErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'CONFLICT';
 
@@ -42,8 +59,13 @@ export class NotificationsError extends Error {
   }
 }
 
-/** Builds an agent from validated settings. Injected in tests. */
-export type AgentFactory = (kind: NotificationAgentKind, settings: unknown) => NotificationAgent;
+/** Builds an agent from validated settings and the destination's templates. Injected in tests. */
+export type AgentFactory = (kind: NotificationAgentKind, settings: unknown, templates?: MessageTemplates) => NotificationAgent;
+
+/** Personal destinations hear about library events (watchlist titles) from the dispatcher. */
+export interface LibraryEventListener {
+  libraryEvent(event: NotificationEvent): Promise<unknown>;
+}
 
 export interface NotificationsServiceOptions {
   db: Db;
@@ -53,6 +75,11 @@ export interface NotificationsServiceOptions {
   instanceName?: string;
   /** Quiet hours in effect; defaults to the `alerts` settings section. */
   quietHours?: () => QuietHoursSettings;
+  /** Waits between retries. Injected in tests. */
+  sleep?: Sleep;
+  /** Shared with the personal destinations so both write one log. */
+  deliveries?: DeliveryLog;
+  limiter?: RateLimiter;
 }
 
 export interface DispatchOutcome {
@@ -60,8 +87,12 @@ export interface DispatchOutcome {
   name: string;
   ok: boolean;
   error?: string;
-  /** Held for quiet hours rather than sent. */
+  /** Held for quiet hours (or the rate limit) rather than sent. */
   held?: boolean;
+  /** Held because the connection's rate limit was reached. */
+  rateLimited?: boolean;
+  /** Attempts made (retries included). */
+  attempts?: number;
 }
 
 /** Held alerts older than this are dropped instead of delivered (the connection kept failing). */
@@ -83,24 +114,57 @@ export class NotificationsService {
   private readonly instanceName: string;
   private readonly status = new Map<number, ConnectionStatus>();
   private readonly quietHours: () => QuietHoursSettings;
+  private readonly sleep: Sleep;
+  readonly deliveryLog: DeliveryLog;
+  readonly limiter: RateLimiter;
+  private listener: LibraryEventListener | undefined;
 
   constructor(options: NotificationsServiceOptions) {
     this.db = options.db;
     this.log = options.log;
-    this.factory = options.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
+    this.factory = options.agentFactory ?? ((kind, settings, templates) => createAgent(kind, settings, templates ? { templates } : {}));
     this.now = options.now ?? (() => new Date());
     this.instanceName = options.instanceName ?? 'Arclight';
     this.quietHours = options.quietHours ?? (() => readQuietHours(this.db));
+    this.sleep = options.sleep ?? realSleep;
+    this.deliveryLog = options.deliveries ?? new DeliveryLog(this.db, this.now);
+    this.limiter = options.limiter ?? new RateLimiter();
+  }
+
+  /** Personal destinations subscribe here for watchlist (import) events. */
+  setLibraryListener(listener: LibraryEventListener | undefined): void {
+    this.listener = listener;
   }
 
   // ---- CRUD ------------------------------------------------------------------------------
 
   list(): NotificationConnection[] {
-    return this.rows().map(toResource);
+    return this.rows().map((r) => this.resource(r));
   }
 
   get(id: number): NotificationConnection {
-    return toResource(this.requireRow(id));
+    return this.resource(this.requireRow(id));
+  }
+
+  private resource(row: NotificationRow): NotificationConnection {
+    return { ...toResource(row), status: this.deliveryLog.status({ notificationId: row.id }) };
+  }
+
+  /** The delivery log of one connection, newest first. */
+  deliveries(id: number): NotificationDelivery[] {
+    this.requireRow(id);
+    return this.deliveryLog.list({ notificationId: id });
+  }
+
+  // ---- templates -----------------------------------------------------------------------------
+
+  templateMeta(): NotificationTemplateMeta {
+    return { keys: [...TEMPLATE_KEYS], variables: TEMPLATE_VARIABLES.map((v) => ({ ...v })) };
+  }
+
+  /** Render `template` against a sample event of `eventType` (`default`: a sample import). */
+  preview(req: NotificationPreviewRequest): NotificationPreview {
+    return previewTemplate(req, this.instanceName, this.now());
   }
 
   schemas(): NotificationSchema[] {
@@ -116,7 +180,7 @@ export class NotificationsService {
       .values({ ...values, addedAt: now, updatedAt: now })
       .returning()
       .get();
-    return toResource(row);
+    return this.resource(row);
   }
 
   update(id: number, raw: NotificationInputRaw): NotificationConnection {
@@ -131,7 +195,8 @@ export class NotificationsService {
       .get();
     if (!row) throw notFound(id);
     this.status.delete(id);
-    return toResource(row);
+    this.limiter.forget(targetKey({ notificationId: id }));
+    return this.resource(row);
   }
 
   delete(id: number): void {
@@ -149,28 +214,46 @@ export class NotificationsService {
     const { id, ...candidate } = parsed.data;
     const existing = id === undefined ? null : this.requireRow(id);
     const values = this.normalize(candidate, existing);
-    return this.sendTest(values.implementation, values.settings);
+    const result = await this.sendTest(values.implementation, values.settings, values.templates);
+    // A saved connection keeps the test in its delivery log (the editor shows the last error).
+    if (existing) this.logTest(existing.id, values.templates, result);
+    return result;
   }
 
   async testAll(): Promise<NotificationTestAllResult> {
     const results: NotificationTestAllResult = [];
     for (const row of this.rows().filter((r) => r.enabled)) {
-      const result = await this.sendTest(row.implementation, row.settings);
+      const result = await this.sendTest(row.implementation, row.settings, row.templates);
       this.record(row.id, result.ok ? undefined : (result.message ?? 'test failed'));
+      this.logTest(row.id, row.templates, result);
       results.push({ id: row.id, name: row.name, ...result });
     }
     return results;
   }
 
-  private async sendTest(kind: NotificationAgentKind, settings: unknown): Promise<NotificationTestResult> {
+  private logTest(id: number, templates: NotificationTemplates, result: NotificationTestResult): void {
+    this.deliveryLog.add(
+      { notificationId: id },
+      {
+        event: testEvent(this.instanceName, this.now),
+        templates,
+        state: result.ok ? 'sent' : 'failed',
+        error: result.message,
+        code: result.code,
+        test: true,
+      },
+    );
+  }
+
+  private async sendTest(kind: NotificationAgentKind, settings: Record<string, unknown>, templates: NotificationTemplates): Promise<NotificationTestResult> {
     try {
-      const agent = this.factory(kind, settings);
+      const agent = this.factory(kind, settings, templates);
       await agent.send(testEvent(this.instanceName, this.now));
       return { ok: true };
     } catch (err) {
       return {
         ok: false,
-        message: err instanceof Error ? err.message : String(err),
+        message: redactSecrets(err instanceof Error ? err.message : String(err), settings),
         ...(err instanceof NotificationError ? { code: err.code } : {}),
       };
     }
@@ -180,13 +263,28 @@ export class NotificationsService {
 
   /**
    * Deliver `event` to every enabled connection whose trigger flags, health-warning option,
-   * tags and agent capabilities accept it. One failing connection never affects the others;
-   * failures are logged and recorded per connection. Resolves once every send settled.
+   * tags, filters and agent capabilities accept it. Each connection is independent: its own
+   * quiet hours and rate limit may hold the alert, and failed sends are retried with backoff.
+   * Failures are logged (secrets redacted) and recorded per connection. Resolves once every
+   * send settled.
    */
   async dispatch(event: NotificationEvent): Promise<DispatchOutcome[]> {
-    const rows = this.rows().filter((r) => r.enabled && wantsEvent(r, event));
+    const library = this.notifyListener(event);
+    const outcomes = await this.dispatchToConnections(event);
+    await library;
+    return outcomes;
+  }
+
+  private notifyListener(event: NotificationEvent): Promise<unknown> {
+    if (!this.listener || (event.type !== 'import' && event.type !== 'upgrade')) return Promise.resolve();
+    return this.listener.libraryEvent(event).catch((err: unknown) => this.log?.warn({ err, event: event.type }, 'personal notifications failed'));
+  }
+
+  private async dispatchToConnections(event: NotificationEvent): Promise<DispatchOutcome[]> {
+    const rows = this.rows().filter((r) => r.enabled && wantsEvent(r, event) && passesFilters(r.filters, event));
     if (rows.length === 0) return [];
-    const quiet = this.isQuietNow();
+    const globalQuiet = this.quietHours();
+    const now = this.now();
     // A kill-switch reminder only goes to connections that held the original alert.
     const reminder = event.type === 'killSwitch' && event.pausedMinutes !== undefined;
     const mediaTags = 'media' in event && event.media ? new Set(event.media.tags) : null;
@@ -202,32 +300,56 @@ export class NotificationsService {
 
     const outcomes = await Promise.all(
       targets.map(async (row): Promise<DispatchOutcome | null> => {
+        const target = { notificationId: row.id };
         let agent: NotificationAgent;
         try {
-          agent = this.factory(row.implementation, row.settings);
+          agent = this.factory(row.implementation, row.settings, row.templates);
         } catch (err) {
-          const message = errorMessage(err);
-          this.log?.warn({ err, notification: row.name }, 'notification connection is misconfigured');
+          const message = redactSecrets(errorMessage(err), row.settings);
+          this.log?.warn({ error: message, notification: row.name }, 'notification connection is misconfigured');
           this.record(row.id, message);
+          this.deliveryLog.add(target, { event, templates: row.templates, state: 'failed', error: message, code: codeOf(err) });
           return { id: row.id, name: row.name, ok: false, error: message };
         }
         if (!agent.supportedEvents.has(event.type)) return null;
-        const holding = quiet && row.respectQuietHours;
+        const holding = row.respectQuietHours && isQuietAt(row.quietHours ?? globalQuiet, now);
         if (reminder && !holding) return null;
-        if (holding && !bypassesQuietHours(event)) {
-          this.hold(row.id, event);
+        const urgent = bypassesQuietHours(event);
+        if (holding && !urgent) {
+          this.hold(row.id, event, 'quiet');
+          this.deliveryLog.add(target, { event, templates: row.templates, state: 'held' });
           return { id: row.id, name: row.name, ok: true, held: true };
         }
-        try {
-          await agent.send(event);
-          this.record(row.id, undefined);
-          return { id: row.id, name: row.name, ok: true };
-        } catch (err) {
-          const message = errorMessage(err);
-          this.log?.warn({ err, notification: row.name, event: event.type }, 'notification failed');
-          this.record(row.id, message);
-          return { id: row.id, name: row.name, ok: false, error: message };
+        const key = targetKey(target);
+        if (urgent) this.limiter.note(key, now.getTime());
+        else if (!this.limiter.take(key, row.rateLimitPerMinute, now.getTime())) {
+          this.hold(row.id, event, 'rate');
+          this.deliveryLog.add(target, { event, templates: row.templates, state: 'rateLimited' });
+          return { id: row.id, name: row.name, ok: true, held: true, rateLimited: true };
         }
+        const result = await sendWithRetry(() => agent.send(event), {
+          maxAttempts: row.maxAttempts,
+          sleep: this.sleep,
+          redact: (text) => redactSecrets(text, row.settings),
+        });
+        this.deliveryLog.add(target, {
+          event,
+          templates: row.templates,
+          state: result.ok ? 'sent' : 'failed',
+          attempts: result.attempts,
+          error: result.error,
+          code: result.code,
+        });
+        if (result.ok) {
+          this.record(row.id, undefined);
+          return { id: row.id, name: row.name, ok: true, attempts: result.attempts };
+        }
+        this.log?.warn(
+          { error: result.error, code: result.code, attempts: result.attempts, notification: row.name, event: event.type },
+          'notification failed',
+        );
+        this.record(row.id, result.error ?? 'failed');
+        return { id: row.id, name: row.name, ok: false, error: result.error ?? 'failed', attempts: result.attempts };
       }),
     );
     return outcomes.filter((o): o is DispatchOutcome => o !== null);
@@ -243,17 +365,17 @@ export class NotificationsService {
     return this.db.select({ n: count() }).from(notificationHeld).get()?.n ?? 0;
   }
 
-  private hold(notificationId: number, event: NotificationEvent): void {
-    this.db.insert(notificationHeld).values({ notificationId, event, heldAt: this.now().toISOString() }).run();
+  private hold(notificationId: number, event: NotificationEvent, reason: HeldReason): void {
+    this.db.insert(notificationHeld).values({ notificationId, event, heldAt: this.now().toISOString(), reason }).run();
   }
 
   /**
-   * Outside quiet hours, send each connection what was held for it: one alert as itself, more
-   * as a single `heldAlerts` batch. Delivered (and expired) rows are deleted; a failed send
-   * keeps them for the next try. Returns the number of alerts delivered.
+   * Send each connection what was held for it once it may: when its quiet hours (its own, or
+   * the global ones) are over, and when its rate limit has room again. One alert goes as
+   * itself, more as a single `heldAlerts` batch. Delivered (and expired) rows are deleted; a
+   * failed send keeps them for the next try. Returns the number of alerts delivered.
    */
   async flushHeld(): Promise<number> {
-    if (this.isQuietNow()) return 0;
     const cutoff = new Date(this.now().getTime() - HELD_ALERT_MAX_AGE_MS).toISOString();
     this.db.delete(notificationHeld).where(lt(notificationHeld.heldAt, cutoff)).run();
     const held = this.db.select().from(notificationHeld).orderBy(asc(notificationHeld.id)).all();
@@ -261,14 +383,20 @@ export class NotificationsService {
     const byConnection = new Map<number, typeof held>();
     for (const h of held) byConnection.set(h.notificationId, [...(byConnection.get(h.notificationId) ?? []), h]);
     const rows = new Map(this.rows().map((r) => [r.id, r]));
+    const globalQuiet = this.quietHours();
+    const now = this.now();
     let delivered = 0;
     for (const [id, items] of byConnection) {
-      const ids = items.map((h) => h.id);
       const row = rows.get(id);
       if (!row || !row.enabled) {
-        this.db.delete(notificationHeld).where(inArray(notificationHeld.id, ids)).run();
+        this.db.delete(notificationHeld).where(inArray(notificationHeld.id, items.map((h) => h.id))).run();
         continue;
       }
+      // Nothing leaves while the connection is in its quiet hours, rate-limited alerts included.
+      if (row.respectQuietHours && isQuietAt(row.quietHours ?? globalQuiet, now)) continue;
+      const key = targetKey({ notificationId: id });
+      if (!this.limiter.hasRoom(key, row.rateLimitPerMinute, now.getTime())) continue;
+      const ids = items.map((h) => h.id);
       const first = items[0]!;
       const event: NotificationEvent =
         items.length === 1
@@ -276,19 +404,35 @@ export class NotificationsService {
           : {
               type: 'heldAlerts',
               instanceName: first.event.instanceName,
-              timestamp: this.now().toISOString(),
+              timestamp: now.toISOString(),
               ...(first.event.applicationUrl ? { applicationUrl: first.event.applicationUrl } : {}),
               events: items.map((h) => h.event),
               heldSince: first.heldAt,
             };
+      this.limiter.note(key, now.getTime());
+      let agent: NotificationAgent;
       try {
-        await this.factory(row.implementation, row.settings).send(event);
-        this.record(id, undefined);
-        this.db.delete(notificationHeld).where(inArray(notificationHeld.id, ids)).run();
-        delivered += items.length;
+        agent = this.factory(row.implementation, row.settings, row.templates);
       } catch (err) {
-        this.log?.warn({ err, notification: row.name, held: items.length }, 'could not deliver held alerts');
-        this.record(id, errorMessage(err));
+        this.record(id, redactSecrets(errorMessage(err), row.settings));
+        continue;
+      }
+      const result = await sendWithRetry(() => agent.send(event), {
+        maxAttempts: row.maxAttempts,
+        sleep: this.sleep,
+        redact: (text) => redactSecrets(text, row.settings),
+      });
+      this.deliveryLog.add(
+        { notificationId: id },
+        { event, templates: row.templates, state: result.ok ? 'sent' : 'failed', attempts: result.attempts, error: result.error, code: result.code },
+      );
+      if (result.ok) {
+        this.record(id, undefined);
+        this.db.delete(notificationHeld).where(and(eq(notificationHeld.notificationId, id), inArray(notificationHeld.id, ids))).run();
+        delivered += items.length;
+      } else {
+        this.log?.warn({ error: result.error, notification: row.name, held: items.length }, 'could not deliver held alerts');
+        this.record(id, result.error ?? 'failed');
       }
     }
     return delivered;
@@ -369,6 +513,15 @@ export class NotificationsService {
       respectQuietHours: input.respectQuietHours,
       tags: [...new Set(input.tags)],
       settings,
+      filters: {
+        mediaTypes: [...new Set(input.filters.mediaTypes)],
+        qualities: [...new Set(input.filters.qualities.map((q) => q.trim()).filter(Boolean))],
+        users: [...new Set(input.filters.users)],
+      },
+      templates: normalizeTemplates(input.templates),
+      quietHours: input.quietHours,
+      rateLimitPerMinute: input.rateLimitPerMinute,
+      maxAttempts: input.maxAttempts,
     };
   }
 
@@ -474,9 +627,78 @@ function toResource(row: NotificationRow): NotificationConnection {
     respectQuietHours: row.respectQuietHours,
     tags: row.tags,
     settings: maskSettings(row.settings),
+    filters: row.filters,
+    templates: row.templates,
+    quietHours: row.quietHours ?? null,
+    rateLimitPerMinute: row.rateLimitPerMinute,
+    maxAttempts: row.maxAttempts,
+    status: { consecutiveFailures: 0 },
     ...caps,
   };
 }
+
+/**
+ * Templates keyed by a known event (or `default`), blank ones dropped, syntax checked.
+ * Throws VALIDATION naming the template that does not parse.
+ */
+export function normalizeTemplates(templates: NotificationTemplates): NotificationTemplates {
+  const keys = new Set<string>(TEMPLATE_KEYS);
+  const out: NotificationTemplates = {};
+  for (const [key, template] of Object.entries(templates)) {
+    if (!keys.has(key)) throw new NotificationsError('VALIDATION', `Unknown template event "${key}"`);
+    const title = template.title?.trim() ? template.title : undefined;
+    const body = template.body?.trim() ? template.body : undefined;
+    for (const [part, source] of [
+      ['title', title],
+      ['body', body],
+    ] as const) {
+      const problem = source === undefined ? undefined : validateTemplate(source);
+      if (problem) throw new NotificationsError('VALIDATION', `Template for ${key} (${part}): ${problem}`);
+    }
+    if (title !== undefined || body !== undefined) {
+      out[key] = { ...(title !== undefined ? { title } : {}), ...(body !== undefined ? { body } : {}) };
+    }
+  }
+  return out;
+}
+
+/** What the template editor shows: `req.template` rendered against a sample event. */
+export function previewTemplate(
+  req: NotificationPreviewRequest,
+  instanceName: string,
+  now: Date,
+  applicationUrl = 'https://arclight.example.com',
+): NotificationPreview {
+  const key = req.eventType;
+  if (key !== 'default' && !(NOTIFICATION_EVENT_TYPES as readonly string[]).includes(key)) {
+    throw new NotificationsError('VALIDATION', `Unknown event type "${key}"`);
+  }
+  const type: NotificationEventType = key === 'default' ? 'import' : (key as NotificationEventType);
+  const event = sampleEvent(type, instanceName, applicationUrl, now);
+  const base = formatEvent(event);
+  const template = req.template ?? {};
+  const error = [template.title, template.body].map((t) => (t ? validateTemplate(t) : undefined)).find(Boolean);
+  const formatted = error ? base : applyTemplate(event, base, { [type]: template });
+  const values: Record<string, string> = {};
+  for (const [name, value] of Object.entries(templateContext(event, base))) {
+    if (name === 'event' || value === undefined || value === null) continue;
+    values[name] = typeof value === 'string' ? value : String(value);
+  }
+  return {
+    subject: formatted.subject,
+    title: formatted.title,
+    body: formatted.body,
+    ...(formatted.link ? { link: formatted.link } : {}),
+    ...(formatted.posterUrl ? { posterUrl: formatted.posterUrl } : {}),
+    ...(error ? { error } : {}),
+    values,
+  };
+}
+
+function codeOf(err: unknown): string | undefined {
+  return err instanceof NotificationError ? err.code : undefined;
+}
+
 
 /** The stored quiet hours; off when they cannot be read (a database without the settings table). */
 function readQuietHours(db: Db): QuietHoursSettings {

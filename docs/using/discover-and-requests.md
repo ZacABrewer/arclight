@@ -343,6 +343,12 @@ To keep a child's account to suitable titles, open **Settings > Users > Manage >
 
 Titles above the cap are hidden from Discover, and requests and title pages for them are refused. Ratings come from TMDB (your region, otherwise US).
 
+## Your own notifications
+
+Anyone with an account, including users who only use the request portal, can be told about their own requests without an admin setting anything up. Open your profile page (or **Account** in the portal) and add a personal destination: your own Telegram chat, ntfy topic, Discord or Slack webhook, Pushover, Home Assistant, Signal and more. Pick the events you care about (request approved, declined or available, issue updates, new episodes and movies of titles on your watchlist), press **Test**, and save. People who can manage requests or issues can also choose to hear about new requests and new issues.
+
+Destinations of non-admin users cannot point at localhost or your home network, and an admin can switch the whole feature off in Settings > Notifications. Details, limits and the full list of services are in [Notifications](notifications.md#personal-destinations). Browser and phone push are separate; see the same page.
+
 ## Issues
 
 Issues let people report that something is wrong with a title you already have, such as bad video, no audio or missing subtitles.

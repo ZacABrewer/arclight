@@ -35,6 +35,8 @@ export type DailySummarySettings = z.infer<typeof DailySummarySettings>;
 export const AlertSettings = z.object({
   quietHours: QuietHoursSettings.default(QuietHoursSettings.parse({})),
   dailySummary: DailySummarySettings.default(DailySummarySettings.parse({})),
+  /** Users may add their own notification destinations (profile / request portal). */
+  personalDestinations: z.boolean().default(true),
 });
 export type AlertSettings = z.infer<typeof AlertSettings>;
 

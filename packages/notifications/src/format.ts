@@ -47,6 +47,8 @@ export interface FormattedEvent {
   actions?: FormattedAction[];
   /** Who the event is about (request events): shown as author/footer by rich agents. */
   person?: { name: string; avatarUrl?: string };
+  /** Set when a user template replaced the title and/or body (template.ts). */
+  templated?: { title?: boolean; body?: boolean };
 }
 
 /**

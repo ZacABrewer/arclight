@@ -67,7 +67,7 @@ describe('Sonarr plan', () => {
     expect(by['notifications']).toMatchObject({ total: 3, create: 1, unsupported: 2 });
     expect(by['downloadClients']).toMatchObject({ total: 3, create: 2, unsupported: 1 });
     expect(by['history']).toMatchObject({ total: 4, details: { otherEventsIgnored: 1 } });
-    expect(plan.unsupported.map((u) => u.name)).toEqual(expect.arrayContaining(['Old Show (1999)', 'IPT', 'Slack', 'Trakt Watchlist']));
+    expect(plan.unsupported.map((u) => u.name)).toEqual(expect.arrayContaining(['Old Show (1999)', 'IPT', 'Mailgun', 'Trakt Watchlist']));
     expect(db.select().from(t.series).all()).toHaveLength(0);
     expect(db.select().from(migrateImported).all()).toHaveLength(0);
   });

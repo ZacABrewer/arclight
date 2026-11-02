@@ -157,7 +157,7 @@ function arrInfrastructure(db: Database.Database, app: 'sonarr' | 'radarr'): voi
     Tags: [],
   });
   insert(db, 'Notifications', { Id: 2, Name: 'Bad Pushover', Implementation: 'Pushover', Settings: { apiKey: 'short', userKey: 'short' }, OnGrab: 1, Tags: [] });
-  insert(db, 'Notifications', { Id: 3, Name: 'Slack', Implementation: 'Slack', Settings: { webHookUrl: 'https://hooks.slack.com/x' }, Tags: [] });
+  insert(db, 'Notifications', { Id: 3, Name: 'Mailgun', Implementation: 'Mailgun', Settings: { apiKey: 'key-x' }, Tags: [] });
   table(db, 'ImportLists', ['Id', 'Name', 'Implementation', 'Settings', 'ConfigContract', 'EnableAutomaticAdd', 'Enabled', 'RootFolderPath', 'ShouldMonitor', 'Monitor', 'QualityProfileId', 'Tags', 'SeriesType', 'SeasonFolder', 'MinimumAvailability', 'SearchOnAdd']);
   insert(db, 'ImportLists', {
     Id: 1,

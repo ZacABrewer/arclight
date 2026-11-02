@@ -4,7 +4,6 @@
  * (Emby only) show an admin notification.
  */
 
-import { formatEvent } from '../format.js';
 import { hostUrl, httpRequest, joinUrl } from '../http.js';
 import type { EmbySettings, JellyfinSettings } from '../settings.js';
 import type { NotificationEvent, NotificationEventType } from '../types.js';
@@ -60,7 +59,7 @@ export class MediaBrowserAgent extends BaseAgent {
   protected async deliver(event: NotificationEvent): Promise<void> {
     const plan = this.plan(event);
     if (plan.notify) {
-      const formatted = formatEvent(event);
+      const formatted = this.format(event);
       await this.request('Notifications/Admin', 'POST', {
         Name: `${event.instanceName}: ${formatted.subject}`,
         Description: `${formatted.title}\n${formatted.body}`,

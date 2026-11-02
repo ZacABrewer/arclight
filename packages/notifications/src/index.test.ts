@@ -10,21 +10,9 @@ import {
   parseAgentSettings,
   type NotificationAgentKind,
 } from './index.js';
-import { fakeFetch } from './test-utils.js';
+import { fakeFetch, MINIMAL_SETTINGS } from './test-utils.js';
 
-const VALID: Record<NotificationAgentKind, unknown> = {
-  discord: { webhookUrl: 'https://discord.com/api/webhooks/1/x' },
-  telegram: { botToken: 't', chatId: '1' },
-  webhook: { url: 'https://example.com/hook' },
-  email: { host: 'smtp', from: 'mt@example.com', to: ['ops@example.org'] },
-  'custom-script': { path: '/bin/true' },
-  ntfy: { topics: ['t'] },
-  gotify: { serverUrl: 'http://g', appToken: 'x' },
-  pushover: { apiToken: 'a'.repeat(30), userKey: 'b'.repeat(30) },
-  jellyfin: { host: 'jf', apiKey: 'k' },
-  emby: { host: 'emby', apiKey: 'k' },
-  plex: { host: 'plex', authToken: 't' },
-};
+const VALID: Record<NotificationAgentKind, unknown> = MINIMAL_SETTINGS;
 
 describe('createAgent', () => {
   it('builds every kind from minimal settings and reports its kind', () => {
@@ -38,7 +26,7 @@ describe('createAgent', () => {
 
   it('applies schema defaults when parsing stored settings', () => {
     expect(parseAgentSettings('ntfy', { topics: ['a'] })).toMatchObject({ serverUrl: 'https://ntfy.sh', priority: 3, tags: [] });
-    expect(parseAgentSettings('email', VALID.email)).toMatchObject({ port: 587, security: 'starttls', cc: [], subjectPrefix: '[Arclight]' });
+    expect(parseAgentSettings('email', { host: 'smtp', from: 'mt@example.com', to: ['ops@example.org'] })).toMatchObject({ port: 587, security: 'starttls', cc: [], subjectPrefix: '[Arclight]' });
     expect(parseAgentSettings('discord', VALID.discord).grabFields).toContain('quality');
   });
 

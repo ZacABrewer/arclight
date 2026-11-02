@@ -6,6 +6,26 @@
 
 import { z } from 'zod';
 import { NOTIFICATION_AGENT_KINDS } from './types.js';
+import { validateTemplate } from './template.js';
+import { SlackSettings } from './agents/slack.js';
+import { TeamsSettings } from './agents/teams.js';
+import { MatrixSettings } from './agents/matrix.js';
+import { MattermostSettings } from './agents/mattermost.js';
+import { RocketChatSettings } from './agents/rocketchat.js';
+import { GoogleChatSettings } from './agents/googlechat.js';
+import { SignalSettings } from './agents/signal.js';
+import { PushbulletSettings } from './agents/pushbullet.js';
+import { ProwlSettings } from './agents/prowl.js';
+import { BarkSettings } from './agents/bark.js';
+import { JoinSettings } from './agents/join.js';
+import { SimplePushSettings } from './agents/simplepush.js';
+import { HomeAssistantSettings } from './agents/homeassistant.js';
+import { MqttSettings } from './agents/mqtt.js';
+import { TwilioSettings } from './agents/twilio.js';
+import { AppriseSettings } from './agents/apprise.js';
+import { NotifiarrSettings } from './agents/notifiarr.js';
+import { LunaSeaSettings } from './agents/lunasea.js';
+
 
 const httpUrl = () => z.url({ protocol: /^https?$/ });
 
@@ -66,7 +86,14 @@ export type TelegramSettings = z.infer<typeof TelegramSettings>;
 
 export const WebhookSettings = z.object({
   url: httpUrl().describe('Endpoint that receives the JSON event.'),
-  method: z.enum(['POST', 'PUT']).default('POST').describe('HTTP method.'),
+  method: z.enum(['POST', 'PUT', 'PATCH']).default('POST').describe('HTTP method.'),
+  bodyTemplate: z
+    .string()
+    .max(20_000)
+    .refine((t) => validateTemplate(t) === undefined, { message: 'Template has an unclosed or unexpected {{#section}}' })
+    .optional()
+    .describe('Custom body. Leave blank to send the full event as JSON. Variables like {{title}} are JSON-escaped; {{json event}} inserts a value as JSON.'),
+  contentType: z.string().max(100).default('application/json').describe('Content-Type of a custom body.'),
   username: z.string().optional().describe('HTTP basic auth username.'),
   password: z.string().optional().describe('HTTP basic auth password.'),
   headers: z.record(z.string(), z.string()).default({}).describe('Extra request headers, e.g. an API key.'),
@@ -155,6 +182,27 @@ export const PlexSettings = z.object({
 });
 export type PlexSettings = z.infer<typeof PlexSettings>;
 
+export {
+  SlackSettings,
+  TeamsSettings,
+  MatrixSettings,
+  MattermostSettings,
+  RocketChatSettings,
+  GoogleChatSettings,
+  SignalSettings,
+  PushbulletSettings,
+  ProwlSettings,
+  BarkSettings,
+  JoinSettings,
+  SimplePushSettings,
+  HomeAssistantSettings,
+  MqttSettings,
+  TwilioSettings,
+  AppriseSettings,
+  NotifiarrSettings,
+  LunaSeaSettings,
+};
+
 export const agentSettingsSchemas = {
   discord: DiscordSettings,
   telegram: TelegramSettings,
@@ -167,6 +215,24 @@ export const agentSettingsSchemas = {
   jellyfin: JellyfinSettings,
   emby: EmbySettings,
   plex: PlexSettings,
+  slack: SlackSettings,
+  teams: TeamsSettings,
+  matrix: MatrixSettings,
+  mattermost: MattermostSettings,
+  rocketchat: RocketChatSettings,
+  googlechat: GoogleChatSettings,
+  signal: SignalSettings,
+  pushbullet: PushbulletSettings,
+  prowl: ProwlSettings,
+  bark: BarkSettings,
+  join: JoinSettings,
+  simplepush: SimplePushSettings,
+  homeassistant: HomeAssistantSettings,
+  mqtt: MqttSettings,
+  twilio: TwilioSettings,
+  apprise: AppriseSettings,
+  notifiarr: NotifiarrSettings,
+  lunasea: LunaSeaSettings,
 } as const satisfies Record<(typeof NOTIFICATION_AGENT_KINDS)[number], z.ZodType>;
 
 export type AgentSettingsMap = {

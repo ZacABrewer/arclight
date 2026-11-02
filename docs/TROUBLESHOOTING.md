@@ -7,7 +7,7 @@ Something is not working. This page is organised by what you see: find your symp
 Contents:
 
 - [First checks](#first-checks)
-- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start, [downloads slow down on their own](#downloads-slow-down-on-their-own), [magnet failed: no metadata](#magnet-no-metadata), [torrents recheck after a restart](#torrents-recheck-after-restart), [same release keeps coming back](#same-release-keeps-coming-back), [Remove Completed removed my torrents](#remove-completed-removed-my-torrents), [hardware transcoding fails](#hardware-transcoding-fails), [health notification without More Info link](#health-notification-no-more-info)
+- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start, [downloads slow down on their own](#downloads-slow-down-on-their-own), [magnet failed: no metadata](#magnet-no-metadata), [torrents recheck after a restart](#torrents-recheck-after-restart), [same release keeps coming back](#same-release-keeps-coming-back), [Remove Completed removed my torrents](#remove-completed-removed-my-torrents), [hardware transcoding fails](#hardware-transcoding-fails), [notifications are not arriving](#notifications-not-arriving), [health notification without More Info link](#health-notification-no-more-info)
 - [Health checks](#health-checks): all 45, with a table of anchors
 - [Still stuck](#still-stuck)
 
@@ -574,6 +574,26 @@ Full guide: [hardware-transcoding.md](using/hardware-transcoding.md).
 
 ---
 
+<a id="notifications-not-arriving"></a>
+### Notifications are not arriving
+
+**What you see:** a connection's Test works (or fails), but the messages you expect do not show up, or they show up late and bunched together.
+
+**Cause:** usually one of these, in this order of likelihood: the event is not ticked on that connection; a tag or filter (media kind, quality, user) excludes the item; quiet hours are holding non-urgent alerts until the window ends; the connection's rate limit is holding a burst; the delivery failed and is being retried, or failed for good.
+
+**How to confirm:** open the connection and look at its delivery log (the last 100 attempts). Each entry is sent, failed, held (quiet hours) or rate limited, and failed entries show the error with secrets removed. The connection also keeps its last error and the time of its last success. An event that a filter or tag excluded never reaches the log, so a missing entry points at the event switches, tags or filters.
+
+**Fix:**
+
+- Failed with `network`, a timeout, 429 or 5xx: Arclight retries these (default 3 attempts, waiting 2 s, 4 s, 8 s and so on, 5 s and up after a 429, never more than 60 s). If all attempts fail the service is down or unreachable from the container; check DNS, the VPN and the URL. Raise **Attempts** (up to 6) for a flaky service.
+- Failed with `unauthorized` or another 4xx: the token, key or webhook was revoked or is wrong. Retrying cannot fix it, so there is no retry. Edit the connection and press **Test**.
+- Held: quiet hours are on. Held alerts go out as one "held alerts" message when the window ends; urgent alerts and tests are never held. Turn off **Respect quiet hours** on that connection, or give it its own window.
+- Rate limited: the connection's **Rate limit per minute** is low for the burst; raise it or set 0 for unlimited.
+- Nothing in the log at all: check the event switches, tags and filters.
+- A user's personal destination fails to save: non-admins cannot use localhost, private or LAN addresses; see [Notifications](using/notifications.md#personal-destinations).
+
+---
+
 <a id="health-notification-no-more-info"></a>
 ### Health notification has no More Info link
 
@@ -837,7 +857,7 @@ Source: `NotificationStatusCheck` (error when all enabled connections are failin
 
 **Meaning:** deliveries failed several times in a row: the service is down, the webhook was deleted or the token was revoked.
 
-**How to confirm:** the Health message lists the failing connections. Settings > Notifications, press **Test**; the error is shown.
+**How to confirm:** the Health message lists the failing connections. Settings > Notifications, press **Test**; the error is shown. The connection's delivery log has the recent attempts and their errors.
 
 **Fix:** press **Test** on the notification to see the error, then update its credentials or URL.
 

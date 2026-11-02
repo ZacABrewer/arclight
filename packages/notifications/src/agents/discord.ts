@@ -1,4 +1,4 @@
-import { formatBytes, formatEvent, qualityLabel, type FormattedField, type Severity } from '../format.js';
+import { formatBytes, qualityLabel, type FormattedField, type Severity } from '../format.js';
 import { httpRequest } from '../http.js';
 import type { DiscordField, DiscordSettings } from '../settings.js';
 import type { NotificationEvent, MediaInfo, EpisodeInfo, ReleaseInfo, MediaFileInfo } from '../types.js';
@@ -44,12 +44,12 @@ export class DiscordAgent extends BaseAgent {
   }
 
   buildPayload(event: NotificationEvent): DiscordPayload {
-    const formatted = formatEvent(event);
+    const formatted = this.format(event);
     const selection = this.fieldSelection(event);
     const embed: DiscordEmbed = {
       author: { name: this.settings.author ?? event.instanceName },
       title: formatted.title,
-      description: formatted.subject,
+      description: formatted.templated?.body ? clip(formatted.body, 4096) : formatted.subject,
       color: DISCORD_COLOURS[formatted.severity],
       fields: [],
       timestamp: event.timestamp,

@@ -4,6 +4,7 @@ import { notificationsRoutes } from './routes.js';
 import { NotificationsService } from './service.js';
 import { EventTranslator } from './translate.js';
 import { DownloadAlerts } from './download-alerts.js';
+import { PersonalNotifications } from './personal.js';
 
 export {
   NotificationsService,
@@ -12,7 +13,12 @@ export {
   type AgentFactory,
   type ConnectionStatus,
   type DispatchOutcome,
+  type LibraryEventListener,
+  normalizeTemplates,
+  previewTemplate,
 } from './service.js';
+export { PersonalNotifications, allowedEvents, isPrivateHost, privateTarget, publicError, PERSONAL_RATE_LIMIT_PER_MINUTE } from './personal.js';
+export { DeliveryLog, RateLimiter, sendWithRetry, isRetryable, backoffMs, passesFilters, DELIVERY_LOG_SIZE } from './delivery.js';
 export { EventTranslator, toMediaInfo, toEpisodeInfo, toFileInfo, releaseFrom } from './translate.js';
 export * from './schema.js';
 export { DownloadAlerts, DISK_SPACE_CHECKS, KILL_SWITCH_URGENT_MS } from './download-alerts.js';
@@ -27,14 +33,35 @@ export const HEALTH_NOTIFICATION_GRACE_MS = 15 * 60_000;
 // One service per app context so every module dispatches through the same instance (and the
 // same per-connection failure state, which the health checks read).
 const services = new WeakMap<AppContext, NotificationsService>();
+const personals = new WeakMap<AppContext, PersonalNotifications>();
 
 export function notificationsServiceFor(ctx: AppContext): NotificationsService {
   let service = services.get(ctx);
   if (!service) {
     service = new NotificationsService({ db: ctx.db, log: ctx.log.child({ module: 'notifications' }) });
     services.set(ctx, service);
+    // Imports of watchlist titles reach the personal destinations of the users watching them.
+    service.setLibraryListener(personalNotificationsFor(ctx));
   }
   return service;
+}
+
+/** Personal destinations; shares the delivery log and rate limits of the system service. */
+export function personalNotificationsFor(ctx: AppContext): PersonalNotifications {
+  let personal = personals.get(ctx);
+  if (!personal) {
+    const system = notificationsServiceFor(ctx);
+    personal = personals.get(ctx);
+    if (personal) return personal;
+    personal = new PersonalNotifications({
+      db: ctx.db,
+      log: ctx.log.child({ module: 'notifications' }),
+      deliveries: system.deliveryLog,
+      limiter: system.limiter,
+    });
+    personals.set(ctx, personal);
+  }
+  return personal;
 }
 
 /**
@@ -71,7 +98,8 @@ export const notificationsModuleWith =
   (ctx) =>
   async (app) => {
     const service = notificationsServiceFor(ctx);
-    await app.register(notificationsRoutes(service));
+    const personal = personalNotificationsFor(ctx);
+    await app.register(notificationsRoutes(service, personal));
     const translator = new EventTranslator({
       db: ctx.db,
       log: ctx.log.child({ module: 'notifications' }),
@@ -90,7 +118,7 @@ export const notificationsModuleWith =
       cron: '* * * * *',
       handler: async () => {
         for (const event of downloadAlerts.tick()) await service.dispatch(event);
-        const delivered = await service.flushHeld();
+        const delivered = (await service.flushHeld()) + (await personal.flushHeld());
         return delivered > 0 ? `delivered ${delivered} held alert(s)` : undefined;
       },
     });

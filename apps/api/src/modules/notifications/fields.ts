@@ -6,6 +6,9 @@ import {
   ALL_EVENTS,
   LIBRARY_EVENTS,
   MESSAGE_EVENTS,
+  SECRET_LIST_KEYS,
+  SECRET_RECORD_KEYS,
+  SECRET_SETTING_KEYS,
   type NotificationAgentKind,
   type NotificationEventType,
 } from '@arclight/notifications';
@@ -74,22 +77,32 @@ const IMPLEMENTATION_NAMES: Record<NotificationAgentKind, string> = {
   jellyfin: 'Jellyfin',
   emby: 'Emby',
   plex: 'Plex Media Server',
+  slack: 'Slack',
+  teams: 'Microsoft Teams',
+  matrix: 'Matrix',
+  mattermost: 'Mattermost',
+  rocketchat: 'Rocket.Chat',
+  googlechat: 'Google Chat',
+  signal: 'Signal',
+  pushbullet: 'Pushbullet',
+  prowl: 'Prowl',
+  bark: 'Bark',
+  join: 'Join',
+  simplepush: 'SimplePush',
+  homeassistant: 'Home Assistant',
+  mqtt: 'MQTT',
+  twilio: 'Twilio (SMS / WhatsApp)',
+  apprise: 'Apprise API',
+  notifiarr: 'Notifiarr',
+  lunasea: 'LunaSea',
 };
 
-/** Settings keys whose value is a credential. Discord's webhook URL embeds its token. */
-const SECRET_KEYS = new Set([
-  'password',
-  'botToken',
-  'accessToken',
-  'appToken',
-  'apiToken',
-  'apiKey',
-  'authToken',
-  'userKey',
-  'webhookUrl',
-]);
-/** Record-valued settings whose every value is a credential (webhook headers). */
-const SECRET_RECORD_KEYS = new Set(['headers']);
+export function implementationName(kind: NotificationAgentKind): string {
+  return IMPLEMENTATION_NAMES[kind];
+}
+
+/** Settings keys whose value is a credential (from the agent package). Webhook URLs embed their token. */
+const SECRET_KEYS = SECRET_SETTING_KEYS;
 
 /** Fallback when stored settings no longer build an agent (e.g. hand-edited). */
 const STATIC_SUPPORT: Record<NotificationAgentKind, ReadonlySet<NotificationEventType>> = {
@@ -104,6 +117,24 @@ const STATIC_SUPPORT: Record<NotificationAgentKind, ReadonlySet<NotificationEven
   jellyfin: LIBRARY_EVENTS,
   emby: LIBRARY_EVENTS,
   plex: LIBRARY_EVENTS,
+  slack: MESSAGE_EVENTS,
+  teams: MESSAGE_EVENTS,
+  matrix: MESSAGE_EVENTS,
+  mattermost: MESSAGE_EVENTS,
+  rocketchat: MESSAGE_EVENTS,
+  googlechat: MESSAGE_EVENTS,
+  signal: MESSAGE_EVENTS,
+  pushbullet: MESSAGE_EVENTS,
+  prowl: MESSAGE_EVENTS,
+  bark: MESSAGE_EVENTS,
+  join: MESSAGE_EVENTS,
+  simplepush: MESSAGE_EVENTS,
+  homeassistant: MESSAGE_EVENTS,
+  mqtt: ALL_EVENTS,
+  twilio: MESSAGE_EVENTS,
+  apprise: MESSAGE_EVENTS,
+  notifiarr: MESSAGE_EVENTS,
+  lunasea: MESSAGE_EVENTS,
 };
 
 /** Events the agent for `kind` handles with these settings (Emby's `notify` widens it). */
@@ -130,6 +161,8 @@ export function maskSettings(settings: Record<string, unknown>): Record<string, 
       out[key] = NOTIFICATION_SECRET_MASK;
     } else if (SECRET_RECORD_KEYS.has(key) && isRecord(value)) {
       out[key] = Object.fromEntries(Object.keys(value).map((k) => [k, NOTIFICATION_SECRET_MASK]));
+    } else if (SECRET_LIST_KEYS.has(key) && Array.isArray(value)) {
+      out[key] = value.map(() => NOTIFICATION_SECRET_MASK);
     } else {
       out[key] = value;
     }
@@ -156,6 +189,12 @@ export function unmaskSettings(
           v === NOTIFICATION_SECRET_MASK ? (prev[k] === undefined ? [] : [[k, prev[k]]]) : [[k, v]],
         ),
       );
+      continue;
+    }
+    if (SECRET_LIST_KEYS.has(key) && Array.isArray(value)) {
+      // Masked entries keep the stored entry at the same position.
+      const prev = Array.isArray(stored?.[key]) ? (stored[key] as unknown[]) : [];
+      out[key] = value.flatMap((v, i) => (v === NOTIFICATION_SECRET_MASK ? (prev[i] === undefined ? [] : [prev[i]]) : [v]));
       continue;
     }
     out[key] = value;
@@ -207,7 +246,7 @@ function fieldType(name: string, node: JsonSchemaNode): NotificationFieldType {
     default:
       if (node.format === 'uri') return 'url';
       if (node.format === 'email') return 'email';
-      return 'text';
+      return (node.maxLength ?? 0) > 1000 ? 'textarea' : 'text';
   }
 }
 
@@ -225,7 +264,7 @@ export function fieldsFor(kind: NotificationAgentKind): NotificationField[] {
       label: labelFor(name),
       type,
       required: required.has(name),
-      secret: SECRET_KEYS.has(name) || SECRET_RECORD_KEYS.has(name),
+      secret: SECRET_KEYS.has(name) || SECRET_RECORD_KEYS.has(name) || SECRET_LIST_KEYS.has(name),
       ...(node.description ? { helpText: node.description } : {}),
       ...(node.default !== undefined ? { default: node.default } : {}),
       ...(options ? { options: options.map((o) => ({ value: String(o), label: String(o) })) } : {}),
@@ -256,6 +295,11 @@ export function schemaFor(kind: NotificationAgentKind): NotificationSchema {
       respectQuietHours: true,
       tags: [],
       settings: defaults,
+      filters: { mediaTypes: [], qualities: [], users: [] },
+      templates: {},
+      quietHours: null,
+      rateLimitPerMinute: 0,
+      maxAttempts: 3,
     },
     ...caps,
   };

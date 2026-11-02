@@ -4,6 +4,7 @@ import pino from 'pino';
 import { describe, expect, it } from 'vitest';
 import {
   createAgent,
+  NOTIFICATION_AGENT_KINDS,
   NotificationError,
   type MediaInfo,
   type NotificationAgentKind,
@@ -37,6 +38,7 @@ async function setup() {
     db,
     log,
     now: () => new Date('2026-03-01T12:00:00Z'),
+    sleep: async () => {},
     agentFactory: (kind, settings) => {
       const real = createAgent(kind, settings); // validates and gives the real capabilities
       return {
@@ -175,7 +177,7 @@ describe('notification schema', () => {
   it('lists every agent kind with fields generated from the Zod settings schemas', async () => {
     const { service } = await setup();
     const schemas = service.schemas();
-    expect(schemas.map((s) => s.implementation)).toHaveLength(11);
+    expect(schemas.map((s) => s.implementation)).toHaveLength(NOTIFICATION_AGENT_KINDS.length);
     const discord = schemas.find((s) => s.implementation === 'discord')!;
     const url = discord.fields.find((f) => f.name === 'webhookUrl')!;
     expect(url).toMatchObject({ type: 'url', required: true, secret: true });
@@ -279,7 +281,7 @@ describe('dispatch', () => {
     failing.add('https://hooks.example/Bad');
     const outcomes = await service.dispatch(grab());
     expect(outcomes).toEqual([
-      { id: bad.id, name: 'Bad', ok: false, error: 'connection refused' },
+      { id: bad.id, name: 'Bad', ok: false, error: 'connection refused', attempts: 3 },
       expect.objectContaining({ name: 'Good', ok: true }),
     ]);
     expect(sent.map((s) => s.settings['url'])).toEqual(['https://hooks.example/Good']);
@@ -474,7 +476,7 @@ describe('notification routes', () => {
     const { app } = await build();
     const schema = await app.inject({ method: 'GET', url: '/api/v1/notification/schema' });
     expect(schema.statusCode).toBe(200);
-    expect(schema.json()).toHaveLength(11);
+    expect(schema.json()).toHaveLength(NOTIFICATION_AGENT_KINDS.length);
     const test = await app.inject({ method: 'POST', url: '/api/v1/notification/test', payload: webhook('Hook') });
     expect(test.json()).toEqual({ ok: true });
     await app.inject({ method: 'POST', url: '/api/v1/notification', payload: webhook('Hook') });

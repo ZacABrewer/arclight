@@ -1,4 +1,3 @@
-import { formatEvent } from '../format.js';
 import { httpRequest, joinUrl } from '../http.js';
 import type { GotifySettings } from '../settings.js';
 import type { NotificationEvent } from '../types.js';
@@ -26,8 +25,8 @@ export class GotifyAgent extends BaseAgent {
   }
 
   buildPayload(event: NotificationEvent): GotifyPayload {
-    const formatted = formatEvent(event);
-    const message = this.settings.markdown
+    const formatted = this.format(event);
+    const message = this.settings.markdown && !formatted.templated?.body
       ? [
           `**${formatted.subject}**`,
           ...formatted.fields.map((f) => `**${f.name}:** ${f.value}`),

@@ -187,7 +187,7 @@ function arrCommon(app: 'sonarr' | 'radarr'): Record<string, Route> {
         fields: fields({ webHookUrl: 'https://discord.com/api/webhooks/1/abc', username: 'Arr', grabFields: [0, 1] }),
       },
       { id: 2, name: 'Bad Pushover', implementation: 'Pushover', onGrab: true, tags: [], fields: fields({ apiKey: 'short', userKey: 'short' }) },
-      { id: 3, name: 'Slack', implementation: 'Slack', tags: [], fields: fields({ webHookUrl: 'https://hooks.slack.com/x' }) },
+      { id: 3, name: 'Mailgun', implementation: 'Mailgun', tags: [], fields: fields({ apiKey: 'key-x' }) },
     ],
     [`${p}/importlist`]: [
       {

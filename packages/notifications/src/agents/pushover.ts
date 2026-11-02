@@ -1,4 +1,3 @@
-import { formatEvent } from '../format.js';
 import { httpRequest } from '../http.js';
 import type { PushoverSettings } from '../settings.js';
 import type { NotificationEvent } from '../types.js';
@@ -19,7 +18,7 @@ export class PushoverAgent extends BaseAgent {
 
   /** Pushover takes form-encoded fields; returned as a map so tests can read it. */
   buildForm(event: NotificationEvent): Record<string, string> {
-    const formatted = formatEvent(event);
+    const formatted = this.format(event);
     const form: Record<string, string> = {
       token: this.settings.apiToken,
       user: this.settings.userKey,

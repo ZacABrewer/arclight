@@ -181,6 +181,12 @@ That is up to you. Users with an auto-approve permission are approved automatica
 ### Can people ask for subtitles or another audio language?
 Yes. With the **Request subtitles & languages** permission (included in **Request**), a **Request subtitles or audio** button appears on titles in the library. Subtitle requests are approved automatically by default; audio requests wait for a manager. See [Discover and requests](using/discover-and-requests.md#subtitle-and-language-requests).
 
+### Can people get notified on their own Telegram, ntfy or Discord?
+Yes. Every user, including request-portal users, can add their own notification destinations from their profile or portal account, and choose which of their events they want (request approved, declined or available, issue updates, watchlist titles that arrive). They cannot point one at your local network, and you can switch the feature off for everyone in Settings > Notifications. See [Notifications](using/notifications.md#personal-destinations).
+
+### Why are my notifications late or missing?
+Check the connection's delivery log first: it shows sent, failed, held and rate-limited alerts. Quiet hours and a per-minute rate limit hold alerts and send them as one batch; failures such as a timeout or a 5xx answer are retried automatically. See [Notifications are not arriving](TROUBLESHOOTING.md#notifications-not-arriving).
+
 ## Updates and data
 
 ### How do updates work?

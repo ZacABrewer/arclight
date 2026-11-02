@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createAgent, NOTIFICATION_AGENT_KINDS, type NotificationAgentKind } from './index.js';
 import { formatEvent, mediaHeadline } from './format.js';
-import { fakeFetch, fakeSmtp, fakeSpawn, type RecordedCall } from './test-utils.js';
+import { fakeFetch, fakeMqtt, fakeSmtp, fakeSpawn, MINIMAL_SETTINGS, serviceResponder, type RecordedCall } from './test-utils.js';
 import type { GrabEvent, ImportEvent, MediaAddedEvent, MediaInfo, NotificationEvent } from './types.js';
 import type { WebhookPayload } from './agents/webhook.js';
 import { PlexAgent, type PlexSection } from './agents/plex.js';
@@ -159,19 +159,7 @@ const SMTP_OK = [
   '221 bye\r\n',
 ];
 
-const SETTINGS: Record<NotificationAgentKind, unknown> = {
-  discord: { webhookUrl: 'https://discord.com/api/webhooks/1/x' },
-  telegram: { botToken: 't', chatId: '1' },
-  webhook: { url: 'https://example.com/hook' },
-  email: { host: 'smtp.example', from: 'mt@example.com', to: ['ops@example.org'], security: 'none', username: 'u', password: 'p' },
-  'custom-script': { path: '/bin/true' },
-  ntfy: { topics: ['t'] },
-  gotify: { serverUrl: 'http://g', appToken: 'x' },
-  pushover: { apiToken: 'a'.repeat(30), userKey: 'b'.repeat(30) },
-  jellyfin: { host: 'jf', apiKey: 'k' },
-  emby: { host: 'emby', apiKey: 'k', notify: true },
-  plex: { host: 'plex', authToken: 't' },
-};
+const SETTINGS: Record<NotificationAgentKind, unknown> = MINIMAL_SETTINGS;
 
 const PLEX_SECTIONS = {
   MediaContainer: {
@@ -186,8 +174,7 @@ const PLEX_SECTIONS = {
 function server(call: RecordedCall) {
   const url = new URL(call.url);
   if (url.pathname === '/library/sections') return { status: 200, json: PLEX_SECTIONS };
-  if (url.hostname === 'api.telegram.org') return { status: 200, json: { ok: true } };
-  return { status: 200, json: {} };
+  return serviceResponder(call);
 }
 
 describe('every agent handles music and audiobook events', () => {
@@ -196,7 +183,7 @@ describe('every agent handles music and audiobook events', () => {
       const http = fakeFetch(server);
       const spawner = fakeSpawn(({ child }) => child.emit('close', 0, null));
       for (const event of [MUSIC_IMPORT, MUSIC_GRAB, BOOK_IMPORT, ARTIST_ADDED] as NotificationEvent[]) {
-        const agent = createAgent(kind, SETTINGS[kind] as never, { fetch: http.fetch, connect: fakeSmtp(SMTP_OK).connect, spawn: spawner.spawn });
+        const agent = createAgent(kind, SETTINGS[kind] as never, { fetch: http.fetch, connect: fakeSmtp(SMTP_OK).connect, spawn: spawner.spawn, socket: fakeMqtt().socket });
         if (!agent.supportedEvents.has(event.type)) continue;
         await expect(agent.send(event)).resolves.toBeUndefined();
       }

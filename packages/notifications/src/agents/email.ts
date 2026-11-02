@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto';
-import { formatEvent } from '../format.js';
 import type { EmailSettings } from '../settings.js';
 import { connectSmtp, sendMail, type SmtpConnect } from '../smtp.js';
 import type { NotificationEvent } from '../types.js';
@@ -38,7 +37,7 @@ export class EmailAgent extends BaseAgent {
   }
 
   buildMessage(event: NotificationEvent): MailMessage {
-    const formatted = formatEvent(event);
+    const formatted = this.format(event);
     const subject = `${this.settings.subjectPrefix} ${formatted.subject}: ${formatted.title}`.trim();
     const text = `${formatted.title}\r\n\r\n${formatted.body.replace(/\r?\n/g, '\r\n')}\r\n`;
     const domain = this.settings.from.split('@')[1] ?? 'arclight';
