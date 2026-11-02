@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Jellyfin.Plugin.Arclight.Configuration;
 
 namespace Jellyfin.Plugin.Arclight.Api;
 
@@ -18,6 +20,9 @@ public static class ProxyValidation
 
     /// <summary>Maximum issue message length.</summary>
     public const int MaxMessageLength = 5000;
+
+    /// <summary>Longest stats window in days (ten years, as Arclight allows).</summary>
+    public const int MaxStatsDays = 3650;
 
     private static readonly HashSet<string> IssueTypes = new(StringComparer.Ordinal) { "video", "audio", "subtitles", "other" };
 
@@ -57,6 +62,90 @@ public static class ProxyValidation
         }
 
         return "search?q=" + Uri.EscapeDataString(query) + "&type=" + t + "&page=" + p.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Whether a Year in review year is in Arclight's range.</summary>
+    /// <param name="year">Value.</param>
+    /// <returns>True for 2000-2100.</returns>
+    public static bool IsYear(int year) => year is >= 2000 and <= 2100;
+
+    /// <summary>Builds the Arclight playback-stats path, or null when the input is invalid.</summary>
+    /// <param name="scope">"me" or "server".</param>
+    /// <param name="days">Window in days, 1-3650 (default 30).</param>
+    /// <returns>Relative path with query string, or null.</returns>
+    public static string? StatsPath(string scope, int? days)
+    {
+        var d = days ?? 30;
+        if (scope is not ("me" or "server") || d is < 1 or > MaxStatsDays)
+        {
+            return null;
+        }
+
+        return "stats/" + scope + "?days=" + d.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Builds the Arclight Year in review path, or null when the year is out of range.</summary>
+    /// <param name="image">Whether the shareable card image is wanted instead of the data.</param>
+    /// <param name="year">Year (2000-2100), or null for Arclight's default (the current year).</param>
+    /// <returns>Relative path, or null.</returns>
+    public static string? WrappedPath(bool image, int? year)
+    {
+        if (year is { } y && !IsYear(y))
+        {
+            return null;
+        }
+
+        var path = image ? "wrapped/image" : "wrapped";
+        return year is { } v ? path + "?year=" + v.ToString(CultureInfo.InvariantCulture) : path;
+    }
+
+    /// <summary>
+    /// Narrows Arclight's stats access answer by this plugin's toggles. Arclight decides who may see
+    /// what; the plugin's settings can only hide more, never show more.
+    /// </summary>
+    /// <param name="json">Arclight's <c>/stats/access</c> body.</param>
+    /// <param name="config">Plugin settings.</param>
+    /// <returns>The narrowed body, or the input unchanged when it is not a JSON object.</returns>
+    public static string ApplyStatsToggles(string json, PluginConfiguration config)
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return json;
+        }
+
+        if (root is not JsonObject obj)
+        {
+            return json;
+        }
+
+        void Off(string key, bool enabled)
+        {
+            if (!enabled || obj[key] is not JsonValue v || !v.TryGetValue<bool>(out var b))
+            {
+                obj[key] = false;
+            }
+            else
+            {
+                obj[key] = b;
+            }
+        }
+
+        Off("myStats", config.EnableMyStats);
+        Off("wrapped", config.EnableWrapped);
+        Off("shareLinks", config.EnableWrapped);
+        Off("serverStats", config.EnableServerStats);
+        Off("leavingSoon", config.EnableLeavingSoon);
+        if (obj["isAdmin"] is not JsonValue a || !a.TryGetValue<bool>(out _))
+        {
+            obj["isAdmin"] = false;
+        }
+
+        return obj.ToJsonString();
     }
 
     /// <summary>Builds the Arclight request body.</summary>

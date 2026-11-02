@@ -45,6 +45,8 @@ import {
   TranscodeSettings,
   VpnSettings,
   WatchHistorySettings,
+  WatchStatsSettings,
+  CollectionsSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
   type MusicMetadataSettingsResponse,
@@ -138,6 +140,12 @@ const sections = {
   healthScan: HealthScanSettings,
   // Owned by the transcode module: software fallback (routes under /settings/transcode).
   transcode: TranscodeSettings,
+  // Owned by the watch-stats module: what the Jellyfin plugin shows, Wrapped share links and the
+  // weekly newsletter (routes under /settings/watchstats).
+  watchStats: WatchStatsSettings,
+  // Owned by the collections module: Leaving Soon and the servers smart collections sync to
+  // (routes under /settings/collections).
+  collections: CollectionsSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

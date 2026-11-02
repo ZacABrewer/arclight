@@ -72,6 +72,17 @@ export interface MediaBrowserItemInfo {
   episodeNumber: number | null;
 }
 
+export interface MediaBrowserCollection {
+  id: string;
+  name: string;
+  overview: string | null;
+}
+
+/** Item ids per collection add/remove call (keeps the query string short). */
+const COLLECTION_BATCH = 50;
+/** Fields read before an item update, so the update sends them back unchanged. */
+const UPDATE_FIELDS = 'Overview,Genres,Tags,Studios,People,ProviderIds,Taglines,LockedFields,DateCreated,SortName,ForcedSortName,PremiereDate,ProductionYear,OfficialRating,CustomRating';
+
 export interface WatchItemsOptions {
   /**
    * Incremental read: only items whose last play is at or after this ISO time, newest first,
@@ -389,6 +400,91 @@ export class MediaBrowserServerClient implements MediaServerClient {
       }
     }
     return out;
+  }
+
+  // ---- collections (BoxSets; the same endpoints on Jellyfin and Emby) ----------------------
+
+  private async send(method: 'POST' | 'DELETE', path: string, query: Record<string, string> = {}, body?: unknown): Promise<unknown> {
+    return requestJson(this.fetchImpl, this.kind, joinUrl(this.base, path), {
+      method,
+      headers: this.headers(),
+      query,
+      ...(body !== undefined ? { body } : {}),
+      ...(this.timeoutMs !== undefined ? { timeoutMs: this.timeoutMs } : {}),
+    });
+  }
+
+  /** Every collection (BoxSet) on the server. */
+  async collections(): Promise<MediaBrowserCollection[]> {
+    const rows = await this.paged('Items', { Recursive: 'true', IncludeItemTypes: 'BoxSet', Fields: 'Overview' });
+    return rows.flatMap((r) => {
+      const id = str(r['Id']);
+      return id ? [{ id, name: str(r['Name']) ?? id, overview: str(r['Overview']) }] : [];
+    });
+  }
+
+  /** Ids of the items in a collection; null when the collection does not exist (any more). */
+  async collectionItemIds(collectionId: string): Promise<string[] | null> {
+    const found = await this.itemsByIds([collectionId]);
+    if (!found.some((i) => i.type === 'BoxSet')) return null;
+    const rows = await this.paged('Items', { ParentId: collectionId, Fields: 'ProviderIds' });
+    return rows.flatMap((r) => (str(r['Id']) ? [str(r['Id'])!] : []));
+  }
+
+  /** Creates a collection holding `itemIds` (may be empty); returns its id. */
+  async createCollection(name: string, itemIds: readonly string[] = []): Promise<string> {
+    const first = itemIds.slice(0, COLLECTION_BATCH);
+    const body = rec(await this.send('POST', 'Collections', { Name: name, ...(first.length ? { Ids: first.join(',') } : {}) }));
+    const id = str(body['Id']);
+    if (!id) throw new MediaServerError(this.kind, 'remoteError', 'creating the collection returned no id');
+    if (itemIds.length > first.length) await this.addToCollection(id, itemIds.slice(first.length));
+    return id;
+  }
+
+  async addToCollection(collectionId: string, itemIds: readonly string[]): Promise<void> {
+    for (let i = 0; i < itemIds.length; i += COLLECTION_BATCH) {
+      await this.send('POST', `Collections/${encodeURIComponent(collectionId)}/Items`, { Ids: itemIds.slice(i, i + COLLECTION_BATCH).join(',') });
+    }
+  }
+
+  async removeFromCollection(collectionId: string, itemIds: readonly string[]): Promise<void> {
+    for (let i = 0; i < itemIds.length; i += COLLECTION_BATCH) {
+      await this.send('DELETE', `Collections/${encodeURIComponent(collectionId)}/Items`, { Ids: itemIds.slice(i, i + COLLECTION_BATCH).join(',') });
+    }
+  }
+
+  /** Deletes a collection (the BoxSet only; its items stay). Gone already counts as done. */
+  async deleteCollection(collectionId: string): Promise<void> {
+    try {
+      await this.send('DELETE', `Items/${encodeURIComponent(collectionId)}`);
+    } catch (err) {
+      if (err instanceof MediaServerError && err.code === 'notFound') return;
+      throw err;
+    }
+  }
+
+  /**
+   * Sets a collection's overview (the text its page shows). The update endpoint takes the whole
+   * item, so the item is read first and sent back with the new overview, locked so a metadata
+   * refresh keeps it.
+   */
+  async setCollectionOverview(collectionId: string, overview: string): Promise<void> {
+    const body = rec(await this.get('Items', { Ids: collectionId, Fields: UPDATE_FIELDS }));
+    const item = list(body['Items']).map(rec)[0];
+    if (!item) throw new MediaServerError(this.kind, 'notFound', `collection ${collectionId} not found`);
+    const locked = list(item['LockedFields']).flatMap((f) => (typeof f === 'string' ? [f] : []));
+    await this.send('POST', `Items/${encodeURIComponent(collectionId)}`, {}, {
+      ...item,
+      Overview: overview,
+      LockedFields: [...new Set([...locked, 'Overview'])],
+      // Fields the update endpoint iterates over; absent ones would be read as null.
+      Genres: list(item['Genres']),
+      Tags: list(item['Tags']),
+      Studios: list(item['Studios']),
+      People: list(item['People']),
+      ProviderIds: rec(item['ProviderIds']),
+      Taglines: list(item['Taglines']),
+    });
   }
 
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {

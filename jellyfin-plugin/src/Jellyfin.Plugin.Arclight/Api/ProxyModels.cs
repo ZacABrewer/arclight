@@ -101,6 +101,14 @@ public sealed class StatusBody
     public List<string>? ItemIds { get; set; }
 }
 
+/// <summary>Browser body for POST /Arclight/Wrapped/Share.</summary>
+public sealed class WrappedShareBody
+{
+    /// <summary>Gets or sets the Year in review year (2000-2100).</summary>
+    [JsonPropertyName("year")]
+    public int? Year { get; set; }
+}
+
 /// <summary>Admin body for POST /Arclight/Admin/ApiKey.</summary>
 public sealed class ApiKeyBody
 {

@@ -95,6 +95,11 @@
                             <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableLabels" /><span>Quality and audio labels on posters</span></label>
                             <div class="fieldDescription checkboxFieldDescription">4K / 1080p, HDR / Dolby Vision, Atmos / 5.1, read from Jellyfin's own media info. Loaded lazily for visible posters only.</div>
                         </div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableMyStats" /><span>"My stats" page (each user's own watch history)</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableWrapped" /><span>"Year in review" page, image download and share links</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableServerStats" /><span>"Server stats" page</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableLeavingSoon" /><span>"Leaving Soon" row on the Discover page</span></label></div>
+                        <div class="fieldDescription" id="ArclightStatsNote">These four can only hide things. Who may see their own stats, server stats, Year in review, share links and Leaving Soon is set in Arclight under Settings &gt; Stats &amp; collections (<a id="ArclightStatsLink" target="_blank" rel="noopener noreferrer" href="#">/settings/statscollections</a> on your Arclight URL). They need an Arclight release newer than 0.19.0 and stay hidden otherwise.</div>
                     </div>
 
                     <div class="verticalSection">
@@ -149,11 +154,21 @@
                 var page = document.querySelector('#ArclightConfigPage');
                 var checkboxes = ['EnableEventForwarding', 'EnablePlaybackEvents', 'EnableUserDataEvents', 'EnableLibraryEvents', 'EnableUserEvents',
                     'EnableWebInjection', 'PatchIndexHtmlOnDisk', 'EnableSearch', 'EnableRequests', 'EnableItemBadges', 'EnableWatchlist', 'EnableIssues', 'EnableLanguageRequests',
-                    'EnableDiscover', 'EnableUpcoming', 'EnableMyRequests', 'EnableProviders', 'EnableLabels', 'LetUsersChooseTheme',
+                    'EnableDiscover', 'EnableUpcoming', 'EnableMyRequests', 'EnableProviders', 'EnableLabels', 'EnableMyStats', 'EnableWrapped', 'EnableServerStats', 'EnableLeavingSoon', 'LetUsersChooseTheme',
                     'EnableIntro', 'IntroBeforeMovies', 'IntroBeforeEpisodes', 'IntroFirstEpisodeOnly'];
                 var numbers = { BatchIntervalSeconds: [2, 300, 10], ProgressThrottleSeconds: [10, 600, 60], MaxQueueSize: [500, 50000, 5000] };
 
                 function $(id) { return page.querySelector('#' + id); }
+
+                function statsLink() {
+                    var link = $('ArclightStatsLink');
+                    var base = ($('ArclightUrl').value || '').trim().replace(/\/+$/, '');
+                    if (/^https?:\/\/[^\s]+$/i.test(base)) {
+                        link.href = base + '/settings/statscollections';
+                    } else {
+                        link.removeAttribute('href');
+                    }
+                }
 
                 function arclight(method, path, body) {
                     var headers = { 'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"', 'Accept': 'application/json' };
@@ -239,6 +254,7 @@
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                         $('ArclightUrl').value = config.ArclightUrl || '';
+                        statsLink();
                         $('ArclightApiKey').value = '';
                         $('ArclightClearKey').checked = false;
                         checkboxes.forEach(function (k) { $(k).checked = !!config[k]; });
@@ -251,6 +267,8 @@
                         loadStatus();
                     });
                 });
+
+                $('ArclightUrl').addEventListener('input', statsLink);
 
                 $('ArclightTest').addEventListener('click', function () {
                     var out = $('ArclightTestResult');

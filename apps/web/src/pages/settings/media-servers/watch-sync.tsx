@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   JELLYFIN_PLUGIN_MANIFEST_URL,
   type JellyfinPluginKey,
@@ -351,6 +352,11 @@ export function JellyfinPluginSection() {
     >
       <p className="al-caption" style={{ marginTop: 0 }}>
         {t('settings.jellyfinPlugin.intro')}
+      </p>
+      <p className="al-caption" style={{ marginTop: 0 }}>
+        <Link to="/settings/statscollections" className="al-link">
+          {t('settings.jellyfinPlugin.statsLink')}
+        </Link>
       </p>
       <FormRow label={t('settings.jellyfinPlugin.repositoryUrl')} caption={t('settings.jellyfinPlugin.repositoryCaption')}>
         <CopyField value={data?.manifestUrl ?? JELLYFIN_PLUGIN_MANIFEST_URL} label={t('settings.jellyfinPlugin.repositoryUrl')} />

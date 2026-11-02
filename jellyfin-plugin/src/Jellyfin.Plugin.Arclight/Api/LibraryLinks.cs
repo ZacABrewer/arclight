@@ -10,7 +10,10 @@ namespace Jellyfin.Plugin.Arclight.Api;
 /// </summary>
 public static class LibraryLinks
 {
-    /// <summary>Annotates a search/discover page (<c>results</c>), a title (root + <c>recommendations</c>) or a watchlist (<c>items</c>).</summary>
+    /// <summary>
+    /// Annotates a search/discover page (<c>results</c>), a title (root + <c>recommendations</c>), a watchlist or
+    /// Leaving Soon (<c>items</c>), or playback stats / Year in review (<c>topMovies</c>, <c>topSeries</c>).
+    /// </summary>
     /// <param name="json">Arclight response body.</param>
     /// <param name="itemId">Looks up the Jellyfin item for (mediaType, tmdbId).</param>
     /// <returns>The annotated body, or the input unchanged when it is not JSON of the expected shape.</returns>
@@ -32,7 +35,7 @@ public static class LibraryLinks
         }
 
         var changed = Mark(obj, itemId);
-        foreach (var key in new[] { "results", "recommendations", "items" })
+        foreach (var key in new[] { "results", "recommendations", "items", "topMovies", "topSeries" })
         {
             if (obj[key] is JsonArray array)
             {

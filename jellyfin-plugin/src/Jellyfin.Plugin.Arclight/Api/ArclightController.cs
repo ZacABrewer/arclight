@@ -110,16 +110,19 @@ public partial class ArclightController : ControllerBase
     // ---------------------------------------------------------------- per-user proxy
 
     /// <summary>Which UI features are enabled (no secrets).</summary>
-    /// <returns>Feature flags.</returns>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Feature flags, plus the features the connected Arclight advertises (null when unknown).</returns>
     [HttpGet("ClientConfig")]
     [Authorize]
-    public ActionResult GetClientConfig()
+    public async Task<ActionResult> GetClientConfig(CancellationToken ct)
     {
         var c = _settings.Config;
+        var arclightFeatures = _client.IsConfigured ? await _client.GetFeaturesAsync(ct).ConfigureAwait(false) : null;
         return Ok(new
         {
             configured = _client.IsConfigured,
             version = IndexHtmlInjector.Version,
+            arclightFeatures,
             features = new
             {
                 search = c.EnableSearch,
@@ -135,6 +138,10 @@ public partial class ArclightController : ControllerBase
                 labels = c.EnableLabels,
                 themes = c.LetUsersChooseTheme || ThemeChoices.DefaultChoice(c) != ThemeChoices.Off,
                 themeChoice = c.LetUsersChooseTheme,
+                myStats = c.EnableMyStats,
+                wrapped = c.EnableWrapped,
+                serverStats = c.EnableServerStats,
+                leavingSoon = c.EnableLeavingSoon,
             },
         });
     }

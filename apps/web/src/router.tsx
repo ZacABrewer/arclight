@@ -77,10 +77,12 @@ import { UsersPage } from './pages/settings/users/users-page.js';
 import { ProfilePage } from './pages/profile-page.js';
 import { GuidesSettingsPage } from './pages/settings/guides/guides-page.js';
 import { MediaServersPage } from './pages/settings/media-servers/media-servers-page.js';
+import { StatsCollectionsSettingsPage } from './pages/settings/stats-collections/stats-collections-page.js';
 import { SystemFeedsPage } from './pages/system/feeds.js';
 import { SystemStatsPage } from './pages/system/stats/stats-page.js';
 import { SystemAuditPage } from './pages/system/audit/audit-page.js';
 import { RetentionPage } from './pages/library/retention/retention-page.js';
+import { SmartCollectionsPage } from './pages/library/smart-collections/smart-collections-page.js';
 import { HygienePage } from './pages/library/hygiene/hygiene-page.js';
 import { RequestDeepLinkPage, parseRequestActionSearch } from './pages/requests/request-deep-link.js';
 import { CrossSeedSettingsPage } from './pages/settings/cross-seed/cross-seed-settings-page.js';
@@ -88,6 +90,7 @@ import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
 import { WatchHistoryPage } from './features/watch-history/watch-history.js';
+import { PlaybackStatsPage } from './features/watch-stats/playback-stats.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
@@ -259,6 +262,7 @@ export const routeTree = rootRoute.addChildren([
   page('/library/collections', CollectionsPage),
   page('/library/collections/$tmdbId', CollectionDetailPage),
   page('/library/retention', RetentionPage),
+  page('/library/smartcollections', SmartCollectionsPage),
   page('/library/hygiene', HygienePage),
 
   // Discover, requests, issues, watchlist (Phase 4).
@@ -281,6 +285,7 @@ export const routeTree = rootRoute.addChildren([
   page('/activity/crossseed', CrossSeedActivityPage),
   page('/activity/transcode', TranscodeJobsPage),
   page('/activity/watchhistory', WatchHistoryPage),
+  page('/activity/playbackstats', PlaybackStatsPage),
   manualImportRoute,
 
   sectionRedirect('/wanted', '/wanted/missing'),
@@ -308,6 +313,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/tags', TagsSettingsPage),
   page('/settings/guides', GuidesSettingsPage),
   page('/settings/mediaservers', MediaServersPage),
+  page('/settings/statscollections', StatsCollectionsSettingsPage),
   page('/settings/indexers', IndexersPage),
   page('/settings/indexerproxies', IndexerProxiesPage),
   page('/settings/indexeroptions', IndexerOptionsPage),

@@ -391,6 +391,50 @@ a.arclight-genre-chip:hover, a.arclight-genre-chip:focus-visible { background: r
 .arclight-person { display: flex; flex-direction: column; min-width: 0; }
 .arclight-person-img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--arclight-radius); background: rgba(128, 128, 128, 0.2); font-size: 2.5em; display: flex; align-items: center; justify-content: center; }
 
+/* Stats, Year in review, Leaving Soon */
+.arclight-chip-leaving { border-color: var(--arclight-warn); background: rgba(239, 108, 0, 0.85); color: #fff; }
+.arclight-stats-tabs { margin: 0 0 1em; }
+.arclight-stats-tabs a.arclight-toggle-btn { text-decoration: none; color: inherit; }
+.arclight-stats-body { margin-top: 1em; }
+.arclight-empty { padding: 2em 0; }
+.arclight-stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10em, 1fr)); gap: 0.8em; margin: 0.5em 0 1.5em; }
+.arclight-stat { padding: 0.8em 1em; border-radius: var(--arclight-radius); background: rgba(128, 128, 128, 0.12); min-width: 0; }
+.arclight-stat-value { font-size: 1.5em; font-weight: 600; overflow-wrap: anywhere; }
+.arclight-stat-label { opacity: 0.7; font-size: 0.9em; margin-top: 0.2em; }
+.arclight-stats-columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(20em, 1fr)); gap: 0 2em; }
+.arclight-stats-section { min-width: 0; }
+.arclight-toplist { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 0.35em; }
+.arclight-toplist-row { display: flex; justify-content: space-between; gap: 1em; }
+.arclight-toplist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
+.arclight-toplist-meta { opacity: 0.7; white-space: nowrap; font-size: 0.9em; }
+.arclight-barlist { display: flex; flex-direction: column; gap: 0.4em; }
+.arclight-barlist-row { display: grid; grid-template-columns: minmax(5em, 9em) 1fr auto; gap: 0.7em; align-items: center; }
+.arclight-barlist-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arclight-barlist-track { height: 0.6em; border-radius: var(--arclight-radius); background: rgba(128, 128, 128, 0.15); overflow: hidden; }
+.arclight-barlist-fill { height: 100%; background: var(--arclight-accent); border-radius: var(--arclight-radius); }
+.arclight-barlist-value { opacity: 0.7; font-size: 0.85em; white-space: nowrap; }
+.arclight-columns { display: flex; align-items: flex-end; gap: 2px; height: 9em; padding-bottom: 1.4em; position: relative; }
+.arclight-column { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
+.arclight-column-fill { background: var(--arclight-accent); border-radius: 2px 2px 0 0; min-height: 0; }
+.arclight-column:hover .arclight-column-fill { opacity: 0.75; }
+.arclight-column-label { position: absolute; top: 100%; left: 0; font-size: 0.75em; opacity: 0.7; white-space: nowrap; padding-top: 0.3em; }
+.arclight-heatmap { display: flex; flex-direction: column; gap: 2px; max-width: 48em; overflow-x: auto; }
+.arclight-heat-row { display: grid; grid-template-columns: 3em repeat(24, minmax(0.7em, 1fr)); gap: 2px; align-items: center; }
+.arclight-heat-day, .arclight-heat-hour { font-size: 0.75em; opacity: 0.7; white-space: nowrap; }
+.arclight-heat-cell { aspect-ratio: 1; border-radius: 2px; background: var(--arclight-accent); }
+.arclight-heat-cell.arclight-heat-empty { background: rgba(128, 128, 128, 0.12); }
+.arclight-year-picker { cursor: default; max-width: 14em; }
+.arclight-year-select { width: auto; }
+.arclight-wrapped-name { font-size: 1.4em; margin: 0.4em 0 0.2em; }
+.arclight-wrapped-percentile { margin: -0.6em 0 1.2em; font-weight: 600; color: var(--arclight-accent); }
+.arclight-wrapped-card { max-width: 32em; }
+.arclight-wrapped-img { display: block; width: 100%; height: auto; border-radius: calc(var(--arclight-radius) * 2); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.35); }
+.arclight-wrapped-actions { display: flex; flex-wrap: wrap; gap: 0.6em; margin: 1em 0; }
+.arclight-wrapped-actions a.arclight-btn { text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 0.4em; }
+.arclight-wrapped-share { max-width: 40em; }
+.arclight-wrapped-share .arclight-row { cursor: default; }
+.arclight-share-url { flex: 1 1 auto; min-width: 0; }
+
 @media (max-width: 40em) {
   .arclight-grid { grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr)); gap: 1em 0.7em; }
   .arclight-action-label { display: none; }
@@ -404,6 +448,13 @@ a.arclight-genre-chip:hover, a.arclight-genre-chip:focus-visible { background: r
   .arclight-hero-title { font-size: 1.6em; }
   .arclight-grid-page { grid-template-columns: repeat(auto-fill, minmax(7em, 1fr)); }
   .arclight-season { grid-template-columns: 1fr auto; }
+  .arclight-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6em; }
+  .arclight-stat-value { font-size: 1.2em; }
+  .arclight-stats-columns { grid-template-columns: minmax(0, 1fr); }
+  .arclight-barlist-row { grid-template-columns: minmax(4em, 7em) 1fr; }
+  .arclight-barlist-value { grid-column: 1 / -1; margin-top: -0.3em; }
+  .arclight-heat-row { grid-template-columns: 2.4em repeat(24, minmax(0.45em, 1fr)); gap: 1px; }
+  .arclight-columns { height: 7em; }
 }
 
 @media (prefers-reduced-motion: reduce) {

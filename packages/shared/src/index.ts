@@ -68,3 +68,5 @@ export * from './search.js';
 export * from './tag-rules.js';
 export * from './list-search.js';
 export * from './release-dates.js';
+export * from './watch-stats.js';
+export * from './smart-collections.js';

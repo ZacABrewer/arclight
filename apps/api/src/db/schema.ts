@@ -70,3 +70,5 @@ export * from '../modules/transfer-metrics/schema.js';
 export * from '../modules/profile-migration/schema.js';
 export * from '../modules/additional-languages/schema.js';
 export * from '../modules/tag-rules/schema.js';
+export * from '../modules/watch-stats/schema.js';
+export * from '../modules/collections/schema.js';

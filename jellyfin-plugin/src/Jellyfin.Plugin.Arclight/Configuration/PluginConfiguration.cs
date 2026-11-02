@@ -79,6 +79,18 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets a value indicating whether quality/audio labels are shown on posters.</summary>
     public bool EnableLabels { get; set; } = true;
 
+    /// <summary>Gets or sets a value indicating whether the "My stats" page is available (Arclight decides who may see it).</summary>
+    public bool EnableMyStats { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether the "Year in review" page is available (Arclight decides who may see it).</summary>
+    public bool EnableWrapped { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether the "Server stats" page is available (Arclight decides who may see it).</summary>
+    public bool EnableServerStats { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether the "Leaving Soon" Discover row is shown (when on in Arclight).</summary>
+    public bool EnableLeavingSoon { get; set; } = true;
+
     /// <summary>Gets or sets the default Jellyfin theme: empty = off, "follow" = each user's Arclight theme, or a pack id.</summary>
     public string DefaultTheme { get; set; } = string.Empty;
 

@@ -211,6 +211,34 @@ Good to know:
 
 Open a collection to see which movies are in your library and which are not ("Not in library"). **Monitor collection (N missing)** adds the missing movies as monitored, using the root folder, quality profile and minimum availability you choose, and can **Search for each movie right away**. It needs a movie root folder under **Settings > Media Management**; a message tells you if there is none. You can also add a single movie from the collection with its **Add** button.
 
+## Smart collections
+
+**Library > Smart collections** (`/library/smartcollections`, admins) builds collections from rules and keeps them up to date as collections (box sets) in Jellyfin and Emby. A rule can match:
+
+- **genres** (any or all of them), and genres to leave out;
+- **release years** (for a decade, 1990 to 1999);
+- **studio or network**;
+- **TMDB collections** (movies);
+- a **TMDB list**: trending this week, popular or top rated (the first 100 titles, matched against your library);
+- a **minimum rating** (TMDB, else IMDb) and **added within** a number of days;
+- **watch status**: unwatched by anyone, watched by someone, or in progress (from the watch history).
+
+Choose movies, series or both, the sort order (date added, title, year, rating, most played or list order) and an optional limit. The editor shows the matching titles as you type. Only titles with files on disk are included.
+
+The `CollectionsSync` task (hourly, or **Sync now**) creates, fills and empties the collections on every enabled Jellyfin and Emby server, or only on the servers chosen in **Settings > Stats & collections**. Titles are matched to the server's items by TMDB, TVDB or IMDb id. Titles the server does not have are counted as "missing". Each rule shows per server how many items it holds, how many are missing and the last error.
+
+Arclight only removes collections it created. Deleting or turning off a rule, or deselecting a server, deletes that collection on the next sync. An existing collection with exactly the same name is taken over instead of making a second one. Renaming a rule replaces its collection with one under the new name. Plex is not supported.
+
+## Leaving Soon
+
+**Leaving Soon** shows what [retention](#retention) is about to delete: titles staged by an enabled rule that is not a dry run, whose action deletes files, and whose grace period ends within the next N days (14 by default). Turn it on in **Settings > Stats & collections**. It then appears:
+
+- on **Library > Smart collections**, with the date each title leaves;
+- as a **Leaving Soon** collection in Jellyfin and Emby, kept in sync by the same task (the collection's description lists the dates);
+- as a **Leaving Soon** row on the Jellyfin plugin's Discover page, with the date on each poster. Turn off **Show in Jellyfin** to hide the row.
+
+Keeping a candidate takes it off the list on the next sync. Posters are not changed.
+
 ## Retention
 
 **Library > Retention** (administrators) is for freeing disk space automatically. Rules look at your library and, once a title has been watched or has gone stale, stage it for unmonitoring or deletion. Nothing disappears without a waiting period during which you can keep it.

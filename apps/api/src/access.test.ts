@@ -186,6 +186,16 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/watchlist': 'portal',
   // Own watch history (the query scopes non-admins to their linked accounts).
   'GET /api/v1/watchhistory': 'portal',
+  // ---- playback stats and Year in review: the caller's own (admins anyone); share links
+  'GET /api/v1/watchstats': 'portal',
+  'GET /api/v1/watchstats/wrapped': 'portal',
+  'GET /api/v1/watchstats/wrapped/image.svg': 'portal',
+  'GET /api/v1/watchstats/wrapped/shares': 'portal',
+  'POST /api/v1/watchstats/wrapped/shares': 'portal',
+  'DELETE /api/v1/watchstats/wrapped/shares/:id': 'portal',
+  // Public Year in review share links (random token, expire, revocable)
+  'GET /api/v1/share/wrapped/:token': 'publicWhen',
+  'GET /api/v1/share/wrapped/:token/image.svg': 'publicWhen',
   'POST /api/v1/watchlist': 'portal',
   'DELETE /api/v1/watchlist/:id': 'portal',
 
