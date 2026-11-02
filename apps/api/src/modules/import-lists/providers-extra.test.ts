@@ -560,6 +560,24 @@ describe('IMDb Top Rated (official dataset)', () => {
     expect(IMDB_RATINGS_URL).toContain('datasets.imdbws.com');
     expect(ANIME_IDS_URL).toContain('Anime-IDs');
   });
+
+  it('walks past a long run of top-rated episodes to fill the list', async () => {
+    const episodes = Array.from({ length: 300 }, (_, i) => `tt5${String(i).padStart(6, '0')}\t9.${String(9 - (i % 9))}\t${200000 - i}`);
+    const rows = ['tconst\taverageRating\tnumVotes', ...episodes, 'tt0111161\t8.0\t3000000'].join('\n');
+    const fetch = fakeFetch([
+      TMDB_CONFIGURATION,
+      [/datasets\.imdbws\.com\/title\.ratings\.tsv\.gz$/, () => new Response(gzipSync(rows))],
+      [
+        /themoviedb\.org\/3\/find\/(tt\d+)$/,
+        (url) =>
+          url.pathname.endsWith('tt0111161')
+            ? { movie_results: [searchResult(278, 'The Shawshank Redemption', { release_date: '1994-09-23' })], tv_results: [] }
+            : { movie_results: [], tv_results: [], tv_episode_results: [{ id: 1 }] },
+      ],
+    ]);
+    const items = await providers.imdbTop(ImdbTopSettings.parse({ minVotes: 1000, limit: 1 }), 'movie', providerCtx(fetch, { ids: memoryIds() }));
+    expect(items.map((i) => i.tmdbId)).toEqual([278]);
+  });
 });
 
 describe('TMDB extras', () => {

@@ -108,7 +108,11 @@ export const imdbList: Provider<'imdbList'> = async (settings, mediaType, ctx) =
 
 export const IMDB_RATINGS_URL = 'https://datasets.imdbws.com/title.ratings.tsv.gz';
 const IMDB_RATINGS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const RESOLVE_CONCURRENCY = 4;
+const RESOLVE_CONCURRENCY = 8;
+// Uncached TMDB lookups per run. Episodes dominate the top of the ratings file (often the first
+// several hundred titles), so the walk goes deep on the first run; hits and misses are cached, so
+// later runs cost almost nothing.
+const MAX_LOOKUPS_PER_RUN = 2500;
 const NL = String.fromCharCode(10);
 const TAB = String.fromCharCode(9);
 
@@ -165,12 +169,13 @@ export const imdbTop: Provider<'imdbTop'> = async (s: ImdbTopSettings, mediaType
     throw new ImportListFetchError('bad-response', 'the IMDb ratings dataset is not a gzip file', { cause });
   }
   const candidates = parseImdbRatings(tsv, s.minVotes);
-  // Most top-rated titles are episodes when unfiltered; resolve in batches until the list is full.
-  const budget = Math.min(candidates.length, s.limit * 4);
+  // Walk the ranking in batches until the list is full or the lookup budget is spent.
   const out: FetchedItem[] = [];
   const batch = Math.max(RESOLVE_CONCURRENCY * 5, s.limit);
-  for (let i = 0; i < budget && out.length < s.limit; i += batch) {
-    const slice = candidates.slice(i, Math.min(i + batch, budget));
+  let lookups = 0;
+  for (let i = 0; i < candidates.length && out.length < s.limit && lookups < MAX_LOOKUPS_PER_RUN; i += batch) {
+    const slice = candidates.slice(i, i + batch);
+    lookups += slice.filter((c) => !ctx.ids.get('imdb', c.imdbId)).length;
     const items = await mapLimit(slice, RESOLVE_CONCURRENCY, (c) => resolveImdb(ctx, c.imdbId));
     for (const item of items) {
       if (item && wants(mediaType, item.mediaType)) out.push(item);
