@@ -517,7 +517,9 @@ describe('helper process limits', () => {
     const files = [1, 2, 3].map((n) => blob(dir, `e${n}.mkv`));
     const a = cache.thumbnail(1, files[0]!, 60_000);
     const b = cache.thumbnail(2, files[1]!, 60_000);
-    await waitFor(() => pending.length === 1);
+    // Each call does some file work before it reaches the limiter: wait until the first runs and
+    // the second waits, so the third (not the second, under a loaded suite) is the one refused.
+    await waitFor(() => pending.length === 1 && cache.limiter.waiting === 1);
     await expect(cache.thumbnail(3, files[2]!, 60_000)).rejects.toMatchObject({ code: 'BUSY' });
     pending.shift()!();
     await a;
@@ -633,6 +635,20 @@ describe('browse, watched and search', () => {
     await h.app.inject({ method: 'PUT', url: `/api/v1/playback/progress/movie:${movie.id}`, headers: { cookie: user.cookie }, payload: { event: 'progress', positionMs: 60_000, durationMs: 600_000, deviceId: 'test', clientTime: NOW } });
     expect((await get(h, '/api/v1/playback/continue', user.cookie)).json().items).toEqual([]);
     expect((await get(h, '/api/v1/playback/video/home', user.cookie)).json().continueWatching.map((c: { itemKey: string }) => c.itemKey)).toEqual([`movie:${movie.id}`]);
+  });
+
+  it('continue watching shows a series once, at its most recently played episode', async () => {
+    const h = await harness();
+    const user = await signIn(h);
+    const { movie } = addMovie(h.db, { title: 'Alpha', tmdbId: 10, files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const { episodes } = addSeries(h.db);
+    const report = (key: string, clientTime: string) =>
+      h.app.inject({ method: 'PUT', url: `/api/v1/playback/progress/${key}`, headers: { cookie: user.cookie }, payload: { event: 'progress', positionMs: 60_000, durationMs: 600_000, deviceId: 'test', clientTime } });
+    await report(`episode:${episodes[0]!.id}`, '2026-05-01T09:00:00.000Z');
+    await report(`movie:${movie.id}`, '2026-05-01T10:00:00.000Z');
+    await report(`episode:${episodes[1]!.id}`, '2026-05-01T11:00:00.000Z');
+    const row = (await get(h, '/api/v1/playback/video/home', user.cookie)).json().continueWatching.map((c: { itemKey: string }) => c.itemKey);
+    expect(row).toEqual([`episode:${episodes[1]!.id}`, `movie:${movie.id}`]);
   });
 
   it('restrictions apply to lists and search', async () => {
