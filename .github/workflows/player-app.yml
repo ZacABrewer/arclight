@@ -1,8 +1,8 @@
 name: Player app
 
-# Builds the Arclight listening app (apps/player, Capacitor) for Android and iOS.
-# Every run: typecheck + unit tests, an Android debug APK and an unsigned iOS simulator build
-# (proves both native projects and their player plugins compile). The app reuses the web
+# Builds the Arclight listening app (apps/player, Capacitor) for Android.
+# Every run: typecheck + unit tests and an Android debug APK (proves the native project and its
+# player plugin compile). The iOS simulator build is in player-app-ios.yml. The app reuses the web
 # player (apps/web/src/features/player) and the shared contracts, so changes there run it too.
 
 on:
@@ -73,35 +73,3 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ios:
-    runs-on: macos-latest
-    timeout-minutes: 60
-    env:
-      CI: 'true'
-    defaults:
-      run:
-        working-directory: apps/player
-    steps:
-      - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-      - name: Enable corepack (pnpm from packageManager)
-        run: corepack enable
-        working-directory: .
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        working-directory: .
-      - name: Build web assets
-        run: pnpm build
-      - name: Capacitor sync
-        run: npx cap sync ios
-      - name: Unsigned simulator build
-        run: |
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -n 50
-          test "${PIPESTATUS[0]}" -eq 0
