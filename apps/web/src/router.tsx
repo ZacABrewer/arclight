@@ -281,6 +281,13 @@ const playerSectionRoutes = [
   playerBrowse('books', () => import('./features/player/browse/books.js'), 'BooksHomePage'),
   playerBrowse('books/$bookId', () => import('./features/player/browse/book-page.js'), 'BookPage'),
   playerBrowse('search', () => import('./features/player/browse/search-page.js'), 'PlayerSearchPage'),
+  playerBrowse('watch', () => import('./features/player/video/watch-home.js'), 'WatchHomePage'),
+  playerBrowse('watch/movies', () => import('./features/player/video/library.js'), 'MoviesPage'),
+  playerBrowse('watch/movies/$id', () => import('./features/player/video/movie-page.js'), 'MovieDetailsPage'),
+  playerBrowse('watch/shows', () => import('./features/player/video/library.js'), 'ShowsPage'),
+  playerBrowse('watch/shows/$id', () => import('./features/player/video/show-page.js'), 'ShowDetailsPage'),
+  playerBrowse('watch/play/$itemKey', () => import('./features/player/video/player-page.js'), 'VideoPlayerPage'),
+  playerBrowse('link', () => import('./features/player/video/link-page.js'), 'SignInTvPage'),
 ];
 
 // Notification deep links: /requests/:id?action=approve|decline.
