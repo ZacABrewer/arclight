@@ -466,8 +466,10 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
 
   const owner = ownerOfBrowse(user);
   if (owner !== null) {
-    // Continue watching: the newest unfinished movies and episodes.
-    const resume = [...ctx.progress.inProgress(owner, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(owner, HOME_ROW * 2, 'episode')].sort((a, b) =>
+    // Continue watching: the newest unfinished movies and episodes, one card per series (its
+    // most recently played episode; a show with two episodes started shows once). More
+    // episodes are read than the row holds so the dedupe still fills it.
+    const resume = [...ctx.progress.inProgress(owner, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(owner, HOME_ROW * 5, 'episode')].sort((a, b) =>
       (b.lastPlayedAt ?? '').localeCompare(a.lastPlayedAt ?? ''),
     );
     const resumeEpisodes = episodesWithSeries(
@@ -475,6 +477,7 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
       r,
       resume.flatMap((p) => (p.itemKey.startsWith('episode:') ? [Number(p.itemKey.slice(8))] : [])),
     );
+    const resumedSeries = new Set<number>();
     for (const p of resume) {
       if (home.continueWatching.length >= HOME_ROW) break;
       const id = Number(p.itemKey.split(':')[1]);
@@ -483,7 +486,9 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
         if (m) home.continueWatching.push(movieCard(ctx, m, p));
       } else {
         const e = resumeEpisodes.get(id);
-        if (e) home.continueWatching.push(episodeCard(ctx, e.episode, e.show, p));
+        if (!e || resumedSeries.has(e.show.id)) continue;
+        resumedSeries.add(e.show.id);
+        home.continueWatching.push(episodeCard(ctx, e.episode, e.show, p));
       }
     }
 
