@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { APP_VERSION } from '../config';
-import { ApiError, appApi, resetArtworkLink, SIGN_IN_ERRORS, type AppDeviceInfo, type AppSignInResponse } from './api';
+import { ApiError, appApi, isInsecureTransportError, resetArtworkLink, SIGN_IN_ERRORS, type AppDeviceInfo, type AppSignInResponse } from './api';
 import type { Account, AccountStore } from './accounts';
 import { normalisePairCode, PAIR_CODE_PATTERN } from './qr';
 import { getSession } from './session';
@@ -38,12 +38,14 @@ export type SignInFailure =
   | 'pairing-required'
   | 'two-factor-setup'
   | 'network'
+  | 'insecure'
   | 'unknown';
 
 /** Maps an API error to what the sign-in screens show (`message` is the server's, for "unknown"). */
 export function signInFailure(err: unknown): { reason: SignInFailure; message: string } {
   const message = err instanceof Error ? err.message : String(err);
   if (!(err instanceof ApiError)) return { reason: 'unknown', message };
+  if (isInsecureTransportError(err)) return { reason: 'insecure', message };
   if (err.status === 0) return { reason: 'network', message };
   switch (err.code) {
     case SIGN_IN_ERRORS.totpRequired:

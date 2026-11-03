@@ -164,5 +164,17 @@
   "app.tv.settings.size.medium": "Normaal",
   "app.tv.settings.size.large": "Groot",
   "app.error.serverTimeout": "{host} heeft niet binnen {seconds} seconden geantwoord. Controleer of de server draait en of dit apparaat op het juiste netwerk zit.",
-  "app.error.serverUnreachable": "{host} is niet bereikbaar. Controleer of de server draait en of dit apparaat op het juiste netwerk zit."
+  "app.error.serverUnreachable": "{host} is niet bereikbaar. Controleer of de server draait en of dit apparaat op het juiste netwerk zit.",
+  "app.serverCheck.server": "Server",
+  "app.serverCheck.secure": "Versleutelde verbinding (https)",
+  "app.serverCheck.plain": "Onversleutelde verbinding (http)",
+  "app.serverCheck.lanNotice": "Het verkeer op je netwerk is niet versleuteld. Iedereen op hetzelfde netwerk kan zien wat je afspeelt.",
+  "app.serverCheck.publicWarning": "Deze server staat op internet en gebruikt geen HTTPS. Je aanmelding en alles wat je afspeelt gaan onversleuteld over het netwerk, en iedereen onderweg kan meelezen.",
+  "app.serverCheck.downgrade": "{host} gebruikte eerder een versleutelde verbinding. Dit adres verbindt zonder versleuteling.",
+  "app.serverCheck.typeHost": "Typ {host} om toch te verbinden",
+  "app.serverCheck.savedTitle": "Bevestig je server",
+  "app.serverCheck.savedBody": "Je server is via internet zonder versleuteling bereikbaar. Arclight vraagt nu één keer voordat je aanmelding zo wordt verstuurd.",
+  "app.serverCheck.continue": "Doorgaan",
+  "app.error.insecureServer": "Arclight stuurt je aanmelding pas onversleuteld naar {host} als je dat toestaat.",
+  "app.signIn.error.insecure": "Sta eerst de onversleutelde verbinding met deze server toe."
 }

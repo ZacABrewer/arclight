@@ -5,6 +5,7 @@ import { ApiError, setFetch } from './api';
 import { startDeviceCodeSignIn, verifyLink, type DeviceCodeApi, type DeviceCodeState } from './device-code';
 import { memoryStore } from './kv';
 import { getSession, setSession } from './session';
+import { transportPolicy } from './transport';
 import { fakeFetch } from '../test/fetch';
 
 const SERVER = 'http://arclight.example.com:7878';
@@ -180,6 +181,8 @@ describe('device-code sign-in', () => {
       'POST /app/device-codes/poll': { json: approved },
     });
     setFetch(impl);
+    // Plain http to an internet host: the user allowed it first (core/transport.ts).
+    await transportPolicy.confirm(SERVER);
     startDeviceCodeSignIn(store, SERVER, (s) => states.push(s), { device, now });
     await vi.advanceTimersByTimeAsync(0);
     await advance(5_000);

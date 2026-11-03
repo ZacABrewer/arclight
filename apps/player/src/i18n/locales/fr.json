@@ -164,5 +164,17 @@
   "app.tv.settings.size.medium": "Moyenne",
   "app.tv.settings.size.large": "Grande",
   "app.error.serverTimeout": "{host} n'a pas répondu en {seconds} secondes. Vérifiez que le serveur fonctionne et que cet appareil est sur le bon réseau.",
-  "app.error.serverUnreachable": "Impossible de joindre {host}. Vérifiez que le serveur fonctionne et que cet appareil est sur le bon réseau."
+  "app.error.serverUnreachable": "Impossible de joindre {host}. Vérifiez que le serveur fonctionne et que cet appareil est sur le bon réseau.",
+  "app.serverCheck.server": "Serveur",
+  "app.serverCheck.secure": "Connexion chiffrée (https)",
+  "app.serverCheck.plain": "Connexion non chiffrée (http)",
+  "app.serverCheck.lanNotice": "Le trafic sur votre réseau n'est pas chiffré. Toute personne sur le même réseau pourrait voir ce que vous écoutez.",
+  "app.serverCheck.publicWarning": "Ce serveur est sur Internet et n'utilise pas HTTPS. Votre connexion et tout ce que vous lisez circuleraient sans chiffrement, et n'importe qui sur le trajet pourrait les lire.",
+  "app.serverCheck.downgrade": "{host} utilisait auparavant une connexion chiffrée. Cette adresse se connecte sans chiffrement.",
+  "app.serverCheck.typeHost": "Pour vous connecter quand même, saisissez {host}",
+  "app.serverCheck.savedTitle": "Confirmez votre serveur",
+  "app.serverCheck.savedBody": "Votre serveur est joint par Internet sans chiffrement. Arclight demande désormais une fois avant d'envoyer ainsi votre connexion.",
+  "app.serverCheck.continue": "Continuer",
+  "app.error.insecureServer": "Arclight n'envoie pas votre connexion à {host} sans chiffrement tant que vous ne l'autorisez pas.",
+  "app.signIn.error.insecure": "Autorisez d'abord la connexion non chiffrée à ce serveur."
 }

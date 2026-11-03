@@ -1,13 +1,16 @@
 import { Capacitor } from '@capacitor/core';
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 import type { User } from '@arclight/shared';
+import { ArclightVault } from '../native/vault';
 import { preferencesStore, readJson, writeJson, type KeyValueStore } from './kv';
 import { setSession, type Session } from './session';
 
 // The servers and accounts this install is signed in to. Several are allowed (home server,
 // a friend's server, two users on one server); one is active. The list (no secrets) lives in
-// Preferences; each device token lives in the platform's secure store (Keychain / Android
-// Keystore-backed storage via @capgo/capacitor-native-biometric), never in Preferences.
+// Preferences; each device token lives in the platform's secure store, never in Preferences:
+// Android Keystore-backed storage via @capgo/capacitor-native-biometric, and on iOS the app's own
+// Keychain plugin (this device only, readable after first unlock), which takes over the tokens
+// earlier versions kept through the biometric plugin.
 
 export interface Account {
   /** Local id ("a_<random>"). */
@@ -62,6 +65,66 @@ export const secureVault: TokenVault = {
   },
 };
 
+/** iOS: the app's own Keychain items (ios/App/App/TokenVaultPlugin.swift). */
+export const deviceOnlyVault: TokenVault = {
+  get: async (accountId) => (await ArclightVault.get({ id: accountId })).value || null,
+  set: (accountId, token) => ArclightVault.set({ id: accountId, value: token }),
+  remove: (accountId) => ArclightVault.remove({ id: accountId }),
+};
+
+/** Capacitor's "this plugin / method is not in this build". */
+const isUnimplemented = (e: unknown) => {
+  const code = (e as { code?: string } | null)?.code;
+  return code === 'UNIMPLEMENTED' || code === 'UNAVAILABLE';
+};
+
+/**
+ * `next`, taking over what `legacy` holds: a token found only in `legacy` is copied to `next` and
+ * then deleted from `legacy` (kept there when the copy fails, so nobody is signed out). When
+ * `next` is not in this build at all, `legacy` keeps working on its own.
+ */
+export function migratingVault(next: TokenVault, legacy: TokenVault): TokenVault {
+  let unavailable = false;
+  const viaNext = async <T>(run: () => Promise<T>, fallback: () => Promise<T>): Promise<T> => {
+    if (unavailable) return fallback();
+    try {
+      return await run();
+    } catch (err) {
+      if (!isUnimplemented(err)) throw err;
+      unavailable = true;
+      return fallback();
+    }
+  };
+  return {
+    async get(accountId) {
+      const current = await viaNext(
+        () => next.get(accountId),
+        async () => undefined,
+      );
+      if (current) return current;
+      const old = await legacy.get(accountId);
+      if (!old || current === undefined) return old;
+      try {
+        await next.set(accountId, old);
+        await legacy.remove(accountId);
+      } catch {
+        /* keep the old copy; moved on a later read */
+      }
+      return old;
+    },
+    async set(accountId, token) {
+      await viaNext(
+        () => next.set(accountId, token),
+        () => legacy.set(accountId, token),
+      );
+      if (!unavailable) await legacy.remove(accountId).catch(() => undefined);
+    },
+    async remove(accountId) {
+      await Promise.all([viaNext(() => next.remove(accountId), async () => undefined), legacy.remove(accountId)]);
+    },
+  };
+}
+
 export function memoryVault(): TokenVault & { data: Map<string, string> } {
   const data = new Map<string, string>();
   return {
@@ -86,7 +149,8 @@ function devVault(): TokenVault {
 }
 
 export function defaultVault(): TokenVault {
-  return Capacitor.isNativePlatform() ? secureVault : devVault();
+  if (!Capacitor.isNativePlatform()) return devVault();
+  return Capacitor.getPlatform() === 'ios' ? migratingVault(deviceOnlyVault, secureVault) : secureVault;
 }
 
 function newId(): string {
@@ -181,6 +245,17 @@ export class AccountStore {
     this.ensureLoaded();
     if (!this.accounts.some((a) => a.id === accountId)) throw new Error(`Unknown account ${accountId}`);
     this.activeId = accountId;
+    await this.save();
+  }
+
+  /**
+   * The server moved to another base URL (an http:// server that also answers over https://):
+   * every account on `from` now uses `to`. Tokens are per server, not per URL, so they stay.
+   */
+  async moveServer(from: string, to: string): Promise<void> {
+    this.ensureLoaded();
+    if (from === to || !this.accounts.some((a) => a.serverUrl === from)) return;
+    this.accounts = this.accounts.map((a) => (a.serverUrl === from ? { ...a, serverUrl: to } : a));
     await this.save();
   }
 

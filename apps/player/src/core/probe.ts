@@ -1,5 +1,6 @@
 import { PROBE_TIMEOUT_MS } from '../config';
 import { candidateUrls, isInsecurePublic, normalizeBaseUrl, parseAddress } from './address';
+import { transportOf } from './transport';
 
 // Is there an Arclight server at this base URL?
 //   GET /api/v1/system/ping   -> 200 { status: "ok" }                          (public)
@@ -107,4 +108,25 @@ export async function connect(fetchImpl: FetchLike, input: string, timeoutMs = P
   const reasons = results.map((r) => (r.ok ? 'unreachable' : r.reason));
   const reason = FAILURE_PRIORITY.find((p) => reasons.includes(p)) ?? 'unreachable';
   return { ok: false, reason, message: `app.addServer.error.${reason}`, tried, host: parsed.host + (parsed.port ? `:${parsed.port}` : '') };
+}
+
+/**
+ * The https:// address of an http:// server, when Arclight answers there: the same port first,
+ * then the default port (a reverse proxy in front of :7878). Null when none answers, or `url` is
+ * already https.
+ */
+export async function findHttps(fetchImpl: FetchLike, url: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<string | null> {
+  if (transportOf(url) === 'https') return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const path = u.pathname.replace(/\/+$/, '');
+  const bareHost = u.host.replace(/:\d+$/, '');
+  const tries = [...new Set([`https://${u.host}${path}`, `https://${bareHost}${path}`])];
+  const results = await Promise.all(tries.map((t) => probeServer(fetchImpl, t, timeoutMs)));
+  const hit = results.find((r) => r.ok && transportOf(r.url) === 'https');
+  return hit ? hit.url : null;
 }

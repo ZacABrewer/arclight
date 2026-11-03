@@ -21,7 +21,6 @@
   "app.addServer.addressHint": "For example 192.168.1.20:7878 or music.example.com",
   "app.addServer.connect": "Connect",
   "app.addServer.checking": "Looking for Arclight…",
-  "app.addServer.insecure": "This server is on the internet without HTTPS. Your password and listening would travel unencrypted.",
   "app.addServer.needsSetup": "This Arclight server is not set up yet. Finish setup in a browser first.",
   "app.addServer.error.invalid": "That doesn't look like a server address.",
   "app.addServer.error.unreachable": "Couldn't reach {host}. Check the address and that this phone is on the right network.",
@@ -301,5 +300,17 @@
   "app.tv.settings.size.medium": "Medium",
   "app.tv.settings.size.large": "Large",
   "app.error.serverTimeout": "{host} didn't answer within {seconds} seconds. Check that the server is running and that this device is on the right network.",
-  "app.error.serverUnreachable": "Couldn't reach {host}. Check that the server is running and that this device is on the right network."
+  "app.error.serverUnreachable": "Couldn't reach {host}. Check that the server is running and that this device is on the right network.",
+  "app.serverCheck.server": "Server",
+  "app.serverCheck.secure": "Encrypted connection (https)",
+  "app.serverCheck.plain": "Unencrypted connection (http)",
+  "app.serverCheck.lanNotice": "Traffic on your network is not encrypted. Anyone on the same network could see what you play.",
+  "app.serverCheck.publicWarning": "This server is on the internet and doesn't use HTTPS. Your sign-in and everything you play would travel unencrypted, and anyone along the way could read it.",
+  "app.serverCheck.downgrade": "{host} used an encrypted connection before. This address connects without encryption.",
+  "app.serverCheck.typeHost": "To connect anyway, type {host}",
+  "app.serverCheck.savedTitle": "Confirm your server",
+  "app.serverCheck.savedBody": "Your server is reached over the internet without encryption. Arclight now asks once before sending your sign-in that way.",
+  "app.serverCheck.continue": "Continue",
+  "app.error.insecureServer": "Arclight doesn't send your sign-in to {host} without encryption until you allow it.",
+  "app.signIn.error.insecure": "Allow the unencrypted connection to this server first."
 }
