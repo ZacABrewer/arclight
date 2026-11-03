@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import type { MediaInfo } from '@arclight/shared';
 import { createTestDb, seedAdmin } from '../../db/test-utils.js';
 import { SAMPLE_RATE } from './fingerprint.js';
+import { chordTheme, episode, mix, speechLike } from './fingerprint.fixtures.js';
 import { SDR_1080, seedMovie, seedSeries } from './media-services.fixtures.js';
+import { ffmpegLog, type LogRunner } from './segment-boundaries.js';
 import { buildAudioExtractArgs, effectiveSegments, ffmpegPcm, SegmentService } from './segments.js';
 import { jpegSize, TrickplayService, type TrickplayRunner } from './trickplay.js';
 import { Limiter } from './video-stream.js';
@@ -36,6 +38,30 @@ const ffmpeg = async (args: string[]) => {
   const [cmd, argv] = cmdOf(['-hide_banner', '-loglevel', 'error', '-y', ...args]);
   await run(cmd, argv, { timeout: 120_000, maxBuffer: 16 * 1024 * 1024 });
 };
+
+/** The boundary probe through the same host / image switch. */
+const probe: LogRunner = (_bin, args, timeoutMs) => {
+  const [cmd, argv] = cmdOf(args);
+  return ffmpegLog(cmd, argv, timeoutMs);
+};
+
+/** 8 kHz mono PCM as a WAV file (ffmpeg encodes it from there). */
+function wav(pcm: Int16Array): Buffer {
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0);
+  h.writeUInt32LE(36 + pcm.byteLength, 4);
+  h.write('WAVEfmt ', 8);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(SAMPLE_RATE, 24);
+  h.writeUInt32LE(SAMPLE_RATE * 2, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write('data', 36);
+  h.writeUInt32LE(pcm.byteLength, 40);
+  return Buffer.concat([h, Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength)]);
+}
 
 const runner: TrickplayRunner = async (_bin, args, timeoutMs) => {
   const [cmd, argv] = cmdOf(args);
@@ -113,6 +139,7 @@ describe.skipIf(!BINARY)('player media services against a real ffmpeg', () => {
       db,
       locate: async () => (IMAGE ? 'docker' : BINARY!),
       settings: () => ({ segmentDetection: true }) as never,
+      probe,
       liveBusy: () => false,
       limiter: new Limiter(1, 100),
       extract: (_bin, args, timeoutMs) => {
@@ -130,4 +157,102 @@ describe.skipIf(!BINARY)('player media services against a real ffmpeg', () => {
       expect(Math.abs(intro!.endMs - (offsets[i]! + 40) * 1000)).toBeLessThanOrEqual(1500);
     }
   }, 300_000);
+
+  it('dialogue over the intro, recaps and black frames: four H.264/AAC episodes', async () => {
+    await mkdir(DIR, { recursive: true });
+    const S = SAMPLE_RATE;
+    // 240 s: the 96 s head window holds every intro.
+    const EP = 240;
+    // head 0-72 s, body 72-117 s, tail 117-180 s.
+    const introAt = [20.3, 33.7, 26.1, 30.9];
+    const theme = chordTheme(40, 11);
+    const bed = (seed: number) => {
+      const n = episode(EP, seed, new Int16Array(0), 0);
+      let y = 0;
+      return n.map((v) => {
+        y = 0.95 * y + 0.05 * v;
+        return Math.round(y * 2);
+      }) as Int16Array;
+    };
+    const pcms: Int16Array[] = [];
+    // Recap clips: [episode, from s, length s], played back to back from 0.
+    const recaps: Array<Array<[number, number, number]>> = [
+      [],
+      [[0, 80, 6], [0, 100, 5], [0, 130, 7], [0, 90, 6], [0, 150, 5]],
+      [[1, 85, 8], [1, 140, 6], [0, 105, 5], [1, 95, 7]],
+      [[2, 78, 7], [2, 110, 8], [2, 125, 6], [2, 160, 9]],
+    ];
+    for (let i = 0; i < 4; i++) {
+      const at0 = Math.round(introAt[i]! * S);
+      // Dialogue all through, the theme's last 10 s in the clear.
+      const speech = speechLike(EP, 900 + i);
+      speech.fill(0, at0 + 30 * S, at0 + 40 * S);
+      const music = new Int16Array(EP * S);
+      music.set(theme, at0);
+      const pcm = mix(mix(bed(400 + i), speech), music, 0.5);
+      let t = 0;
+      for (const [from, fromS, len] of recaps[i]!) {
+        pcm.set(pcms[from]!.subarray(fromS * S, (fromS + len) * S), t * S);
+        t += len;
+      }
+      pcms.push(pcm);
+      await writeFile(at(`d${i + 1}.wav`), wav(pcm));
+      // A black moment of 0.4 s before the intro and right after it.
+      const a = introAt[i]!;
+      const black = `drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill:enable='between(t,${(a - 0.4).toFixed(2)},${a.toFixed(2)})+between(t,${(a + 40).toFixed(2)},${(a + 40.4).toFixed(2)})'`;
+      await ffmpeg([
+        '-f', 'lavfi', '-i', `testsrc=size=320x180:rate=10:duration=${EP}`,
+        '-i', at(`d${i + 1}.wav`),
+        '-vf', black, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '96k', '-ar', '48000', '-shortest', at(`d${i + 1}.mkv`),
+      ]); // prettier-ignore
+    }
+    const recapEnd = [0, 29, 26, 30];
+    const db = await createTestDb();
+    seedAdmin(db);
+    const info = { ...SDR_1080, width: 320, height: 180, durationMs: EP * 1000, audioStreams: [{ codec: 'aac', channels: 1, language: 'eng', title: null, default: true }] } as MediaInfo;
+    const { show } = seedSeries(db, DIR, { title: 'Dialogue', tmdbId: 10, episodes: introAt.map((_, i) => ({ season: 1, episode: i + 1, info, path: at(`d${i + 1}.mkv`) })) });
+    const svc = new SegmentService({
+      db,
+      locate: async () => (IMAGE ? 'docker' : BINARY!),
+      settings: () => ({ segmentDetection: true, segmentDetectionRecaps: true }) as never,
+      probe,
+      liveBusy: () => false,
+      limiter: new Limiter(1, 100),
+      extract: (_bin, args, timeoutMs) => {
+        const [cmd, argv] = cmdOf(args);
+        return ffmpegPcm(cmd, argv, timeoutMs);
+      },
+    });
+    const t0 = Date.now();
+    await svc.scanSeason(show.id, 1);
+    const files = svc.seasonFiles(show.id, 1);
+    const report: string[] = [`scan ${Date.now() - t0} ms`];
+    let lateStarts = 0;
+    for (let i = 0; i < 4; i++) {
+      const segs = await effectiveSegments(db, { id: files[i]!.mediaFileId, path: files[i]!.path }, []);
+      report.push(`ep${i + 1} ${segs.map((x) => `${x.type} ${x.startMs}-${x.endMs}`).join(', ')}`);
+      // eslint-disable-next-line no-console
+      console.log(report[report.length - 1]);
+      const intro = segs.find((x) => x.type === 'intro');
+      expect(intro, `intro of episode ${i + 1}`).toBeDefined();
+      // Snapped onto the black frames where the audio match lands within 2 s of them. Dialogue
+      // can hide the theme's first seconds from some neighbours (a late start); never by more
+      // than 20 s here, and at most one episode of four.
+      const startOff = Math.abs(intro!.startMs - introAt[i]! * 1000);
+      if (startOff > 500) lateStarts++;
+      expect(startOff, `intro start ${i + 1}`).toBeLessThanOrEqual(20_000);
+      expect(Math.abs(intro!.endMs - (introAt[i]! + 40) * 1000), `intro end ${i + 1}`).toBeLessThanOrEqual(1000);
+      const recap = segs.find((x) => x.type === 'recap');
+      if (i === 0) expect(recap).toBeUndefined();
+      else {
+        expect(recap, `recap of episode ${i + 1}`).toBeDefined();
+        expect(recap!.startMs).toBe(0);
+        expect(Math.abs(recap!.endMs - recapEnd[i]! * 1000), `recap end ${i + 1}`).toBeLessThanOrEqual(3000);
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(report.join(' | '));
+    expect(lateStarts).toBeLessThanOrEqual(1);
+  }, 1_500_000);
 });

@@ -30,7 +30,7 @@ export interface PlayerSettingsDraft {
   trickplay: PlayerSettings['trickplay'];
   /** Intro and credits detection. */
   segmentDetection: boolean;
-  /** Recap detection (kept as saved; set with intro and credits detection). */
+  /** Recap ("Previously on") detection, with intros and credits. */
   segmentDetectionRecaps: boolean;
   /** Extra player paths and player hostnames. */
   address: PlayerSettings['address'];
@@ -167,6 +167,8 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
           savedSegmentDetection={data.segmentDetection}
           onTrickplay={(v) => set('trickplay', v)}
           onSegmentDetection={(v) => set('segmentDetection', v)}
+          segmentDetectionRecaps={d.segmentDetectionRecaps}
+          onSegmentDetectionRecaps={(v) => set('segmentDetectionRecaps', v)}
         />
         <FormSection label={t('player.settings.engine')}>
           <FormRow label={t('player.settings.engineLabel')} caption={noServers ? t('player.settings.engineNoServer') : t('player.settings.engineCaption')}>

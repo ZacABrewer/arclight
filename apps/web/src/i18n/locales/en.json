@@ -5813,6 +5813,8 @@
   "settings.player.trickplay.couldNotClear": "Could not clear the scrub thumbnails",
   "settings.player.segments.label": "Detect intros and credits",
   "settings.player.segments.caption": "Compares the audio of episodes in a season to find the shared intro and credits, so the player can offer Skip. Chapters and manual edits come first.",
+  "settings.player.segments.recaps": "Detect recaps",
+  "settings.player.segments.recapsCaption": "Also finds the \"Previously on\" clips at the start of an episode, so the player can offer Skip Recap.",
   "settings.player.segments.scan": "Scan the library",
   "settings.player.segments.scanCaption": "Checks every season whose files changed since the last scan. This also runs every night.",
   "settings.player.segments.scanOff": "Turn on detection and save to scan.",

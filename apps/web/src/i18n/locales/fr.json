@@ -5836,6 +5836,8 @@
   "settings.player.trickplay.couldNotClear": "Impossible d'effacer les miniatures",
   "settings.player.segments.label": "Détecter génériques de début et de fin",
   "settings.player.segments.caption": "Compare le son des épisodes d'une saison pour trouver les génériques communs, afin que le lecteur propose Passer. Les chapitres et les modifications manuelles priment.",
+  "settings.player.segments.recaps": "Détecter les récapitulatifs",
+  "settings.player.segments.recapsCaption": "Trouve aussi les extraits « Précédemment dans » au début d'un épisode, afin que le lecteur propose Passer le récapitulatif.",
   "settings.player.segments.scan": "Analyser la bibliothèque",
   "settings.player.segments.scanCaption": "Vérifie chaque saison dont les fichiers ont changé depuis la dernière analyse. S'exécute aussi chaque nuit.",
   "settings.player.segments.scanOff": "Activez la détection et enregistrez pour analyser.",

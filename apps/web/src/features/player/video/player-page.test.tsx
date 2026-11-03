@@ -86,6 +86,21 @@ describe('VideoPlayerPage', () => {
     expect(sessions(calls)[1]?.startMs).toBe(70_000);
   });
 
+  it('offers Skip Recap during a recap and jumps to its end', async () => {
+    const calls = stubFetch(
+      routes({
+        [ITEM]: videoItem({ segments: [{ type: 'recap', startMs: 0, endMs: 42_000 }] }),
+        [`POST ${api('/video/session')}`]: (_u: URL, body: unknown) =>
+          session({ method: 'transcode', reasons: ['audio-codec'], seekable: false, streamStartMs: (body as VideoSessionRequest).startMs ?? 0 }),
+      }),
+    );
+    renderBrowse('/player/watch/play/movie:7?t=5000');
+    await waitFor(() => expect(sessions(calls)).toHaveLength(1));
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip Recap' }));
+    await waitFor(() => expect(sessions(calls)).toHaveLength(2));
+    expect(sessions(calls)[1]?.startMs).toBe(42_000);
+  });
+
   it('shows an error for an item that is not a video', async () => {
     stubFetch(routes({ [ITEM]: videoItem({ kind: 'track', video: undefined } as never) }));
     renderBrowse('/player/watch/play/movie:7');
