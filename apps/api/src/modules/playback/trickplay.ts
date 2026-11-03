@@ -140,6 +140,8 @@ export class TrickplayService {
   private stopped = false;
   /** Files that failed (or have no video) at this stamp: not retried until the file changes. */
   private readonly failed = new Map<number, string>();
+  /** The file being generated now and its temporary folder (clear() leaves that folder alone). */
+  private active: { id: number; tmp: string } | null = null;
   private readonly run: TrickplayRunner;
 
   constructor(private readonly opts: TrickplayOptions) {
@@ -237,6 +239,15 @@ export class TrickplayService {
     const fileDir = join(this.opts.dir, String(id));
     const tmp = join(fileDir, `${stamp}.tmp`);
     const final = join(fileDir, stamp);
+    this.active = { id, tmp };
+    try {
+      await this.generateInto(id, row, info, bin, stamp, fileDir, tmp, final);
+    } finally {
+      this.active = null;
+    }
+  }
+
+  private async generateInto(id: number, row: FileRow, info: MediaInfo | null, bin: string, stamp: string, fileDir: string, tmp: string, final: string): Promise<void> {
     await rm(tmp, { recursive: true, force: true });
     await mkdir(tmp, { recursive: true });
     const hdr = dynamicRangeOf(info) !== 'sdr';
@@ -304,10 +315,25 @@ export class TrickplayService {
     return { bytes, files };
   }
 
-  /** Deletes every sheet (they are made again on demand). */
+  /**
+   * Deletes every sheet (they are made again on demand), forgets failures and drops queued files
+   * that have not started. The file being generated right now keeps its temporary folder and
+   * finishes normally.
+   */
   async clear(): Promise<void> {
-    for (const e of await readdir(this.opts.dir).catch(() => [] as string[])) await rm(join(this.opts.dir, e), { recursive: true, force: true });
     this.failed.clear();
+    for (const id of this.order.splice(0)) this.queued.delete(id);
+    for (const e of await readdir(this.opts.dir).catch(() => [] as string[])) {
+      const active = this.active;
+      if (active && e === String(active.id)) {
+        const fileDir = join(this.opts.dir, e);
+        for (const sub of await readdir(fileDir).catch(() => [] as string[])) {
+          if (join(fileDir, sub) !== active.tmp) await rm(join(fileDir, sub), { recursive: true, force: true });
+        }
+        continue;
+      }
+      await rm(join(this.opts.dir, e), { recursive: true, force: true });
+    }
   }
 
   /**
