@@ -20,7 +20,7 @@ import {
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
-import { effectiveAppAccess, hashToken, toUser, type AuthService, type RequestAuth, type RequestCredentials } from '../auth/service.js';
+import { AuthError, effectiveAppAccess, hashToken, toUser, type AuthService, type RequestAuth, type RequestCredentials } from '../auth/service.js';
 import { audit } from '../audit/recorder.js';
 import { decide, playerSettings } from '../playback/access.js';
 import { VERSION } from '../../version.js';
@@ -46,7 +46,8 @@ export type AppAuthErrorCode =
   | 'PAIR_CODE_EXPIRED'
   | 'DEVICE_CODE_INVALID'
   | 'PLAYER_DISABLED'
-  | 'PLAYER_NOT_ALLOWED';
+  | 'PLAYER_NOT_ALLOWED'
+  | 'INVALID_CREDENTIALS';
 
 export const APP_AUTH_ERROR_STATUS: Record<AppAuthErrorCode, number> = {
   NO_USER: 400,
@@ -59,6 +60,8 @@ export const APP_AUTH_ERROR_STATUS: Record<AppAuthErrorCode, number> = {
   DEVICE_CODE_INVALID: 404,
   PLAYER_DISABLED: 403,
   PLAYER_NOT_ALLOWED: 403,
+  // Not 401: the device token is fine, only the password typed to confirm it was wrong.
+  INVALID_CREDENTIALS: 403,
 };
 
 export class AppAuthError extends Error {
@@ -83,6 +86,10 @@ export const DEVICE_CODES_PER_WINDOW = 10;
 export const DEVICE_CODE_WINDOW_MS = 10 * 60_000;
 /** At most this many device codes wait at once (a flood of requests cannot grow memory). */
 export const MAX_PENDING_DEVICE_CODES = 500;
+/** How long a password confirmed in the app (POST /app/reauth) lets that device write the command routes. */
+export const APP_REAUTH_MS = 10 * 60_000;
+/** At most this many devices hold a confirmation at once. */
+export const MAX_APP_REAUTHS = 10_000;
 /** Polls closer together than this answer 429. */
 export const DEVICE_CODE_MIN_POLL_MS = 2_000;
 
@@ -135,6 +142,11 @@ export class AppAuthService {
   private readonly deviceCodes = new Map<string, PendingDeviceCode>();
   private readonly pollTokens = new Map<string, string>();
   private readonly deviceCodeRequests = new Map<string, number[]>();
+  /**
+   * Devices that confirmed their password, until when. Keyed by id and creation time, so a removed
+   * device whose id SQLite hands out again does not inherit it. In memory: a restart asks again.
+   */
+  private readonly reauths = new Map<string, number>();
 
   constructor(private readonly opts: AppAuthServiceOptions) {
     this.db = opts.db;
@@ -325,16 +337,48 @@ export class AppAuthService {
     }
     const user = toUser(found.user);
     const isAdmin = user.role === 'admin';
+    const reauthKey = `${found.device.id}:${found.device.createdAt}`;
+    const confirmedUntil = this.reauths.get(reauthKey);
+    if (confirmedUntil !== undefined && confirmedUntil <= t) this.reauths.delete(reauthKey);
     return {
       user,
       via: 'app',
       isAdmin,
       appAccess: effectiveAppAccess(user, isAdmin),
       appDeviceId: found.device.id,
+      reauthenticated: confirmedUntil !== undefined && confirmedUntil > t,
       // The household profile the device selected (AuthService.resolve attaches and masks it).
       credentialProfileId: found.device.profileId ?? null,
       credentialCreatedAt: found.device.createdAt,
     };
+  }
+
+  /**
+   * POST /app/reauth: the app's user types their password again; for APP_REAUTH_MS this device may
+   * then write the command routes (backups and restores, VPN, solver and subtitle settings,
+   * custom-script notifications). Rate-limited and audited like a sign-in.
+   */
+  async reauthenticate(auth: RequestAuth | null | undefined, password: string, ip: string): Promise<{ expiresAt: string }> {
+    if (auth?.via !== 'app' || auth.appDeviceId === undefined || !auth.user) throw new AppAuthError('NOT_APP', 'this confirms an Arclight app device; in a browser, sign in again instead');
+    const device = this.db.select().from(appDevices).where(eq(appDevices.id, auth.appDeviceId)).get();
+    if (!device) throw new AppAuthError('NOT_FOUND', 'device not found');
+    try {
+      await this.auth.confirmPassword(auth, password, ip);
+    } catch (err) {
+      if (err instanceof AuthError && err.code === 'INVALID_CREDENTIALS') throw new AppAuthError('INVALID_CREDENTIALS', err.message);
+      throw err;
+    }
+    const t = this.now();
+    for (const [key, until] of this.reauths) if (until <= t) this.reauths.delete(key);
+    while (this.reauths.size >= MAX_APP_REAUTHS) {
+      const oldest = this.reauths.keys().next().value;
+      if (oldest === undefined) break;
+      this.reauths.delete(oldest);
+    }
+    const until = t + APP_REAUTH_MS;
+    this.reauths.set(`${device.id}:${device.createdAt}`, until);
+    audit(this.db).record({ action: 'app.device.reauth', userId: auth.user.id, username: auth.user.username, ip, target: String(device.id), details: { name: device.name } });
+    return { expiresAt: new Date(until).toISOString() };
   }
 
   private toResource(row: AppDeviceRow, currentId: number | undefined, userName?: string): AppDevice {

@@ -10,7 +10,7 @@ import { authServiceFor, SESSION_COOKIE } from '../auth/index.js';
 import { totpCode } from '../auth/totp.js';
 import { setSection } from '../settings/service.js';
 import { appAuthServiceFor, APP_DEVICE_TOUCH_MS, PAIR_CODES_PER_WINDOW } from './index.js';
-import { APP_DEVICE_IDLE_MS, MAX_PENDING_DEVICE_CODES } from './service.js';
+import { APP_DEVICE_IDLE_MS, APP_REAUTH_MS, MAX_PENDING_DEVICE_CODES } from './service.js';
 
 // The Arclight player app's sign-in over HTTP: password sign-in (with two-factor), QR pairing,
 // the Bearer token on portal and player routes, device management, revocation and CORS for the
@@ -441,5 +441,53 @@ describe('0.24 hardening', () => {
     expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(token), payload: {} })).statusCode).toBe(403);
     // Reading stays open to the admin's app.
     expect((await h.app.inject({ method: 'GET', url: '/api/v1/settings/vpn', headers: bearer(token) })).statusCode).toBe(200);
+  });
+
+  it('an app token writes the command routes only for 10 minutes after confirming the password', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const token = (await signInApp(h, admin.username)).json().token;
+    const putVpn = () => h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(token), payload: {} });
+    const script = { name: 'Run', implementation: 'custom-script', settings: { path: '/bin/true' } };
+
+    // The token alone: 403 with a code the app can act on (not 401: the token is fine).
+    const refused = await putVpn();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().code).toBe('REAUTH_REQUIRED');
+    expect((await post(h, '/api/v1/notification', script, bearer(token))).json().code).toBe('REAUTH_REQUIRED');
+
+    // A wrong password: 403 INVALID_CREDENTIALS (the app stays signed in) and still refused.
+    const wrong = await post(h, '/api/v1/app/reauth', { password: 'nope-nope' }, bearer(token));
+    expect(wrong.statusCode).toBe(403);
+    expect(wrong.json().code).toBe('INVALID_CREDENTIALS');
+    expect((await putVpn()).json().code).toBe('REAUTH_REQUIRED');
+
+    const ok = await post(h, '/api/v1/app/reauth', { password: 'password1' }, bearer(token));
+    expect(ok.statusCode).toBe(200);
+    expect(Date.parse(ok.json().expiresAt)).toBe(h.clock.t + APP_REAUTH_MS);
+    expect((await putVpn()).statusCode).not.toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/1', {}, bearer(token))).statusCode).not.toBe(403);
+    expect((await post(h, '/api/v1/notification', script, bearer(token))).json().code).not.toBe('REAUTH_REQUIRED');
+    expect(h.db.select().from(schema.auditEvents).all().map((r) => r.action)).toContain('app.device.reauth');
+
+    // Another device of the same user is not confirmed by it.
+    const other = (await signInApp(h, admin.username, { deviceName: 'Tablet' })).json().token;
+    expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(other), payload: {} })).json().code).toBe('REAUTH_REQUIRED');
+
+    // Ten minutes later the device has to confirm again.
+    h.clock.t += APP_REAUTH_MS + 1;
+    expect((await putVpn()).json().code).toBe('REAUTH_REQUIRED');
+  });
+
+  it('only app tokens confirm through /app/reauth, and a non-admin-scope key stays refused', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const key = await post(h, '/api/v1/user/me/apikeys', { name: 'k', scope: 'requests' }, { cookie: admin.cookie });
+    expect(key.statusCode).toBe(201);
+    const headers = { 'x-api-key': key.json().key };
+    expect((await post(h, '/api/v1/app/reauth', { password: 'password1' }, headers)).statusCode).toBe(400);
+    const res = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers, payload: {} });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('FORBIDDEN');
   });
 });

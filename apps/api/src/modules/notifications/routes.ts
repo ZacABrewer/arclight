@@ -17,7 +17,7 @@ import {
   PersonalDestinationTestRequest,
 } from '@arclight/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { mayRunCommands, requireSelfOrAdmin } from '../auth/hook.js';
+import { APP_REAUTH_MESSAGE, mayRunCommands, requireSelfOrAdmin } from '../auth/hook.js';
 import type { PersonalNotifications } from './personal.js';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -45,6 +45,10 @@ const errors = {
 async function guardCustomScript(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = req.body as { implementation?: unknown } | undefined;
   if (body?.implementation === 'custom-script' && !mayRunCommands(req.auth)) {
+    if (req.auth?.via === 'app') {
+      await reply.code(403).send({ error: APP_REAUTH_MESSAGE, code: 'REAUTH_REQUIRED' });
+      return;
+    }
     await reply.code(403).send({ error: 'custom scripts can only be set up from a signed-in browser or an admin-scope key', code: 'FORBIDDEN' });
   }
 }

@@ -25,6 +25,8 @@ import { AppAuthError, APP_AUTH_ERROR_STATUS, type AppAuthService } from './serv
 //   POST /app/device-codes/approve     signed-in browser session only; the approving user needs player access
 //   GET /app/devices, DELETE /app/devices/:id, POST /app/sign-out   any signed-in user (own devices;
 //   admins list with ?all=true or ?userId= and remove anyone's)
+//   POST /app/reauth                   app token only: confirm the password, then for 10 minutes
+//   that device may write the command routes (hook.ts COMMAND_WRITE_ROUTES; else 403 REAUTH_REQUIRED)
 // Sign-in bodies carry passwords and codes: these routes keep out of the request audit (the
 // service records login.success / login.failed itself).
 
@@ -32,6 +34,8 @@ const portal = { access: { portal: true } } as const;
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
 const errors = { 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody, 410: ErrorBody, 429: ErrorBody };
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
+const AppReauthRequest = z.object({ password: z.string().min(1).max(1024) });
+const AppReauthResponse = z.object({ expiresAt: z.string() });
 
 function userOf(req: FastifyRequest) {
   const user = req.auth?.user;
@@ -90,6 +94,10 @@ export function appAuthRoutes(service: AppAuthService, opts: { basePath: string 
       service.remove(req.auth?.user?.id ?? null, req.auth?.isAdmin === true, req.params.id);
       return reply.code(204).send(null);
     });
+
+    app.post('/app/reauth', { config: { ...portal, audit: false }, schema: { body: AppReauthRequest, response: { 200: AppReauthResponse, ...errors } } }, async (req) =>
+      service.reauthenticate(req.auth, req.body.password, req.ip),
+    );
 
     app.post('/app/sign-out', { config: portal, schema: { response: { 204: z.null(), ...errors } } }, async (req, reply) => {
       const user = userOf(req);

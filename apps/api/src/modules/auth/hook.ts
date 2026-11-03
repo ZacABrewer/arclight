@@ -195,10 +195,21 @@ export const COMMAND_WRITE_ROUTES: ReadonlySet<string> = new Set([
   `${API_PREFIX}/settings/vpn`,
 ]);
 
+export const APP_REAUTH_MESSAGE = 'confirm your password in the app (POST /api/v1/app/reauth), then try again within 10 minutes';
+
+/**
+ * An app token refused only because it has not confirmed its password lately: the answer is
+ * 403 REAUTH_REQUIRED (not 401, the token itself is fine), so the app can ask and retry.
+ */
+export function needsAppReauth(auth: RequestAuth | null | undefined, method: string, routeUrl: string | undefined): boolean {
+  if (auth?.via !== 'app' || auth.reauthenticated === true || !routeUrl) return false;
+  return method !== 'GET' && method !== 'HEAD' && COMMAND_WRITE_ROUTES.has(routeUrl);
+}
+
 /** Whether this caller may set something Arclight runs on the host (see COMMAND_WRITE_ROUTES). */
 export function mayRunCommands(auth: RequestAuth | null | undefined): boolean {
   if (!auth) return false;
-  if (auth.via === 'app') return false;
+  if (auth.via === 'app') return auth.reauthenticated === true;
   if (auth.via === 'userkey') return auth.apiKeyScope === 'admin';
   return auth.isAdmin;
 }
@@ -232,7 +243,7 @@ export function apiKeyScopeAllows(auth: RequestAuth, method: string, routeUrl: s
   const writes = method !== 'GET' && method !== 'HEAD';
   if (auth.via === 'app') {
     if (!routeUrl) return false;
-    if (writes && COMMAND_WRITE_ROUTES.has(routeUrl)) return false;
+    if (writes && COMMAND_WRITE_ROUTES.has(routeUrl) && auth.reauthenticated !== true) return false;
     return !SESSION_ONLY_PREFIXES.some((p) => routeUrl.startsWith(p)) && !SECRET_ROUTES.has(routeUrl);
   }
   if (auth.via !== 'userkey') return true;
@@ -367,6 +378,7 @@ export function requireAuth(service: AuthService, options: AuthHookOptions | Pub
       if (token) setSessionCookie(req, reply, token, resolved.renewed.maxAgeSeconds);
     }
     if (req.auth && !apiKeyScopeAllows(req.auth, req.method, routeUrl)) {
+      if (needsAppReauth(req.auth, req.method, routeUrl)) return reply.code(403).send({ error: APP_REAUTH_MESSAGE, code: 'REAUTH_REQUIRED' });
       const error = req.auth.via === 'app' ? 'the Arclight app may not call this; use the web app' : `this API key (${req.auth.apiKeyScope ?? 'read'} scope) may not call this`;
       return reply.code(403).send({ error, code: 'FORBIDDEN' });
     }

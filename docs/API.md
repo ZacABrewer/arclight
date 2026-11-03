@@ -88,7 +88,12 @@ memory and capped at 10,000 entries each.
 `COMMAND_WRITE_ROUTES` (`hook.ts`): `POST /config/import`, `POST /system/backup/restore/upload`,
 `POST /system/backup/restore/:id`, `PUT /settings/backup`, `PUT /subtitle/settings`,
 `PUT /settings/solver` and `PUT /settings/vpn`, or create, change or test a `custom-script`
-notification: `403 FORBIDDEN`. Reading those settings is unchanged. App tokens idle for 90 days
+notification: `403 FORBIDDEN`. Reading those settings is unchanged. An app token may write them
+for 10 minutes after confirming its user's password with `POST /app/reauth` `{ "password" }`
+(`200 { "expiresAt" }`; a wrong password is `403 INVALID_CREDENTIALS`, rate-limited like a
+sign-in, audited as `app.device.reauth`). Until then the answer is
+`403 {"code":"REAUTH_REQUIRED"}` (not 401: the token stays valid), so the app can ask for the
+password and retry. The confirmation belongs to that device and is kept in memory. App tokens idle for 90 days
 stop working (`401`; the device is removed, audited as `app.device.expired`).
 
 **Portal-only hostnames.** On a public-portal hostname with `portalOnly` on, an admin signed in

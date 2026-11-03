@@ -126,6 +126,11 @@ export interface RequestAuth {
   /** `via: 'app'`: the app device (app_devices.id) whose token this is. */
   appDeviceId?: number;
   /**
+   * `via: 'app'`: the device confirmed its user's password (POST /app/reauth) within the last
+   * APP_REAUTH_MS, so it may write the command routes (hook.ts COMMAND_WRITE_ROUTES).
+   */
+  reauthenticated?: boolean;
+  /**
    * The active household profile; set for every credential with a user (sessions and app
    * devices: the one they selected, else the owner profile; every other credential: the owner
    * profile). A non-owner profile is never admin: `isAdmin`, `appAccess` and the user's role
@@ -1098,6 +1103,18 @@ export class AuthService {
       if (auth.via === 'forward') return;
       throw new AuthError('REAUTH_REQUIRED', 'this account has no password: sign out and sign in again, then try again within 10 minutes');
     }
+    await this.confirmPassword(auth, currentPassword, address);
+  }
+
+  /**
+   * Checks the account's own password for a caller that is already signed in (re-authentication).
+   * Missing: 401 REAUTH_REQUIRED; wrong: 401 INVALID_CREDENTIALS, counted as a failed sign-in from
+   * `address`; an account without a password of its own: 403 FORBIDDEN.
+   */
+  async confirmPassword(auth: RequestAuth | null | undefined, currentPassword: string | undefined, address: string): Promise<void> {
+    if (!auth?.user) throw new AuthError('UNAUTHORIZED', 'sign in first');
+    const row = this.row(auth.user.id);
+    if (!row.localPassword) throw new AuthError('FORBIDDEN', 'this account has no Arclight password to confirm; use the web app');
     if (!currentPassword) throw new AuthError('REAUTH_REQUIRED', 'confirm your current password to continue');
     this.checkRateLimit(address, row.username);
     if (!(await verifyPassword(currentPassword, row.passwordHash))) {

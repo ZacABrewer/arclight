@@ -4,7 +4,7 @@ import { parseTrustedProxies } from '../../trust-proxy.js';
 import { originOf, parseCorsOrigins } from '../../origin-policy.js';
 import { scrubLogChunk } from '../../logging.js';
 import { httpsApplicationHost } from '../../security-headers.js';
-import { COMMAND_WRITE_ROUTES, apiKeyScopeAllows, mayRunCommands } from './hook.js';
+import { COMMAND_WRITE_ROUTES, apiKeyScopeAllows, mayRunCommands, needsAppReauth } from './hook.js';
 import { LoginLimiter, LoginLimitedError, MAX_LIMITER_ENTRIES } from './login-limiter.js';
 import type { RequestAuth } from './service.js';
 import { totpCode } from './totp.js';
@@ -141,6 +141,12 @@ describe('command routes for narrow credentials (DATA-13)', () => {
     }
     expect(apiKeyScopeAllows(app, 'GET', '/api/v1/settings/vpn')).toBe(true);
     expect(mayRunCommands(app)).toBe(false);
+    expect(needsAppReauth(app, 'PUT', '/api/v1/settings/vpn')).toBe(true);
+    expect(needsAppReauth(app, 'GET', '/api/v1/settings/vpn')).toBe(false);
+    const confirmed = { ...app, reauthenticated: true } as RequestAuth;
+    expect(apiKeyScopeAllows(confirmed, 'PUT', '/api/v1/settings/vpn')).toBe(true);
+    expect(mayRunCommands(confirmed)).toBe(true);
+    expect(needsAppReauth(key('requests'), 'PUT', '/api/v1/settings/vpn')).toBe(false);
     expect(mayRunCommands(key('admin'))).toBe(true);
     expect(mayRunCommands({ user: null, via: 'session', isAdmin: true, appAccess: [] } as unknown as RequestAuth)).toBe(true);
   });
