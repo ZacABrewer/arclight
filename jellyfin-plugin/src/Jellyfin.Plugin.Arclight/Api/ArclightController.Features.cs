@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -278,6 +279,11 @@ public partial class ArclightController
             {
                 themes = null;
             }
+
+            if (ThemeCache.ParseCatalogue(list.Body) is { } ids)
+            {
+                _themeCache.SetCatalogue(ids);
+            }
         }
 
         var choice = ThemeChoices.EffectiveChoice(config, userId);
@@ -332,8 +338,9 @@ public partial class ArclightController
 
     /// <summary>
     /// The generated Jellyfin stylesheet for an Arclight pack. Anonymous because &lt;link&gt; tags carry no
-    /// token; it contains no secrets, ids are validated and responses are cached, so Arclight sees at
-    /// most one request per pack per hour.
+    /// token; it contains no secrets, ids are checked against the installed pack catalogue before
+    /// Arclight is asked, and responses (misses too) are cached, so Arclight sees at most one request
+    /// per pack per hour however many ids an anonymous caller tries.
     /// </summary>
     /// <param name="theme">Pack id.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -341,32 +348,51 @@ public partial class ArclightController
     [HttpGet("Theme.css")]
     [AllowAnonymous]
     [Produces("text/css")]
-    public Task<ActionResult> ThemeCss([FromQuery] string? theme, CancellationToken ct)
+    public async Task<ActionResult> ThemeCss([FromQuery] string? theme, CancellationToken ct)
     {
-        if (!ThemeChoices.IsPackId(theme))
+        if (!ThemeChoices.IsPackId(theme) || !await IsInstalledPackAsync(theme!, ct).ConfigureAwait(false))
         {
-            return Task.FromResult<ActionResult>(NotFound());
+            return NotFound();
         }
 
-        return CachedThemeResource("theme/" + theme + ".css", TimeSpan.FromHours(1), "text/css; charset=utf-8", "no-cache", ct);
+        var entry = await LoadThemeResourceAsync(ThemeCssPath(theme!), CssMaxAge, ct).ConfigureAwait(false);
+        return ServeThemeResource(entry, CssContentType, "no-cache");
     }
 
-    /// <summary>A font file a pack ships (referenced relatively by the stylesheet).</summary>
+    /// <summary>
+    /// A font file a pack ships (referenced relatively by the stylesheet). Only fonts the pack's
+    /// stylesheet actually links are fetched from Arclight.
+    /// </summary>
     /// <param name="themeId">Pack id.</param>
     /// <param name="file">File name (.woff2).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Font.</returns>
     [HttpGet("theme-fonts/{themeId}/{file}")]
     [AllowAnonymous]
-    public Task<ActionResult> ThemeFont([FromRoute] string themeId, [FromRoute] string file, CancellationToken ct)
+    public async Task<ActionResult> ThemeFont([FromRoute] string themeId, [FromRoute] string file, CancellationToken ct)
     {
-        if (!ThemeChoices.IsPackId(themeId) || !FontFile().IsMatch(file ?? string.Empty))
+        if (!ThemeChoices.IsPackId(themeId) || !FontFile().IsMatch(file ?? string.Empty) || !await IsInstalledPackAsync(themeId, ct).ConfigureAwait(false))
         {
-            return Task.FromResult<ActionResult>(NotFound());
+            return NotFound();
         }
 
-        return CachedThemeResource("theme-fonts/" + themeId + "/" + file, TimeSpan.FromDays(1), "font/woff2", "public, max-age=604800", ct);
+        var css = await LoadThemeResourceAsync(ThemeCssPath(themeId), CssMaxAge, ct).ConfigureAwait(false);
+        if (css is null || css.Status != 200 || !StylesheetLinksFont(css.Body, themeId, file!))
+        {
+            return NotFound();
+        }
+
+        var entry = await LoadThemeResourceAsync("theme-fonts/" + themeId + "/" + file, TimeSpan.FromDays(1), ct).ConfigureAwait(false);
+        return ServeThemeResource(entry, FontContentType, "public, max-age=604800");
     }
+
+    /// <summary>Whether a generated stylesheet links <c>theme-fonts/&lt;id&gt;/&lt;file&gt;</c>.</summary>
+    /// <param name="css">Stylesheet bytes.</param>
+    /// <param name="themeId">Pack id.</param>
+    /// <param name="file">Font file (already validated: URL-safe characters only).</param>
+    /// <returns>True when linked.</returns>
+    internal static bool StylesheetLinksFont(byte[] css, string themeId, string file)
+        => System.Text.Encoding.UTF8.GetString(css).Contains("theme-fonts/" + themeId + "/" + file + "\"", StringComparison.Ordinal);
 
     internal static string NormalizeRegion(string? region)
     {
@@ -398,30 +424,79 @@ public partial class ArclightController
         }
     }
 
-    private async Task<ActionResult> CachedThemeResource(string path, TimeSpan maxAge, string fallbackType, string cacheControl, CancellationToken ct)
-    {
-        if (!_themeCache.TryGetFresh(path, maxAge, out var entry))
-        {
-            var stale = _themeCache.Get(path);
-            var (status, body, type, etag) = await _client.GetBytesAsync(path, stale?.ETag, ct).ConfigureAwait(false);
-            if (status == 304 && stale is not null)
-            {
-                entry = stale with { FetchedAt = DateTimeOffset.UtcNow };
-            }
-            else if (status is 200 or 404)
-            {
-                entry = new ThemeCache.Entry(status, status == 200 ? body : Array.Empty<byte>(), type, etag, DateTimeOffset.UtcNow);
-            }
-            else if (stale is not null)
-            {
-                entry = stale; // Arclight unreachable: keep serving the last good copy
-            }
-            else
-            {
-                return StatusCode(StatusCodes.Status502BadGateway);
-            }
+    // Fixed response types: never the upstream Content-Type, so a misbehaving Arclight (or anything
+    // answering at its address) cannot get HTML or script served from the Jellyfin origin.
+    private const string CssContentType = "text/css; charset=utf-8";
 
-            _themeCache.Set(path, entry);
+    private const string FontContentType = "font/woff2";
+
+    private static readonly TimeSpan CssMaxAge = TimeSpan.FromHours(1);
+
+    private static string ThemeCssPath(string themeId) => "theme/" + themeId + ".css";
+
+    /// <summary>
+    /// Whether Arclight lists the pack as installed. The catalogue is cached for 10 minutes; an id it
+    /// does not list refreshes it at most once a minute (so a pack installed moments ago still works),
+    /// and an unlisted id never causes a fetch of the resource itself.
+    /// </summary>
+    private async Task<bool> IsInstalledPackAsync(string themeId, CancellationToken ct)
+    {
+        var known = _themeCache.TryGetCatalogue(out var ids, out var age);
+        if (known && (age < ThemeCache.CatalogueRetry || (ids is not null && ids.Contains(themeId) && age < ThemeCache.CatalogueTtl)))
+        {
+            return KnownPack(ids, themeId);
+        }
+
+        var list = await _client.SendAsync(HttpMethod.Get, "themes", null, null, ct).ConfigureAwait(false);
+        _themeCache.SetCatalogue(list.IsSuccess ? ThemeCache.ParseCatalogue(list.Body) : null);
+        _themeCache.TryGetCatalogue(out ids, out _);
+        return KnownPack(ids, themeId);
+    }
+
+    // With no catalogue at all (Arclight unreachable since start-up) only packs already cached are served.
+    private bool KnownPack(IReadOnlySet<string>? ids, string themeId)
+        => ids?.Contains(themeId) ?? _themeCache.Get(ThemeCssPath(themeId))?.Status == 200;
+
+    /// <summary>Gets a theme resource from the cache or Arclight (a 502 entry when it cannot be had).</summary>
+    private async Task<ThemeCache.Entry> LoadThemeResourceAsync(string path, TimeSpan maxAge, CancellationToken ct)
+    {
+        if (_themeCache.TryGetFresh(path, maxAge, out var entry))
+        {
+            return entry;
+        }
+
+        var stale = _themeCache.Get(path);
+        var good = stale is { Status: 200 } ? stale : null;
+        var (status, body, type, etag) = await _client.GetBytesAsync(path, good?.ETag, ct).ConfigureAwait(false);
+        var now = _themeCache.Now;
+        if (status == 304 && good is not null)
+        {
+            entry = good with { FetchedAt = now };
+        }
+        else if (status is 200 or 404)
+        {
+            entry = new ThemeCache.Entry(status, status == 200 ? body : Array.Empty<byte>(), type, status == 200 ? etag : null, now);
+        }
+        else if (good is not null)
+        {
+            // Arclight unreachable: keep serving the last good copy (it is revalidated next time).
+            return good;
+        }
+        else
+        {
+            // Remember the failure briefly so repeated requests do not all reach Arclight.
+            entry = new ThemeCache.Entry(StatusCodes.Status502BadGateway, Array.Empty<byte>(), null, null, now);
+        }
+
+        _themeCache.Set(path, entry);
+        return entry;
+    }
+
+    private ActionResult ServeThemeResource(ThemeCache.Entry entry, string contentType, string cacheControl)
+    {
+        if (entry.Status == StatusCodes.Status502BadGateway)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway);
         }
 
         if (entry.Status != 200)
@@ -430,6 +505,7 @@ public partial class ArclightController
         }
 
         var tag = entry.ETag ?? "\"" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(entry.Body))[..16] + "\"";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         if (Request.Headers.IfNoneMatch.Any(v => v == tag))
         {
             return StatusCode(StatusCodes.Status304NotModified);
@@ -439,8 +515,7 @@ public partial class ArclightController
         // Stylesheets revalidate on every load (a cheap 304 from the plugin cache) so pack or
         // generator updates show at once; font files never change under the same name.
         Response.Headers.CacheControl = cacheControl;
-        Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File(entry.Body, entry.ContentType ?? fallbackType);
+        return File(entry.Body, contentType);
     }
 }
 

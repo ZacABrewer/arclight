@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -37,6 +38,12 @@ public sealed class ArclightClient : IDisposable
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
+
+    /// <summary>Largest JSON body accepted from Arclight.</summary>
+    internal const int MaxJsonBytes = 4 * 1024 * 1024;
+
+    /// <summary>Largest static resource (stylesheet, font) accepted from Arclight.</summary>
+    internal const int MaxResourceBytes = 8 * 1024 * 1024;
 
     private readonly HttpClient _http;
     private readonly IArclightSettings _settings;
@@ -149,14 +156,14 @@ public sealed class ArclightClient : IDisposable
         using var request = BuildRequest(baseUrl, apiKey, method, relativePath, body, jellyfinUserId);
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
-            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (text.Length > 4 * 1024 * 1024)
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            var bytes = await ReadBoundedAsync(response.Content, MaxJsonBytes, cancellationToken).ConfigureAwait(false);
+            if (bytes is null)
             {
                 return new ArclightResponse(502, "{\"code\":\"response_too_large\"}");
             }
 
-            return new ArclightResponse((int)response.StatusCode, text);
+            return new ArclightResponse((int)response.StatusCode, Decode(bytes, response.Content.Headers.ContentType?.CharSet));
         }
         catch (HttpRequestException)
         {
@@ -248,12 +255,12 @@ public sealed class ArclightClient : IDisposable
         try
         {
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-            if (response.Content.Headers.ContentLength is > 8 * 1024 * 1024)
+            var bytes = await ReadBoundedAsync(response.Content, MaxResourceBytes, cancellationToken).ConfigureAwait(false);
+            if (bytes is null)
             {
                 return (502, Array.Empty<byte>(), null, null);
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
             return ((int)response.StatusCode, bytes, response.Content.Headers.ContentType?.ToString(), response.Headers.ETag?.ToString());
         }
         catch (HttpRequestException)
@@ -264,6 +271,65 @@ public sealed class ArclightClient : IDisposable
         {
             return (0, Array.Empty<byte>(), null, null);
         }
+    }
+
+    /// <summary>
+    /// Reads a response body, giving up (null) as soon as it would exceed <paramref name="maxBytes"/>:
+    /// a declared Content-Length over the limit is refused before reading, and a chunked or lying body
+    /// is cut off at the limit, so a huge upstream response can never be buffered whole.
+    /// </summary>
+    /// <param name="content">Response content.</param>
+    /// <param name="maxBytes">Limit.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The body, or null when it is too large.</returns>
+    internal static async Task<byte[]?> ReadBoundedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength is { } declared && declared > maxBytes)
+        {
+            return null;
+        }
+
+        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using (stream.ConfigureAwait(false))
+        {
+            using var buffer = new MemoryStream();
+            var chunk = new byte[81920];
+            while (true)
+            {
+                var read = await stream.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, maxBytes + 1L - buffer.Length)), cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    return buffer.ToArray();
+                }
+
+                buffer.Write(chunk, 0, read);
+                if (buffer.Length > maxBytes)
+                {
+                    return null;
+                }
+            }
+        }
+    }
+
+    private static string Decode(byte[] bytes, string? charset)
+    {
+        var encoding = Encoding.UTF8;
+        if (!string.IsNullOrWhiteSpace(charset))
+        {
+            try
+            {
+                encoding = Encoding.GetEncoding(charset.Trim('"', ' '));
+            }
+            catch (ArgumentException)
+            {
+                encoding = Encoding.UTF8;
+            }
+        }
+
+        // Strip a byte-order mark the way ReadAsStringAsync did.
+        var preamble = encoding.GetPreamble();
+        var offset = preamble.Length > 0 && bytes.AsSpan().StartsWith(preamble) ? preamble.Length : 0;
+        return encoding.GetString(bytes, offset, bytes.Length - offset);
     }
 
     /// <inheritdoc />

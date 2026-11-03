@@ -47,6 +47,7 @@ import {
 } from './search-model.js';
 import './search.css';
 import { t } from '../i18n/index.js';
+import { externalHref } from '../lib/safe-url.js';
 
 const route = getRouteApi('/search');
 
@@ -70,7 +71,7 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
         <span className="mt-release__title">
           <ProtocolBadge protocol={r.protocol} />
           {r.infoUrl ? (
-            <a href={r.infoUrl} target="_blank" rel="noreferrer noopener" className="mt-release__name">
+            <a href={externalHref(r.infoUrl)} target="_blank" rel="noreferrer noopener" className="mt-release__name">
               {r.title}
             </a>
           ) : (

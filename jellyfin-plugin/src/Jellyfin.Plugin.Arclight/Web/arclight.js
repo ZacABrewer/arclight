@@ -252,6 +252,29 @@
   }
 
   // ------------------------------------------------------------------ helpers
+  // url-guard:start (tests/web/url-guard.test.mjs runs this block)
+  // Links and images built from server data (TMDB, JustWatch, trailers) may only point at http(s)
+  // addresses, relative or fragment links, or blob: URLs this script makes itself. A javascript: or
+  // data: URL from poisoned metadata is dropped: the element renders without the attribute.
+  function isHttpUrl(v) {
+    if (typeof v !== 'string' || !v) return false;
+    try {
+      var u = new URL(v);
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function safeUrl(v) {
+    var s = String(v);
+    try {
+      return /^(https?|blob):$/.test(new URL(s, location.href).protocol) ? s : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function el(tag, attrs, children) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -261,7 +284,10 @@
         if (k === 'class') node.className = v;
         else if (k === 'text') node.textContent = v;
         else if (k.indexOf('on') === 0 && typeof v === 'function') node.addEventListener(k.slice(2), v);
-        else node.setAttribute(k, v === true ? '' : String(v));
+        else if (k === 'href' || k === 'src') {
+          var safe = safeUrl(v);
+          if (safe !== null) node.setAttribute(k, safe);
+        } else node.setAttribute(k, v === true ? '' : String(v));
       });
     }
     (children || []).forEach(function (c) {
@@ -270,6 +296,7 @@
     });
     return node;
   }
+  // url-guard:end
 
   function debounce(fn, ms) {
     var timer = null;
@@ -1119,7 +1146,7 @@
         box.appendChild(row);
       });
       if (!any) { box.remove(); return; }
-      var attribution = data.link
+      var attribution = isHttpUrl(data.link)
         ? el('a', { class: 'arclight-attribution', href: data.link, target: '_blank', rel: 'noopener noreferrer', text: data.attribution || t('justWatch') })
         : el('span', { class: 'arclight-attribution', text: data.attribution || t('justWatch') });
       box.appendChild(attribution);
@@ -1542,7 +1569,7 @@
         }, on);
         actions.appendChild(wl);
       }
-      if (d.trailer && /^https:\/\/(www\.youtube\.com|vimeo\.com)\//.test(d.trailer.url)) {
+      if (d.trailer && isHttpUrl(d.trailer.url) && /^https:\/\/(www\.youtube\.com|vimeo\.com)\//.test(d.trailer.url)) {
         actions.appendChild(el('a', { class: 'emby-button arclight-action', href: d.trailer.url, target: '_blank', rel: 'noopener noreferrer' }, [el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'smart_display' }), el('span', { class: 'arclight-action-label', text: t('trailer') })]));
       }
       if (features().issues) {
