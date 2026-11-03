@@ -565,6 +565,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (!buildOverlay(request, k)) bindOverlay(request);
         upNext.setVisibility(View.GONE);
         skip.setVisibility(View.GONE);
+        // A (re)build runs a tick, which can already show Skip (an intro from 0:00) or the up-next
+        // card (a resume in the credits). They were just hidden, so the next tick decides afresh;
+        // left set, Skip would stay hidden for the whole segment.
+        shownSkip = null;
+        upNextShown = false;
 
         startStream(request.startPositionMs, true);
         showControls(true);
