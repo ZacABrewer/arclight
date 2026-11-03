@@ -1,8 +1,8 @@
 import type { CustomUrlSettings, ImportListMediaType } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
-import { asArray, asRecord, getText, imdbIdOf, int, str } from './http.js';
+import { asArray, asRecord, imdbIdOf, int, request, str } from './http.js';
 import { parseCsv } from './imdb.js';
-import { wants, type FetchedItem, type Provider } from './types.js';
+import { wants, type FetchedItem, type Provider, type ProviderContext } from './types.js';
 
 // Generic feeds: a JSON document of titles (or bare TMDB ids), or an RSS/Atom feed whose items
 // carry TMDB/IMDb ids in links or tags. StevenLu's popular-movies feed is the JSON shape.
@@ -62,9 +62,91 @@ function parseJsonRows(rows: unknown[], fallback: 'series' | 'movie'): FetchedIt
   return out;
 }
 
+/** Largest feed or list document read; real ones are a few hundred kilobytes. */
+export const MAX_FEED_BYTES = 16 * 1024 * 1024;
+/** Longest item title kept; the year regexes below run on it. */
+const MAX_FEED_TITLE = 512;
+
+/** The response body as text, refused once it passes MAX_FEED_BYTES. */
+async function getFeedText(ctx: Pick<ProviderContext, 'fetch' | 'signal'>, what: string, url: string, init: RequestInit): Promise<string> {
+  const res = await request(ctx, what, url, init);
+  const declared = Number(res.headers.get('content-length'));
+  const tooBig = () => new ImportListFetchError('bad-response', `${what} sent more than ${MAX_FEED_BYTES / 1024 / 1024} MB`);
+  if (declared > MAX_FEED_BYTES) {
+    await res.body?.cancel().catch(() => undefined);
+    throw tooBig();
+  }
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_FEED_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw tooBig();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+/**
+ * Every `<name ...>...</name>` element (first match wins, as a lazy regex would), found with
+ * indexOf so an unclosed tag costs one scan, not one scan per opening tag.
+ */
+function elements(xml: string, names: readonly string[], limit = Infinity): string[] {
+  const lower = xml.toLowerCase();
+  const out: string[] = [];
+  const open = names.map((n) => `<${n}`);
+  const closed = new Set<number>(); // names with no closing tag left
+  let pos = 0;
+  while (out.length < limit) {
+    let at = -1;
+    let which = -1;
+    for (let k = 0; k < names.length; k++) {
+      if (closed.has(k)) continue;
+      const i = lower.indexOf(open[k]!, pos);
+      if (i >= 0 && (at < 0 || i < at)) [at, which] = [i, k];
+    }
+    if (at < 0) break;
+    const after = at + open[which]!.length;
+    const next = xml[after];
+    if (next === undefined || !(next === '>' || /\s/.test(next))) {
+      pos = at + 1;
+      continue;
+    }
+    const closer = `</${names[which]}>`;
+    const end = lower.indexOf(closer, after + 1);
+    if (end < 0) {
+      closed.add(which);
+      pos = at + 1;
+      continue;
+    }
+    out.push(xml.slice(at, end + closer.length));
+    pos = end + closer.length;
+  }
+  return out;
+}
+
+function stripCdata(s: string): string {
+  if (!s.includes('<![CDATA[')) return s;
+  let out = '';
+  let pos = 0;
+  for (;;) {
+    const start = s.indexOf('<![CDATA[', pos);
+    const end = start < 0 ? -1 : s.indexOf(']]>', start + 9);
+    if (end < 0) return out + s.slice(pos);
+    out += s.slice(pos, start) + s.slice(start + 9, end);
+    pos = end + 3;
+  }
+}
+
 function decodeXml(s: string): string {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+  return stripCdata(s)
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
@@ -74,15 +156,15 @@ function decodeXml(s: string): string {
 }
 
 function tag(block: string, name: string): string | null {
-  const m = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, 'i').exec(block);
-  return m?.[1] !== undefined ? decodeXml(m[1]) : null;
+  const el = elements(block, [name], 1)[0];
+  if (el === undefined) return null;
+  return decodeXml(el.slice(el.indexOf('>') + 1, el.length - name.length - 3));
 }
 
 export function parseXmlFeed(xml: string, mediaType: ImportListMediaType): FetchedItem[] {
   const fallback = fallbackKind(mediaType);
   const out: FetchedItem[] = [];
-  const blocks = xml.match(/<(item|entry)[\s>][\s\S]*?<\/\1>/gi) ?? [];
-  for (const block of blocks) {
+  for (const block of elements(xml, ['item', 'entry'])) {
     const text = decodeXml(block);
     const tmdbLink = /themoviedb\.org\/(movie|tv)\/(\d+)/i.exec(text);
     const tmdbTag = tag(block, 'tmdb') ?? tag(block, 'tmdbid') ?? tag(block, 'tmdb:id');
@@ -91,7 +173,7 @@ export function parseXmlFeed(xml: string, mediaType: ImportListMediaType): Fetch
     const tmdbId = tmdbLink ? int(tmdbLink[2]) : int(tmdbTag);
     if (tmdbId === null && !imdb && int(tvdb) === null) continue;
     const kind = tmdbLink ? (tmdbLink[1]!.toLowerCase() === 'tv' ? 'series' : 'movie') : kindFrom(tag(block, 'mediatype'), fallback);
-    const rawTitle = tag(block, 'title') ?? '';
+    const rawTitle = (tag(block, 'title') ?? '').slice(0, MAX_FEED_TITLE);
     const yearMatch = /\((\d{4})\)\s*$/.exec(rawTitle);
     const title = rawTitle.replace(/\s*\(\d{4}\)\s*$/, '').trim() || imdb || `TMDB ${tmdbId}`;
     out.push({
@@ -107,6 +189,7 @@ export function parseXmlFeed(xml: string, mediaType: ImportListMediaType): Fetch
 }
 
 export function parseFeed(text: string, mediaType: ImportListMediaType): FetchedItem[] {
+  if (text.length > MAX_FEED_BYTES) throw new ImportListFetchError('bad-response', 'feed is too large');
   const trimmed = text.trim();
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
     let json: unknown;
@@ -122,13 +205,13 @@ export function parseFeed(text: string, mediaType: ImportListMediaType): Fetched
 }
 
 export const rssList: Provider<'rss'> = async (settings, mediaType, ctx) => {
-  const text = await getText(ctx, 'Feed', settings.url, { headers: { Accept: 'application/json, application/rss+xml, application/xml' } });
+  const text = await getFeedText(ctx, 'Feed', settings.url, { headers: { Accept: 'application/json, application/rss+xml, application/xml' } });
   return parseFeed(text, mediaType).filter((i) => wants(mediaType, i.mediaType));
 };
 
 export const stevenLu: Provider<'stevenLu'> = async (settings, mediaType, ctx) => {
   if (!wants(mediaType, 'movie')) return [];
-  const text = await getText(ctx, 'StevenLu', settings.url, { headers: { Accept: 'application/json' } });
+  const text = await getFeedText(ctx, 'StevenLu', settings.url, { headers: { Accept: 'application/json' } });
   return parseFeed(text, 'movie').filter((i) => i.mediaType === 'movie');
 };
 
@@ -199,6 +282,6 @@ export function parseCustomDocument(text: string, s: Pick<CustomUrlSettings, 'fo
 export const customUrl: Provider<'customUrl'> = async (settings, mediaType, ctx) => {
   const headers: Record<string, string> = { Accept: 'application/json, text/csv, text/plain' };
   if (settings.headerName && settings.headerValue) headers[settings.headerName] = settings.headerValue;
-  const text = await getText(ctx, 'Custom list', settings.url, { headers });
+  const text = await getFeedText(ctx, 'Custom list', settings.url, { headers });
   return parseCustomDocument(text, settings, mediaType).filter((i) => wants(mediaType, i.mediaType));
 };

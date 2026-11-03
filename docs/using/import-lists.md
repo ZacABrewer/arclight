@@ -93,6 +93,7 @@ AniList, MyAnimeList, Kitsu and Simkl anime entries are matched to TMDB (and TVD
 - **IMDb List** reads IMDb's list export. IMDb sometimes blocks automated requests to it; if a list fails with a blocked or empty response, use the same list through MDBList or a custom URL.
 - **Letterboxd** has no public API, so Arclight reads the public list pages (and each film's page once, to find its TMDB id; the match is remembered). If Letterboxd changes its pages, this source can stop working until Arclight is updated. Private lists cannot be read.
 - **Rotten Tomatoes and Metacritic** have no public list feed or API that may be used this way, so there is no source for them. MDBList offers lists filtered and sorted by those scores; add one with the MDBList source.
+- An RSS, JSON or custom-URL document larger than 16 MB is refused ("sent more than 16 MB"). Real feeds are far smaller.
 - Each list is limited to the number of titles you set (where the source has a limit field) to stay inside the source's rate limits.
 
 ## API

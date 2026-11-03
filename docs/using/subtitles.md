@@ -23,7 +23,7 @@ A language profile says which subtitles you want for an item. You can have sever
 | Forced (per language) | Never | **Never**: plain subtitles only. **Also**: both a full and a forced subtitle are wanted. **Only**: only a forced subtitle. Forced subtitles translate only foreign-language dialogue. |
 | HI (per language) | Also | Hearing-impaired subtitles. **Never**: excluded. **Also**: accepted. **Only**: required. |
 | Cutoff | none (every language wanted) | Pick one language: once a subtitle for it exists, nothing else is searched. **Any language** means any one item completes the profile. |
-| Must contain | empty | Release info must match one of these (regex or plain text, not case sensitive) or the subtitle is rejected. |
+| Must contain | empty | Release info must match one of these (regex or plain text, not case sensitive) or the subtitle is rejected. A pattern that is not a valid regex, or one that could hang on a crafted release name (see [refused regular expressions](quality-profiles.md#regular-expressions-that-are-refused)), is matched as plain text. |
 | Must not contain | empty | Release info matching any of these is rejected. |
 | Keep original format (do not convert to SubRip) | off | Keep the provider's format (for example .ass) instead of converting to .srt. |
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pathEncode } from './encoding.js';
-import { isTruthy, renderTemplate, TemplateError, templateVariables, validateTemplate, type TemplateVars } from './template.js';
+import { definitionRegex, hasNestedQuantifier, isTruthy, regexReplace, renderTemplate, TemplateError, templateVariables, validateTemplate, type TemplateVars } from './template.js';
 
 const vars: TemplateVars = {
   'Config.sitelink': 'https://site.example/',
@@ -106,5 +106,37 @@ describe('isTruthy', () => {
     expect(isTruthy('0')).toBe(true);
     expect(isTruthy('false')).toBe(true);
     expect(isTruthy(['a'])).toBe(true);
+  });
+});
+
+describe('definition regexes (DATA-53)', () => {
+  it('refuses nested repeats, which a hostile page could stall', () => {
+    for (const p of [String.raw`(a+)+$`, String.raw`(?:\w*\s?){1,50}x`, String.raw`((ab)*c)*d`, String.raw`(?<n>[a-z]+)*!`])
+      expect([p, hasNestedQuantifier(p)]).toEqual([p, true]);
+    const fine = [
+      String.raw`[^\w\s.-]+`,
+      String.raw`(\d)(st|nd|rd|th)`,
+      String.raw`.*\b(2160p|4k)\b.*`,
+      String.raw`\bS\d{2}(E\d{2,3})?\b`,
+      String.raw`(\d{1,3}\.){3}\d+`,
+      String.raw`[(+]+x`,
+      String.raw`\(a+\)+`,
+    ];
+    for (const p of fine) expect([p, hasNestedQuantifier(p)]).toEqual([p, false]);
+    expect(() => definitionRegex('(a+)+$')).toThrow(SyntaxError);
+    expect(() => definitionRegex('x'.repeat(1001))).toThrow(SyntaxError);
+    expect(() => definitionRegex('(')).toThrow(SyntaxError);
+  });
+
+  it('still compiles, caches and translates ordinary patterns', () => {
+    expect(definitionRegex('(?i)abc').test('ABC')).toBe(true);
+    expect(definitionRegex('(?i)abc')).toBe(definitionRegex('(?i)abc'));
+    expect(regexReplace('a1b22', String.raw`(?'d'\d+)`, '<${d}>')).toBe('a<1>b<22>');
+  });
+
+  it('keeps the cache bounded', () => {
+    const first = definitionRegex('first-pattern');
+    for (let i = 0; i < 300; i++) definitionRegex(`p${i}`);
+    expect(definitionRegex('first-pattern')).not.toBe(first);
   });
 });

@@ -17,6 +17,7 @@ import {
 } from '@arclight/shared';
 import { downloadClientSettingsSchemas } from '@arclight/download-clients';
 import { isAgentKind, parseAgentSettings } from '@arclight/notifications';
+import { termProblem, validateCustomFormat } from '@arclight/profiles-engine';
 import { DOWNLOAD_CLIENT_PROTOCOLS } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import {
@@ -189,6 +190,8 @@ const customFormatKind = define({
       })),
     ),
   refsOf: () => [],
+  // The same rules as saving one: bad and catastrophic regex patterns are refused.
+  check: (e) => validateCustomFormat({ name: 'import', ...e }).map((i) => ({ field: i.path, message: i.message, level: 'error' as const })),
   insert: (db, key, e) => {
     db.insert(customFormats).values({ name: key, ...e }).run();
   },
@@ -309,6 +312,16 @@ const releaseProfileKind = define({
       })),
     ),
   refsOf: (e) => [...(e.indexer ? [{ kind: 'indexers' as const, name: e.indexer, field: 'indexer' }] : []), ...tagRefs(e.tags)],
+  check: (e) => {
+    const out: EntryCheck[] = [];
+    for (const list of ['required', 'ignored'] as const) {
+      e[list].forEach((term, i) => {
+        const problem = termProblem(term);
+        if (problem) out.push({ field: `${list}[${i}]`, message: `invalid term (${problem}): ${term.slice(0, 200)}`, level: 'error' });
+      });
+    }
+    return out;
+  },
   insert: (db, key, e, refs) => {
     db.insert(releaseProfiles).values(releaseProfileValues(key, e, refs)).run();
   },

@@ -214,6 +214,21 @@ describe('config import planning', () => {
     expect(db.select().from(tags).all().map((t) => t.label).sort()).toEqual(['a', 'b']);
   });
 
+  it('refuses catastrophic regex patterns in formats and release profiles (DATA-34)', async () => {
+    const db = await createTestDb();
+    const out = importDocument(db, {
+      customFormats: {
+        Evil: {
+          includeWhenRenaming: false,
+          specifications: [{ implementation: 'releaseTitle', name: 't', negate: false, required: false, fields: { pattern: '(a+)+$' } }],
+        },
+      },
+      releaseProfiles: { Bad: { enabled: true, required: ['/(\\w|\\d)+$/'], ignored: ['cam'], tags: [] } },
+    });
+    expect(out.applied).toBe(false);
+    expect(out.errors.map((e) => e.path).sort()).toEqual(['customFormats.Evil.specifications[0]', 'releaseProfiles.Bad.required[0]']);
+  });
+
   it('reports invalid entries with their path', async () => {
     const db = await createTestDb();
     const out = importDocument(db, { rootFolders: { '/x': { mediaType: 'comics' } }, downloadClients: { Y: { protocol: 'torrent' } } });

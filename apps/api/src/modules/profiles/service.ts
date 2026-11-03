@@ -30,9 +30,9 @@ import {
   defaultMusicProfiles,
   defaultAudiobookProfiles,
   defaultQualitySize,
-  isValidTerm,
   matchCustomFormats,
   reorderDelayProfiles,
+  termProblem,
   validateCustomFormat,
   validateQualityProfile,
 } from '@arclight/profiles-engine';
@@ -440,10 +440,12 @@ export class ProfilesService {
       issues.push({ path: 'required', message: 'a release profile needs at least one required or ignored term' });
     }
     input.required.forEach((t, i) => {
-      if (!isValidTerm(t)) issues.push({ path: `required[${i}]`, message: `invalid term: ${t}` });
+      const problem = termProblem(t);
+      if (problem) issues.push({ path: `required[${i}]`, message: `invalid term (${problem}): ${t.slice(0, 200)}` });
     });
     input.ignored.forEach((t, i) => {
-      if (!isValidTerm(t)) issues.push({ path: `ignored[${i}]`, message: `invalid term: ${t}` });
+      const problem = termProblem(t);
+      if (problem) issues.push({ path: `ignored[${i}]`, message: `invalid term (${problem}): ${t.slice(0, 200)}` });
     });
     assertValid(issues);
   }

@@ -46,6 +46,19 @@ const settings = (over: Partial<GuidesSettings> = {}) =>
   GuidesSettings.parse({ enabled: true, profiles: [{ guideProfileName: 'HD Bluray + WEB', localQualityProfileId: 1 }], ...over });
 
 describe('guide parsing (recorded TRaSH files)', () => {
+  it('refuses a format whose pattern could backtrack catastrophically (DATA-34)', () => {
+    const raw = {
+      trash_id: 'f'.repeat(32),
+      name: 'Evil',
+      specifications: [
+        { name: 'x265', implementation: 'ReleaseTitleSpecification', negate: false, required: false, fields: { value: 'x265' } },
+        { name: 'Evil', implementation: 'ReleaseTitleSpecification', negate: false, required: false, fields: { value: '(a+)+$' } },
+      ],
+    };
+    const out = parseGuideFormat(raw, 'radarr', 'evil.json');
+    expect(out).toMatch(/^evil\.json: invalid regex \(.*nests a repeat.*\): \(a\+\)\+\$$/);
+  });
+
   it('parses every recorded custom format', () => {
     const g = recordedGuide();
     expect(g.formats.map((f) => f.name).sort()).toEqual(['BR-DISK', 'HD Bluray Tier 01', 'Repack/Proper', 'Repack2', 'WEB Tier 01']);
@@ -120,6 +133,12 @@ describe('format selection', () => {
     expect(matchesPattern('WEB Tier 0?', 'web tier 01')).toBe(true);
     expect(matchesPattern('BR-DISK', 'BR-DISK2')).toBe(false);
     expect(matchesPattern('a.b', 'axb')).toBe(false);
+    expect(matchesPattern('*', '')).toBe(true);
+    expect(matchesPattern('*tier*01', 'HD Bluray Tier 01')).toBe(true);
+    expect(matchesPattern('(a)', '(A)')).toBe(true);
+    const t = performance.now();
+    expect(matchesPattern('*a'.repeat(30) + 'b', 'a'.repeat(200))).toBe(false);
+    expect(performance.now() - t).toBeLessThan(50);
   });
 
   it('defaults to the formats mapped profiles reference', () => {
