@@ -28,6 +28,8 @@ import { NativeVideoLauncher } from '../video/native-video';
 import { documentTheme } from '../video/native-extras';
 import { householdKeys, householdsApi } from '../households/api';
 import { currentVideoQuality, setActiveProfileId } from '../video/quality';
+import { readBandwidth, writeBandwidth } from '../video/bandwidth';
+import { request as apiRequest } from '@web/api/client';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
 // React through AppServicesContext.
@@ -194,6 +196,13 @@ export async function createServices(): Promise<AppServices> {
       saveProfileSettings: async (patch) => qc.setQueryData(householdKeys.settings(), await householdsApi.saveSettings(patch)),
       theme: documentTheme,
       quality: currentVideoQuality,
+      // 0.24 HLS: a build whose native side reports it; the throughput hint per network type.
+      deliveries: device.deliveries ?? ['progressive'],
+      bandwidth: {
+        get: () => readBandwidth(netState().cellular ? 'cellular' : 'other'),
+        set: (kbps) => writeBandwidth(netState().cellular ? 'cellular' : 'other', kbps),
+      },
+      endSession: (id) => apiRequest(`/playback/video/session/${encodeURIComponent(id)}`, null, { method: 'DELETE' }),
     });
     await video.start();
     setVideoLauncher(video.launch);

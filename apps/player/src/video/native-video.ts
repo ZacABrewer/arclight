@@ -6,6 +6,7 @@ import type {
   ProfileSettings,
   ProfileSettingsPatch,
   ProgressReport,
+  VideoDelivery,
   VideoDeviceProfile,
   VideoSession,
   VideoSessionRequest,
@@ -78,6 +79,12 @@ export interface NativeVideoDeps {
   strings?: () => PlayVideoOptions['strings'];
   /** Streaming quality for this device and profile (Settings > Playback); absent: auto. */
   quality?: () => VideoQuality;
+  /** How the native player takes converted video (getDeviceInfo().deliveries); absent: progressive only. */
+  deliveries?: VideoDelivery[];
+  /** The last measured throughput on the current network (kbit/s), saved from the player's events. */
+  bandwidth?: { get: () => number | null; set: (kbps: number) => void };
+  /** DELETE /playback/video/session/:id: an HLS session the player is done with. */
+  endSession?: (sessionId: string) => Promise<unknown>;
 }
 
 interface Current {
@@ -90,6 +97,21 @@ interface Current {
   subtitle: string | null;
   mediaFileId: number | null;
   started: boolean;
+  /** Playback health from the latest native event (ProgressReport stalls / stallMs / startupMs). */
+  stats?: Pick<ProgressReport, 'stalls' | 'stallMs' | 'startupMs'>;
+}
+
+/** The health fields of a native event, as ProgressReport takes them. */
+function statsOf(e: VideoProgressEvent | VideoClosedEvent): Current['stats'] {
+  const out: NonNullable<Current['stats']> = {};
+  const n = (v: number | undefined) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined);
+  const stalls = n(e.stalls);
+  const stallMs = n(e.stallMs);
+  const startupMs = n(e.startupMs);
+  if (stalls !== undefined) out.stalls = stalls;
+  if (stallMs !== undefined) out.stallMs = stallMs;
+  if (startupMs !== undefined) out.startupMs = startupMs;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** The text subtitle to show at start: the file's default text track, else a forced text one, else off. */
@@ -209,8 +231,15 @@ export class NativeVideoLauncher {
     }
   };
 
-  private request(c: Pick<Current, 'item' | 'audioTrack' | 'subtitle' | 'mediaFileId'>, profile: VideoDeviceProfile, startMs: number): VideoSessionRequest {
+  private request(
+    c: Pick<Current, 'item' | 'audioTrack' | 'subtitle' | 'mediaFileId'>,
+    profile: VideoDeviceProfile,
+    startMs: number,
+    avoidDirect = false,
+  ): VideoSessionRequest {
     const sub = c.subtitle ? c.item.video?.subtitleTracks.find((s) => s.id === c.subtitle) : undefined;
+    const deliveries = this.deps.deliveries;
+    const hint = this.deps.bandwidth?.get() ?? null;
     return {
       itemKey: c.item.itemKey as VideoSessionRequest['itemKey'],
       ...(c.mediaFileId !== null ? { mediaFileId: c.mediaFileId } : {}),
@@ -220,7 +249,29 @@ export class NativeVideoLauncher {
       ...(sub && !sub.text ? { subtitle: sub.id } : {}),
       ...(startMs > 0 ? { startMs: Math.floor(startMs) } : {}),
       quality: this.deps.quality?.() ?? 'auto',
+      // 0.24 HLS: what the player takes, the throughput hint and the device (one session per device).
+      ...(deliveries?.length ? { deliveries } : {}),
+      ...(deliveries?.includes('hls') ? { deviceKey: this.deps.deviceId.slice(0, 64) } : {}),
+      ...(hint ? { bandwidthKbps: hint } : {}),
+      ...(avoidDirect ? { avoidDirect: true } : {}),
     };
+  }
+
+  /** The HLS parts of a session for the plugin (none for progressive streams). */
+  private hlsOf(session: VideoSession): Pick<PlayVideoOptions, 'delivery' | 'sessionId' | 'hls'> {
+    if (session.delivery !== 'hls' || !session.hls) return {};
+    return { delivery: 'hls', sessionId: session.sessionId, hls: session.hls };
+  }
+
+  /** Lets the server free an HLS session the player no longer uses (its encoder and slot). */
+  private endSession(session: VideoSession | null | undefined): void {
+    if (!session || session.delivery !== 'hls' || !session.sessionId || !this.deps.endSession) return;
+    void this.deps.endSession(session.sessionId).catch(() => undefined);
+  }
+
+  /** Keeps the player's throughput measurement for the next video on this network. */
+  private saveBandwidth(kbps: number | undefined): void {
+    if (kbps && kbps > 0) this.deps.bandwidth?.set(kbps);
   }
 
   /** Fetch the item, ask for a session and open the native player (an open one loads it in place). */
@@ -251,6 +302,8 @@ export class NativeVideoLauncher {
     // Closed (or another item opened) while the session was being prepared.
     if (stale()) return;
     const durationMs = session.durationMs || item.durationMs;
+    // Replacing an item in place (another playVideo): its HLS session is done.
+    if (this.current && this.current.session !== session) this.endSession(this.current.session);
     this.current = {
       ...base,
       session,
@@ -284,7 +337,11 @@ export class NativeVideoLauncher {
       ...(session.audioTrack !== null && session.audioTrack !== undefined ? { selectedAudio: session.audioTrack } : {}),
       chapters: item.chapters.map((c) => ({ title: c.title, startMs: c.startMs })),
       segments: item.segments ?? [],
+      ...this.hlsOf(session),
+      quality: this.deps.quality?.() ?? 'auto',
     };
+    const hint = this.deps.bandwidth?.get();
+    if (hint) options.bandwidthKbps = hint;
     if (titles.subtitle) options.subtitle = titles.subtitle;
     const art = httpUrl(item.artworkUrl);
     if (art) options.artworkUrl = art;
@@ -326,6 +383,7 @@ export class NativeVideoLauncher {
       ...(this.deps.deviceName ? { deviceName: this.deps.deviceName } : {}),
       clientTime: (this.deps.now?.() ?? new Date()).toISOString(),
       playMethod: c.session.method === 'direct' ? 'DirectPlay' : 'Transcode',
+      ...(c.stats ?? {}),
     };
     void this.deps.sendProgress(c.item.itemKey, body).catch(() => undefined);
   }
@@ -343,6 +401,9 @@ export class NativeVideoLauncher {
     c.positionMs = e.positionMs;
     if (e.durationMs > 0) c.durationMs = e.durationMs;
     c.paused = e.paused;
+    const st = statsOf(e);
+    if (st) c.stats = st;
+    this.saveBandwidth(e.bandwidthKbps);
     if (e.paused && wasPaused) return; // Nothing moved.
     this.report(e.paused ? 'pause' : 'progress', c);
   }
@@ -350,13 +411,16 @@ export class NativeVideoLauncher {
   private async onSeekRequest(e: VideoSeekRequestEvent): Promise<void> {
     const c = this.matches(e.itemKey);
     if (!c) return;
+    // Direct play keeps stalling: switch to a converted stream only on Auto (a pinned quality is
+    // the viewer's choice; native asks only on Auto too).
+    if (e.avoidDirect && (this.deps.quality?.() ?? 'auto') !== 'auto') return;
     const token = ++this.seekToken;
     c.positionMs = e.positionMs;
     if (e.audioTrack !== undefined) c.audioTrack = e.audioTrack;
     if (e.subtitle !== undefined) c.subtitle = e.subtitle;
     let session: VideoSession;
     try {
-      session = await this.deps.requestSession(this.request(c, await this.profile(), e.positionMs));
+      session = await this.deps.requestSession(this.request(c, await this.profile(), e.positionMs, e.avoidDirect === true));
     } catch (err) {
       if (token !== this.seekToken || this.current !== c) return;
       // The native screen waits (spinner) for an answer that will not come: close it rather than
@@ -366,7 +430,12 @@ export class NativeVideoLauncher {
       return;
     }
     // A newer seek, or the player moved on / closed meanwhile.
-    if (token !== this.seekToken || this.current !== c) return;
+    if (token !== this.seekToken || this.current !== c) {
+      this.endSession(session);
+      return;
+    }
+    // The stream changes (audio track, direct play to HLS): the old HLS session is done.
+    if (c.session.sessionId !== session.sessionId) this.endSession(c.session);
     c.session = session;
     if (session.audioTrack !== null && session.audioTrack !== undefined) c.audioTrack = session.audioTrack;
     await this.deps.plugin
@@ -379,6 +448,7 @@ export class NativeVideoLauncher {
         subtitles: subtitlesOf(session),
         ...(c.audioTrack !== null ? { selectedAudio: c.audioTrack } : {}),
         streamInfo: streamInfo(c.item, session),
+        ...this.hlsOf(session),
       })
       .catch(() => undefined);
     this.report('seek', c);
@@ -396,6 +466,7 @@ export class NativeVideoLauncher {
       const watched = e.completed !== false;
       if (watched) c.positionMs = Math.max(c.positionMs, c.durationMs);
       if (c.started) this.report('stop', c);
+      this.endSession(c.session);
       if (watched) await this.deps.markPlayed(c.item.itemKey).catch(() => undefined);
     }
     try {
@@ -418,6 +489,7 @@ export class NativeVideoLauncher {
       this.seekToken++;
       if (e.positionMs > 0) c.positionMs = e.positionMs;
       if (c.started) this.report('stop', c);
+      this.endSession(c.session);
     }
     try {
       await this.open(e.itemKey, {}, gen);
@@ -461,9 +533,13 @@ export class NativeVideoLauncher {
       this.seekToken++;
       if (e.positionMs > 0) c.positionMs = e.positionMs;
       if (e.durationMs > 0) c.durationMs = e.durationMs;
+      const st = statsOf(e);
+      if (st) c.stats = st;
       if (c.started) this.report('stop', c);
+      this.endSession(c.session);
       if (e.completed) await this.deps.markPlayed(c.item.itemKey).catch(() => undefined);
     }
+    this.saveBandwidth(e.bandwidthKbps);
     if (e.error) this.deps.onError?.(t(`player.video.error.${errorKey(e.error)}`));
     this.deps.refresh();
   }
