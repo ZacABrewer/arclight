@@ -128,7 +128,8 @@ describe('parseTorrent', () => {
     const big = [{ length: 2 ** 45, path: ['a'] }, { length: 2 ** 45, path: ['b'] }, { length: 2 ** 45, path: ['c'] }];
     expect(() => parseTorrent(encode({ info: { name: 'x', 'piece length': 2 ** 28, pieces: Buffer.alloc(20), files: big } }))).toThrowError('too large');
     expect(() => parseTorrent(encode({ info: { ...one, 'piece length': 16384, length: 2n ** 64n } }))).toThrowError('valid length');
-  });
+    // Encoding 200,001 file entries takes several seconds on a busy CI runner.
+  }, 30_000);
 
   it('requires a power-of-two piece length for v2 (BEP 52)', () => {
     const v2 = { name: 'x', 'meta version': 2, 'piece length': 3 * 16384, 'file tree': { x: { '': { length: 1, 'pieces root': Buffer.alloc(32) } } } };

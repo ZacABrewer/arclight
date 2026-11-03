@@ -1185,7 +1185,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     // A web seed piece for this index was being checked meanwhile: if it got written, done.
     const busy = this.finishing.get(index);
     if (busy) await busy;
-    if (this.closed || storage.have.get(index)) return;
+    // Not skipped when closing: close() waits for received blocks to finish verifying.
+    if (storage.have.get(index)) return;
     const verify = storage.verifyPiece(index);
     this.finishing.set(index, verify);
     let ok: boolean;
