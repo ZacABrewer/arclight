@@ -4,7 +4,7 @@ import { originOf } from '../core/address.js';
 import { connect, type ConnectResult } from '../core/probe.js';
 import { parsePairingCode } from '../core/qr.js';
 import { defaultServerName, type Server } from '../core/servers.js';
-import type { PushState } from '../core/push.js';
+import { confirmsHost, type Verdict } from '../core/transport.js';
 import { DEFAULT_SETTINGS, LOCK_AFTER_CHOICES, loadSettings, saveSettings, type AppSettings } from '../core/settings.js';
 import licenses from '../generated/licenses.json';
 import { appBuild, isNative, openExternal, type Runtime } from '../platform/capacitor.js';
@@ -55,6 +55,7 @@ export function ServerListScreen({ rt, go, connectTo }: WithRuntime) {
     if (!window.confirm(`Remove ${s.name}? You can add it again later.`)) return;
     await rt.servers.remove(s.id);
     await rt.push.unregister(originOf(s.url)).catch(() => undefined);
+    void rt.servers.list().then((left) => rt.push.reconcile(left.map((x) => originOf(x.url)))).catch(() => undefined);
     void haptic.tap();
     await refresh();
   };
@@ -124,6 +125,60 @@ export function ServerListScreen({ rt, go, connectTo }: WithRuntime) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Plain-http notice / typed confirmation (core/transport.ts)
+
+export function TransportWarning({ verdict, typed, setTyped }: { verdict: Verdict; typed: string; setTyped: (v: string) => void }) {
+  if (verdict.kind === 'ok') return null;
+  if (verdict.kind === 'notice') return <Notice kind="warn">Traffic on your network to this server is not encrypted (plain http://). Anyone on the same network can read it.</Notice>;
+  return (
+    <>
+      <Notice kind="warn">
+        {verdict.reason === 'downgrade'
+          ? `${verdict.host} has worked over https:// before. This address uses plain http://, so your password and data would not be encrypted.`
+          : 'This connection is not encrypted (plain http:// over the internet). Your password and data can be read by anyone on the network path. Use https:// or a VPN for access from outside your home.'}
+      </Notice>
+      <label>
+        Type {verdict.host} to connect without encryption
+        <input type="text" autoCapitalize="off" autoCorrect="off" spellCheck={false} value={typed} onChange={(e) => setTyped(e.target.value)} />
+      </label>
+    </>
+  );
+}
+
+/** A saved plain-http server that needs the one-time notice or the typed confirmation first. */
+export function TransportScreen({ server, verdict, typed, setTyped, onAccept, go }: Nav & { server: Server; verdict: Exclude<Verdict, { kind: 'ok' }>; typed: string; setTyped: (v: string) => void; onAccept: () => void }) {
+  const blocked = verdict.kind === 'confirm' && !confirmsHost(typed, verdict.host);
+  return (
+    <main className="screen">
+      <TopBar title="Not encrypted" />
+      <div className="center">
+        <Mark />
+        <h2>{server.name}</h2>
+        <p className="muted small mono">{server.url}</p>
+      </div>
+      <form
+        className="actions"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!blocked) onAccept();
+        }}
+      >
+        <TransportWarning verdict={verdict} typed={typed} setTyped={setTyped} />
+        <button type="submit" className={verdict.kind === 'notice' ? 'btn accent block' : 'btn block'} disabled={blocked}>
+          {verdict.kind === 'notice' ? 'Continue' : 'Connect anyway'}
+        </button>
+        <button type="button" className="btn block" onClick={() => go({ name: 'edit', id: server.id })}>
+          Edit address
+        </button>
+        <button type="button" className="btn ghost block" onClick={() => go({ name: 'servers' })}>
+          Switch server
+        </button>
+      </form>
+    </main>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
 // Add / edit server
 
 export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithRuntime & { initialUrl?: string; editId?: string }) {
@@ -134,6 +189,8 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
   const [editing, setEditing] = useState<Server | null>(null);
   const [hasServers, setHasServers] = useState(true);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [typed, setTyped] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -152,7 +209,10 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
   const check = async (value = address) => {
     setBusy(true);
     setResult(null);
+    setVerdict(null);
+    setTyped('');
     const r = await connect(rt.http, value);
+    if (r.ok) setVerdict(await rt.transport.verdict(r.url));
     setBusy(false);
     setResult(r);
     if (r.ok) {
@@ -162,8 +222,12 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
     return r;
   };
 
+  const blocked = verdict?.kind === 'confirm' && !confirmsHost(typed, verdict.host);
+
   const save = async () => {
-    if (!result?.ok) return;
+    if (!result?.ok || !verdict || blocked) return;
+    await rt.transport.accept(result.url, verdict);
+    await rt.transport.pinHttps(result.url);
     let server: Server;
     if (editing) {
       try {
@@ -230,6 +294,7 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
             onChange={(e) => {
               setAddress(e.target.value);
               setResult(null);
+              setVerdict(null);
             }}
             autoFocus={!initialUrl && !editId}
           />
@@ -244,11 +309,7 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
               Found Arclight at <span className="mono">{result.url}</span>.{' '}
               {result.needsSetup ? 'The server still needs its first-time setup; you will be taken there.' : result.needsSignIn ? 'You will sign in on the next screen.' : 'You are already signed in.'}
             </Notice>
-            {result.insecure && (
-              <Notice kind="warn">
-                This connection is not encrypted (plain http:// over the internet). Your password and data can be read by anyone on the network path. Use https:// or a VPN for access from outside your home.
-              </Notice>
-            )}
+            {verdict && <TransportWarning verdict={verdict} typed={typed} setTyped={setTyped} />}
             <label>
               Name
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="Home" />
@@ -257,8 +318,8 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
         )}
 
         {result?.ok ? (
-          <button type="submit" className={result.insecure ? 'btn block' : 'btn accent block'}>
-            {result.insecure ? 'Connect anyway' : editing ? 'Save and connect' : 'Add and connect'}
+          <button type="submit" className={verdict?.kind === 'confirm' ? 'btn block' : 'btn accent block'} disabled={!verdict || blocked}>
+            {verdict?.kind === 'confirm' ? 'Connect anyway' : editing ? 'Save and connect' : 'Add and connect'}
           </button>
         ) : (
           <button type="submit" className="btn accent block" disabled={busy || !address.trim()}>
@@ -287,11 +348,14 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [bio, setBio] = useState<{ available: boolean; label: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [push, setPush] = useState<PushState | null>(null);
+  const [push, setPush] = useState<Array<{ origin: string; deviceId: string }>>([]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    void rt.push.state().then(setPush);
+    void (async () => {
+      const origins = (await rt.servers.list()).map((s) => originOf(s.url));
+      setPush((await rt.push.states(origins)).map((r) => ({ origin: r.origin, deviceId: r.state.deviceId })));
+    })();
     void loadSettings(rt.kv).then(setSettings);
     void biometricAvailable().then(setBio);
   }, []);
@@ -299,6 +363,7 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
   const update = async (next: AppSettings) => {
     setSettings(next);
     await saveSettings(rt.kv, next);
+    await rt.syncNative(); // server pages read the lock settings from their snapshot
   };
 
   const toggleLock = async (on: boolean) => {
@@ -370,34 +435,36 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
       <section className="card actions">
         <h2>Notifications</h2>
         <p className="hint">Turn notifications on in each server's own settings (your profile → Notifications). The server decides what to send.</p>
-        {push ? (
+        {push.length > 0 ? (
           <>
-            <label>
-              Push relay device ID
-              <span className="hint">Quote this ID to ask for the push registration to be deleted at the relay.</span>
-              <input type="text" readOnly value={push.deviceId} className="mono" onFocus={(e) => e.currentTarget.select()} aria-label="Push relay device ID" />
-            </label>
+            {push.map((p) => (
+              <label key={p.origin}>
+                Push relay device ID for {new URL(p.origin).host}
+                <span className="hint">Quote this ID to ask for the push registration to be deleted at the relay.</span>
+                <input type="text" readOnly value={p.deviceId} className="mono" onFocus={(e) => e.currentTarget.select()} aria-label={`Push relay device ID for ${new URL(p.origin).host}`} />
+              </label>
+            ))}
             <div className="actions inline">
               <button
                 type="button"
                 className="btn"
                 onClick={() =>
-                  void navigator.clipboard?.writeText(push.deviceId).then(
+                  void navigator.clipboard?.writeText([...new Set(push.map((p) => p.deviceId))].join(', ')).then(
                     () => setCopied(true),
                     () => setCopied(false),
                   )
                 }
               >
-                {copied ? 'Copied' : 'Copy ID'}
+                {copied ? 'Copied' : push.length > 1 ? 'Copy IDs' : 'Copy ID'}
               </button>
               <button
                 type="button"
                 className="btn danger"
                 onClick={async () => {
                   if (!window.confirm('Remove the push registration? No server can send notifications to this device until you turn them on again.')) return;
-                  await rt.push.unregister(null);
+                  await rt.push.unregisterAll(push.map((p) => p.origin));
                   void haptic.tap();
-                  setPush(null);
+                  setPush([]);
                 }}
               >
                 Remove push registration

@@ -4,7 +4,9 @@ import { DEFAULT_PORT } from '../config.js';
 // into the ordered list of base URLs worth probing.
 //
 // Rules (kept deliberately small):
-//  - A scheme typed by the user is respected. Without a port we also try :7878 (Arclight's default).
+//  - A scheme typed by the user is respected, except that a typed http:// to a public host is
+//    tried over https:// first (core/transport.ts: prefer https). Without a port we also try
+//    :7878 (Arclight's default).
 //  - Without a scheme, https:// is tried first. http:// is added only for private/LAN hosts and
 //    bare IPs (a plain-http server on the public internet must be typed as http:// explicitly).
 //  - Without a port we try the scheme's default port first, then :7878.
@@ -135,7 +137,8 @@ function build(scheme: 'http' | 'https', a: ParsedAddress, port: number | null):
 /** Ordered, de-duplicated base URLs to probe for what the user typed. */
 export function candidateUrls(input: string | ParsedAddress): string[] {
   const a = typeof input === 'string' ? parseAddress(input) : input;
-  const schemes: Array<'http' | 'https'> = a.scheme ? [a.scheme] : a.isPrivate || a.isIp ? ['https', 'http'] : ['https'];
+  const schemes: Array<'http' | 'https'> =
+    a.scheme === 'http' && !a.isPrivate ? ['https', 'http'] : a.scheme ? [a.scheme] : a.isPrivate || a.isIp ? ['https', 'http'] : ['https'];
   const ports: Array<number | null> = a.port !== null ? [a.port] : [null, DEFAULT_PORT];
   const out: string[] = [];
   // Port is the outer loop: "host" on its default port beats "host:7878" for either scheme.

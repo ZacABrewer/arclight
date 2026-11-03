@@ -31,10 +31,18 @@ export const LINKS = {
   tmdb: 'https://www.themoviedb.org/',
 } as const;
 
-/** Capacitor Preferences keys (stored in UserDefaults / SharedPreferences "CapacitorStorage"). */
+/**
+ * Capacitor Preferences keys (stored in UserDefaults / SharedPreferences "CapacitorStorage").
+ * Server pages cannot reach Preferences at all (the native bridge gate refuses it), so these are
+ * written by the app's own screens only. Secrets (push relay credentials) are not kept here but in
+ * the native secure store (Keychain / Android Keystore), see platform/capacitor.ts.
+ */
 export const KEYS = {
   servers: 'arclight.servers',
   settings: 'arclight.settings',
+  /** Before 0.24: the one shared push registration. Moved to the secure store on first start. */
   push: 'arclight.push',
   pendingRoute: 'arclight.pendingRoute',
+  /** Plain-http notices / confirmations and https-pinned hosts (core/transport.ts). */
+  transport: 'arclight.transport',
 } as const;
