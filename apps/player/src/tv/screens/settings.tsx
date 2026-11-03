@@ -49,6 +49,11 @@ export function languageName(code: string | null, locale: string, t: Translate):
   }
 }
 
+/** Whether the active profile may reach the account's device settings: the owner, or no profiles at all. */
+export function ownsAccount(profile: { isOwner: boolean } | null): boolean {
+  return !profile || profile.isOwner;
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -212,14 +217,19 @@ export function TvSettingsScreen() {
         if (canManage) out.push({ kind: 'action', key: 'manageProfiles', label: t('app.tv.settings.manageProfiles'), value: '', run: () => void navigate({ to: MANAGE_PROFILES_PATH }) });
         return out;
       }
-      case 'about':
-        return [
+      case 'about': {
+        const out: SettingsOption[] = [
           { kind: 'info', key: 'server', label: t('app.tv.settings.server'), value: active ? `${active.serverName} · ${hostOf(active.serverUrl)}` : '' },
           { kind: 'info', key: 'version', label: t('app.tv.settings.appVersion'), value: APP_VERSION },
           { kind: 'info', key: 'account', label: t('app.tv.settings.signedInAs'), value: [active?.displayName || active?.username, profile?.name].filter(Boolean).join(' · ') },
-          // Accounts (sign out, another server), streaming, downloads and language: the phone's "This device" page.
-          { kind: 'action', key: 'device', label: t('app.settings.device'), value: '', run: () => void navigate({ to: DEVICE_SETTINGS_PATH }) },
         ];
+        // Accounts (sign out, another server), streaming, downloads and language: the phone's
+        // "This device" page. The account's business, so the owner profile only (other profiles,
+        // like Kids, cannot manage the account, as on the web); servers without households have
+        // no profiles and keep it.
+        if (ownsAccount(profile)) out.push({ kind: 'action', key: 'device', label: t('app.settings.device'), value: '', run: () => void navigate({ to: DEVICE_SETTINGS_PATH }) });
+        return out;
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, settings, quality, intro, themes.data, profile, canManage, active, locale, t, profileId]);

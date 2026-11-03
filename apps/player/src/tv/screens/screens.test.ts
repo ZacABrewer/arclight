@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlayerSearchResponse, PlayerTrack, VideoCard } from '@arclight/shared';
 import { newEpisodes, recentAlbums } from './home';
 import { searchTiles, SEARCH_MAX } from './search';
-import { cycle, languageName, SUBTITLE_LANGUAGES } from './settings';
+import { cycle, languageName, ownsAccount, SUBTITLE_LANGUAGES } from './settings';
 import { chapterRows, listenProgress } from './listen';
 import { initialOf } from './manage-profiles';
 
@@ -56,6 +56,12 @@ describe('TV settings helpers', () => {
     expect(languageName(null, 'en', t)).toBe('app.tv.settings.off');
     expect(languageName('de', 'en', t)).toBe('German');
     expect(languageName('es', 'fr', t)).toBe('Espagnol');
+  });
+
+  it('"This device" is for the owner profile only (and servers without profiles)', () => {
+    expect(ownsAccount({ isOwner: true })).toBe(true);
+    expect(ownsAccount({ isOwner: false })).toBe(false);
+    expect(ownsAccount(null)).toBe(true);
   });
 });
 

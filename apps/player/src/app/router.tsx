@@ -5,6 +5,7 @@ import { browseRoutes } from '@web/features/player/browse/index';
 import { PlayerControllerScope } from '@web/features/player/player-context';
 import { NowPlayingPage } from '@web/features/player/ui/now-playing';
 import { getSession } from '../core/session';
+import { useActiveProfile } from '../households/api';
 import { shouldShowPicker } from '../households/gate';
 import { AppAuthBridge } from '../households/web-auth';
 import { AddServerPage, SignInPage, WelcomePage } from '../ui/onboarding';
@@ -23,7 +24,7 @@ import { TvManageProfilesScreen } from '../tv/screens/manage-profiles';
 import { TvBooksScreen, TvMusicScreen } from '../tv/screens/music';
 import { TvProfilesScreen } from '../tv/screens/profiles';
 import { TvSearchScreen } from '../tv/screens/search';
-import { MANAGE_PROFILES_PATH, TvSettingsScreen } from '../tv/screens/settings';
+import { MANAGE_PROFILES_PATH, ownsAccount, TvSettingsScreen } from '../tv/screens/settings';
 import { useServices } from './context';
 import type { AppServices } from './services';
 
@@ -133,6 +134,9 @@ const playerProfilesRoute = createRoute({
 
 /** This device's settings (accounts, streaming, language) on TV: the app page, under the TV header. */
 function TvDeviceSettings() {
+  const { profile } = useActiveProfile();
+  // Owner only (TV Settings shows the row to the owner profile alone).
+  if (!ownsAccount(profile)) return <Navigate to="/player/settings" replace />;
   return (
     <div className="tv-scroll-y" data-tv-scroll="y">
       <div className="tv-browse">
