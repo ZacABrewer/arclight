@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       allowBackup=false: the app keeps sign-in tokens (Keystore) and downloaded audio; neither
@@ -40,10 +41,42 @@
         </activity>
 
         <!--
-          The native player (Media3 MediaSessionService, foregroundServiceType mediaPlayback), the
-          Android Auto media browser service and the download worker are declared here by the
-          native implementation of ArclightPlayerPlugin (see apps/player/README.md).
+          Native player (ArclightPlayerPlugin): Media3 MediaLibraryService for background audio,
+          the media notification, lock screen, headset buttons and the Android Auto browse tree.
+          Exported so system media controllers and Android Auto can bind to it.
         -->
+        <service
+            android:name=".player.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <!-- Android Auto: this app is a media app. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <!-- Google Cast (optional at runtime; ignored when Play services are missing). -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.moviemethat.arclight.cast.CastOptionsProvider" />
+
+        <!-- Artwork for Android Auto when it needs auth headers or is a downloaded file. -->
+        <provider
+            android:name=".car.ArtworkProvider"
+            android:authorities="${applicationId}.artwork"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- WorkManager's foreground service runs the download worker (dataSync on Android 14+). -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

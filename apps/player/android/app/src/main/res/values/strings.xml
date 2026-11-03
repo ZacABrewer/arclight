@@ -4,4 +4,7 @@
     <string name="title_activity_main">Arclight</string>
     <string name="package_name">com.moviemethat.arclight</string>
     <string name="custom_url_scheme">com.moviemethat.arclight</string>
+    <!-- Native player plugin (downloads notification). -->
+    <string name="downloads_channel">Downloads</string>
+    <string name="downloading">Downloading for offline listening</string>
 </resources>
