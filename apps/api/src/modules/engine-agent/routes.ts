@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { AGENT_DEPRECATION_HEADER, handleAgentRequest, MAX_AGENT_BODY_BYTES, type AgentErrorBody } from '@arclight/engine-agent';
 import { EngineAgentSettingsResponse, EngineAgentSettingsUpdate } from '@arclight/shared';
 import { z } from 'zod';
+import { admitSocket, sendBounded } from '../../ws-limits.js';
 import { EngineAgentSettingsError, type EngineAgentService } from './service.js';
 
 // /api/v1/engine-agent/* serves the agent protocol (see @arclight/engine-agent protocol.ts) for
@@ -85,10 +86,9 @@ export function engineAgentRoutes(service: EngineAgentService): Plugin {
       const preValidation = guard(service);
 
       scope.get('/engine-agent/events', { websocket: true, preValidation }, (socket) => {
+        if (!admitSocket(socket, null)) return;
         socket.send(JSON.stringify({ type: 'hello', status: service.core.status() }));
-        const unsubscribe = service.core.subscribe((event) => {
-          if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
-        });
+        const unsubscribe = service.core.subscribe((event) => sendBounded(socket, JSON.stringify(event)));
         socket.on('close', unsubscribe);
         socket.on('error', unsubscribe);
       });

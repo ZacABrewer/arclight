@@ -110,9 +110,19 @@ Two events can be turned on per connection in **Settings > Notifications** (see 
 - **New podcast episodes**: new episodes found in a feed (not sent when you subscribe).
 - **Podcast episode downloaded**: an episode was saved, with its size and path.
 
+## Feeds on your local network
+
+Feeds, episode files, artwork, chapters and transcripts are fetched from the public internet only: an address on your local network (localhost, private and link-local addresses, and names such as `nas`, `nas.lan` or `box.local`) is refused, on the first request and on every redirect. A feed's publisher decides where its episode files and redirects point, so this keeps a feed from making your server download from your own network.
+
+The exception is a feed an **admin** adds by a local name or address, for example a self-hosted feed at `http://nas.lan:8080/feed.xml`: Arclight may then reach that one host (any port) for the feed and its files. Other local hosts stay blocked for that feed. Use the local name or address in the feed URL; a public name that only resolves to a local address on your network is treated as public and refused.
+
+Episode files must arrive as audio or video (or a generic binary type such as `application/octet-stream`); a text, JSON or XML answer is not kept as an episode.
+
 ## Suggestions from the request portal
 
 Request-portal users can suggest a podcast from **Discover > Podcasts**: they search the directory or paste a feed address, add an optional note and press **Suggest**. Anyone allowed to request music, audiobooks or anything at all can suggest podcasts, unless an admin turned **Podcasts** off in that user's request types (**Settings > Users**, see [Discover and requests](discover-and-requests.md)). Users who may auto-approve are subscribed straight away.
+
+A suggested feed must be on the public internet. If the address cannot be read, the person sees one general message ("that address could not be read as a podcast feed") rather than the error the server got.
 
 Admins and request managers review suggestions in **Podcasts > Suggestions**. **Approve** subscribes with the default settings. **Decline** takes an optional reason, which the person sees. People can withdraw their own pending suggestions.
 

@@ -111,6 +111,19 @@ filtered: non-admins get their own request and issue events (everyone's with Vie
 View issues), library events with the Library, Calendar or Wanted area and queue, download,
 history, release and import events with the Activity area; nothing else.
 
+WebSocket limits (all sockets: `/events`, `/log/stream`, `/engine-agent/events`): frames from the
+client may be at most 64 KiB (larger ones close the socket with code 1009); a client that falls
+more than 1 MB behind is closed with code 1013 and should reconnect; at most 10 sockets are open
+per user (or per credential type for keys), and the next one is closed with 1013.
+
+The folder browser (`GET /filesystem`, `POST /filesystem/mkdir`, compat `GET /api/v3/filesystem`)
+is a secret route: personal keys need the admin scope, and app device tokens cannot call it.
+
+Push subscriptions (`POST /push/subscription`): `endpoint` must be `https://`. For non-admins it
+must be on a browser push service (`fcm.googleapis.com`, `android.googleapis.com`,
+`*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`); admins may use any
+public HTTPS host. Local addresses are refused (`400`).
+
 Media-server sign-in (`POST /auth/login` with a media-server method, `POST /auth/plex/poll`)
 never signs in an admin (`403`), and only ever creates `role: 'user'` accounts with no app
 access and no local password (`localPassword: false`). `PUT /user/:id` refuses to promote such
