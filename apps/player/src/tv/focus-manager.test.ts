@@ -153,6 +153,26 @@ describe('FocusManager', () => {
     expect(active()).toBe('tile');
   });
 
+  it('up into the stage header lands on the active tab, from any row (features spec 5.2, D12)', () => {
+    const stage = (current: boolean) => `<div data-tv-stage="" data-tv-scale="1" data-box="0,0,1280,720">
+      <header data-tv-row="" data-tv-fixed=""><a id="tab-home" href="#/h" data-box="300,20,80,32">Home</a>
+      <a id="tab-movies" href="#/m" data-box="420,20,80,32" ${current ? 'aria-current="page"' : ''}>Movies</a></header>
+      <main data-tv-group="main"><div data-tv-row=""><button id="chip-all" data-box="64,100,60,30">All</button>
+      <button id="chip-under-home" data-box="300,100,80,30">Drama</button></div>
+      <a id="tile" href="#/t" data-box="300,200,200,120">Tile</a></main></div>`;
+    render(stage(true));
+    document.getElementById('chip-under-home')!.focus();
+    key('ArrowUp'); // "Home" is right above, but Movies is the page we are on
+    expect(active()).toBe('tab-movies');
+    key('ArrowLeft'); // inside the header, moves stay the nearest
+    expect(active()).toBe('tab-home');
+    // Without an active tab in the header (a detail page), the nearest one as before.
+    render(stage(false));
+    document.getElementById('chip-under-home')!.focus();
+    key('ArrowUp');
+    expect(active()).toBe('tab-home');
+  });
+
   it('up / down at the ends of the rail stays in the rail', () => {
     render(`<nav data-tv-group="rail"><a id="r1" href="#/1" data-box="0,100,60,50">R1</a><a id="r2" href="#/2" data-box="0,160,60,50">R2</a></nav>
       <main data-tv-group="main"><a id="top" href="#/t" data-box="100,0,100,60">T</a><a id="low" href="#/l" data-box="100,300,100,60">L</a></main>`);

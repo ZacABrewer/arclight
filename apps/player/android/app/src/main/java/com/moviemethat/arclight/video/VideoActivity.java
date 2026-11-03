@@ -64,6 +64,7 @@ import androidx.media3.session.MediaSession;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
+import com.moviemethat.arclight.ArclightWebView;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackMapping;
@@ -338,8 +339,16 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        // The app's page stays running behind this screen (events and progress reach JS).
+        ArclightWebView.holdVisible(true);
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
+        ArclightWebView.holdVisible(false);
         if (closed || isInPip()) return;
         // Home on a TV / app switch on a phone without PiP: pause and report.
         if (player != null && player.getPlayWhenReady()) {
@@ -1606,12 +1615,15 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             return;
         }
         controlsShown = false;
-        skip.setControlsShown(false);
-        upNext.setControlsShown(false);
-        liftSubtitles(false);
         controls.animate().cancel();
         long d = ui.anim(200);
+        // Skip, up next and the captions drop once the controls have faded: moved at the start,
+        // Skip sat on top of the fading Audio & Subtitles button for the length of the fade.
+        // A show during the fade cancels this (no end action) and lifts them again.
         Runnable done = () -> {
+            skip.setControlsShown(false);
+            upNext.setControlsShown(false);
+            liftSubtitles(false);
             controls.setVisibility(View.INVISIBLE);
             if (skip.getVisibility() == View.VISIBLE) skip.requestFocus();
             else if (upNext.getVisibility() == View.VISIBLE) upNext.playNow.requestFocus();
