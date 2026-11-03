@@ -33,6 +33,8 @@ How the Arclight app (`apps/player`) lays out its screens. Using the app is cove
 
 The phone shell (`ui/shell.tsx`) has tabs for Home, TV Shows, Movies, My List and Search. The top bar holds the Mark, the offline badge, Music and Audiobooks (when turned on) and the profile avatar, whose sheet has Switch profile, Settings, Manage profiles and Sign out.
 
+In landscape (`useLayout()` is `wide`), the phone uses the same wide header as the web player instead (`ui/landscape-frame.tsx`): 72 px tall, 56 px on screens under 430 px tall, with the tabs, Music, Audiobooks, Settings and the avatar in one row. There are no bottom tabs; the mini-player docks at the bottom right. The header and the page keep clear of the side safe-area insets.
+
 ## Launch intro
 
 On a cold launch the app shows the Arclight intro (`intro/`) over the app while it loads: the MP4 with its sound, muted if the WebView blocks sound, or the still frame when the video does not start within 1.5 s. Any key or tap skips it, and Back only skips it while it is up. With Reduce motion on, the still shows for 1 s. It never plays before a video, on resume from the background, or on a WebView reload. Settings > Display > Play intro on launch turns it off on that device.
