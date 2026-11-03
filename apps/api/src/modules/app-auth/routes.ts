@@ -1,4 +1,17 @@
-import { AppDevice, AppDeviceListQuery, AppPairCode, AppPairRequest, AppSignInRequest, AppSignInResponse } from '@arclight/shared';
+import {
+  AppDevice,
+  AppDeviceCode,
+  AppDeviceCodeApproveRequest,
+  AppDeviceCodeApproveResponse,
+  AppDeviceCodePollRequest,
+  AppDeviceCodePollResponse,
+  AppDeviceCodeRequest,
+  AppDeviceListQuery,
+  AppPairCode,
+  AppPairRequest,
+  AppSignInRequest,
+  AppSignInResponse,
+} from '@arclight/shared';
 import type { FastifyPluginAsync, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -8,6 +21,8 @@ import { AppAuthError, APP_AUTH_ERROR_STATUS, type AppAuthService } from './serv
 // /api/v1/app/*: the Arclight player app's sign-in, QR pairing and devices.
 //   POST /app/sign-in, POST /app/pair  public (rate-limited per address with the web sign-in)
 //   POST /app/pair-codes               signed-in browser session only (hook.ts SESSION_ONLY_PREFIXES)
+//   POST /app/device-codes, POST /app/device-codes/poll   public (TV sign-in; limited per address / poll rate)
+//   POST /app/device-codes/approve     signed-in browser session only; the approving user needs player access
 //   GET /app/devices, DELETE /app/devices/:id, POST /app/sign-out   any signed-in user (own devices;
 //   admins list with ?all=true or ?userId= and remove anyone's)
 // Sign-in bodies carry passwords and codes: these routes keep out of the request audit (the
@@ -46,6 +61,20 @@ export function appAuthRoutes(service: AppAuthService, opts: { basePath: string 
 
     app.post('/app/pair-codes', { config: { ...portal, audit: false }, schema: { response: { 201: AppPairCode, ...errors } } }, async (req, reply) =>
       reply.code(201).send(service.createPairCode(userOf(req), `${req.protocol}://${req.host}${opts.basePath}`)),
+    );
+
+    app.post('/app/device-codes', { config: { audit: false }, schema: { body: AppDeviceCodeRequest, response: { 201: AppDeviceCode, ...errors } } }, async (req, reply) =>
+      reply.code(201).send(service.createDeviceCode(req.body, `${req.protocol}://${req.host}${opts.basePath}`, req.ip)),
+    );
+
+    app.post('/app/device-codes/poll', { config: { audit: false }, schema: { body: AppDeviceCodePollRequest, response: { 200: AppDeviceCodePollResponse, ...errors } } }, async (req) =>
+      service.pollDeviceCode(req.body.pollToken, req.ip),
+    );
+
+    app.post(
+      '/app/device-codes/approve',
+      { config: { ...portal, audit: false }, schema: { body: AppDeviceCodeApproveRequest, response: { 200: AppDeviceCodeApproveResponse, ...errors } } },
+      async (req) => service.approveDeviceCode(userOf(req), req.body.userCode, req.ip),
     );
 
     app.get('/app/devices', { config: portal, schema: { querystring: AppDeviceListQuery, response: { 200: z.array(AppDevice), ...errors } } }, async (req) => {

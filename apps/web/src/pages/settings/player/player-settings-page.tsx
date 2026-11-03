@@ -8,7 +8,7 @@ import { SettingsPage, useDraft } from '../settings-layout.js';
 import { t } from '../../../i18n/index.js';
 
 // Settings → Player: GET/PUT /settings/player (contract PlayerSettings). Turns the built-in
-// music and audiobook player on, and sets the limits for streams from outside the home
+// music, audiobook and Movies & TV player on, sets the live-video slots and the limits for streams from outside the home
 // network. Who may use it is set per user (Users → edit user → Player). The playback engine is
 // Arclight's own, or a Jellyfin/Emby server from Settings → Media servers (streams are proxied).
 
@@ -20,6 +20,10 @@ export interface PlayerSettingsDraft {
   backend: PlaybackEngine;
   /** '' = the first enabled Jellyfin/Emby server. */
   jellyfinServerId: string;
+  /** Movies & TV in the player. */
+  video: boolean;
+  videoMaxStreams: string;
+  videoMaxStreamsPerUser: string;
 }
 
 /** Enabled Jellyfin and Emby connections: the servers the player can stream through. */
@@ -42,6 +46,9 @@ export function toPlayerSettingsDraft(s: PlayerSettings): PlayerSettingsDraft {
     streamLinkHours: String(s.streamLinkHours),
     backend: s.backend,
     jellyfinServerId: s.jellyfinServerId ?? '',
+    video: s.video,
+    videoMaxStreams: String(s.videoMaxStreams),
+    videoMaxStreamsPerUser: String(s.videoMaxStreamsPerUser),
   };
 }
 
@@ -56,10 +63,18 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     streamLinkHours: num(d.streamLinkHours),
     backend: d.backend,
     jellyfinServerId: d.jellyfinServerId === '' ? null : d.jellyfinServerId,
+    video: d.video,
+    videoMaxStreams: num(d.videoMaxStreams),
+    videoMaxStreamsPerUser: num(d.videoMaxStreamsPerUser),
   });
   if (parsed.success) return { ok: true, body: parsed.data };
   const field = String(parsed.error.issues[0]?.path[0] ?? '');
-  const label = field === 'streamLinkHours' ? t('player.settings.streamLinkHours') : t('player.settings.remoteMaxBitrate');
+  const labels: Record<string, string> = {
+    streamLinkHours: t('player.settings.streamLinkHours'),
+    videoMaxStreams: t('player.settings.videoMaxStreams'),
+    videoMaxStreamsPerUser: t('player.settings.videoMaxStreamsPerUser'),
+  };
+  const label = labels[field] ?? t('player.settings.remoteMaxBitrate');
   return { ok: false, field, error: t('player.settings.checkField', { field: label }) };
 }
 
@@ -70,7 +85,7 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
   const set = <K extends keyof PlayerSettingsDraft>(key: K, value: PlayerSettingsDraft[K]) => draft.set((prev) => ({ ...prev, [key]: value }));
   const result = toPlayerSettingsBody(d);
   const invalid = result.ok ? null : result.field;
-  const ids = { enabled: useId(), remote: useId(), bitrate: useId(), hours: useId(), server: useId() };
+  const ids = { enabled: useId(), remote: useId(), bitrate: useId(), hours: useId(), server: useId(), video: useId(), videoMax: useId(), videoPerUser: useId() };
   const mediaServers = useMediaServers();
   const servers = playerEngineServers(mediaServers.data);
   const noServers = servers.length === 0;
@@ -95,6 +110,37 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
         <FormSection label={t('player.settings.general')}>
           <FormRow label={t('player.settings.enabled')} caption={t('player.settings.enabledCaption')} captionInline>
             <Toggle id={ids.enabled} aria-label={t('player.settings.enabled')} checked={d.enabled} onChange={(e) => set('enabled', e.currentTarget.checked)} />
+          </FormRow>
+        </FormSection>
+        <FormSection label={t('player.settings.video')}>
+          <FormRow label={t('player.settings.videoEnabled')} caption={t('player.settings.videoEnabledCaption')} captionInline>
+            <Toggle id={ids.video} aria-label={t('player.settings.videoEnabled')} checked={d.video} onChange={(e) => set('video', e.currentTarget.checked)} />
+          </FormRow>
+          <FormRow label={t('player.settings.videoMaxStreams')} htmlFor={ids.videoMax} caption={t('player.settings.videoMaxStreamsCaption')}>
+            <Input
+              id={ids.videoMax}
+              type="number"
+              mono
+              className="al-input--num"
+              min={1}
+              max={32}
+              invalid={invalid === 'videoMaxStreams'}
+              value={d.videoMaxStreams}
+              onChange={(e) => set('videoMaxStreams', e.currentTarget.value)}
+            />
+          </FormRow>
+          <FormRow label={t('player.settings.videoMaxStreamsPerUser')} htmlFor={ids.videoPerUser} caption={t('player.settings.videoMaxStreamsPerUserCaption')}>
+            <Input
+              id={ids.videoPerUser}
+              type="number"
+              mono
+              className="al-input--num"
+              min={1}
+              max={32}
+              invalid={invalid === 'videoMaxStreamsPerUser'}
+              value={d.videoMaxStreamsPerUser}
+              onChange={(e) => set('videoMaxStreamsPerUser', e.currentTarget.value)}
+            />
           </FormRow>
         </FormSection>
         <FormSection label={t('player.settings.engine')}>

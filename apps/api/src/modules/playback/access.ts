@@ -1,7 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { PlayerAccess, type PlayerCapabilities, type PlayerSettings } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { credentialsOf } from '../auth/hook.js';
+import { sessions, userApiKeys } from '../auth/schema.js';
+import { appDevices } from '../app-auth/schema.js';
 import { allLocal } from '../auth/network.js';
 import { getSection } from '../settings/service.js';
 
@@ -94,7 +97,7 @@ export function capabilitiesOf(db: Db, decision: PlayerDecision): PlayerCapabili
       audiobooks: on && features.audiobooks,
       podcasts: on && features.podcasts,
       books: on && features.books === true,
-      video: false,
+      video: on && playerSettings(db).video,
     },
   };
 }
@@ -129,4 +132,27 @@ export function requirePlayer(db: Db, opts: { needsUser?: boolean } = {}) {
     }
     if (opts.needsUser && !req.auth?.user) await denialReply(reply, 'NO_USER');
   };
+}
+
+/**
+ * A signed link stays usable while its user may still sign in: some unexpired session, a
+ * personal API key or a signed-in Arclight app device. "Sign out everywhere", a password
+ * change and deleting the user end it.
+ */
+export function linkUserStillActive(db: Db, userId: number, nowMs: number): boolean {
+  const device = db.select({ id: appDevices.id }).from(appDevices).where(eq(appDevices.userId, userId)).get();
+  if (device) return true;
+  const at = new Date(nowMs).toISOString();
+  const session = db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, at)))
+    .get();
+  if (session) return true;
+  const key = db
+    .select({ id: userApiKeys.id })
+    .from(userApiKeys)
+    .where(and(eq(userApiKeys.userId, userId), or(isNull(userApiKeys.expiresAt), gt(userApiKeys.expiresAt, at))))
+    .get();
+  return key !== undefined;
 }

@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
-import { ItemPrefs, PLAYED_THRESHOLD, RESUME_MIN, type PlaybackProgress, type ProgressReport, type ProgressUpdate } from '@arclight/shared';
+import { ItemPrefs, PLAYED_THRESHOLD, RESUME_MIN, type PlayableKind, type PlaybackProgress, type ProgressReport, type ProgressUpdate } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { mediaServerUsers, watchState } from '../watch-history/schema.js';
@@ -285,7 +285,7 @@ export class ProgressStore {
   }
 
   /** Unfinished items with something to resume, newest first. */
-  inProgress(userId: number, limit: number, kind?: 'track' | 'audiobook'): PlaybackProgress[] {
+  inProgress(userId: number, limit: number, kind?: PlayableKind): PlaybackProgress[] {
     const rows = this.db
       .select()
       .from(playbackProgress)
@@ -305,7 +305,7 @@ export class ProgressStore {
   }
 
   /** Item keys this user played most recently (any state), newest first. */
-  recent(userId: number, limit: number, kind: 'track' | 'audiobook', opts: { played?: boolean } = {}): PlaybackProgress[] {
+  recent(userId: number, limit: number, kind: PlayableKind, opts: { played?: boolean } = {}): PlaybackProgress[] {
     return this.db
       .select()
       .from(playbackProgress)

@@ -12,6 +12,7 @@ at the end of this file.
 ### Added
 - Arclight player app for Android and iOS (`com.moviemethat.arclight`), not in the stores yet. It plays your music and audiobooks with native audio, keeps playing in the background and on the lock screen, downloads albums and books for offline use (Wi-Fi only by default), and sends progress made offline when it reconnects. It works with Android Auto and CarPlay, casts to Chromecast and AirPlay, and signs in by scanning a QR code from the web player.
 - Server: device sign-in for the player app, a batch progress endpoint for progress saved offline, and a "Sign in a phone" QR code in the web player.
+- Server: Movies & TV playback. A session API picks direct play, remux to MP4 or transcode per device (with the reasons), live streams use Intel QSV/VAAPI with a software fallback and HDR tone-mapping, text subtitles are served as WebVTT, and there are browse, home, artwork and "mark watched" routes. New Settings > Player options: Movies & TV on/off and live video slots. TV sign-in with a code (`/app/device-codes`).
 
 ### Changed
 - The companion app is now called Arclight Admin (app ID `com.moviemethat.arclight.admin`). The name Arclight and the ID `com.moviemethat.arclight` go to a separate player app. Neither app is in the stores yet.

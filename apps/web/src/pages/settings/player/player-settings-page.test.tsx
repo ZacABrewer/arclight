@@ -61,3 +61,24 @@ describe('Settings -> Player -> Playback engine', () => {
     expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ backend: 'jellyfin', jellyfinServerId: 'e2' });
   });
 });
+
+describe('Settings -> Player -> Movies & TV', () => {
+  it('round-trips the switch and slot limits, and names a bad slot field', () => {
+    const s = PlayerSettings.parse({ video: false, videoMaxStreams: 5, videoMaxStreamsPerUser: 2 });
+    expect(toPlayerSettingsBody(toPlayerSettingsDraft(s))).toEqual({ ok: true, body: s });
+    const bad = toPlayerSettingsBody({ ...toPlayerSettingsDraft(s), videoMaxStreamsPerUser: '0' });
+    expect(bad).toMatchObject({ ok: false, field: 'videoMaxStreamsPerUser' });
+  });
+
+  it('turns Movies & TV off and changes the live video slots', async () => {
+    stub([]);
+    renderAt('/settings/player');
+    const toggle = (await screen.findByLabelText('Movies & TV')) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('Live video slots'), { target: { value: '4' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ video: false, videoMaxStreams: 4, videoMaxStreamsPerUser: 1 });
+  });
+});
