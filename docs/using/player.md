@@ -28,7 +28,11 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Jellyfin server | Which Jellyfin or Emby server to stream through. Shown when the engine is Jellyfin. | First enabled server |
 | Movies & TV | Lets the player show and play movies and episodes. | On |
 | Live video slots | How many videos the server may convert or repackage at once, for everyone together. Each one costs CPU or GPU time. | 3 |
-| Live video slots per user | How many of those one person may use. Starting a new video replaces that person's oldest one. | 1 |
+| Live video slots per user | How many of those one person may use on one device. Starting a new video on that device replaces its oldest one; a phone and a TV of the same person each have their own. | 1 |
+| Video streaming | **Adaptive** sends converted video as HLS: the quality follows the connection and a jump starts playing again quickly. **Single stream** is the older way (one stream that restarts on every seek). Apps and browsers that cannot play HLS always get a single stream. | Adaptive |
+| Video segment cache | Disk space for converted video, so a replay or a jump back is instant. When it is full, the parts furthest behind what people are watching go first. 1 to 10,000 GB. | 100 GB |
+| Video segment folder | Where that cache lives. Empty: `cache/player/hls` in the config folder. In Docker, point it at a mounted volume. | Empty |
+| Remote video bitrate limit | Movies and episodes watched away from home stay under this, and the picture size follows it. The audio limit above stays for music and audiobooks. `0` means no limit. | 8000 kbps |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -122,7 +126,9 @@ TV remotes and game pads work too: the arrows move between buttons, and **OK** p
 
 ### How video reaches you
 
-Arclight sends the original file when your browser can play it (**direct play**). When it cannot, for example because of the file type, the video or audio format, HDR, or your bitrate limit, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power. A converted stream starts again from the new point when you seek, which can take a moment.
+Arclight sends the original file when your browser can play it (**direct play**) and the connection is fast enough for it. When it cannot, for example because of the file type, the video or audio format, HDR, your bitrate limit or a slow connection, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power.
+
+Converted video goes out as an adaptive stream (HLS) of 6-second pieces. **Auto** starts at a quality the connection and the server can keep up with and moves up or down as they change, so playback does not stop to buffer. The server only offers a quality it can convert at least 1.3 times faster than real time, and 4K only after it has measured that speed. A jump inside what is already converted is instant; a jump further ahead starts a new conversion from there, which takes a second or two. Converted pieces stay in the segment cache, so watching again costs nothing. Picking a fixed quality (1080p, 720p, 480p) keeps that quality.
 
 Subtitles that are text (SRT, ASS, WebVTT) are drawn by the player. Picture subtitles (PGS, VobSub) are burned into the video, which means converting it.
 
@@ -184,7 +190,9 @@ How a video reaches you depends on what your device can play:
 - **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
 - **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
 
-The player says which one it uses and why. Remuxed and converted streams cannot be fetched in ranges, so seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+The player says which one it uses and why. Remuxed and converted video is sent as an adaptive stream (see [How video reaches you](#how-video-reaches-you)); older apps get a single stream, which starts again from the new point on each seek. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+
+Subtitles that are forced (signs and foreign-language lines only) and are pictures are burned in when subtitles are off, so those lines still show.
 
 Text subtitles (SRT, ASS, WebVTT, embedded or next to the file) can be turned on and off at any time. Picture subtitles (PGS, VobSub) have to be burned into the picture, which means a transcode.
 

@@ -2723,6 +2723,34 @@ codecs, size, HDR, audio and subtitle tracks), `versions` (best first), `chapter
 | GET | `/playback/movies/:id`, `/playback/series/:id` | A movie with its versions and the caller's progress; a series with seasons, episodes with files, played counts and `nextUp` |
 | POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}` |
 
+#### Adaptive video (HLS)
+
+Contract: `packages/shared/src/video-hls.ts`. A session request may add `deliveries`
+(`['hls', 'progressive']`: what the client can play; absent means `progressive` only, the 0.23
+behaviour), `bandwidthKbps` (the client's measured throughput), `avoidDirect` and `deviceKey` (a
+stable id per device; slot limits count per user and device). When the client lists `hls`, the
+stream is a remux or transcode and `videoDelivery` in `PlayerSettings` is `hls`, the session
+answers `delivery: 'hls'`, a `sessionId` and `hls` `{masterUrl, rungs, startRung, healthUrl}`;
+`url` is the master playlist (`application/vnd.apple.mpegurl`). Auto plays a file directly only
+when `bandwidthKbps` covers its bitrate with headroom (else `reasons` has `bitrate`). Remote
+sessions are capped at `remoteVideoMaxBitrateKbps` and the height follows the cap.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/stream/hls/:sessionId/master.m3u8` | Master playlist: one variant per rung (`BANDWIDTH`, `CODECS`, `RESOLUTION`, `VIDEO-RANGE`), best first. Signed like other stream links; `403` for a bad or expired signature, `404` for an ended session |
+| GET | `/stream/hls/:sessionId/:rung/index.m3u8` | Media playlist of a rung: the whole film as a VOD list of fMP4 segments (about 6 s, cut at the file's keyframes) with `EXT-X-MAP` |
+| GET | `/stream/hls/:sessionId/:rung/init.mp4` | The rung's init segment |
+| GET | `/stream/hls/:sessionId/:rung/:n.m4s` | Segment `n` (`video/iso.segment`). Encoded on demand: a request for the segment being encoded waits for it, a far one restarts the encoder there. `X-Arclight-Encode` carries the encode speed and how far ahead it is. `409 RUNG_UNSUSTAINABLE` when the server cannot keep up with this rung (switch down); `503` with `Retry-After` while busy or still encoding |
+| GET | `/playback/video/session/:sessionId/health` | `VideoHlsHealth` `{encodeSpeed, aheadSec, maxSustainableRung, hwaccel}` |
+| DELETE | `/playback/video/session/:sessionId` | End the session now: stops the encoder and frees the slot (`204`; `404` when unknown or another user's) |
+
+Encoders pause when they are 180 s ahead of the player and resume at 90 s; an encoder idle for
+2 minutes stops, and a session idle for 15 minutes is removed with its segments. The segment
+cache (`videoCacheGb`, at `videoCachePath` or `<config>/cache/player/hls`) drops the segments
+furthest behind the playheads first. Audio in HLS is AAC, AC-3 or E-AC-3 at 48 kHz; a forced
+picture subtitle is burned in when subtitles are off. `ProgressReport` takes optional `stalls`,
+`stallMs` and `startupMs` so clients can report stall statistics.
+
 `/playback/search` adds `movies` and `series` when Movies & TV is on; `/playback/continue` stays
 audio only (video resumes from `/playback/video/home`). Progress uses the normal progress routes.
 Live remux and transcode follow the audio transcoder's rules with their own limits
