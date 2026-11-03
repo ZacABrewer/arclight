@@ -1,7 +1,6 @@
 {
   "app.tv.movies": "Films",
   "app.tv.shows": "Séries",
-  "app.tv.welcomeHelp": "Confirmez ensuite un code sur votre téléphone ou ordinateur, sans taper de mot de passe à la télécommande.",
   "app.tv.code.open": "Sur votre téléphone ou ordinateur, ouvrez",
   "app.tv.code.enter": "Connectez-vous si demandé, puis saisissez ce code (ou scannez le QR code) :",
   "app.tv.code.label": "Code de connexion",
@@ -113,7 +112,7 @@
   "app.settings.device": "Cet appareil",
   "app.settings.deviceDesc": "Comptes, streaming, téléchargements, confidentialité et langue",
   "app.tv.settings.playIntro": "Lire l’intro au lancement",
-  "app.tv.settings.playbackIntro": "Ces réglages ne s’appliquent qu’à ce téléviseur.",
+  "app.tv.settings.playbackIntro": "La qualité de streaming est enregistrée sur ce téléviseur. Les autres options suivent votre profil.",
   "app.tv.settings.quality": "Qualité de streaming",
   "app.tv.settings.qualityDesc": "Auto choisit la meilleure qualité que votre connexion peut tenir.",
   "app.tv.settings.reduceMotion": "Réduire les animations",

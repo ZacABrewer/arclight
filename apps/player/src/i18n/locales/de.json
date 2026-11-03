@@ -1,7 +1,6 @@
 {
   "app.tv.movies": "Filme",
   "app.tv.shows": "Serien",
-  "app.tv.welcomeHelp": "Danach bestätigst du einen Code auf dem Handy oder Computer, ohne ein Passwort mit der Fernbedienung einzutippen.",
   "app.tv.code.open": "Öffne auf deinem Handy oder Computer",
   "app.tv.code.enter": "Melde dich dort an, falls nötig, und gib diesen Code ein (oder scanne den QR-Code):",
   "app.tv.code.label": "Anmeldecode",
@@ -113,7 +112,7 @@
   "app.settings.device": "Dieses Gerät",
   "app.settings.deviceDesc": "Konten, Streaming, Downloads, Datenschutz und Sprache",
   "app.tv.settings.playIntro": "Intro beim Start abspielen",
-  "app.tv.settings.playbackIntro": "Diese gelten nur für diesen Fernseher.",
+  "app.tv.settings.playbackIntro": "Die Streaming-Qualität gilt für diesen Fernseher. Die anderen Optionen folgen deinem Profil.",
   "app.tv.settings.quality": "Streaming-Qualität",
   "app.tv.settings.qualityDesc": "Auto wählt die beste Qualität, die deine Verbindung schafft.",
   "app.tv.settings.reduceMotion": "Bewegung reduzieren",

@@ -1,7 +1,6 @@
 {
   "app.tv.movies": "Películas",
   "app.tv.shows": "Series",
-  "app.tv.welcomeHelp": "Después confirma un código en tu móvil u ordenador, sin escribir una contraseña con el mando.",
   "app.tv.code.open": "En tu móvil u ordenador, abre",
   "app.tv.code.enter": "Inicia sesión allí si te lo pide y escribe este código (o escanea el código QR):",
   "app.tv.code.label": "Código de inicio de sesión",
@@ -113,7 +112,7 @@
   "app.settings.device": "Este dispositivo",
   "app.settings.deviceDesc": "Cuentas, streaming, descargas, privacidad e idioma",
   "app.tv.settings.playIntro": "Reproducir la intro al abrir",
-  "app.tv.settings.playbackIntro": "Se aplican solo a esta TV.",
+  "app.tv.settings.playbackIntro": "La calidad de streaming se guarda en esta TV. Las demás opciones siguen a tu perfil.",
   "app.tv.settings.quality": "Calidad de streaming",
   "app.tv.settings.qualityDesc": "Automática elige la mejor calidad que admite tu conexión.",
   "app.tv.settings.reduceMotion": "Reducir movimiento",

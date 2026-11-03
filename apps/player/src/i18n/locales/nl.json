@@ -1,7 +1,6 @@
 {
   "app.tv.movies": "Films",
   "app.tv.shows": "Series",
-  "app.tv.welcomeHelp": "Bevestig daarna een code op je telefoon of computer, zonder een wachtwoord te typen met de afstandsbediening.",
   "app.tv.code.open": "Open op je telefoon of computer",
   "app.tv.code.enter": "Log daar in als dat gevraagd wordt en voer deze code in (of scan de QR-code):",
   "app.tv.code.label": "Aanmeldcode",
@@ -113,7 +112,7 @@
   "app.settings.device": "Dit apparaat",
   "app.settings.deviceDesc": "Accounts, streamen, downloads, privacy en taal",
   "app.tv.settings.playIntro": "Intro afspelen bij openen",
-  "app.tv.settings.playbackIntro": "Deze gelden alleen voor deze tv.",
+  "app.tv.settings.playbackIntro": "De streamkwaliteit wordt op deze tv bewaard. De andere opties volgen je profiel.",
   "app.tv.settings.quality": "Streamingkwaliteit",
   "app.tv.settings.qualityDesc": "Auto kiest de beste kwaliteit die je verbinding aankan.",
   "app.tv.settings.reduceMotion": "Beweging beperken",

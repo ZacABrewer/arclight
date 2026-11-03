@@ -72,7 +72,6 @@ export function WelcomePage() {
             <Button variant="primary" block data-tv-autofocus icon={<Icon name="server" size={20} />} onClick={() => void navigate({ to: '/add-server' })}>
               {t('app.welcome.enter')}
             </Button>
-            <p className="app-hint">{t('app.tv.welcomeHelp')}</p>
           </div>
         ) : (
           <div className="app-stack">

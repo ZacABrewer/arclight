@@ -5,6 +5,7 @@ import { useT } from '@web/i18n/index';
 import { householdKeys, householdsApi, useActiveProfile, useProfileSettings } from '../../households/api';
 import { usePickProfile } from '../../households/use-pick';
 import { Lockup } from '@web/arclight/lockup';
+import { RdIcon } from '@web/features/player/redesign/icons';
 import { ProfileAvatar } from '@web/features/player/redesign/profile-avatar';
 import { NameKeyboard, PinPad, TvPanel } from '../profile-parts';
 import { TvStage } from '../stage';
@@ -53,6 +54,11 @@ export function TvProfilesScreen() {
                 aria-label={p.name}
               >
                 <ProfileAvatar color={p.color} initial={p.initial} size={132} />
+                {p.hasPin ? (
+                  <span className="tv-prof__badge" aria-hidden="true">
+                    <RdIcon name="lock" size={16} />
+                  </span>
+                ) : null}
               </button>
               <span className="tv-prof__name">{p.name}</span>
             </div>

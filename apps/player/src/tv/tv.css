@@ -1319,6 +1319,7 @@
 }
 
 .tv-prof__avatar {
+  position: relative;
   width: 132px;
   height: 132px;
   border-radius: 50%;
@@ -1347,9 +1348,20 @@
   color: var(--tv-t3);
 }
 
-.tv-prof__lock {
-  font-size: 13px;
-  color: var(--tv-t4);
+/* The lock on a PIN-protected profile (the web picker's badge). */
+.tv-prof__badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--al-pl-panel, rgba(17, 19, 22, 0.97));
+  border: 1px solid var(--tv-line);
+  color: var(--tv-text);
 }
 
 /* PIN pad (§9 Q5) */
