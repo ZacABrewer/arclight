@@ -672,6 +672,38 @@ export class PlayerController {
     this.set({ current: null, sleepTimer: null });
   };
 
+  /**
+   * A profile switch around `select` (the request that switches). The queue and the place belong
+   * to the profile that is leaving, so they are saved for it first; once the switch went through,
+   * the player is emptied without saving anything and the new profile's queue is restored (paused).
+   * A failed switch (a wrong PIN) leaves playback as it was.
+   */
+  async switchProfile<T>(select: () => Promise<T>): Promise<T> {
+    if (this.engine.current || this.queueTimer !== null) {
+      if (this.queueTimer !== null) clearTimeout(this.queueTimer);
+      this.queueTimer = null;
+      await Promise.all([
+        this.deps.saveQueue(toServerQueue(this.queue, this.engine.positionMs, this.deps.deviceId)).catch(() => undefined),
+        this.reporter.flush(),
+      ]);
+    }
+    const res = await select();
+    for (const t of [this.queueTimer, this.seekTimer, this.prefsTimer]) if (t !== null) clearTimeout(t);
+    this.queueTimer = this.seekTimer = this.prefsTimer = null;
+    this.reporter.forget();
+    this.loadToken++;
+    this.nextToken++;
+    this.engine.stop();
+    this.queue = { ...EMPTY_QUEUE, repeat: this.queue.repeat };
+    this.sleep = null;
+    this.pausedAt = null;
+    this.touched = false;
+    this.restoreStarted = false;
+    this.set({ ...this.queueState(), current: null, sleepTimer: null, loading: false, error: null });
+    void this.restore();
+    return res;
+  }
+
   // ------------------------------------------------------------------ page lifecycle
 
   /** Tab hidden: send the place with sendBeacon. */

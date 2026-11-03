@@ -78,6 +78,23 @@ export class ProgressReporter {
     this.started = null;
   }
 
+  /** Send the place now and wait for the server (before a profile switch takes the session over). */
+  async flush(): Promise<void> {
+    const s = this.opts.read();
+    if (!s || this.started !== s.itemKey) return;
+    const event: Event = s.playing ? 'progress' : 'pause';
+    const body = this.build(s, event);
+    this.last = { itemKey: s.itemKey, positionMs: body.positionMs, event };
+    await this.opts.send(s.itemKey, body).catch(() => undefined);
+  }
+
+  /** Forget the started item without reporting (the profile it belonged to has left). */
+  forget(): void {
+    this.stopHeartbeat();
+    this.started = null;
+    this.last = null;
+  }
+
   /** One heartbeat: skipped while paused or when nothing moved since the last report (stale). */
   heartbeat(): void {
     const s = this.opts.read();

@@ -1,7 +1,8 @@
-import { Suspense, type ComponentType, type FC } from 'react';
+import { Suspense, type ComponentType, type FC, type ReactNode } from 'react';
 import { createHashHistory, createRootRouteWithContext, createRoute, createRouter, Navigate, Outlet, redirect, type RouterHistory } from '@tanstack/react-router';
 import { Skeleton } from '@web/arclight/index';
 import { browseRoutes } from '@web/features/player/browse/index';
+import { PlayerControllerScope } from '@web/features/player/player-context';
 import { NowPlayingPage } from '@web/features/player/ui/now-playing';
 import { getSession } from '../core/session';
 import { shouldShowPicker } from '../households/gate';
@@ -23,6 +24,7 @@ import { TvBooksScreen, TvMusicScreen } from '../tv/screens/music';
 import { TvProfilesScreen } from '../tv/screens/profiles';
 import { TvSearchScreen } from '../tv/screens/search';
 import { MANAGE_PROFILES_PATH, TvSettingsScreen } from '../tv/screens/settings';
+import { useServices } from './context';
 import type { AppServices } from './services';
 
 // Hash history: the bundle is served from capacitor://localhost / https://localhost as files,
@@ -111,7 +113,7 @@ const profilesRoute = createRoute({
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
   },
-  component: () => (isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage gate />),
+  component: () => <PickerScope>{isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage gate />}</PickerScope>,
 });
 
 /**
@@ -126,8 +128,14 @@ const playerProfilesRoute = createRoute({
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
   },
-  component: () => (isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage />),
+  component: () => <PickerScope>{isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage />}</PickerScope>,
 });
+
+/** The pickers sit outside the shell's player; a switch still hands the player over (the queue is per profile). */
+function PickerScope({ children }: { children: ReactNode }) {
+  const services = useServices();
+  return <PlayerControllerScope controller={services.player().controller}>{children}</PlayerControllerScope>;
+}
 
 /** Phones manage profiles on the shared picker page. */
 function PhoneManageProfiles() {

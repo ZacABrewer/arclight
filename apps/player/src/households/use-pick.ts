@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { HouseholdProfile } from '@arclight/shared';
+import type { HouseholdProfile, HouseholdProfilesResponse } from '@arclight/shared';
+import { usePlayerController } from '@web/features/player/player-context';
 import { useT } from '@web/i18n/index';
-import { selectFailure, selectProfile } from './api';
+import { householdKeys, selectFailure, selectProfile } from './api';
 
 // Choosing a profile on the picker (TV and phone): straight in, or the PIN pad first for a profile
 // with a PIN (§9 Q5). A wrong PIN clears the pad; 5 wrong tries lock the profile on this device
@@ -28,6 +29,7 @@ export function lockMessageMinutes(retryAfterSeconds: number): number {
 export function usePickProfile(onPicked: (p: HouseholdProfile) => void): PickState {
   const t = useT();
   const qc = useQueryClient();
+  const player = usePlayerController();
   const [pinFor, setPinFor] = useState<HouseholdProfile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState(0);
@@ -49,7 +51,10 @@ export function usePickProfile(onPicked: (p: HouseholdProfile) => void): PickSta
   const attempt = async (p: HouseholdProfile, pin?: string) => {
     setBusy(true);
     try {
-      const chosen = await selectProfile(qc, p, pin);
+      const run = () => selectProfile(qc, p, pin);
+      // The queue is per profile: a switch hands the player over (the same profile just goes on).
+      const activeId = qc.getQueryData<HouseholdProfilesResponse>(householdKeys.profiles())?.activeProfileId;
+      const chosen = await (player && p.id !== activeId ? player.switchProfile(run) : run());
       setPinFor(null);
       setMessage(null);
       done.current(chosen);

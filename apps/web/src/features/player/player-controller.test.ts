@@ -197,6 +197,37 @@ describe('PlayerController', () => {
     expect(late.controller.getState().current?.itemKey).toBe('track:3');
   });
 
+  it('hands the player over on a profile switch: saves for the old profile, then loads the new queue', async () => {
+    const h = makeController([track(1), track(2), book()]);
+    await h.controller.playItems(['track:1', 'track:2']);
+    h.active().at(30);
+    const order: string[] = [];
+    h.deps.saveQueue.mockImplementation(async () => void order.push('save'));
+    h.deps.sendProgress.mockImplementation(async (_key: string, r: { event: string }) => void order.push(r.event));
+    h.deps.loadQueue = vi.fn(async () => ({ items: ['audiobook:7'] as never, index: 0, positionMs: 5_000, shuffle: false, order: null, repeat: 'off' as const, source: 'audiobook:7' }));
+    const res = await h.controller.switchProfile(async () => {
+      order.push('select');
+      return 'ok';
+    });
+    expect(res).toBe('ok');
+    expect(order).toEqual(['save', 'progress', 'select']);
+    expect(h.deps.saveQueue).toHaveBeenCalledWith(expect.objectContaining({ items: ['track:1', 'track:2'] }));
+    await flush();
+    const s = h.controller.getState();
+    expect(s.current?.itemKey).toBe('audiobook:7');
+    expect(s.playing).toBe(false);
+    // Nothing more was saved or reported, so the new profile's queue stays as it was.
+    expect(order).toEqual(['save', 'progress', 'select']);
+  });
+
+  it('keeps playing when the profile switch fails', async () => {
+    const h = makeController([track(1)]);
+    await h.controller.playItem('track:1');
+    await expect(h.controller.switchProfile(() => Promise.reject(new Error('pin-wrong')))).rejects.toThrow('pin-wrong');
+    expect(h.controller.getState().current?.itemKey).toBe('track:1');
+    expect(h.controller.getState().playing).toBe(true);
+  });
+
   it('beacons the place when the tab is hidden or closed', async () => {
     const h = makeController([book()]);
     await h.controller.playItem('audiobook:7', { startMs: 0 });

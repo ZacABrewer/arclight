@@ -10,6 +10,7 @@ import {
 } from '@arclight/shared';
 import { cx } from '../../../../arclight/cx.js';
 import { useT } from '../../../../i18n/index.js';
+import { usePlayerController } from '../../player-context.js';
 import { useCreateProfile, useDeleteProfile, useSelectProfile, useUpdateProfile } from '../api.js';
 import { useLayout } from '../layout.js';
 import { ProfileAvatar } from '../profile-avatar.js';
@@ -36,6 +37,7 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
   const search = parseProfilesSearch(useSearch({ strict: false }) as Record<string, unknown>);
   const { profiles, canManage, activeId, loaded } = useProfilesView();
   const select = useSelectProfile();
+  const player = usePlayerController();
   const [managing, setManaging] = useState(Boolean(search.manage) && !gate);
   const [editing, setEditing] = useState<HouseholdProfile | 'new' | null>(null);
   const [pinTarget, setPinTarget] = useState<number | null>(gate ? null : (search.select ?? null));
@@ -50,7 +52,9 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
     else void navigate({ to: '/player' });
   };
   const onSelect = async (p: PickerProfile, pin?: string) => {
-    await select.mutateAsync({ id: p.id, pin });
+    const run = () => select.mutateAsync({ id: p.id, pin });
+    // The queue is per profile: a switch hands the player over (the same profile just goes on).
+    await (player && p.id !== activeId ? player.switchProfile(run) : run());
     done();
   };
 
