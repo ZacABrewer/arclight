@@ -9,6 +9,70 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-03
+
+### Added
+- Video that does not stutter. Whatever Arclight has to repack or convert now goes out as an adaptive (HLS) stream of 6-second pieces cut at keyframes, with a quality ladder (Original, 1080p, 720p, 480p, 360p). **Auto** starts at a quality the connection and the server can keep up with, moves up or down as they change, and switches from direct play to HLS by itself if direct play keeps stalling. Seeking, going back and changing quality happen in place, without starting a new stream.
+- The server checks capacity before it starts a stream and only offers a quality it can convert at least 1.3 times faster than real time. It uses Intel Quick Sync or VA-API when they work, with a software fallback. 4K is only offered once its speed has been measured on your server, so a low-power CPU never gets a 2160p conversion it cannot keep up with. The video badge shows the stream, for example `HLS · 1080p · QSV`.
+- Settings > Player: **Video streaming** (Adaptive or Single stream), **Video segment cache** (default 100 GB, kept in `/config/cache/player/hls`), **Video segment folder** (to move the cache to another volume) and **Remote video bitrate limit** (default 8 Mbps for movies and episodes watched away from home). `scripts/hls-nas-probe.sh` measures what your hardware can do; see the hardware transcoding guide.
+- hls.js in the web player and Media3 HLS in the Android app, both with stall guards. Older apps keep getting a single stream.
+- A Netflix-style profile picker on the web, phones and TVs: a round **Add profile** tile at the end of the row and a pencil **Manage profiles** button that turns the tiles into edit mode. An account with one profile has no picker, so Add profile is also in the avatar menu and under Settings > Profiles.
+- Player address: Settings > Player > Player address gives the player extra paths (such as `/watch`) and its own hostnames (such as `watch.example.com`), like the request portal. Each hostname has a **Player only** switch that keeps the admin pages away. TV sign-in, QR codes and Copy link use it. See the new player address guide.
+- Sync tags to Jellyfin, Emby and Plex: Settings > Media servers > Sync tags copies Arclight's tags (set by hand or by tag rules) to Jellyfin and Emby item tags and to Plex labels, for all tags or a chosen list, with an optional prefix. Use it for Jellyfin parental controls, for example allowing a child's account only items tagged `arclight:kids`. Includes Preview, Sync now and a nightly pass. Arclight only touches tags it added itself. Plex labels are best-effort.
+- Recap detection: Arclight now finds "Previously on" recaps and offers Skip Recap. Turn it off under Settings > Player > Detect recaps.
+- Encrypted backups: set a backup passphrase under System > Backups > Settings.
+- New settings: `ARCLIGHT_TRUSTED_PROXIES`, `ARCLIGHT_CORS_ORIGINS`, `ARCLIGHT_SECRETS_AT_REST` and `ALLOW_ROOT` (see Security and Upgrade notes).
+- Store readiness for the Arclight player app: an iOS privacy manifest, an iOS version taken from the release, a manual store-upload workflow and store review notes.
+
+### Changed
+- Account menu in the player: **Request portal** shows for every user who may request (and opens the configured portal address), and **Open Arclight** only for admins and accounts with app access.
+- Cards in the player no longer have play buttons, finished books get a "Finished" badge, and continue-listening tiles play instead of opening the book.
+- Intro detection also finds intros with dialogue over the music, and detected times snap to a nearby black frame or silence.
+- The web Music and Audiobooks pages follow the new player design, and a phone in landscape uses the wide header.
+- On a TV, pressing Up from the chips lands on the active tab in the header.
+- The phone Home screen says why it could not load.
+- Live video slots are counted per device, so a phone and a TV of the same person no longer replace each other's video.
+- Docker: a new install refuses to start as root unless `ALLOW_ROOT=1` is set (installs that already run as root keep starting, with a warning). Gluetun and FlareSolverr are pinned to release tags, the VPN compose files need `GLUETUN_API_KEY`, and the agent compose file publishes on 127.0.0.1 by default.
+- A native install needs ffmpeg 6.0 or newer.
+
+### Fixed
+- The Android app page kept running behind the video screen.
+- Skip and up next now drop only after the controls fade out.
+- TV full-screen panels and the profile editor sit above the stage header and cover the whole screen.
+- The player-off page no longer loops on a player hostname without an address, and Back to Arclight leaves a player hostname.
+- Profile initials are readable on light themes, and the current track and chapter use a text-safe accent colour.
+- Tag sync counts use correct plurals, back-to-back passes are counted, and Remove unlocks only the tag locks Arclight added.
+- `ARCLIGHT_SETTING__updates__*` and config files now reach the updates settings.
+- The Docker image builds again (a line continuation was missing in the Jellyfin key step).
+- Signed links no longer reach app logs: Capacitor debug logging is off in every build.
+
+### Security
+Every finding of a full audit of the server, web app, apps, Jellyfin plugin and Docker setup is fixed. What you may notice:
+- Sign-in limits are shared by every way of signing in (login, media server, HTTP Basic, second step, app and TV codes, password changes): per account and address, per address, and a growing delay per account of at most 5 minutes. Answers carry `Retry-After`. Passkeys are not affected.
+- Forwarded headers (`X-Forwarded-For` and friends) are read only from trusted proxies, set by `ARCLIGHT_TRUSTED_PROXIES`. The default is loopback and private networks, which covers a proxy on the same machine, your LAN or a Docker network. Before, every proxy was trusted. If your proxy reaches Arclight from a public address, set its address.
+- Only Arclight's own address, the Application URL, portal hostnames and `ARCLIGHT_CORS_ORIGINS` may use your sign-in from a browser. The live-update connection checks its origin and drops ended sessions.
+- Security headers on every page: a Content-Security-Policy, frame protection, `nosniff` and a referrer policy; HSTS and Secure cookies on the host of an https Application URL.
+- App tokens (the player app, paired devices) must re-enter the password with `POST /api/v1/app/reauth` before changing settings, importing config and other sensitive actions; it lasts 10 minutes. Arclight Admin signs in with a session cookie, so it is not affected. Personal API keys of Requests scope can no longer use command routes or create custom-script notifications.
+- The password is asked again (when your sign-in is older than 10 minutes) before creating API keys, passkeys or an authenticator app, and the Admin API key box shows only its last four characters until Show (each reveal is audited).
+- Stored secrets (API key, two-factor secrets, settings, indexer, download client, notification and VPN credentials, media-server tokens, phone relay secrets, Year in review share links) are sealed in the database with AES-256-GCM. Set `ARCLIGHT_SECRETS_AT_REST=0` to opt out. Database, logs, backups and `secrets.key` are owner-only.
+- Year in review share links are stored hashed; links shared before the upgrade keep working.
+- Outbound requests (webhooks, push, podcasts, catalogue files, indexer proxies, subtitles, metadata, update checks) go through a guarded fetch that refuses local and reserved addresses, checks every redirect, pins DNS and caps response sizes. Requests Arclight makes to itself never skip sign-in.
+- Downloaded files are treated as untrusted: ffmpeg and ffprobe only open files and pipes, archives and subtitles are size-limited, Soulseek and import paths stay inside their folders, and updates pull the exact image digest that was checked.
+- Torrent engine: peer bans last 1 hour and double on repeat up to 24 hours, web-seed pieces are checked before they are written, the blocklist applies at every peer entry point, and uTP, handshakes, trackers and metainfo have limits.
+- The remote engine agent has failed-auth back-off, an optional TLS mode and a scoped token.
+- Admins signed in on a portal-only hostname can no longer reach admin settings there, and paired devices unused for 90 days are signed out.
+- Apps: Android and iOS tighten cleartext traffic (https first, a one-time notice for a home network, the host name typed to confirm plain http to the internet), tokens are kept in the iOS Keychain and Android Keystore, pairing links ask for confirmation, the Android Auto media service only serves system or Play-installed hosts (including Google Assistant), and Arclight Admin gives server pages only the native calls it needs.
+- Jellyfin plugin and themes: theme CSS cannot load external resources, `javascript:` links are refused, and Test connection no longer echoes the key.
+- Push relay: registrations are limited per network and per day. Third-party images and GitHub actions are pinned, and the Gluetun control server requires its key on every route.
+
+### Upgrade notes
+- One database migration runs on first start. Stored secrets are also sealed once; keep `secrets.key` in your backups.
+- Before downgrading to an older version, start 0.24 once with `ARCLIGHT_SECRETS_AT_REST=0`.
+- If you run your own push relay, redeploy it (migration `0003_registration_days.sql`).
+- If your reverse proxy reaches Arclight from a public address, set `ARCLIGHT_TRUSTED_PROXIES`. For a dashboard on another origin, set `ARCLIGHT_CORS_ORIGINS`.
+- The VPN compose files need `GLUETUN_API_KEY` (run the helper script). `PUID=0` on a new install needs `ALLOW_ROOT=1`.
+- Apps that sign in with an app token ask for your password the first time they change settings.
+
 ## [0.23.0] - 2026-11-03
 
 ### Added
@@ -484,6 +548,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.24.0]: https://github.com/ZacABrewer/arclight/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/ZacABrewer/arclight/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/ZacABrewer/arclight/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/ZacABrewer/arclight/compare/v0.20.1...v0.21.0
