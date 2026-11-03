@@ -19,6 +19,8 @@ import { signedOutTarget } from '../app/router';
 import { useBrowseDownloads } from './downloads';
 import { TvFrame } from '../tv/tv-shell';
 import { AddProfileRow } from './add-profile-row';
+import { useLayout } from '@web/features/player/redesign/layout';
+import { LandscapeFrame } from './landscape-frame';
 
 // Chrome of every signed-in screen. TV: the design's top header on the stage (tv-shell). Phone
 // (§4.4): a top bar (back or the Mark, offline badge, Music and Audiobooks, the profile avatar
@@ -33,8 +35,8 @@ interface Tab {
   match: (path: string) => boolean;
 }
 
-/** Gives the web browse pages the actions they use from the shared player. */
-function BrowsePlayerBridge({ children }: { children: ReactNode }) {
+/** Gives the web browse pages the actions they use from the shared player (exported for its test). */
+export function BrowsePlayerBridge({ children }: { children: ReactNode }) {
   const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
   const services = useServices();
   const browseDownloads = useBrowseDownloads();
@@ -128,7 +130,16 @@ function Frame({ children, bare }: { children: ReactNode; bare?: boolean }) {
   useEffect(() => {
     if (loaded) rememberReduceMotion(settings.reduceMotion);
   }, [loaded, settings.reduceMotion]);
+  // Phone landscape: the wide header, no bottom tabs (features spec §5.5).
+  const layout = useLayout();
   if (services.tv) return <TvFrame bare={bare}>{children}</TvFrame>;
+  if (layout === 'wide') {
+    return (
+      <LandscapeFrame bare={bare} sheet={(close) => <AvatarSheet onClose={close} />}>
+        {children}
+      </LandscapeFrame>
+    );
+  }
   return <PhoneFrame bare={bare}>{children}</PhoneFrame>;
 }
 

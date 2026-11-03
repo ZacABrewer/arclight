@@ -1,15 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import type { PlayerTrack } from '@arclight/shared';
-import { Button, ButtonGroup, Field, Icon, Input, Modal } from '../../../arclight/index.js';
+import { Button, ButtonGroup, Field, Input, Modal } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
+import { RdError, RdLoading } from '../redesign/pages/common.js';
 import { useCreatePlaylist, useDeletePlaylist, useMovePlaylistEntry, usePlaylist, usePlaylists, useRemovePlaylistEntry, useRenamePlaylist } from './api.js';
-import { PlaylistArt, PlaylistCard } from './cards.js';
+import { PlaylistArt, PlaylistTile } from './cards.js';
 import { DownloadButton } from './download.js';
 import { lengthLabel, shuffled } from './format.js';
-import { DetailsSkeleton, Empty, GridSkeleton, LoadError, PageTitle, ShuffleIcon, playerPaths, useNumericParam } from './kit.js';
+import { playerPaths, useNumericParam } from './kit.js';
 import { MusicNav } from './music-nav.js';
 import { usePlayerActions } from './player-hooks.js';
+import { AudioDetail, AudioHead, AudioNotice, AudioPage, AudioSection, DetailAction, PrimaryAction } from './rd-audio.js';
+import { AudioIcon } from './rd-icons.js';
 import { TrackList } from './tracks.js';
 
 /** Name dialog for create and rename. */
@@ -84,48 +87,51 @@ function DeleteDialog({ open, name, busy, onClose, onConfirm }: { open: boolean;
   );
 }
 
-/** /player/music/playlists */
+/** /player/music/playlists: the head (New playlist beside the title), the chips, then the playlists as a tile grid. */
 export function PlaylistsPage() {
   const t = useT();
   const q = usePlaylists();
   const create = useCreatePlaylist();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const newButton = (
+    <button type="button" className="rd-btn rd-btn--primary" onClick={() => setCreating(true)}>
+      <AudioIcon name="plus" size={18} />
+      {t('player.browse.playlist.new')}
+    </button>
+  );
 
   return (
-    <div className="pb-page">
-      <PageTitle
-        actions={
-          <Button variant="primary" icon={<Icon name="plus" />} onClick={() => setCreating(true)}>
-            {t('player.browse.playlist.new')}
-          </Button>
-        }
-      >
-        {t('player.browse.nav.playlists')}
-      </PageTitle>
-      <MusicNav />
-      {q.isPending ? (
-        <GridSkeleton count={6} label={t('player.browse.loading')} />
-      ) : q.isError ? (
-        <LoadError title={t('player.browse.playlist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
-      ) : q.data.length === 0 ? (
-        <Empty
-          title={t('player.browse.playlist.emptyTitle')}
-          action={
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              {t('player.browse.playlist.new')}
-            </Button>
-          }
-        >
-          {t('player.browse.playlist.emptyBody')}
-        </Empty>
-      ) : (
-        <ul className="pb-grid" aria-label={t('player.browse.playlist.yours')}>
-          {q.data.map((p) => (
-            <PlaylistCard key={p.id} playlist={p} />
-          ))}
-        </ul>
-      )}
+    <AudioPage>
+      <AudioHead title={t('player.browse.nav.playlists')} actions={newButton}>
+        <MusicNav />
+      </AudioHead>
+      <AudioSection>
+        {q.isPending ? (
+          <RdLoading />
+        ) : q.isError ? (
+          <RdError title={t('player.browse.playlist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
+        ) : q.data.length === 0 ? (
+          <AudioNotice
+            title={t('player.browse.playlist.emptyTitle')}
+            action={
+              <button type="button" className="rd-btn rd-btn--primary" onClick={() => setCreating(true)}>
+                {t('player.browse.playlist.new')}
+              </button>
+            }
+          >
+            {t('player.browse.playlist.emptyBody')}
+          </AudioNotice>
+        ) : (
+          <ul className="rd-music-grid" aria-label={t('player.browse.playlist.yours')}>
+            {q.data.map((p) => (
+              <li key={p.id}>
+                <PlaylistTile playlist={p} fill />
+              </li>
+            ))}
+          </ul>
+        )}
+      </AudioSection>
       <NameDialog
         open={creating}
         title={t('player.browse.playlist.new')}
@@ -145,11 +151,20 @@ export function PlaylistsPage() {
           )
         }
       />
-    </div>
+    </AudioPage>
   );
 }
 
-/** /player/music/playlist/$playlistId */
+/** A small icon button in a playlist track row (move up, move down, remove). */
+function EditButton({ icon, label, disabled, onClick }: { icon: 'up' | 'down' | 'close'; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="rd-music-iconbtn" aria-label={label} title={label} disabled={disabled} onClick={onClick}>
+      <AudioIcon name={icon} size={18} />
+    </button>
+  );
+}
+
+/** /player/music/playlist/$playlistId: the title page (mosaic cover), then the editable track list. */
 export function PlaylistPage() {
   const t = useT();
   const id = useNumericParam('playlistId');
@@ -162,13 +177,19 @@ export function PlaylistPage() {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null);
 
-  if (!Number.isFinite(id)) return <Empty title={t('player.browse.playlist.notFound')} />;
-  if (q.isPending) return <DetailsSkeleton label={t('player.browse.loading')} />;
+  if (!Number.isFinite(id)) {
+    return (
+      <AudioPage>
+        <AudioNotice title={t('player.browse.playlist.notFound')} />
+      </AudioPage>
+    );
+  }
+  if (q.isPending) return <RdLoading />;
   if (q.isError) {
     return (
-      <div className="pb-page">
-        <LoadError title={t('player.browse.playlist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
-      </div>
+      <AudioPage>
+        <RdError title={t('player.browse.playlist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
+      </AudioPage>
     );
   }
 
@@ -190,67 +211,38 @@ export function PlaylistPage() {
   };
   const rowActions = (track: PlayerTrack, index: number) => (
     <span className="pb-track__edit">
-      <Button
-        variant="ghost"
-        className="pb-icon-btn"
-        icon={<Icon name="arrowUp" />}
-        aria-label={t('player.browse.playlist.moveUp', { title: track.title })}
-        disabled={index === 0 || busy}
-        onClick={() => move(index, -1)}
-      />
-      <Button
-        variant="ghost"
-        className="pb-icon-btn"
-        icon={<Icon name="arrowDown" />}
-        aria-label={t('player.browse.playlist.moveDown', { title: track.title })}
-        disabled={index === entries.length - 1 || busy}
-        onClick={() => move(index, 1)}
-      />
-      <Button
-        variant="ghost"
-        className="pb-icon-btn"
-        icon={<Icon name="close" />}
-        aria-label={t('player.browse.playlist.remove', { title: track.title })}
-        disabled={busy}
-        onClick={() => removeAt(index)}
-      />
+      <EditButton icon="up" label={t('player.browse.playlist.moveUp', { title: track.title })} disabled={index === 0 || busy} onClick={() => move(index, -1)} />
+      <EditButton icon="down" label={t('player.browse.playlist.moveDown', { title: track.title })} disabled={index === entries.length - 1 || busy} onClick={() => move(index, 1)} />
+      <EditButton icon="close" label={t('player.browse.playlist.remove', { title: track.title })} disabled={busy} onClick={() => removeAt(index)} />
     </span>
   );
 
   return (
-    <div className="pb-page">
-      <section className="pb-hero" aria-labelledby="pb-playlist-title">
-        <div className="pb-hero__art">
-          <PlaylistArt urls={list.artworkUrls} />
-        </div>
-        <div className="pb-hero__body">
-          <p className="pb-eyebrow">{t('player.browse.playlist.kind')}</p>
-          <h1 className="pb-title" id="pb-playlist-title">
-            {list.name}
-          </h1>
-          {list.description ? <p className="pb-overview">{list.description}</p> : null}
-          <p className="pb-hero__meta">{t('player.browse.playlist.meta', { count: list.tracks.length, length: lengthLabel(list.durationMs) })}</p>
-          <ButtonGroup className="pb-hero__actions">
-            <Button variant="primary" icon={<Icon name="play" />} disabled={!keys.length} onClick={() => player.playItems(keys, { source })}>
-              {t('player.browse.play')}
-            </Button>
-            <Button icon={<ShuffleIcon />} disabled={!keys.length} onClick={() => player.playItems(shuffled(keys), { source })}>
-              {t('player.browse.shuffle')}
-            </Button>
-            <DownloadButton itemKeys={keys} />
-            <Button variant="ghost" icon={<Icon name="edit" />} onClick={() => setDialog('rename')}>
-              {t('player.browse.playlist.rename')}
-            </Button>
-            <Button variant="danger" icon={<Icon name="trash" />} onClick={() => setDialog('delete')}>
-              {t('player.browse.playlist.delete')}
-            </Button>
-          </ButtonGroup>
-        </div>
-      </section>
+    <AudioDetail
+      kicker={t('player.browse.playlist.kind')}
+      title={list.name}
+      image={list.artworkUrls[0]}
+      cover={<PlaylistArt name={list.name} urls={list.artworkUrls} className="rd-music-detail__cover" />}
+      lines={
+        <>
+          <p className="rd-music-detail__meta">{t('player.browse.playlist.meta', { count: list.tracks.length, length: lengthLabel(list.durationMs) })}</p>
+          {list.description ? <p className="rd-music-detail__blurb">{list.description}</p> : null}
+        </>
+      }
+      primary={<PrimaryAction label={t('player.browse.play')} disabled={!keys.length} onClick={() => player.playItems(keys, { source })} />}
+      actions={
+        <>
+          <DetailAction icon="shuffle" label={t('player.browse.shuffle')} disabled={!keys.length} onClick={() => player.playItems(shuffled(keys), { source })} />
+          <DownloadButton itemKeys={keys} />
+          <DetailAction icon="edit" label={t('player.browse.playlist.rename')} onClick={() => setDialog('rename')} />
+          <DetailAction icon="trash" label={t('player.browse.playlist.delete')} danger onClick={() => setDialog('delete')} />
+        </>
+      }
+    >
       {list.tracks.length ? (
         <TrackList tracks={list.tracks} source={source} label={t('player.browse.playlist.tracks')} showAlbum rowActions={rowActions} />
       ) : (
-        <Empty title={t('player.browse.playlist.noTracks')}>{t('player.browse.playlist.noTracksBody')}</Empty>
+        <AudioNotice title={t('player.browse.playlist.noTracks')}>{t('player.browse.playlist.noTracksBody')}</AudioNotice>
       )}
       <NameDialog
         open={dialog === 'rename'}
@@ -275,6 +267,6 @@ export function PlaylistPage() {
           })
         }
       />
-    </div>
+    </AudioDetail>
   );
 }

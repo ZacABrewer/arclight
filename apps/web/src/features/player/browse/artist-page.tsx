@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PlayerArtistDetails } from '@arclight/shared';
-import { Button, ButtonGroup, Icon } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
+import { RdError, RdLoading } from '../redesign/pages/common.js';
 import { browseKeys, playerBrowseApi, useArtist } from './api.js';
-import { AlbumCard } from './cards.js';
+import { AlbumTile } from './cards.js';
 import { groupAlbums, shuffled } from './format.js';
-import { Artwork, DetailsSkeleton, Empty, LoadError, ShuffleIcon, useNumericParam } from './kit.js';
+import { useNumericParam } from './kit.js';
 import { usePlayerActions } from './player-hooks.js';
+import { AudioDetail, AudioNotice, AudioPage, AudioSection, DetailAction, PrimaryAction } from './rd-audio.js';
 import { TrackList } from './tracks.js';
 
 /**
@@ -23,7 +24,7 @@ function useArtistTracks() {
   };
 }
 
-/** /player/music/artist/$artistId */
+/** /player/music/artist/$artistId: the title page (round photo), top tracks, then the albums by kind. */
 export function ArtistPage() {
   const t = useT();
   const id = useNumericParam('artistId');
@@ -32,13 +33,19 @@ export function ArtistPage() {
   const allTracks = useArtistTracks();
   const [busy, setBusy] = useState<'play' | 'shuffle' | null>(null);
 
-  if (!Number.isFinite(id)) return <Empty title={t('player.browse.artist.notFound')} />;
-  if (q.isPending) return <DetailsSkeleton label={t('player.browse.loading')} />;
+  if (!Number.isFinite(id)) {
+    return (
+      <AudioPage>
+        <AudioNotice title={t('player.browse.artist.notFound')} />
+      </AudioPage>
+    );
+  }
+  if (q.isPending) return <RdLoading />;
   if (q.isError) {
     return (
-      <div className="pb-page">
-        <LoadError title={t('player.browse.artist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
-      </div>
+      <AudioPage>
+        <RdError title={t('player.browse.artist.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
+      </AudioPage>
     );
   }
 
@@ -57,55 +64,44 @@ export function ArtistPage() {
   const canPlay = artist.trackCount > 0 || artist.albums.length > 0;
 
   return (
-    <div className="pb-page">
-      <section className="pb-hero pb-hero--artist" aria-labelledby="pb-artist-title">
-        <Artwork src={artist.imageUrl} alt={t('player.browse.artist.photo', { name: artist.name })} shape="round" className="pb-hero__art" loading="eager" />
-        <div className="pb-hero__body">
-          <p className="pb-eyebrow">{t('player.browse.artist.kind')}</p>
-          <h1 className="pb-title" id="pb-artist-title">
-            {artist.name}
-          </h1>
-          <p className="pb-hero__meta">
+    <AudioDetail
+      kicker={t('player.browse.artist.kind')}
+      title={artist.name}
+      image={artist.imageUrl}
+      round
+      lines={
+        <>
+          <p className="rd-music-detail__meta">
             {t('player.browse.artist.albumCount', { count: artist.albumCount })} · {t('player.browse.artist.trackCount', { count: artist.trackCount })}
           </p>
-          {artist.genres.length ? <p className="pb-muted">{artist.genres.join(', ')}</p> : null}
-          <ButtonGroup className="pb-hero__actions">
-            <Button variant="primary" icon={<Icon name="play" />} disabled={!canPlay} loading={busy === 'play'} onClick={() => void playAll('play')}>
-              {t('player.browse.playAll')}
-            </Button>
-            <Button icon={<ShuffleIcon />} disabled={!canPlay} loading={busy === 'shuffle'} onClick={() => void playAll('shuffle')}>
-              {t('player.browse.shuffle')}
-            </Button>
-          </ButtonGroup>
-          {artist.overview ? <p className="pb-overview">{artist.overview}</p> : null}
-        </div>
-      </section>
-
+          {artist.genres.length ? <p className="rd-music-detail__meta">{artist.genres.join(', ')}</p> : null}
+        </>
+      }
+      primary={<PrimaryAction label={t('player.browse.playAll')} disabled={!canPlay} busy={busy === 'play'} onClick={() => void playAll('play')} />}
+      actions={<DetailAction icon="shuffle" label={t('player.browse.shuffle')} disabled={!canPlay} busy={busy === 'shuffle'} onClick={() => void playAll('shuffle')} />}
+      extra={artist.overview ? <p className="rd-music-detail__blurb">{artist.overview}</p> : null}
+    >
       {artist.topTracks.length ? (
-        <section className="pb-section" aria-labelledby="pb-top-tracks">
-          <h2 className="pb-section__title" id="pb-top-tracks">
-            {t('player.browse.artist.topTracks')}
-          </h2>
+        <AudioSection title={t('player.browse.artist.topTracks')}>
           <TrackList tracks={artist.topTracks} source={source} label={t('player.browse.artist.topTracks')} showAlbum />
-        </section>
+        </AudioSection>
       ) : null}
 
       {groups.length === 0 ? (
-        <Empty title={t('player.browse.artist.noAlbums')}>{t('player.browse.music.emptyBody')}</Empty>
+        <AudioNotice title={t('player.browse.artist.noAlbums')}>{t('player.browse.music.emptyBody')}</AudioNotice>
       ) : (
         groups.map((g) => (
-          <section key={g.group} className="pb-section" aria-labelledby={`pb-group-${g.group}`}>
-            <h2 className="pb-section__title" id={`pb-group-${g.group}`}>
-              {t(`player.browse.artist.group.${g.group}`)}
-            </h2>
-            <ul className="pb-grid" aria-labelledby={`pb-group-${g.group}`}>
+          <AudioSection key={g.group} title={t(`player.browse.artist.group.${g.group}`)}>
+            <ul className="rd-music-grid" aria-label={t(`player.browse.artist.group.${g.group}`)}>
               {g.albums.map((a) => (
-                <AlbumCard key={a.id} album={a} />
+                <li key={a.id}>
+                  <AlbumTile album={a} sub={a.year ? String(a.year) : undefined} fill />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ))
       )}
-    </div>
+    </AudioDetail>
   );
 }

@@ -71,9 +71,9 @@ export function useSections() {
   };
 }
 
-/** Pages that are the old music / audiobook / utility pages: they get the classic page frame. */
+/** Pages that still use the old page frame (now playing and device linking). */
 export function isLegacyPage(path: string): boolean {
-  return ['/player/music', '/player/books', '/player/now-playing', '/player/link', '/player/search'].some((p) => path === p || path.startsWith(`${p}/`));
+  return ['/player/now-playing', '/player/link'].some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 /** The account's profiles, the active one first in mind: what the avatar and picker show. */
