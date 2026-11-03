@@ -66,13 +66,32 @@ function fail(message: string): never {
 
 const WINDOWS_ILLEGAL = /[<>:"|?*\u0000-\u001f]/g;
 
+/**
+ * Windows device names (with or without an extension, any case). Opening `NUL.txt` or
+ * `COM1.mkv` on Windows reaches the device, not a file. The superscript digits count too.
+ */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\s*\..*)?$/i;
+
+/** Hard limits for a parsed torrent: far above any real one, low enough to bound memory. */
+export const MAX_PIECE_LENGTH = 256 * 1024 * 1024;
+export const MAX_FILES = 200_000;
+export const MAX_TOTAL_LENGTH = 64 * 1024 ** 4;
+
+export interface SanitizeOptions {
+  /** Also rename Windows device names (CON, NUL, COM1, ...). Default: on Windows only. */
+  windows?: boolean;
+}
+
 /** Makes a single path component safe for any filesystem; throws on traversal attempts. */
-export function sanitizeSegment(raw: string): string {
+export function sanitizeSegment(raw: string, opts: SanitizeOptions = {}): string {
   if (raw === '' || raw === '.' || raw === '..') fail(`invalid path component "${raw}"`);
   if (raw.includes('/') || raw.includes('\\')) fail(`path component contains a separator: "${raw}"`);
   let s = raw.replace(WINDOWS_ILLEGAL, '_');
   // Windows silently strips trailing dots and spaces; make them explicit.
   s = s.replace(/[. ]+$/, (m) => '_'.repeat(m.length));
+  // Only on Windows: elsewhere these are ordinary names ("Con.Air.1997.mkv"), and renaming
+  // them would move the files of torrents that are already downloaded or seeding.
+  if ((opts.windows ?? process.platform === 'win32') && WINDOWS_RESERVED.test(s)) s = `_${s}`;
   return s;
 }
 
@@ -94,6 +113,7 @@ function parseV1Files(info: BDict, name: string): { files: TorrentFileEntry[]; m
     return { files, multi: false };
   }
   if (list.length === 0) fail('empty files list');
+  if (list.length > MAX_FILES) fail(`too many files (${list.length}, max ${MAX_FILES})`);
   let offset = 0;
   for (const [i, entry] of list.entries()) {
     if (!isDict(entry)) fail(`files[${i}] is not a dictionary`);
@@ -117,6 +137,7 @@ function parseV1Files(info: BDict, name: string): { files: TorrentFileEntry[]; m
       padding: attr.includes('p'),
     });
     offset += length;
+    if (offset > MAX_TOTAL_LENGTH) fail('torrent is too large');
   }
   return { files, multi: true };
 }
@@ -130,6 +151,8 @@ function parseV2Tree(tree: BDict, name: string): TorrentFileEntry[] {
       if (!isDict(child)) fail('malformed v2 file tree');
       if (key === '') {
         const length = getInt(child, 'length') ?? fail('v2 file without length');
+        if (length < 0) fail('v2 file with a negative length');
+        if (files.length >= MAX_FILES) fail(`too many files (max ${MAX_FILES})`);
         files.push({
           index: files.length,
           path: [name, ...prefix].join('/'),
@@ -139,6 +162,7 @@ function parseV2Tree(tree: BDict, name: string): TorrentFileEntry[] {
           padding: false,
         });
         offset += length;
+        if (offset > MAX_TOTAL_LENGTH) fail('torrent is too large');
       } else {
         walk(child, [...prefix, sanitizeSegment(Buffer.from(key, 'latin1').toString('utf8'))]);
       }
@@ -172,10 +196,17 @@ export function parseInfoDict(infoBytes: Uint8Array): InfoDictResult {
   if (!nameBuf || nameBuf.length === 0) fail('info has no name');
   const name = sanitizeSegment(nameBuf.toString('utf8'));
   const pieceLength = getInt(info, 'piece length');
+  // Any length up to 256 MiB loads: v1 does not require a power of two and old tools made odd
+  // sizes. The cap bounds the per-piece buffers (cache, hashing, web seed ranges).
   if (pieceLength === undefined || pieceLength <= 0) fail('info has no valid piece length');
+  if (pieceLength > MAX_PIECE_LENGTH) fail(`piece length ${pieceLength} is too large (max ${MAX_PIECE_LENGTH})`);
   const metaVersion = getInt(info, 'meta version');
   const tree = getDict(info, 'file tree');
   const hasV2 = metaVersion === 2 && tree !== undefined;
+  // BEP 52 requires a power of two of at least 16 KiB for v2 (its merkle layers depend on it).
+  // That also bounds the piece count a v2-only torrent can claim without listing hashes.
+  if (hasV2 && (pieceLength < 16 * 1024 || (pieceLength & (pieceLength - 1)) !== 0))
+    fail(`v2 piece length ${pieceLength} is not a power of two of at least 16 KiB`);
   const pieces = getBytes(info, 'pieces');
   const hasV1 = pieces !== undefined;
   if (!hasV1 && !hasV2) fail('info has neither v1 pieces nor a v2 file tree');

@@ -328,6 +328,12 @@ export class Storage {
       this.cache.delete(p);
       this.cacheSize -= e.bytes;
     }
+    // The current piece alone is over the budget (a huge piece length): stop caching it. Its
+    // blocks are on disk and a piece not complete in the cache is hashed from disk.
+    if (this.cacheSize > max) {
+      this.cache.delete(piece);
+      this.cacheSize -= entry.bytes;
+    }
   }
 
   /**

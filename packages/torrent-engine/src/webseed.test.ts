@@ -91,6 +91,37 @@ describe('web seeds (BEP 19)', () => {
     expect(lt.getStats().downloaded).toBeGreaterThanOrEqual(lt.getStats().totalBytes);
   }, 30_000);
 
+  it('refuses loopback / LAN web seeds unless allowLocalTrackers is on (DATA-11)', async () => {
+    const p = payload();
+    const root = await env.tmp();
+    await writePayload(root, 'pack', p);
+    const web = await webServer(root);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [web.base] });
+    const leecher = await env.session({ savePath: await env.tmp(), allowLocalTrackers: false, webSeedRetryMs: 50 });
+    const lt = await leecher.addTorrent({ torrent });
+    const refused = await waitFor(() => lt.getWebSeeds().find((w) => w.failures > 0));
+    expect(refused.lastError).toMatch(/local or reserved/);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(web.requests).toHaveLength(0);
+  });
+
+  it('disables a web seed whose data keeps failing the hash check (DATA-24)', async () => {
+    const p = payload();
+    const root = await env.tmp();
+    // Serve the right sizes with the wrong bytes.
+    await writePayload(root, 'pack', { files: p.files.map((f) => ({ path: f.path, data: Buffer.alloc(f.data.length, 0x5a) })) });
+    const web = await webServer(root);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [web.base] });
+    const leecher = await env.session({ savePath: await env.tmp(), webSeedConnectionsPerTorrent: 1 });
+    const lt = await leecher.addTorrent({ torrent });
+    const off = await waitFor(() => lt.getWebSeeds().find((w) => /disabled/.test(w.lastError ?? '')));
+    expect(off.retryAt).toBeNull();
+    const seen = web.requests.length;
+    await new Promise((r) => setTimeout(r, 300));
+    expect(web.requests.length).toBe(seen);
+    expect(lt.hashFailureCount).toBeGreaterThanOrEqual(3);
+  }, 30_000);
+
   it('backs off after server errors and then recovers', async () => {
     const p = payload();
     const root = await env.tmp();

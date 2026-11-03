@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { errorMessage, TorrentEngineError } from './errors.js';
 import type { Metainfo, TorrentFileEntry } from './metainfo.js';
+import { guardHop } from './net-guard.js';
 import type { PickedBlock } from './picker.js';
 import { RateMeter } from './rate.js';
 import type { PieceLayout } from './storage/layout.js';
@@ -35,6 +36,11 @@ export interface WebSeedOptions {
   retryMs: number;
   timeoutMs?: number;
   userAgent?: string;
+  /**
+   * Allow web seeds on loopback / LAN addresses. Off by default: the .torrent or magnet picks
+   * the URL, so every hop (redirects included) must resolve to public addresses only.
+   */
+  allowPrivate?: boolean;
 }
 
 export interface WebSeedStats {
@@ -65,25 +71,29 @@ interface RangeRequest {
   timeoutMs: number;
   userAgent: string;
   signal: AbortSignal;
+  allowPrivate?: boolean;
 }
 
 const MAX_REDIRECTS = 3;
 
 /** GET with a Range header; resolves with exactly `length` bytes or rejects. */
-export function fetchRange(req: RangeRequest, redirects = MAX_REDIRECTS): Promise<Buffer> {
+export async function fetchRange(req: RangeRequest, redirects = MAX_REDIRECTS): Promise<Buffer> {
+  let u: URL;
+  try {
+    u = new URL(req.url);
+  } catch {
+    throw new TorrentEngineError('peer', 'invalid web seed url');
+  }
+  const mod = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
+  if (!mod) throw new TorrentEngineError('peer', `unsupported web seed protocol ${u.protocol}`);
+  // Each hop is vetted on its own, so a public seed cannot redirect into the LAN.
+  let guard: Awaited<ReturnType<typeof guardHop>>;
+  try {
+    guard = await guardHop(u, req.allowPrivate === true);
+  } catch (err) {
+    throw new TorrentEngineError('peer', `web seed refused: ${errorMessage(err)}`, { cause: err });
+  }
   return new Promise((resolve, reject) => {
-    let u: URL;
-    try {
-      u = new URL(req.url);
-    } catch {
-      reject(new TorrentEngineError('peer', `invalid web seed url ${req.url}`));
-      return;
-    }
-    const mod = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
-    if (!mod) {
-      reject(new TorrentEngineError('peer', `unsupported web seed protocol ${u.protocol}`));
-      return;
-    }
     const opts: http.RequestOptions = {
       method: 'GET',
       timeout: req.timeoutMs,
@@ -94,13 +104,21 @@ export function fetchRange(req: RangeRequest, redirects = MAX_REDIRECTS): Promis
         'accept-encoding': 'identity',
       },
     };
+    if (guard.lookup) opts.lookup = guard.lookup;
     if (req.localAddress) opts.localAddress = req.localAddress;
     const r = mod.request(u, opts, (res) => {
       const status = res.statusCode ?? 0;
       const location = res.headers.location;
       if (status >= 300 && status < 400 && location && redirects > 0) {
         res.resume();
-        fetchRange({ ...req, url: new URL(location, u).toString() }, redirects - 1).then(resolve, reject);
+        let next: string;
+        try {
+          next = new URL(location, u).toString();
+        } catch {
+          reject(new TorrentEngineError('peer', 'web seed sent an invalid redirect'));
+          return;
+        }
+        fetchRange({ ...req, url: next }, redirects - 1).then(resolve, reject);
         return;
       }
       // 200 means the server ignored Range: usable only when the range starts at 0.
@@ -143,6 +161,8 @@ class WebSeed {
   failures = 0;
   retryAt = 0;
   lastError: string | null = null;
+  /** Turned off for good (it kept sending data that failed the hash check). */
+  disabled = false;
 
   constructor(
     readonly url: string,
@@ -184,7 +204,7 @@ export class WebSeedManager {
     while (progress && this.activeRequests < this.opts.maxConnections) {
       progress = false;
       // spread requests: least busy usable seed first
-      const usable = this.seeds.filter((s) => s.retryAt <= now).sort((a, b) => a.active - b.active);
+      const usable = this.seeds.filter((s) => !s.disabled && s.retryAt <= now).sort((a, b) => a.active - b.active);
       for (const seed of usable) {
         if (this.activeRequests >= this.opts.maxConnections) break;
         const blocks = this.host.pick(seed.key, this.host.layout.blocksInPiece(0) || 1);
@@ -224,9 +244,9 @@ export class WebSeedManager {
         seed.meter.add(length);
       }
       seed.failures = 0;
-      seed.lastError = null;
+      if (!seed.disabled) seed.lastError = null;
     } catch (err) {
-      if (!this.closed) {
+      if (!this.closed && !seed.disabled) {
         seed.failures++;
         seed.lastError = errorMessage(err);
         seed.retryAt = this.host.now() + this.opts.retryMs * 2 ** Math.min(seed.failures - 1, 6);
@@ -255,6 +275,7 @@ export class WebSeedManager {
         userAgent: this.opts.userAgent ?? 'Arclight',
         signal,
       };
+      if (this.opts.allowPrivate) req.allowPrivate = true;
       const local = this.host.localAddress();
       if (local) req.localAddress = local;
       parts.push(await fetchRange(req));
@@ -262,6 +283,15 @@ export class WebSeedManager {
     const out = Buffer.concat(parts);
     if (out.length !== length) throw new TorrentEngineError('peer', 'web seed returned a short range');
     return out;
+  }
+
+  /** Stops using the web seed with this key (its data failed the hash check too often). */
+  disable(key: string): boolean {
+    const seed = this.seeds.find((s) => s.key === key);
+    if (!seed || seed.disabled) return false;
+    seed.disabled = true;
+    seed.lastError = 'disabled: its data failed the hash check';
+    return true;
   }
 
   stats(): WebSeedStats[] {
@@ -272,7 +302,7 @@ export class WebSeedManager {
       downloaded: s.meter.total,
       activeRequests: s.active,
       failures: s.failures,
-      retryAt: s.retryAt > now ? s.retryAt : null,
+      retryAt: !s.disabled && s.retryAt > now ? s.retryAt : null,
       lastError: s.lastError,
     }));
   }

@@ -18,12 +18,16 @@ export const TORRENT_TRANSPORT_DEFAULTS = {
   utp: true,
   ipv6: true,
   webSeedConnectionsPerTorrent: 4,
+  localPeers: false,
+  localTrackers: false,
 } as const satisfies {
   encryption: TorrentEncryptionMode;
   tcp: boolean;
   utp: boolean;
   ipv6: boolean;
   webSeedConnectionsPerTorrent: number;
+  localPeers: boolean;
+  localTrackers: boolean;
 };
 
 export const TorrentSettings = z.object({
@@ -105,6 +109,16 @@ export const TorrentSettings = z.object({
     .max(32)
     .optional()
     .describe('Concurrent HTTP requests to web seeds per torrent (default 4; 0 disables web seeds).'),
+  localPeers: z
+    .boolean()
+    .optional()
+    .describe('Connect to peers on loopback / LAN / other private addresses learned from trackers, DHT and peer exchange (default off).'),
+  localTrackers: z
+    .boolean()
+    .optional()
+    .describe(
+      'Allow trackers and web seeds on loopback / LAN / other private addresses (default off). Peers from such a tracker are used even with localPeers off.',
+    ),
 });
 export type TorrentSettings = z.infer<typeof TorrentSettings>;
 

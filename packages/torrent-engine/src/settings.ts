@@ -52,6 +52,20 @@ export interface SessionSettings {
   webSeedConnectionsPerTorrent: number;
   /** Base back-off after a web seed error, doubled per consecutive failure. */
   webSeedRetryMs: number;
+  /**
+   * Connect to peers (and DHT nodes) on loopback, LAN and other non-public addresses that
+   * trackers, the DHT, PEX or a magnet's `x.pe` hand out. Off by default, so a hostile peer or
+   * torrent cannot make the engine probe the local network. Peers passed to `addTorrent`
+   * directly, and peers from a local tracker that `allowLocalTrackers` lets through, are
+   * always used.
+   */
+  allowLocalPeers: boolean;
+  /**
+   * Contact trackers and web seeds on loopback, LAN and other non-public addresses (a LAN
+   * tracker). Off by default: the .torrent or magnet picks these URLs, so every request
+   * (redirects included) must reach public addresses only.
+   */
+  allowLocalTrackers: boolean;
   /** Default share ratio after which seeding stops (null = unlimited). */
   seedRatioLimit: number | null;
   /** Default seeding time after which seeding stops, in ms (null = unlimited). */
@@ -139,6 +153,8 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   ipv6: true,
   webSeedConnectionsPerTorrent: 4,
   webSeedRetryMs: 30_000,
+  allowLocalPeers: false,
+  allowLocalTrackers: false,
   seedRatioLimit: null,
   seedTimeLimitMs: null,
   seedLimitAction: 'pause',

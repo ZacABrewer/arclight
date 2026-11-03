@@ -22,7 +22,7 @@ async function tmp(): Promise<string> {
   return d;
 }
 
-const LOCAL: Partial<SessionSettings> = { listenPort: 0, listenAddress: '127.0.0.1', dht: false, utp: false, dhtBootstrapNodes: [] };
+const LOCAL: Partial<SessionSettings> = { listenPort: 0, listenAddress: '127.0.0.1', dht: false, utp: false, dhtBootstrapNodes: [], allowLocalPeers: true, allowLocalTrackers: true };
 
 async function session(settings: Partial<SessionSettings>): Promise<Session> {
   const s = new Session({ settings: { ...LOCAL, ...settings } });

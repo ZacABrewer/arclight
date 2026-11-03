@@ -126,6 +126,7 @@ Arclight also does step 1 for you. With **Recover stalled downloads** on (Settin
 - Incoming connections are impossible: no forwarded port, or the listening port is blocked. Outgoing connections still work, so you get fewer peers, not none.
 - You are on a private tracker and the tracker rejected the announce (passkey, ratio or account problem). DHT and peer exchange are not used for private torrents.
 - A transport setting is switched off. If both TCP and uTP are off, no peer can connect at all (Settings > Torrent Engine warns about this).
+- The tracker or the peers are on your local network. Trackers, web seeds and peers on loopback / LAN addresses are refused by default; the tracker row shows "tracker refused: ...". See [Local network addresses](using/download-clients.md#local-network-addresses).
 
 **How to confirm:**
 

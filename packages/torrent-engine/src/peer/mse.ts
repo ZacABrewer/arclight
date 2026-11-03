@@ -113,11 +113,25 @@ function u32(n: number): Buffer {
 // ---- incremental reader over a socket during the handshake -----------------------------------
 
 /** Buffers socket data during the handshake and lets the handshake await exact byte counts. */
+/**
+ * Most bytes the handshake may buffer before it has been consumed. The largest legal exchange
+ * is Ya/Yb (96) + PadA/PadB (512) + the hashes, VC and padding (~600) + IA (up to 65535),
+ * plus whatever the peer pipelines after it (its BitTorrent handshake and bitfield). A peer
+ * that sends more without finishing the exchange is dropped.
+ */
+export const MSE_MAX_BUFFER = 128 * 1024;
+
 class HandshakeReader {
   private buf: Buffer;
   private waiter: (() => void) | null = null;
   private failure: Error | null = null;
   private readonly onData = (d: Buffer): void => {
+    if (this.failure) return;
+    if (this.buf.length + d.length > MSE_MAX_BUFFER) {
+      this.fail(new TorrentEngineError('peer', 'mse: handshake too large'));
+      this.sock.destroy();
+      return;
+    }
     this.buf = this.buf.length === 0 ? d : Buffer.concat([this.buf, d]);
     this.waiter?.();
   };

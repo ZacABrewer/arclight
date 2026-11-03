@@ -173,6 +173,8 @@ These settings apply to the built-in engine only. The top of the page shows live
 | uTP | On | Accept and open uTP peer connections on the UDP port |
 | IPv6 | On | Also listen on IPv6 and use IPv6 peers when available |
 | Web seed connections | 4 | Concurrent HTTP requests to web seeds per torrent (0 to 32). 0 turns web seeds off |
+| Local network peers | Off | Connect to peers on loopback, LAN or other private addresses that trackers, DHT and peer exchange hand out. See [Local network addresses](#local-network-addresses) |
+| Local network trackers and web seeds | Off | Allow trackers and web seeds on loopback, LAN or other private addresses. See [Local network addresses](#local-network-addresses) |
 
 If you switch both TCP and uTP off, the page warns that no peer can connect. The Resume data folder (fast-resume data and saved `.torrent` files, inside your config folder) is shown but cannot be changed.
 
@@ -258,6 +260,17 @@ A torrent whose resume data still matches its files does not use a slot: it is a
 ### Magnets without metadata
 
 A magnet link has no file list until a peer sends it. If no peer has it, the torrent would wait for days. After **Magnet metadata timeout** minutes of active time (only time the torrent is running counts) the torrent fails with "no metadata after N minutes: no peers had this magnet". Arclight then handles it like any failed download: it is removed (when **Remove Failed** is on) and, with automatic re-download of failed downloads on (the default), the release is blocklisted and a different one is searched for. Set the timeout to 0 to wait forever. See [Magnet failed: no metadata](../TROUBLESHOOTING.md#magnet-no-metadata).
+
+### Local network addresses
+
+A `.torrent` file, a magnet link, a tracker or another peer can name any address, including ones on your own network (your router, NAS admin pages, other services). So by default the engine only talks to public addresses that came from those sources:
+
+- Trackers and web seeds on loopback, LAN (10.x, 172.16-31.x, 192.168.x), link-local and other private or reserved addresses are refused ("tracker refused: ..."). This is checked again on every redirect and after the name is looked up, so a public name that points at a private address is refused too.
+- Peers with such addresses from trackers, DHT, peer exchange and the `x.pe` part of a magnet are ignored.
+
+If you run your own tracker or seedbox at home, turn on **Local network trackers and web seeds**. Peers handed out by a tracker that is itself on a local address are then used as well, so a home tracker works without the peer setting. Turn on **Local network peers** only if you also want LAN peers from DHT, peer exchange and public trackers (for example two clients on the same network that find each other through a public swarm). Both apply to the trackers and web seeds of torrents started after the change; peer addresses are filtered from then on. Binding to the VPN is not affected: the engine still sends everything from the tunnel address.
+
+The engine also protects itself from peers that send bad data: a peer IP that took part in 3 pieces that failed the hash check, or that sent magnet metadata that does not match the info-hash, is banned for that torrent ("banned peer ...: ..." in the log). A web seed with 3 failed pieces is turned off for that torrent.
 
 ### Resume data and shutdown
 

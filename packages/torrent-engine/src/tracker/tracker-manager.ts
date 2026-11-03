@@ -28,6 +28,8 @@ export interface TrackerClientFactoryOptions {
   timeoutMs?: number;
   udpBaseTimeoutMs?: number;
   udpMaxRetries?: number;
+  /** Allow trackers on loopback / LAN addresses (default: public addresses only). */
+  allowPrivate?: boolean;
 }
 
 /** Default tracker factory: http(s) and udp URLs; anything else is unsupported (null). */
@@ -40,6 +42,7 @@ export function createTrackerClient(url: string, opts: TrackerClientFactoryOptio
       if (opts.userAgent) o.userAgent = opts.userAgent;
       if (opts.requester) o.requester = opts.requester;
       if (opts.timeoutMs) o.timeoutMs = opts.timeoutMs;
+      if (opts.allowPrivate) o.allowPrivate = true;
       return new HttpTracker(url, o);
     }
     if (proto === 'udp:') {
@@ -48,6 +51,7 @@ export function createTrackerClient(url: string, opts: TrackerClientFactoryOptio
       if (opts.udpSocketFactory) o.socketFactory = opts.udpSocketFactory;
       if (opts.udpBaseTimeoutMs) o.baseTimeoutMs = opts.udpBaseTimeoutMs;
       if (opts.udpMaxRetries !== undefined) o.maxRetries = opts.udpMaxRetries;
+      if (opts.allowPrivate) o.allowPrivate = true;
       return new UdpTracker(url, o);
     }
   } catch {

@@ -240,6 +240,8 @@ export class TorrentService {
       utp: t.utp,
       ipv6: t.ipv6,
       webSeedConnectionsPerTorrent: t.webSeedConnectionsPerTorrent,
+      allowLocalPeers: t.localPeers,
+      allowLocalTrackers: t.localTrackers,
       listenPort: binding.port,
       listenAddress: binding.address,
       ...this.connectionLimits(s),
@@ -1095,6 +1097,8 @@ export type TorrentSettingsFilled = Omit<TorrentSettings, keyof typeof TORRENT_T
   utp: boolean;
   ipv6: boolean;
   webSeedConnectionsPerTorrent: number;
+  localPeers: boolean;
+  localTrackers: boolean;
 };
 
 export function withTransportDefaults(s: TorrentSettings): TorrentSettingsFilled {
@@ -1105,6 +1109,8 @@ export function withTransportDefaults(s: TorrentSettings): TorrentSettingsFilled
     utp: s.utp ?? TORRENT_TRANSPORT_DEFAULTS.utp,
     ipv6: s.ipv6 ?? TORRENT_TRANSPORT_DEFAULTS.ipv6,
     webSeedConnectionsPerTorrent: s.webSeedConnectionsPerTorrent ?? TORRENT_TRANSPORT_DEFAULTS.webSeedConnectionsPerTorrent,
+    localPeers: s.localPeers ?? TORRENT_TRANSPORT_DEFAULTS.localPeers,
+    localTrackers: s.localTrackers ?? TORRENT_TRANSPORT_DEFAULTS.localTrackers,
   };
 }
 
