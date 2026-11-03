@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Arclight: classes reached by name (manifest meta-data, Capacitor plugin reflection).
+# Release builds are not minified today; these keep it safe if minify is turned on.
+-keep class com.moviemethat.arclight.cast.CastOptionsProvider { *; }
+-keep class com.moviemethat.arclight.ArclightPlayerPlugin { *; }
+-keep class com.moviemethat.arclight.download.DownloadWorker { <init>(...); }
