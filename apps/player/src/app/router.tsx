@@ -131,6 +131,17 @@ const playerProfilesRoute = createRoute({
   component: () => <PickerScope>{isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage />}</PickerScope>,
 });
 
+/** This device's settings (accounts, streaming, language) on TV: the app page, under the TV header. */
+function TvDeviceSettings() {
+  return (
+    <div className="tv-scroll-y" data-tv-scroll="y">
+      <div className="tv-browse">
+        <SettingsPage />
+      </div>
+    </div>
+  );
+}
+
 /** The pickers sit outside the shell's player; a switch still hands the player over (the queue is per profile). */
 function PickerScope({ children }: { children: ReactNode }) {
   const services = useServices();
@@ -181,7 +192,7 @@ const playerChildren = [
   createRoute({ getParentRoute: () => playerRoute, path: 'queue', component: QueuePage }),
   createRoute({ getParentRoute: () => playerRoute, path: 'downloads', component: DownloadsPage }),
   createRoute({ getParentRoute: () => playerRoute, path: 'settings', component: byDevice(TvSettingsScreen, PhoneSettingsPage) }),
-  createRoute({ getParentRoute: () => playerRoute, path: childPath(DEVICE_SETTINGS_PATH), component: SettingsPage }),
+  createRoute({ getParentRoute: () => playerRoute, path: childPath(DEVICE_SETTINGS_PATH), component: byDevice(TvDeviceSettings, SettingsPage) }),
   createRoute({ getParentRoute: () => playerRoute, path: childPath(MANAGE_PROFILES_PATH), component: byDevice(TvManageProfilesScreen, PhoneManageProfiles) }),
   ...browseRoutes.map((r) => {
     const path = childPath(r.path);

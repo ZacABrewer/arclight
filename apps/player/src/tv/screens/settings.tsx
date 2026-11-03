@@ -8,6 +8,7 @@ import { APP_VERSION } from '../../config';
 import { request } from '../../core/api';
 import { useActiveProfile, useProfileSettings, useSaveProfileSettings } from '../../households/api';
 import { playIntroOnLaunch, setPlayIntroOnLaunch } from '../../intro/launch';
+import { DEVICE_SETTINGS_PATH } from '../../ui/phone-pages';
 import { DEFAULT_PLAYER_THEME } from '../../ui/profile-theme';
 import { readVideoQuality, VIDEO_QUALITIES, writeVideoQuality } from '../../video/quality';
 import { PROFILES_PATH } from '../tv-runtime';
@@ -215,6 +216,8 @@ export function TvSettingsScreen() {
           { kind: 'info', key: 'server', label: t('app.tv.settings.server'), value: active ? `${active.serverName} · ${hostOf(active.serverUrl)}` : '' },
           { kind: 'info', key: 'version', label: t('app.tv.settings.appVersion'), value: APP_VERSION },
           { kind: 'info', key: 'account', label: t('app.tv.settings.signedInAs'), value: [active?.displayName || active?.username, profile?.name].filter(Boolean).join(' · ') },
+          // Accounts (sign out, another server), streaming, downloads and language: the phone's "This device" page.
+          { kind: 'action', key: 'device', label: t('app.settings.device'), value: '', run: () => void navigate({ to: DEVICE_SETTINGS_PATH }) },
         ];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
