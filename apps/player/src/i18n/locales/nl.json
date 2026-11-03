@@ -144,7 +144,7 @@
   "app.video.episode": "Aflevering {n}",
   "app.video.episodes": "Afleveringen",
   "app.video.nextEpisode": "Volgende aflevering",
-  "app.video.nextIn": "Volgende aflevering over {s}",
+  "app.video.nextIn": "Volgende aflevering over {s} s",
   "app.video.nowPlaying": "Speelt nu",
   "app.video.off": "Uit",
   "app.video.playNow": "Nu afspelen",
