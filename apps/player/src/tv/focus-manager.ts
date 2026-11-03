@@ -157,11 +157,17 @@ export class FocusManager {
     const candidates = els.map((el) => ({ box: this.rectOf(el), sameRow: !row || row.contains(el), inHeader: Boolean(el.closest('[data-tv-fixed]')) }));
     // Down from the header enters the page at its first item (the "All" chip, the hero's
     // button), not whichever is nearest the tab: the first in page order that down can reach.
-    const i =
+    let i =
       origin.inHeader && dir === 'down'
         ? candidates.findIndex((c) => !c.inHeader && stageScore(origin, c, dir, headerBottom) < Infinity)
         : pickStage(origin, candidates, dir, headerBottom);
     if (i < 0) return false;
+    // Up from the page into the header lands on the active tab (aria-current), not on whichever
+    // tab is nearest; with none shown (a title page), the nearest as before.
+    if (dir === 'up' && !origin.inHeader && candidates[i]!.inHeader) {
+      const current = els.findIndex((el, k) => candidates[k]!.inHeader && el.getAttribute('aria-current') === 'page');
+      if (current >= 0) i = current;
+    }
     this.focus(els[i]!, dir);
     return true;
   }
