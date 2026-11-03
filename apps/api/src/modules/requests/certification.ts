@@ -11,6 +11,8 @@ import { RequestsError } from './errors.js';
 import type { Actor } from './permissions.js';
 import type { TitleSource } from './service.js';
 import { findUserRow } from './users.js';
+import type { RequestAuth } from '../auth/service.js';
+import { householdsFor } from '../households/service.js';
 
 // Kids / certification caps (users.settings.contentRestrictions). Certifications come from
 // TMDB through the metadata client (region rating, else US) and are cached per title.
@@ -63,6 +65,52 @@ export function restrictionsOfSettings(settings: unknown): ContentRestrictions {
   const raw = ((settings ?? {}) as Record<string, unknown>)['contentRestrictions'];
   const parsed = ContentRestrictions.safeParse(raw ?? {});
   return parsed.success ? parsed.data : ContentRestrictions.parse({});
+}
+
+/** The stricter of two caps of one rating scale (lower rank wins; null is no cap, so the other side wins). */
+function stricter<T extends string>(order: readonly T[], a: T | null, b: T | null): T | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return order.indexOf(a) <= order.indexOf(b) ? a : b;
+}
+
+/**
+ * An account's caps combined with a household profile's own (Kids): per media type the stricter
+ * certification cap, and adult content hidden when either hides it. `b` null: just `a`.
+ */
+export function combineRestrictions(a: ContentRestrictions, b: ContentRestrictions | null): ContentRestrictions {
+  if (!b) return { maxCertification: { ...a.maxCertification }, hideAdultContent: a.hideAdultContent };
+  return {
+    maxCertification: {
+      movie: stricter(MOVIE_CERTIFICATIONS, a.maxCertification.movie, b.maxCertification.movie),
+      tv: stricter(TV_CERTIFICATIONS, a.maxCertification.tv, b.maxCertification.tv),
+    },
+    hideAdultContent: a.hideAdultContent || b.hideAdultContent,
+  };
+}
+
+/**
+ * The caps a request plays under: the account's (users.settings) combined with the active
+ * household profile's. null: no caps (also for admin credentials without a user).
+ */
+export function restrictionsFor(auth: RequestAuth | null | undefined): ContentRestrictions | null {
+  if (!auth?.user) return null;
+  const r = combineRestrictions(restrictionsOfSettings(auth.user.settings), auth.profile?.restrictions ?? null);
+  return isUnrestricted(r) ? null : r;
+}
+
+/**
+ * The caps of an account and one of its household profiles, for paths that only carry ids
+ * (signed links, the Jellyfin plugin). `profileId` null: the owner profile. Throws when the
+ * profile does not exist or belongs to another account, so a stale id never plays uncapped.
+ */
+export function restrictionsForProfile(db: Db, userId: number, profileId: number | null): ContentRestrictions | null {
+  const row = findUserRow(db, userId);
+  if (!row) throw new Error(`user ${userId} not found`);
+  const profile = householdsFor(db).linkProfile(userId, profileId);
+  if (!profile) throw new Error(`household profile ${profileId ?? 'owner'} of user ${userId} not found`);
+  const r = combineRestrictions(restrictionsOfSettings(row.settings), profile.restrictions);
+  return isUnrestricted(r) ? null : r;
 }
 
 export interface CertificationGuardOptions {

@@ -225,6 +225,13 @@
       "when": 1793665861242,
       "tag": "0031_mobile_app_id",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793686488360,
+      "tag": "0032_household_profiles",
+      "breakpoints": true
     }
   ]
 }

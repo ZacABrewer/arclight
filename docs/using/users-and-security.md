@@ -55,6 +55,8 @@ Request permissions, quotas and notification options for each user are separate:
 
 **Request** grants every kind of request. To keep a user off some kinds (for example music, audiobooks, subtitles or audio languages), use **Request types** under Settings > Users > Manage > Caps and approval: a type turned off is refused even when the permissions allow it, and admins are not filtered. New accounts start with **Default request types for new users** from Settings > Requests. See [Request types](discover-and-requests.md#request-types).
 
+Each account can also hold several household profiles, one for each person who watches on it, with their own progress, My List and content limit. Manage them under Settings > Users > Manage > Profiles. See [Household profiles](../guides/profiles.md).
+
 ### App access
 
 A user sees the request portal and nothing more: signing in takes them to `/portal`, and any app address (the dashboard, `/library`, `/settings` and so on) sends them back there. To let someone look at more, edit the user and set **App access** to "Request portal and parts of the app", then tick the areas:
@@ -165,6 +167,7 @@ On Settings > Users, tick users to delete several at once (it asks first, with t
 
 ## Related
 
+- [Household profiles](../guides/profiles.md)
 - [Exposing Arclight outside your home](../getting-started/exposing-outside-home.md)
 - [System pages](system.md)
 - [Single sign-on, two-factor and API keys](single-sign-on.md)

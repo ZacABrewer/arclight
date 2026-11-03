@@ -50,6 +50,7 @@ import { tagRulesModule } from './modules/tag-rules/index.js';
 import { requestsModule } from './modules/requests/index.js';
 import { authModule, installAuth } from './modules/auth/index.js';
 import { appAuthModule } from './modules/app-auth/index.js';
+import { householdsModule } from './modules/households/index.js';
 import { guidesModule } from './modules/guides/index.js';
 import { mediaServersModule } from './modules/media-servers/index.js';
 import { retentionModule } from './modules/retention/index.js';
@@ -240,6 +241,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     authModule,
     // The Arclight player app: device tokens (Bearer), QR pairing, /app/devices.
     appAuthModule,
+    // Household profiles: owner-profile backfill, /households and /users/:userId/profiles.
+    householdsModule,
     auditModule,
     // POST /bulk: one action over many rows of a settings / activity / system list.
     bulkActionsModule,

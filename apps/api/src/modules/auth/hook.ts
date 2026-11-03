@@ -69,6 +69,51 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/app/device-codes',
   '/app/device-codes/poll',
 ]);
+/**
+ * What a non-owner household profile may call (full route patterns, matched on the route
+ * pattern, so other API scopes such as /api/v3 are refused too). Anything else answers 403
+ * `{ error: 'profile-forbidden' }`, whatever the account may do: a profile is never an admin or a
+ * manager. `methods` absent: every method. `prefix`: the pattern starts with it.
+ */
+export interface ProfileRouteRule {
+  route?: string;
+  prefix?: string;
+  methods?: readonly string[];
+}
+const READ = ['GET', 'HEAD'] as const;
+export const PROFILE_ROUTES: readonly ProfileRouteRule[] = [
+  { route: `${API_PREFIX}/auth/me`, methods: READ },
+  { route: `${API_PREFIX}/auth/logout` },
+  { route: `${API_PREFIX}/auth/status`, methods: READ },
+  { route: `${API_PREFIX}/households/profiles`, methods: READ },
+  { route: `${API_PREFIX}/households/profiles/:id/select`, methods: ['POST'] },
+  { route: `${API_PREFIX}/households/profiles/active/settings`, methods: ['GET', 'HEAD', 'PUT'] },
+  // The player (browse, items, progress, queue, My List, artwork, sessions) and its streams.
+  // Settings → Player is /settings/player* (not here); segment editing is excluded below.
+  { prefix: `${API_PREFIX}/playback/` },
+  { prefix: `${API_PREFIX}/stream/` },
+  // What the Arclight player app calls once signed in: who am I, and sign out.
+  { route: `${API_PREFIX}/user/me`, methods: READ },
+  { route: `${API_PREFIX}/app/sign-out`, methods: ['POST'] },
+  // Theme packs (public anyway).
+  { route: `${API_PREFIX}/theme`, methods: READ },
+  { prefix: `${API_PREFIX}/theme/`, methods: READ },
+  { route: `${API_PREFIX}/system/ping`, methods: READ },
+];
+/** Excluded from the profile allowlist even though a prefix above covers them. */
+export const PROFILE_ROUTE_EXCLUSIONS: readonly string[] = [`${API_PREFIX}/playback/segments/`, `${API_PREFIX}/playback/segments`];
+
+/** True when a non-owner household profile may call this route pattern with this method. */
+export function profileMay(method: string, routeUrl: string | undefined): boolean {
+  if (!routeUrl) return false;
+  if (PROFILE_ROUTE_EXCLUSIONS.some((p) => routeUrl === p || routeUrl.startsWith(p.endsWith('/') ? p : `${p}/`))) return false;
+  return PROFILE_ROUTES.some((rule) => {
+    if (rule.methods && !rule.methods.includes(method)) return false;
+    if (rule.route !== undefined) return routeUrl === rule.route;
+    return rule.prefix !== undefined && routeUrl.startsWith(rule.prefix);
+  });
+}
+
 /** Route prefixes that answer without credentials; the setup routes guard themselves. */
 export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
 
@@ -258,7 +303,8 @@ export interface AuthHookOptions {
  * 1. no admin account yet: 403 SETUP_REQUIRED, except the setup bootstrap routes;
  * 2. resolve `req.auth` (app token, session cookie, Basic, API keys, plugin key, forward-auth,
  *    local bypass);
- * 3. a per-user key or app token outside its scope gets 403; an admin who must set up two-factor gets 403
+ * 3. a per-user key or app token outside its scope gets 403; a non-owner household profile outside
+ *    PROFILE_ROUTES gets 403 profile-forbidden; an admin who must set up two-factor gets 403
  *    TWO_FACTOR_SETUP_REQUIRED outside the setup routes;
  * 4. public routes answer; anonymous callers elsewhere get 401;
  * 5. a Jellyfin plugin key passes on /api/v1/jellyfin/* and gets 403 anywhere else;
@@ -292,6 +338,11 @@ export function requireAuth(service: AuthService, options: AuthHookOptions | Pub
     if (req.auth && !apiKeyScopeAllows(req.auth, req.method, routeUrl)) {
       const error = req.auth.via === 'app' ? 'the Arclight app may not call this; use the web app' : `this API key (${req.auth.apiKeyScope ?? 'read'} scope) may not call this`;
       return reply.code(403).send({ error, code: 'FORBIDDEN' });
+    }
+    // A non-owner household profile (Kids ...) only reaches the player: never an admin, portal or request route.
+    if (req.auth?.profile && !req.auth.profile.isOwner && !profileMay(req.method, routeUrl)) {
+      // `code` too: most route error schemas require one (the households routes read `error`).
+      return reply.code(403).send({ error: 'profile-forbidden', code: 'profile-forbidden' });
     }
     if (req.auth && !isPublic(routeUrl) && !allowedDuringTwoFactorSetup(req.method, routeUrl) && service.twoFactorSetupRequired(req.auth)) {
       return reply.code(403).send({ error: 'set up two-factor sign-in on your account first', code: 'TWO_FACTOR_SETUP_REQUIRED' });

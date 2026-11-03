@@ -1,6 +1,7 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { ItemPrefs, PlayQueue } from '@arclight/shared';
 import { users } from '../auth/schema.js';
+import { householdProfiles } from '../households/schema.js';
 
 // The player's own tables, keyed on the Arclight user. Items are referenced by item key
 // (`track:<id>`, `audiobook:<id>`) without foreign keys, like the watch history: a row of an item
@@ -18,6 +19,8 @@ export const playbackProgress = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** The household profile the row belongs to (backfilled to the owner profile; see households/backfill.ts). */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'cascade' }),
     itemKey: text('item_key').notNull(),
     positionMs: integer('position_ms').notNull().default(0),
     durationMs: integer('duration_ms').notNull().default(0),
@@ -31,7 +34,7 @@ export const playbackProgress = sqliteTable(
     deviceId: text('device_id'),
   },
   (t) => [
-    uniqueIndex('playback_progress_user_item_idx').on(t.userId, t.itemKey),
+    uniqueIndex('playback_progress_profile_item_idx').on(t.profileId, t.itemKey),
     index('playback_progress_user_played_at_idx').on(t.userId, t.lastPlayedAt),
   ],
 );
@@ -47,6 +50,8 @@ export const playbackPlays = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** The household profile the row belongs to (backfilled to the owner profile; see households/backfill.ts). */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'cascade' }),
     itemKey: text('item_key').notNull(),
     at: text('at').notNull(),
     durationMs: integer('duration_ms').notNull().default(0),
@@ -54,10 +59,17 @@ export const playbackPlays = sqliteTable(
     deviceName: text('device_name'),
     playMethod: text('play_method').$type<'DirectPlay' | 'Transcode'>(),
   },
-  (t) => [index('playback_plays_user_at_idx').on(t.userId, t.at), index('playback_plays_item_idx').on(t.itemKey)],
+  (t) => [
+    index('playback_plays_user_at_idx').on(t.userId, t.at),
+    index('playback_plays_item_idx').on(t.itemKey),
+    index('playback_plays_profile_at_idx').on(t.profileId, t.at),
+  ],
 );
 
-/** One play queue per user; the whole queue is one JSON value (last write wins). */
+/**
+ * One play queue per user; the whole queue is one JSON value (last write wins). Read-only since
+ * household profiles: `profile_playback_queue` replaced it, and the backfill copies its rows.
+ */
 export const playbackQueue = sqliteTable('playback_queue', {
   userId: integer('user_id')
     .primaryKey()
@@ -74,12 +86,14 @@ export const playbackBookmarks = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** The household profile the row belongs to (backfilled to the owner profile; see households/backfill.ts). */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'cascade' }),
     itemKey: text('item_key').notNull(),
     positionMs: integer('position_ms').notNull(),
     note: text('note').notNull().default(''),
     createdAt: text('created_at').notNull(),
   },
-  (t) => [index('playback_bookmarks_user_item_idx').on(t.userId, t.itemKey)],
+  (t) => [index('playback_bookmarks_user_item_idx').on(t.userId, t.itemKey), index('playback_bookmarks_profile_item_idx').on(t.profileId, t.itemKey)],
 );
 
 /** The player's own playlists (not the music module's synced `music_playlists`). */
@@ -90,12 +104,14 @@ export const userPlaylists = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** The household profile the row belongs to (backfilled to the owner profile; see households/backfill.ts). */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [index('user_playlists_user_idx').on(t.userId)],
+  (t) => [index('user_playlists_user_idx').on(t.userId), index('user_playlists_profile_idx').on(t.profileId)],
 );
 
 /** Tracks of a user playlist in order; the same track may appear more than once. */

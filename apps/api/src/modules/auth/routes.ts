@@ -53,6 +53,7 @@ function sessionOf(auth: RequestAuth, service: AuthService): Session {
     ...(auth.expiresAt ? { expiresAt: auth.expiresAt } : {}),
     ...(service.twoFactorSetupRequired(auth) ? { twoFactorSetupRequired: true } : {}),
     ...(auth.apiKeyScope ? { apiKeyScope: auth.apiKeyScope } : {}),
+    ...(auth.user ? { activeProfile: service.activeProfileSummary(auth) } : {}),
   };
 }
 
