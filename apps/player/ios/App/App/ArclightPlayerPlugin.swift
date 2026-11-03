@@ -49,6 +49,11 @@ public class ArclightPlayerPlugin: CAPPlugin, CAPBridgedPlugin, PlayerEventSink 
         CAPPluginMethod(name: "getCastState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "showRoutePicker", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "endCastSession", returnType: CAPPluginReturnPromise),
+        // Movies & TV (Android only for now; iOS reports unimplemented and the app falls back).
+        CAPPluginMethod(name: "getDeviceInfo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playVideo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "replaceVideoStream", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "closeVideo", returnType: CAPPluginReturnPromise),
     ]
 
     override public func load() {
@@ -374,5 +379,23 @@ public class ArclightPlayerPlugin: CAPPlugin, CAPBridgedPlugin, PlayerEventSink 
             }
             call.resolve()
         }
+    }
+
+    // MARK: - Movies & TV (not on iOS yet)
+
+    @objc func getDeviceInfo(_ call: CAPPluginCall) {
+        call.unimplemented("getDeviceInfo is not available on iOS yet.")
+    }
+
+    @objc func playVideo(_ call: CAPPluginCall) {
+        call.unimplemented("playVideo is not available on iOS yet.")
+    }
+
+    @objc func replaceVideoStream(_ call: CAPPluginCall) {
+        call.unimplemented("replaceVideoStream is not available on iOS yet.")
+    }
+
+    @objc func closeVideo(_ call: CAPPluginCall) {
+        call.unimplemented("closeVideo is not available on iOS yet.")
     }
 }

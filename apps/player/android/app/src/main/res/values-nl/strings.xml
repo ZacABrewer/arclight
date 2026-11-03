@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Video player strings (the rest of the app's text lives in the web UI's locales). -->
+<resources>
+    <string name="downloads_channel">Downloads</string>
+    <string name="downloading">Downloaden om offline te luisteren</string>
+    <string name="video_close">Sluiten</string>
+    <string name="video_play">Afspelen</string>
+    <string name="video_pause">Pauzeren</string>
+    <string name="video_back_10">10 seconden terug</string>
+    <string name="video_forward_10">10 seconden vooruit</string>
+    <string name="video_audio">Audio</string>
+    <string name="video_subtitles">Ondertiteling</string>
+    <string name="video_subtitles_off">Uit</string>
+    <string name="video_next">Volgende</string>
+    <string name="video_next_title">Volgende: %1$s</string>
+    <string name="video_skip_intro">Intro overslaan</string>
+    <string name="video_skip_recap">Terugblik overslaan</string>
+    <string name="video_skip_credits">Aftiteling overslaan</string>
+    <string name="video_up_next">Hierna</string>
+    <string name="video_playing_in">Begint over %1$d s</string>
+    <string name="video_play_now">Nu afspelen</string>
+    <string name="video_cancel">Annuleren</string>
+    <string name="video_ends_at">eindigt %1$s</string>
+    <string name="video_track_n">Spoor %1$d</string>
+</resources>

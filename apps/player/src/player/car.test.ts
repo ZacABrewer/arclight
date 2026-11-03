@@ -60,7 +60,7 @@ function harness(online = true) {
     playlists: async () => [{ id: 4, name: 'Road trip', description: null, trackCount: 2, durationMs: 1, artworkUrls: [], updatedAt: '' }],
     playlist: async () => ({ id: 4, name: 'Road trip', description: null, trackCount: 2, durationMs: 1, artworkUrls: [], updatedAt: '', tracks: [ptrack(3), ptrack(1)], entryIds: [1, 2], trackIds: [3, 1] }),
     books: async () => [],
-    search: async () => ({ tracks: [ptrack(2)], albums: [palbum], artists: [], audiobooks: [] }),
+    search: async () => ({ tracks: [ptrack(2)], albums: [palbum], artists: [], audiobooks: [], movies: [], series: [] }),
     downloads: () => [{ item: track(10, { albumId: 5, artistId: 6, context: 'Offline Album', subtitle: 'Offline Artist' }) }, { item: track(11, { albumId: 5, artistId: 6 }) }, { item: book(8) }],
   };
   const player = { playItems: vi.fn(async () => undefined), playItem: vi.fn(async () => undefined) };
