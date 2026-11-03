@@ -5,6 +5,7 @@ import { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { Logger } from 'pino';
 import { PRIVATE_FILE_MODE } from '../file-modes.js';
 import { isSecretKey } from '../modules/config-export/secrets.js';
+import { backfillShareTokenHashes } from '../modules/watch-stats/token-hash.js';
 import type { Db } from './index.js';
 import * as schema from './schema.js';
 import {
@@ -225,6 +226,9 @@ export function initSecretsAtRest(opts: { configDir: string; db: Db; log: Logger
   );
   const file = loadSecretKeys(opts.configDir, opts.log);
   setSealing(enabled ? file.active : null);
+  // Share links from before 0.24 are found by token equality; give them the hash lookups use now.
+  const hashed = backfillShareTokenHashes(opts.db);
+  if (hashed > 0) opts.log.info({ rows: hashed }, 'added lookup hashes to Year in review share links');
   const rewritten = backfillSecrets(opts.db, enabled ? 'seal' : 'open');
   if (rewritten > 0) {
     opts.log.info({ rows: rewritten }, enabled ? 'sealed stored secrets (encryption at rest)' : 'stored secrets written back in the clear (ARCLIGHT_SECRETS_AT_REST=0)');
