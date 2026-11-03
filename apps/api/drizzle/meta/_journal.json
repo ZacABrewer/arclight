@@ -239,6 +239,13 @@
       "when": 1793694992991,
       "tag": "0033_pin_lockout",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1793695251327,
+      "tag": "0034_fingerprint_window",
+      "breakpoints": true
     }
   ]
 }

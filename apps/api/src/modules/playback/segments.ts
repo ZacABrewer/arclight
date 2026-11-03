@@ -5,7 +5,7 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { EpisodeSegmentsRow, MediaInfo, PlayerSettings, SeasonSegmentsResponse, VideoSegment, VideoSegmentEdit } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles } from '../library/schema.js';
-import { alignCodes, codesFromBlob, codesToBlob, fingerprint, FRAME_MS, pcmFromS16le, SAMPLE_RATE } from './fingerprint.js';
+import { alignSteps, codesFromBlob, codesToBlob, driveSteps, fingerprintAsync, FRAME_MS, pcmFromS16le, runSteps, SAMPLE_RATE, type Steps } from './fingerprint.js';
 import { videoFingerprints, videoSegmentOverrides, videoSegments, videoSegmentScans } from './segments-schema.js';
 import { fileStamp, type Limiter } from './video-stream.js';
 
@@ -141,8 +141,8 @@ export function neighbourIndexes(i: number, count: number, n = NEIGHBOURS): numb
 }
 
 /** A run of `part` on the episode's own timeline when it passes the intro / credits rules. */
-function runOf(type: 'intro' | 'credits', a: PartCodes, b: PartCodes, durationMs: number): { startMs: number; endMs: number } | null {
-  const run = alignCodes(a.codes, b.codes);
+function* runOf(type: 'intro' | 'credits', a: PartCodes, b: PartCodes, durationMs: number): Steps<{ startMs: number; endMs: number } | null> {
+  const run = yield* alignSteps(a.codes, b.codes);
   if (!run) return null;
   const startMs = Math.round(a.startMs + run.startA * FRAME_MS);
   let endMs = Math.round(a.startMs + run.endA * FRAME_MS);
@@ -156,6 +156,15 @@ function runOf(type: 'intro' | 'credits', a: PartCodes, b: PartCodes, durationMs
 
 /** Season consensus: per episode and type, the median accepted run when ≥ half the comparisons agree. */
 export function detectSeason(eps: readonly EpisodeCodes[]): DetectedSegment[] {
+  return runSteps(detectSteps(eps));
+}
+
+/** detectSeason() giving the event loop a turn every few milliseconds (the service uses this). */
+export function detectSeasonAsync(eps: readonly EpisodeCodes[]): Promise<DetectedSegment[]> {
+  return driveSteps(detectSteps(eps));
+}
+
+function* detectSteps(eps: readonly EpisodeCodes[]): Steps<DetectedSegment[]> {
   const out: DetectedSegment[] = [];
   if (eps.length < 2) return out;
   for (let i = 0; i < eps.length; i++) {
@@ -170,7 +179,7 @@ export function detectSeason(eps: readonly EpisodeCodes[]): DetectedSegment[] {
         const other = eps[j]![part];
         if (!other) continue;
         compared++;
-        const r = runOf(type, mine, other, me.durationMs);
+        const r = yield* runOf(type, mine, other, me.durationMs);
         if (r) runs.push(r);
       }
       if (compared === 0 || runs.length === 0) continue;
@@ -358,8 +367,23 @@ export class SegmentService {
     return this.queued.has(seasonKey(seriesId, seasonNumber));
   }
 
+  /** Resolves when the queue is empty, or as soon as `signal` aborts. */
   async idle(signal?: AbortSignal): Promise<void> {
-    while (this.pumping && !signal?.aborted) await this.pumping;
+    while (this.pumping && !signal?.aborted) {
+      const pumping = this.pumping;
+      if (!signal) {
+        await pumping;
+        continue;
+      }
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          signal.removeEventListener('abort', done);
+          resolve();
+        };
+        signal.addEventListener('abort', done, { once: true });
+        pumping.then(done, done);
+      });
+    }
   }
 
   /** Stops after the current season (shutdown). */
@@ -401,12 +425,15 @@ export class SegmentService {
       .from(videoFingerprints)
       .where(and(eq(videoFingerprints.mediaFileId, f.mediaFileId), eq(videoFingerprints.part, part)))
       .get();
-    if (row && row.fileStamp === stamp && row.startMs === win.startMs) return { startMs: row.startMs, lengthMs: win.lengthMs, codes: codesFromBlob(row.hashes) };
+    // Reused only for the same window: a head starts at 0 whatever its length, so both must match.
+    if (row && row.fileStamp === stamp && row.startMs === win.startMs && row.lengthMs === win.lengthMs) {
+      return { startMs: row.startMs, lengthMs: win.lengthMs, codes: codesFromBlob(row.hashes) };
+    }
     const args = buildAudioExtractArgs(f.path, defaultAudioOrdinal(f.mediaInfo), win.startMs, win.lengthMs);
     const pcm = await this.background(() => this.extract(bin, args, 10 * 60_000));
-    const codes = fingerprint(pcmFromS16le(pcm));
+    const codes = await fingerprintAsync(pcmFromS16le(pcm));
     const createdAt = new Date(this.now()).toISOString();
-    const values = { mediaFileId: f.mediaFileId, part, fileStamp: stamp, frameMs: FRAME_MS, startMs: win.startMs, hashes: codesToBlob(codes), createdAt };
+    const values = { mediaFileId: f.mediaFileId, part, fileStamp: stamp, frameMs: FRAME_MS, startMs: win.startMs, lengthMs: win.lengthMs, hashes: codesToBlob(codes), createdAt };
     this.opts.db
       .insert(videoFingerprints)
       .values(values)
@@ -445,9 +472,11 @@ export class SegmentService {
       }
     }
     if (eps.length < 2 && failures > 0) throw new Error(`could not read the audio of ${failures} episodes`);
-    const found = detectSeason(eps);
+    const found = await detectSeasonAsync(eps);
     const nowIso = new Date(this.now()).toISOString();
-    const ids = files.map((f) => f.mediaFileId);
+    // Only files read in this run get their detected rows replaced: one whose audio could not be
+    // read (or that went missing) keeps what an earlier scan found.
+    const ids = eps.map((e) => e.mediaFileId);
     this.opts.db.transaction((tx) => {
       tx.delete(videoSegments).where(and(inArray(videoSegments.mediaFileId, ids), eq(videoSegments.source, 'fingerprint'))).run();
       for (const s of found) {
@@ -461,7 +490,7 @@ export class SegmentService {
   }
 
   /** Seasons (with ≥ 2 files) whose stamp changed since their last scan, newest file first. */
-  async changedSeasons(seriesId?: number): Promise<Array<{ seriesId: number; seasonNumber: number }>> {
+  async changedSeasons(seriesId?: number, signal?: AbortSignal): Promise<Array<{ seriesId: number; seasonNumber: number }>> {
     const rows = this.opts.db
       .select({ seriesId: episodes.seriesId, seasonNumber: episodes.seasonNumber, dateAdded: mediaFiles.dateAdded })
       .from(episodes)
@@ -478,6 +507,7 @@ export class SegmentService {
     }
     const out: Array<{ seriesId: number; seasonNumber: number; newest: string }> = [];
     for (const s of seasons.values()) {
+      if (signal?.aborted) break;
       if (s.files < 2) continue;
       const prev = this.scanRow(s.seriesId, s.seasonNumber);
       if (prev && prev.status === 'done' && prev.stamp === (await this.seasonStamp(this.seasonFiles(s.seriesId, s.seasonNumber)))) continue;
@@ -487,13 +517,37 @@ export class SegmentService {
     return out.map(({ seriesId: id, seasonNumber }) => ({ seriesId: id, seasonNumber }));
   }
 
-  /** The nightly job: queue every changed season and wait for the queue. */
+  /**
+   * The nightly job: queue every changed season and wait for the queue. When `signal` aborts, the
+   * seasons it queued that have not started are dropped (the one running finishes).
+   */
   async nightly(signal?: AbortSignal): Promise<string> {
     if (!this.opts.settings().segmentDetection) return 'intro and credits detection is turned off';
-    const seasons = await this.changedSeasons();
-    for (const s of seasons) this.enqueue(s.seriesId, s.seasonNumber);
+    const seasons = await this.changedSeasons(undefined, signal);
+    const mine: string[] = [];
+    for (const s of seasons) {
+      if (signal?.aborted) break;
+      if (this.enqueue(s.seriesId, s.seasonNumber)) mine.push(seasonKey(s.seriesId, s.seasonNumber));
+    }
     await this.idle(signal);
+    if (signal?.aborted) {
+      const dropped = this.dequeue(mine);
+      return `stopped: ${dropped} seasons left for the next run`;
+    }
     return seasons.length === 0 ? 'no season changed' : `scanned ${seasons.length} seasons`;
+  }
+
+  /** Removes seasons that are queued but not started. Returns how many were removed. */
+  private dequeue(keys: readonly string[]): number {
+    let n = 0;
+    for (const key of keys) {
+      const at = this.order.indexOf(key);
+      if (at < 0) continue;
+      this.order.splice(at, 1);
+      this.queued.delete(key);
+      n++;
+    }
+    return n;
   }
 
   /** GET /playback/segments/series/:seriesId/season/:seasonNumber. */
