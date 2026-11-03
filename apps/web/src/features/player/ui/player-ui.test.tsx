@@ -23,11 +23,20 @@ const caps = (over: Record<string, unknown> = {}) => ({
 
 describe('/player guard', () => {
   it('explains the player is off for this account', async () => {
-    stubApi({ ...authRoutes(user()), '/api/v1/playback/me': caps({ allowed: false }) });
+    stubApi({ ...authRoutes(user()), '/api/v1/playback/me': caps({ allowed: false, appUrl: location.origin }) });
     renderAt('/player');
     expect(await screen.findByText("The player isn't turned on for your account")).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to the portal' }).getAttribute('href')).toBe('/portal');
     expect(screen.queryByRole('navigation', { name: 'Player' })).toBeNull();
+  });
+
+  it('shows only the message on a player hostname with no other address for Arclight', async () => {
+    // appUrl null: this hostname's root and portal path only redirect back to the player.
+    stubApi({ ...authRoutes(user()), '/api/v1/playback/me': caps({ allowed: false, appUrl: null }) });
+    renderAt('/player');
+    expect(await screen.findByText("The player isn't turned on for your account")).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Back to the portal' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Back to Arclight' })).toBeNull();
   });
 
   it('treats a missing playback api as off', async () => {
