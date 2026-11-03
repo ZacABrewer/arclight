@@ -101,6 +101,51 @@ export function firstOutput(stream: Readable): Promise<boolean> {
   });
 }
 
+// ---- concurrency ----------------------------------------------------------------------------------
+
+/** Thrown by Limiter.run when its queue is full. */
+export class LimiterBusy extends Error {}
+
+/**
+ * Runs at most `max` jobs at once; up to `maxQueue` more wait their turn and the rest are refused
+ * (LimiterBusy). Keeps helper processes (ffprobe, subtitle/thumbnail ffmpeg runs) bounded however
+ * many distinct files clients ask for.
+ */
+export class Limiter {
+  private running = 0;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(
+    private readonly max: number,
+    private readonly maxQueue: number,
+  ) {}
+
+  get active(): number {
+    return this.running;
+  }
+
+  get waiting(): number {
+    return this.queue.length;
+  }
+
+  async run<T>(job: () => Promise<T>): Promise<T> {
+    if (this.running >= this.max) {
+      if (this.queue.length >= this.maxQueue) throw new LimiterBusy('too many jobs waiting');
+      await new Promise<void>((resolve) => this.queue.push(resolve));
+    } else {
+      this.running++;
+    }
+    try {
+      return await job();
+    } finally {
+      // Hand the slot straight to the next waiter (running stays the same), else free it.
+      const next = this.queue.shift();
+      if (next) next();
+      else this.running--;
+    }
+  }
+}
+
 // ---- disk caches --------------------------------------------------------------------------------
 
 /** A file's identity for cache keys: size and mtime, so a replaced file gets a new entry. */
@@ -113,22 +158,25 @@ export async function fileStamp(path: string): Promise<string | null> {
   }
 }
 
-/** True when `buf` is valid UTF-8 (external subtitles in another charset get a hint for ffmpeg). */
-export function isUtf8(buf: Buffer): boolean {
+/**
+ * True when `buf` is valid UTF-8 (external subtitles in another charset get a hint for ffmpeg).
+ * `truncated`: `buf` is only the head of the file, so a character cut at the end is not an error.
+ */
+export function isUtf8(buf: Buffer, truncated = false): boolean {
   try {
-    new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    new TextDecoder('utf-8', { fatal: true }).decode(buf, { stream: truncated });
     return true;
   } catch {
     return false;
   }
 }
 
-async function readHead(path: string, bytes = 256 * 1024): Promise<Buffer> {
+async function readHead(path: string, bytes = 256 * 1024): Promise<{ buf: Buffer; truncated: boolean }> {
   const fh = await open(path, 'r');
   try {
     const buf = Buffer.alloc(bytes);
     const { bytesRead } = await fh.read(buf, 0, bytes, 0);
-    return buf.subarray(0, bytesRead);
+    return { buf: buf.subarray(0, bytesRead), truncated: bytesRead === bytes };
   } finally {
     await fh.close();
   }
@@ -139,11 +187,14 @@ export interface MediaCacheOptions {
   dir: string;
   locate: () => Promise<string | null>;
   exec?: Exec;
+  /** ffmpeg runs at once (default 2) and runs that may wait for one (default 50); more answer BUSY. */
+  concurrency?: number;
+  maxQueue?: number;
 }
 
 export class MediaCacheError extends Error {
   constructor(
-    readonly code: 'FFMPEG_MISSING' | 'CONVERT_FAILED' | 'SOURCE_MISSING',
+    readonly code: 'FFMPEG_MISSING' | 'CONVERT_FAILED' | 'SOURCE_MISSING' | 'BUSY',
     message: string,
   ) {
     super(message);
@@ -158,9 +209,12 @@ export class MediaCacheError extends Error {
 export class MediaCache {
   private readonly exec: Exec;
   private readonly pending = new Map<string, Promise<string>>();
+  /** Bounds the ffmpeg runs: a page of episode thumbnails (or a client asking for every file) queues. */
+  readonly limiter: Limiter;
 
   constructor(private readonly opts: MediaCacheOptions) {
     this.exec = opts.exec ?? nodeExec;
+    this.limiter = new Limiter(opts.concurrency ?? 2, opts.maxQueue ?? 50);
   }
 
   private async make(sub: string, name: string, build: (bin: string, tmp: string) => Promise<readonly string[]>, timeoutMs: number): Promise<string> {
@@ -180,7 +234,14 @@ export class MediaCache {
       await mkdir(dir, { recursive: true });
       const ext = name.slice(name.lastIndexOf('.'));
       const tmp = join(dir, `.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-      const res = await this.exec(bin, await build(bin, tmp), timeoutMs);
+      const args = await build(bin, tmp);
+      let res: { code: number; stdout: string };
+      try {
+        res = await this.limiter.run(() => this.exec(bin, args, timeoutMs));
+      } catch (err) {
+        if (err instanceof LimiterBusy) throw new MediaCacheError('BUSY', 'the server is busy converting other files; try again shortly');
+        throw err;
+      }
       let size = 0;
       try {
         size = (await stat(tmp)).size;
@@ -212,7 +273,8 @@ export class MediaCache {
       async (_bin, tmp) => {
         if (source.kind === 'embedded') return buildSubtitleArgs(source.path, source.ordinal, tmp);
         // ffmpeg reads text subtitles as UTF-8; older .srt files are often Windows-1252.
-        const charset = isUtf8(await readHead(source.path)) ? undefined : 'CP1252';
+        const head = await readHead(source.path);
+        const charset = isUtf8(head.buf, head.truncated) ? undefined : 'CP1252';
         return buildSubtitleArgs(source.path, null, tmp, charset);
       },
       15 * 60_000,

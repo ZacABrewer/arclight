@@ -7,6 +7,7 @@ import { episodes, episodeVersionFiles, mediaFiles, movies, series } from '../li
 import { locateFfprobe } from '../media-analysis/runner.js';
 import { isUnrestricted, restrictionReason } from '../requests/certification.js';
 import { subtitleFiles } from '../subtitles/schema.js';
+import { Limiter, LimiterBusy } from './video-stream.js';
 import { baseRangeOf, compareVersions, durationOf, segmentsFromChapters, parseProbeChapters, videoInfoOf, versionLabel, type ExternalSubtitle, type VideoFileFacts } from './video-info.js';
 
 // Movies and episodes as playable items (GET /playback/item/movie:<id> | episode:<id>): the file
@@ -124,11 +125,16 @@ export function ffprobeChapters(locate: () => Promise<string | null> = () => loc
 export class ChapterReader {
   private readonly cache = new Map<string, PlayableChapter[]>();
   private readonly pending = new Map<string, Promise<PlayableChapter[]>>();
+  /** ffprobe runs at once; a client opening many items queues, and past the queue gets no chapters (uncached). */
+  readonly limiter: Limiter;
 
   constructor(
     private readonly probe: ChapterProbe = ffprobeChapters(),
     private readonly maxEntries = 2000,
-  ) {}
+    limits: { concurrency?: number; maxQueue?: number } = {},
+  ) {
+    this.limiter = new Limiter(limits.concurrency ?? 3, limits.maxQueue ?? 50);
+  }
 
   /** Cached chapters only (no probing); null when the file was not read yet. */
   peek(file: Pick<MediaFileRow, 'id' | 'sizeBytes'>): PlayableChapter[] | null {
@@ -149,7 +155,14 @@ export class ChapterReader {
     const running = this.pending.get(key);
     if (running) return running;
     const job = (async () => {
-      const json = await this.probe(file.path);
+      let json: string | null;
+      try {
+        json = await this.limiter.run(() => this.probe(file.path));
+      } catch (err) {
+        // Busy: no chapters this time, and nothing cached so a later request reads them.
+        if (err instanceof LimiterBusy) return [];
+        throw err;
+      }
       const chapters = json ? parseProbeChapters(json, totalMs) : [];
       // Drop stale keys of the same file, then the oldest entries over the bound.
       for (const k of this.cache.keys()) if (k.startsWith(`${file.id}:`)) this.cache.delete(k);

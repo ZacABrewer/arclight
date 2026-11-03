@@ -44,7 +44,7 @@ import { firstOutput, MediaCacheError, type EncoderDetector, type MediaCache } f
 // Movies & TV routes of the player: the playback session (direct play / remux / transcode with
 // reason codes), GET|HEAD /stream/video/:mediaFileId (ranges for direct play; fragmented MP4 from
 // a live ffmpeg otherwise), WebVTT subtitles, movie/series/episode artwork, browse and "mark
-// watched". Every route passes the player guard and the Movies & TV switch (Settings → Player),
+// watched". Every route passes the player guard and the Movies & TV switch (Settings â†’ Player),
 // and nothing outside the user's content restrictions is listed, opened or streamed.
 
 export interface VideoDeps {
@@ -52,7 +52,7 @@ export interface VideoDeps {
   basePath: string;
   progress: ProgressStore;
   apiKey: () => string;
-  /** Live remux/transcode slots (Settings → Player: live video slots). */
+  /** Live remux/transcode slots (Settings â†’ Player: live video slots). */
   transcoder: AudioTranscoder;
   encoders: EncoderDetector;
   cache: MediaCache;
@@ -135,13 +135,13 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
   const guard = requirePlayer(db);
   const guardUser = requirePlayer(db, { needsUser: true });
 
-  /** The guard, then 404 while Movies & TV is turned off (Settings → Player). */
+  /** The guard, then 404 while Movies & TV is turned off (Settings â†’ Player). */
   const videoOn =
     (base: typeof guard) =>
     async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
       await base(req, reply);
       if (reply.sent) return;
-      if (!playerSettings(db).video) await reply.code(404).send({ error: 'Movies & TV is turned off (Settings → Player)', code: 'SECTION_OFF' });
+      if (!playerSettings(db).video) await reply.code(404).send({ error: 'Movies & TV is turned off (Settings â†’ Player)', code: 'SECTION_OFF' });
     };
   const video = { config: user, preHandler: videoOn(guard) } as const;
   const videoUser = { config: user, preHandler: videoOn(guardUser) } as const;
@@ -180,7 +180,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
       return null;
     }
     if (!playerSettings(db).video) {
-      await reply.code(404).send({ error: 'Movies & TV is turned off (Settings → Player)', code: 'SECTION_OFF' });
+      await reply.code(404).send({ error: 'Movies & TV is turned off (Settings â†’ Player)', code: 'SECTION_OFF' });
       return null;
     }
     const file = mediaFileAllowed(db, mediaFileId, access.restrictions);
@@ -205,7 +205,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     if (!row || !linkUserStillActive(db, row.id, now())) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
     const decision = decide(playerSettings(db), { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, isRemoteRequest(req));
     if (decision.denial) return denialReply(reply, decision.denial);
-    if (!playerSettings(db).video) return reply.code(404).send({ error: 'Movies & TV is turned off (Settings → Player)', code: 'SECTION_OFF' });
+    if (!playerSettings(db).video) return reply.code(404).send({ error: 'Movies & TV is turned off (Settings â†’ Player)', code: 'SECTION_OFF' });
     artworkSubjects.set(req, restrictionsOfSettings(row.settings));
   };
 
@@ -216,7 +216,14 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
   }
 
   /** Starts ffmpeg for a remux/transcode; a hardware encoder that fails before any output is retried in software. */
-  async function startLive(path: string, spec: LiveVideoSpec, userId: number | null, onProc: (p: RunningTranscode) => void, log: FastifyRequest['log']): Promise<{ proc: RunningTranscode; hwaccel: string } | null> {
+  async function startLive(
+    path: string,
+    spec: LiveVideoSpec,
+    userId: number | null,
+    onProc: (p: RunningTranscode) => void,
+    isClosed: () => boolean,
+    log: FastifyRequest['log'],
+  ): Promise<{ proc: RunningTranscode; hwaccel: string } | null> {
     let current = spec;
     if (spec.method === 'transcode') {
       const bin = await deps.transcoder.binaryPath();
@@ -226,9 +233,14 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
       }
     }
     for (;;) {
+      // The client left (a seek aborts the old request): start nothing, and take no slot.
+      if (isClosed()) return null;
       const proc = await deps.transcoder.startArgs(buildVideoStreamArgs(path, current), userId);
       onProc(proc);
       if (await firstOutput(proc.stdout)) return { proc, hwaccel: current.hwaccel ?? 'none' };
+      proc.kill();
+      // No output because the client went away and we killed ffmpeg: not the encoder's fault.
+      if (isClosed()) return null;
       const hw = current.hwaccel ?? 'none';
       if (current.method !== 'transcode' || hw === 'none') return null;
       log.warn({ hwaccel: hw }, 'hardware video encoding failed for a live stream; using software from now on');
@@ -274,8 +286,11 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         if (!f) throw new VideoHttpError(404, 'NOT_FOUND', `file ${body.mediaFileId} is not a version of ${body.itemKey}`);
         chosen = f;
       } else {
-        // The best version the device plays as it is, else the best one.
-        chosen = files.find((f) => planFor(f).method === 'direct') ?? files[0]!;
+        // External subtitle ids belong to one file: only versions that have the asked-for track
+        // are candidates (none: 400 below). Then the best one the device plays as it is, else the best.
+        const candidates = body.subtitle ? files.filter((f) => f.info.subtitleTracks.some((s) => s.id === body.subtitle)) : files;
+        const pool = candidates.length > 0 ? candidates : files;
+        chosen = pool.find((f) => planFor(f).method === 'direct') ?? pool[0]!;
       }
       const plan = planFor(chosen);
       const audioTrack = audioOf(chosen.info);
@@ -395,6 +410,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
               proc = p;
               if (closed) p.kill();
             },
+            () => closed,
             req.log,
           );
         } catch (err) {
@@ -438,7 +454,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
             path = await deps.cache.subtitle({ kind: 'external', subtitleId: sub.id, path: sub.path });
           }
         } catch (err) {
-          if (err instanceof MediaCacheError) return reply.code(err.code === 'FFMPEG_MISSING' ? 503 : err.code === 'SOURCE_MISSING' ? 404 : 422).send({ error: err.message, code: err.code });
+          if (err instanceof MediaCacheError) return reply.code(err.code === 'FFMPEG_MISSING' || err.code === 'BUSY' ? 503 : err.code === 'SOURCE_MISSING' ? 404 : 422).send({ error: err.message, code: err.code });
           throw err;
         }
         // Cast receivers fetch text tracks cross-origin; the URL is signed, so any origin may read it.

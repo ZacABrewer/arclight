@@ -19,6 +19,9 @@ import { locateFfmpeg } from '../transcode/runner.js';
 import { videoPartsFor, videoTranscoderFor } from './index.js';
 import type { RunningTranscode } from './transcode.js';
 import { ChapterReader } from './video-items.js';
+import { isUtf8, Limiter, LimiterBusy, MediaCache } from './video-stream.js';
+import { get as httpGet } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 // Movies & TV over HTTP: items, the playback session and its reasons, the video stream (ranges,
 // signed links, live remux/transcode through a fake ffmpeg), WebVTT subtitles, artwork, browse,
@@ -88,7 +91,7 @@ afterEach(async () => {
   for (const h of open.splice(0)) await h.app.close();
 });
 
-async function harness(opts: { real?: boolean; hold?: boolean } = {}): Promise<Harness> {
+async function harness(opts: { real?: boolean; hold?: boolean; silent?: boolean; hw?: 'qsv' | 'none' } = {}): Promise<Harness> {
   const db = await createTestDb();
   seedAdmin(db);
   const launches: string[][] = [];
@@ -110,6 +113,12 @@ async function harness(opts: { real?: boolean; hold?: boolean } = {}): Promise<H
         launcher: (_bin, args): RunningTranscode => {
           launches.push([...args]);
           const out = new PassThrough();
+          if (opts.silent) {
+            // An ffmpeg still opening the file: no output until killed, then stdout just ends.
+            let end!: () => void;
+            const done = new Promise<void>((r) => (end = r));
+            return { stdout: out, done, kill: () => (out.end(), end()) };
+          }
           out.end(Buffer.from('FMP4DATA'));
           if (!opts.hold) return { stdout: out, done: Promise.resolve(), kill: () => out.destroy() };
           let end!: () => void;
@@ -119,7 +128,7 @@ async function harness(opts: { real?: boolean; hold?: boolean } = {}): Promise<H
         },
       });
       videoPartsFor(c, {
-        encoders: { detect: async () => ({ hwaccel: 'none', zscale: true }) },
+        encoders: { detect: async () => ({ hwaccel: opts.hw ?? 'none', zscale: true }) },
         cache: {
           dir: cacheDir,
           locate: async () => '/fake/ffmpeg',
@@ -421,6 +430,106 @@ describe('the playback session', () => {
     await new Promise((r) => setImmediate(r));
     expect(transcoder.active).toBe(0);
     expect((await h.app.inject({ method: 'HEAD', url: sa })).statusCode).toBe(200);
+  });
+
+  it('a version that has the asked-for external subtitle is chosen instead of failing on the others', async () => {
+    const h = await harness();
+    const user = await signIn(h);
+    // The 4K file sorts first; the subtitle belongs to the 1080p file only.
+    const { movie, files } = addMovie(h.db, { title: 'Versions', tmdbId: 30, files: [{ name: 'a.mp4', info: H264_AAC }, { name: 'b.mkv', info: HEVC10_AC3, tag: '4K' }] });
+    const srt = join(tmp, 'movie-30', 'a.en.srt');
+    writeFileSync(srt, '1\n00:00:01,000 --> 00:00:02,000\nHi\n');
+    const sub = h.db.insert(schema.subtitleFiles).values({ mediaFileId: files[0]!.id, language: 'eng', path: srt, codec: 'srt', added: NOW }).returning().get();
+    const res = await session(h, user.cookie, { itemKey: `movie:${movie.id}`, subtitle: `x${sub.id}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ mediaFileId: files[0]!.id, method: 'direct' });
+    // Asking for it on the other version explicitly is still an error.
+    expect((await session(h, user.cookie, { itemKey: `movie:${movie.id}`, mediaFileId: files[1]!.id, subtitle: `x${sub.id}` })).json().code).toBe('NO_SUBTITLE');
+  });
+
+  it('a client that leaves while a hardware transcode starts neither marks the encoder broken nor starts a software run', { timeout: 30_000 }, async () => {
+    const h = await harness({ silent: true, hw: 'qsv' });
+    const user = await signIn(h);
+    const { movie } = addMovie(h.db, { title: 'Seek', tmdbId: 31, files: [{ name: 'b.mkv', info: HEVC10_AC3 }] });
+    const s = (await session(h, user.cookie, { itemKey: `movie:${movie.id}` })).json();
+    expect(s.method).toBe('transcode');
+    await h.app.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = h.app.server.address() as AddressInfo;
+    const req = httpGet({ host: '127.0.0.1', port, path: pathOf(s.url) });
+    req.on('error', () => undefined);
+    await waitFor(() => h.launches.length === 1);
+    expect(h.launches[0]!.join(' ')).toContain('h264_qsv');
+    req.destroy();
+    const transcoder = videoTranscoderFor(h.ctx);
+    await waitFor(() => transcoder.active === 0);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(h.launches).toHaveLength(1);
+    expect((await videoPartsFor(h.ctx).encoders.pick('/fake/ffmpeg')).hwaccel).toBe('qsv');
+  });
+});
+
+async function waitFor(cond: () => boolean, timeoutMs = 15_000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error('timed out waiting');
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+describe('helper process limits', () => {
+  it('Limiter runs at most max jobs, queues up to maxQueue and refuses the rest', async () => {
+    const limiter = new Limiter(1, 1);
+    let release!: () => void;
+    const first = limiter.run(() => new Promise<string>((r) => (release = () => r('one'))));
+    const second = limiter.run(async () => 'two');
+    await expect(limiter.run(async () => 'three')).rejects.toBeInstanceOf(LimiterBusy);
+    expect(limiter.active).toBe(1);
+    expect(limiter.waiting).toBe(1);
+    release();
+    expect(await first).toBe('one');
+    expect(await second).toBe('two');
+    expect(limiter.active).toBe(0);
+  });
+
+  it('episode thumbnails and subtitle conversions never run more ffmpeg processes than the cap', { timeout: 30_000 }, async () => {
+    const dir = mkdtempSync(join(tmp, 'limit-'));
+    const pending: Array<() => void> = [];
+    let running = 0;
+    let peak = 0;
+    const cache = new MediaCache({
+      dir: join(dir, 'cache'),
+      locate: async () => '/fake/ffmpeg',
+      concurrency: 1,
+      maxQueue: 1,
+      exec: (_bin, args) =>
+        new Promise((resolve) => {
+          running++;
+          peak = Math.max(peak, running);
+          pending.push(() => {
+            writeFileSync(args.at(-1)!, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+            running--;
+            resolve({ code: 0, stdout: '' });
+          });
+        }),
+    });
+    const files = [1, 2, 3].map((n) => blob(dir, `e${n}.mkv`));
+    const a = cache.thumbnail(1, files[0]!, 60_000);
+    const b = cache.thumbnail(2, files[1]!, 60_000);
+    await waitFor(() => pending.length === 1);
+    await expect(cache.thumbnail(3, files[2]!, 60_000)).rejects.toMatchObject({ code: 'BUSY' });
+    pending.shift()!();
+    await a;
+    await waitFor(() => pending.length === 1);
+    pending.shift()!();
+    await b;
+    expect(peak).toBe(1);
+  });
+
+  it('a subtitle file larger than the sniffed head is not mistaken for another charset when a character is cut', () => {
+    const text = Buffer.from('Ã©', 'utf8');
+    expect(isUtf8(text.subarray(0, 1), true)).toBe(true);
+    expect(isUtf8(text.subarray(0, 1), false)).toBe(false);
+    expect(isUtf8(Buffer.from([0x48, 0xe9, 0x6c]), true)).toBe(false);
   });
 });
 
