@@ -10,7 +10,7 @@ import { useLayout } from '../layout.js';
 import { Row } from '../row.js';
 import { useSections } from '../shell.js';
 import { SquareTile, WideTile } from '../tiles.js';
-import { RdError, RdLoading, RdPage, shareOf, useCardActions, useCardSubs, useListen } from './common.js';
+import { onePerSeries, RdError, RdLoading, RdPage, shareOf, useCardActions, useCardSubs, useListen } from './common.js';
 
 // Home (the template's Home; spec §4.4 / §4.5): the rotating hero, then the rows in the
 // template's order: Continue Watching, Trending Now, New Episodes, Movies for Tonight, Recently
@@ -83,7 +83,7 @@ function VideoHomeBlock() {
         ) : null}
         <Row title={t('player.redesign.rows.continueWatching')}>{cw.map((c) => wide(c, subs.continueSub(c), true))}</Row>
         <Row title={t('player.redesign.rows.trending')}>{trending.map((c) => wide(c, subs.plainSub(c)))}</Row>
-        <Row title={t('player.redesign.rows.newEpisodes')}>{d.recentEpisodes.map((c) => wide(c, subs.newEpisodeSub(c)))}</Row>
+        <Row title={t('player.redesign.rows.newEpisodes')}>{onePerSeries(d.recentEpisodes).map((c) => wide(c, subs.newEpisodeSub(c)))}</Row>
         <Row title={t('player.redesign.rows.moviesTonight')}>{tonight.map((c) => wide(c, subs.plainSub(c)))}</Row>
         <Row title={t('player.redesign.rows.myList')}>{myList.map((c) => wide(c, subs.plainSub(c)))}</Row>
       </div>

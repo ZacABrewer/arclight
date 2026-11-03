@@ -7,7 +7,7 @@ import { watchPaths } from '../../video/paths.js';
 import { RdIcon } from '../icons.js';
 import { useSections } from '../shell.js';
 import { WideTile } from '../tiles.js';
-import { RdLoading, RdPage, useCardActions, useListen } from './common.js';
+import { onePerSeries, RdLoading, RdPage, useCardActions, useListen } from './common.js';
 
 // Search (the template's Search screen, spec §4.4 / §4.5): the input on top with the system
 // keyboard, then "Popular right now" or the results: movies and shows, plus albums and
@@ -58,7 +58,7 @@ export function RdSearchPage() {
         : []),
     ].slice(0, MAX_RESULTS);
   } else if (!query && home.data) {
-    const popular = home.data.trending?.length ? home.data.trending : [...home.data.recentMovies, ...home.data.recentEpisodes];
+    const popular = home.data.trending?.length ? home.data.trending : onePerSeries([...home.data.recentMovies, ...home.data.recentEpisodes]);
     results = popular.slice(0, 6).map((c) => ({
       key: `${c.kind}:${c.id}`,
       title: c.title,

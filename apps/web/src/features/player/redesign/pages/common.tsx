@@ -26,6 +26,18 @@ export function minutesLeft(p: VideoProgress | null | undefined): number {
   return Math.max(0, (p.durationMs - p.positionMs) / 60_000);
 }
 
+/** The first card of each show (the server lists up to three new episodes per show; a row of
+ *  the same show's tile three times over reads as a glitch). Movies pass through. */
+export function onePerSeries<T extends { kind: string; id: number; seriesId?: number | undefined }>(cards: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return cards.filter((c) => {
+    const key = c.seriesId !== undefined ? `series:${c.seriesId}` : `${c.kind}:${c.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Subs under tiles: "S2 · E5 · 27m left", "27m left", "S3 · New episode", the server's subtitle or the year. */
 export function useCardSubs() {
   const t = useT();
