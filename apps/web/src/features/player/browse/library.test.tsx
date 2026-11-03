@@ -26,6 +26,14 @@ describe('AlbumsPage', () => {
     expect(q?.get('desc')).toBeNull();
   });
 
+  it('marks only the Albums section current, not the Home above it', async () => {
+    stubFetch({ [api('/music/albums')]: page([album(1)]) });
+    renderBrowse('/player/music/albums');
+    const nav = await screen.findByRole('navigation', { name: 'Music sections' });
+    expect(within(nav).getByRole('link', { name: 'Albums' }).getAttribute('aria-current')).toBe('page');
+    expect(within(nav).getByRole('link', { name: 'Home' }).getAttribute('aria-current')).toBeNull();
+  });
+
   it('remembers the list view across visits', async () => {
     stubFetch({ [api('/music/albums')]: page([album(1)]) });
     renderBrowse('/player/music/albums');

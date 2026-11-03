@@ -37,7 +37,9 @@ export interface PlayerLinkProps {
  * router.tsx by the player core, so this folder cannot name their typed patterns.
  */
 export function PlayerLink({ to, ...rest }: PlayerLinkProps) {
-  const props = { to, ...rest } as unknown as Parameters<typeof Link>[0];
+  // Exact: the router otherwise marks a link current on every route under it, so /player (Home)
+  // read as the current tab on every page. Callers that track a section set aria-current themselves.
+  const props = { to, activeOptions: { exact: true }, ...rest } as unknown as Parameters<typeof Link>[0];
   return <Link {...props} />;
 }
 
