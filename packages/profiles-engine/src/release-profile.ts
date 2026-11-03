@@ -1,24 +1,40 @@
 import type { ReleaseProfile } from '@arclight/shared';
+import { LruCache, describeRegexProblem, regexPatternProblem, reportUnsafeRegex } from '@arclight/shared';
 
-const termCache = new Map<string, (value: string) => boolean>();
+/** Compiled term matchers, bounded so one-off terms cannot grow the cache forever. */
+const termCache = new LruCache<string, (value: string) => boolean>(512);
+/** Longest value a regex term is run against; release titles are far shorter. */
+const MAX_MATCH_INPUT = 1024;
+
+const REGEX_TERM = /^\/(.+)\/([a-z]*)$/s;
+
+function regexFlags(flags: string): string {
+  return flags.includes('i') ? flags : `${flags}i`;
+}
 
 /**
  * Build a matcher for a term. `/pattern/` or `/pattern/flags` is a regex (always
  * case-insensitive); anything else is a case-insensitive substring. A regex that does
- * not compile matches nothing.
+ * not compile matches nothing, and so does one that could backtrack catastrophically
+ * (stored before such terms were refused), with a logged warning.
  */
 export function termMatcher(term: string): (value: string) => boolean {
   const cached = termCache.get(term);
   if (cached) return cached;
 
   let matcher: (value: string) => boolean;
-  const regexForm = /^\/(.+)\/([a-z]*)$/s.exec(term);
+  const regexForm = REGEX_TERM.exec(term);
   if (regexForm) {
     const [, body = '', flags = ''] = regexForm;
-    try {
-      const re = new RegExp(body, flags.includes('i') ? flags : `${flags}i`);
-      matcher = (value) => re.test(value);
-    } catch {
+    const problem = regexPatternProblem(body, regexFlags(flags));
+    if (problem === null) {
+      const re = new RegExp(body, regexFlags(flags));
+      matcher = (value) => {
+        re.lastIndex = 0;
+        return re.test(value.length > MAX_MATCH_INPUT ? value.slice(0, MAX_MATCH_INPUT) : value);
+      };
+    } else {
+      if (problem !== 'invalid') reportUnsafeRegex(body, problem, 'release profile term');
       matcher = () => false;
     }
   } else {
@@ -38,15 +54,16 @@ export function matchingTerms(terms: ReadonlyArray<string>, value: string): stri
   return terms.filter((t) => matchesTerm(t, value));
 }
 
+/** Why a term cannot be saved, or null when it can. */
+export function termProblem(term: string): string | null {
+  const regexForm = REGEX_TERM.exec(term);
+  if (!regexForm) return term.trim().length > 0 ? null : 'term is empty';
+  const problem = regexPatternProblem(regexForm[1] ?? '', regexFlags(regexForm[2] ?? ''));
+  return problem === null ? null : describeRegexProblem(problem);
+}
+
 export function isValidTerm(term: string): boolean {
-  const regexForm = /^\/(.+)\/([a-z]*)$/s.exec(term);
-  if (!regexForm) return term.trim().length > 0;
-  try {
-    new RegExp(regexForm[1] ?? '', regexForm[2] ?? '');
-    return true;
-  } catch {
-    return false;
-  }
+  return termProblem(term) === null;
 }
 
 export interface ReleaseProfileSubject {

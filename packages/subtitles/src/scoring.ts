@@ -1,4 +1,5 @@
 import { parseRelease } from '@arclight/parser';
+import { LruCache, regexPatternProblem, reportUnsafeRegex } from '@arclight/shared';
 import type { MatchKey, MediaType, SubtitleCandidate, SubtitleQuery, WantedLanguage } from './types.js';
 
 // Scoring (spec section 4) and winner selection (section 6).
@@ -397,14 +398,28 @@ export function chooseBest(query: SubtitleQuery, scored: readonly ScoredCandidat
   return selectCandidates(query, scored, wanted, opts)[0];
 }
 
-/** Must-contain / must-not-contain filters on release info (R2.15-R2.17). */
+const filterCache = new LruCache<string, RegExp | null>(256);
+
+/** A filter as a case-insensitive regex, or null when it is used as plain text instead. */
+function filterRegex(pattern: string): RegExp | null {
+  if (filterCache.has(pattern)) return filterCache.get(pattern)!;
+  const problem = regexPatternProblem(pattern, 'i');
+  if (problem && problem !== 'invalid' && problem !== 'empty') reportUnsafeRegex(pattern, problem, 'subtitle release filter');
+  const rx = problem ? null : new RegExp(pattern, 'i');
+  filterCache.set(pattern, rx);
+  return rx;
+}
+
+/**
+ * Must-contain / must-not-contain filters on release info (R2.15-R2.17). A filter that is not
+ * a valid regex, or one that could backtrack for ever on a hostile provider string, is matched
+ * as plain text.
+ */
 export function passesReleaseFilters(releaseInfo: string, mustContain: readonly string[] = [], mustNotContain: readonly string[] = []): boolean {
+  const info = releaseInfo.length > 1024 ? releaseInfo.slice(0, 1024) : releaseInfo;
   const test = (pattern: string) => {
-    try {
-      return new RegExp(pattern, 'i').test(releaseInfo);
-    } catch {
-      return releaseInfo.toLowerCase().includes(pattern.toLowerCase());
-    }
+    const rx = filterRegex(pattern);
+    return rx ? rx.test(info) : info.toLowerCase().includes(pattern.toLowerCase());
   };
   if (mustNotContain.some(test)) return false;
   return mustContain.every(test);

@@ -1,3 +1,5 @@
+import { clampTitle } from './normalize.js';
+
 // Hashed/obfuscated releases: the name is random, the real title is hidden in a folder or
 // in a trailing tag. We detect them so the caller can fall back to other information.
 
@@ -9,6 +11,7 @@ const RELEASE_HASH_TAG = /(?:\[(?<hash>[a-f0-9]{8})\]|\((?<paren>[a-f0-9]{8})\))
 const WORDLESS = /^[a-z0-9]{8,}$/i;
 
 export function isHashedRelease(title: string): boolean {
+  title = clampTitle(title);
   const base = title.replace(/\.[a-z0-9]{2,4}$/i, '').trim();
   if (HEX32.test(base) || HEX40.test(base)) return true;
   if (WORDLESS.test(base) && !/\d{3,4}p/i.test(base)) return true;
@@ -18,6 +21,7 @@ export function isHashedRelease(title: string): boolean {
 }
 
 export function parseReleaseHash(title: string): string | null {
+  title = clampTitle(title);
   const g = RELEASE_HASH_TAG.exec(title.trim())?.groups;
   return (g?.['hash'] ?? g?.['paren'])?.toUpperCase() ?? null;
 }

@@ -10,33 +10,45 @@ import type {
   ReleaseEvaluation,
   ReleaseKind,
 } from '@arclight/shared';
+import { LruCache, describeRegexProblem, regexPatternProblem, reportUnsafeRegex } from '@arclight/shared';
 
 const GIGABYTE = 1024 ** 3;
 
-const regexCache = new Map<string, RegExp | null>();
+/** Compiled patterns, bounded: a long-running server sees many one-off patterns over time. */
+const regexCache = new LruCache<string, RegExp | null>(512);
+/** Longest value a pattern is run against; release titles are far shorter. */
+const MAX_MATCH_INPUT = 1024;
 
-/** Compile a user pattern once; an invalid pattern never matches rather than throwing mid-evaluation. */
+/**
+ * Compile a user pattern once. An invalid pattern never matches rather than throwing
+ * mid-evaluation; so does one that could backtrack catastrophically (saved before that was
+ * refused, or imported around the check), with a logged warning.
+ */
 export function compilePattern(pattern: string): RegExp | null {
   const cached = regexCache.get(pattern);
   if (cached !== undefined) return cached;
-  let compiled: RegExp | null;
-  try {
-    compiled = new RegExp(pattern, 'i');
-  } catch {
-    compiled = null;
-  }
+  let compiled: RegExp | null = null;
+  const problem = regexPatternProblem(pattern, 'i');
+  if (problem === null) compiled = new RegExp(pattern, 'i');
+  else if (problem !== 'invalid' && problem !== 'empty') reportUnsafeRegex(pattern, problem, 'custom format');
   regexCache.set(pattern, compiled);
   return compiled;
 }
 
+/** Why a pattern cannot be saved, or null when it can. */
+export function patternProblem(pattern: string): string | null {
+  const problem = regexPatternProblem(pattern, 'i');
+  return problem === null ? null : describeRegexProblem(problem);
+}
+
 export function isValidPattern(pattern: string): boolean {
-  return compilePattern(pattern) !== null;
+  return patternProblem(pattern) === null;
 }
 
 function matchString(pattern: string, value: string | undefined): boolean {
   if (value === undefined || value === '') return false;
   const re = compilePattern(pattern);
-  return re !== null && re.test(value);
+  return re !== null && re.test(value.length > MAX_MATCH_INPUT ? value.slice(0, MAX_MATCH_INPUT) : value);
 }
 
 /** Nominal average bitrate of a LAME VBR preset, for bitrate bands when none is stated. */
@@ -231,9 +243,11 @@ export function validateCustomFormat(format: Omit<CustomFormat, 'id'>): SpecVali
       case 'releaseTitle':
       case 'releaseGroup':
       case 'edition':
-      case 'narrator':
-        if (!isValidPattern(spec.fields.pattern)) issues.push({ path, message: `invalid regex: ${spec.fields.pattern}` });
+      case 'narrator': {
+        const problem = patternProblem(spec.fields.pattern);
+        if (problem) issues.push({ path, message: `invalid regex (${problem}): ${spec.fields.pattern.slice(0, 200)}` });
         break;
+      }
       case 'size':
         if (spec.fields.maxGb <= spec.fields.minGb) issues.push({ path, message: 'maxGb must be greater than minGb' });
         break;

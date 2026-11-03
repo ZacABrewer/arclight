@@ -125,6 +125,13 @@ describe('helpers', () => {
     expect(passesReleaseFilters('Show.S01E01.720p.HDTV-LOL', ['web', 'lol'])).toBe(false);
     expect(passesReleaseFilters('a(b', ['a(b'])).toBe(true);
   });
+  it('treats a catastrophic filter as plain text, so a hostile release name cannot stall it (DATA-34)', () => {
+    const hostile = 'a'.repeat(5000) + '!';
+    const t = performance.now();
+    expect(passesReleaseFilters(hostile, ['(a+)+$'])).toBe(false);
+    expect(passesReleaseFilters('x (a+)+$ y', ['(a+)+$'])).toBe(true);
+    expect(performance.now() - t).toBeLessThan(100);
+  });
 });
 
 describe('guessMatches / computeMatches', () => {

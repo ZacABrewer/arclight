@@ -1,4 +1,4 @@
-import { prepare, stripExtension, cleanTitle, normalizeTitle, spaced } from './normalize.js';
+import { prepare, stripExtension, cleanTitle, normalizeTitle, spaced, clampPath, clampTitle } from './normalize.js';
 import { parseQuality, parseRevision } from './quality.js';
 import { parseSeries, parseSeriesTitleInfo, parseSeasonTitle, seriesPackKind, splitSeasonTitle, type SeriesPackKind } from './series.js';
 import { parseMovie, normalizeImdbId } from './movie.js';
@@ -97,6 +97,7 @@ export function titleEndIndex(releaseTitle: string, title: string): number {
  * series one wins when the title has episode structure, otherwise the movie one.
  */
 export function parseRelease(raw: string, hint: MediaTypeHint = 'auto'): ParsedRelease & { titleEnd: number } {
+  raw = clampTitle(raw);
   const stripped = stripExtension(raw.trim());
   const extension = stripped.extension;
   const unreversed = unreverse(stripped.title);
@@ -133,6 +134,7 @@ function seasonFolder(name: string): number | null {
  * falls back to the parent folder name (which is where scene releases keep the real title).
  */
 export function parsePath(path: string, hint: MediaTypeHint = 'auto'): ParsedRelease {
+  path = clampPath(path);
   const parts = path.split(/[\\/]+/).filter(Boolean);
   const fileName = parts[parts.length - 1] ?? path;
   const folder = parts.length > 1 ? parts[parts.length - 2]! : null;

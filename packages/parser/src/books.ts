@@ -1,5 +1,5 @@
 import { COMIC_FORMATS, EBOOK_FORMATS, booksFormatOfExtension, type BooksFormat } from '@arclight/shared';
-import { prepare, removeAccents } from './normalize.js';
+import { prepare, removeAccents, clampPath, clampTitle } from './normalize.js';
 
 // Ebook and comic release names (docs/books.md), as Newznab/Torznab indexers list them.
 //
@@ -380,6 +380,7 @@ function cleanText(text: string): string {
  * title nor a series could be read.
  */
 export function parseEbookRelease(title: string): ParsedEbookRelease | null {
+  title = clampTitle(title);
   const raw = title.trim();
   if (!raw) return null;
   const prepared = prepareName(raw, (w) => isEbookTag(w, true));
@@ -729,6 +730,7 @@ function parseComicPartial(title: string): ComicPartial | null {
 
 /** Parse a comic or manga release name (see the header for the shapes). Null when no series could be read. */
 export function parseComicRelease(title: string): ParsedComicRelease | null {
+  title = clampTitle(title);
   const r = parseComicPartial(title);
   return r && r.series ? r : null;
 }
@@ -750,6 +752,7 @@ function pathParts(path: string): { file: string; folder: string | null; grandpa
  * author-shaped grandparent folder ("Author/Title (Year)/file.epub") for a missing author.
  */
 export function parseEbookPath(path: string): ParsedEbookRelease | null {
+  path = clampPath(path);
   const { file, folder, grandparent } = pathParts(path);
   let fromFile = parseEbookRelease(file);
   // A bare number or track-like name ("01.epub") says nothing about the book.
@@ -779,6 +782,7 @@ export function parseEbookPath(path: string): ParsedEbookRelease | null {
  * parent folder ("Saga (2012)/054.cbz").
  */
 export function parseComicPath(path: string): ParsedComicRelease | null {
+  path = clampPath(path);
   const { file, folder } = pathParts(path);
   const fromFile = parseComicPartial(file);
   const fromFolder = folder ? parseComicPartial(folder) : null;
@@ -813,6 +817,7 @@ function stripUndefined<T extends object>(o: T): Partial<T> {
  * ("The Final Empire" → "final empire", "Ender's Game" → "enders game").
  */
 export function bookTitleKey(title: string): string {
+  title = clampTitle(title);
   const words = removeAccents(title)
     .toLowerCase()
     .replace(/&/g, ' and ')

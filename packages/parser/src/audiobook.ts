@@ -1,7 +1,7 @@
 import { QUALITIES, type AudioCodec, type AudioFileLayout, type AudioVbrPreset, type QualityDefinition, type ReleaseAudioEvaluation, type ReleaseKind } from '@arclight/shared';
 import { readAudioFacts, type ParsedAudioQuality } from './audio-quality.js';
 import { parseReleaseHash } from './hash.js';
-import { prepare } from './normalize.js';
+import { prepare, clampPath, clampTitle } from './normalize.js';
 import { parseRevision } from './quality.js';
 
 // Audiobook release names (docs/design/music-audiobooks.md section 6). The usual shapes:
@@ -816,6 +816,7 @@ function normalizeSeparators(name: string): string {
  * "Author - [Series #3] - Title (2015) 64kbps", "Author_Name-Title-AUDIOBOOK-WEB-EN-2019-GRP").
  */
 export function parseAudiobookRelease(raw: string): ParsedAudiobookRelease {
+  raw = clampTitle(raw);
   const { title: noExt, extension } = stripAudiobookExtension(raw.trim());
   const releaseTitle = prepare(noExt);
   const releaseHash = parseReleaseHash(releaseTitle);
@@ -958,6 +959,7 @@ function authorFolder(name: string | undefined): string | null {
  * The file's extension sets the container; the folder name fills in what the file does not say.
  */
 export function parseAudiobookPath(path: string): ParsedAudiobookRelease {
+  path = clampPath(path);
   const parts = path.split(/[\\/]+/).filter(Boolean);
   const fileName = parts[parts.length - 1] ?? path;
   const folders = parts.slice(0, -1).filter((p) => !/^[a-z]:$/i.test(p));

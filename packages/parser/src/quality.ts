@@ -1,5 +1,6 @@
 import { QUALITIES, type QualityDefinition, type Resolution } from '@arclight/shared';
 import type { ParsedQuality } from './types.js';
+import { clampTitle } from './normalize.js';
 
 // Quality detection.
 //
@@ -118,6 +119,7 @@ const REAL = /(?<![A-Za-z0-9])REAL(?![A-Za-z0-9])/g; // case-sensitive: "Real" i
 const EXTENSION = /\.([a-z0-9]{2,4})$/i;
 
 export function parseRevision(title: string): ParsedQuality['revision'] {
+  title = clampTitle(title);
   const name = title.replace(/_/g, ' ');
   const v = VERSION.exec(name);
   const explicit = v ? Number(v[1] ?? v[2] ?? v[3]) : null;
@@ -326,6 +328,7 @@ function detect(name: string, extension: string | null): Detected {
  * the dot) when the caller already split it off; otherwise a trailing extension is detected here.
  */
 export function parseQuality(releaseTitle: string, extension: string | null = null): ParsedQuality {
+  releaseTitle = clampTitle(releaseTitle);
   let title = releaseTitle.trim();
   let ext = extension?.toLowerCase() ?? null;
   if (!ext) {
