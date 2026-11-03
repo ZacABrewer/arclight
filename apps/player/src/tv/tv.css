@@ -1533,12 +1533,13 @@
   margin-top: 12px;
 }
 
-/* Full-screen panels over a screen (PIN, name keyboard, profile editor, confirm). */
+/* Full-screen panels over a screen (PIN, name keyboard, profile editor, confirm). Above the
+   header (21) too: a panel opened from a page (the title page's "more") covers the whole screen. */
 .tv-panel,
 .tv-manage__editor {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 30;
   background: color-mix(in srgb, var(--tv-bg) 97%, transparent);
 }
 
