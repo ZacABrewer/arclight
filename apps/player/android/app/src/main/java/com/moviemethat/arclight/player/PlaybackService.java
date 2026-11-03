@@ -36,7 +36,9 @@ public final class PlaybackService extends MediaLibraryService {
         Intent open = new Intent(this, MainActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                // Tells a notification / lock-screen tap apart from the launcher (LaunchInfo).
+                .putExtra(com.moviemethat.arclight.LaunchInfo.EXTRA_SOURCE, "notification");
         PendingIntent sessionActivity = PendingIntent.getActivity(this, 0, open,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 

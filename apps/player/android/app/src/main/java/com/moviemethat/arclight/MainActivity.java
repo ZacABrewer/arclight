@@ -1,5 +1,6 @@
 package com.moviemethat.arclight;
 
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
@@ -13,6 +14,11 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // App-local plugin (not an npm package), registered before the bridge is created.
         registerPlugin(ArclightPlayerPlugin.class);
+        Intent intent = getIntent();
+        if (intent != null) {
+            LaunchInfo.record(LaunchInfo.classify(intent.getAction(), intent.getCategories(), intent.getData() != null,
+                    intent.getStringExtra(LaunchInfo.EXTRA_SOURCE), savedInstanceState != null));
+        }
         super.onCreate(savedInstanceState);
         if (VideoProfile.isTv(this)) prepareForRemote();
     }

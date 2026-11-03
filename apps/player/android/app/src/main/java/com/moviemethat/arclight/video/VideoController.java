@@ -143,6 +143,24 @@ public final class VideoController {
         emit("videoClosed", o, true);
     }
 
+    /** The user picked another episode in the episodes panel; JS answers with playVideo. */
+    void pickItem(String itemKey, String fromItemKey, long positionMs) {
+        JSONObject o = new JSONObject();
+        put(o, "itemKey", itemKey);
+        put(o, "fromItemKey", fromItemKey);
+        put(o, "positionMs", positionMs);
+        emit("videoPickItem", o, true);
+    }
+
+    /** A track pick in the Audio & Subtitles panel (JS saves it to the per-item prefs). */
+    void tracksChanged(String itemKey, @Nullable Integer audioTrack, @Nullable String subtitle) {
+        JSONObject o = new JSONObject();
+        put(o, "itemKey", itemKey);
+        put(o, "audioTrack", audioTrack == null ? JSONObject.NULL : audioTrack);
+        put(o, "subtitle", subtitle == null ? JSONObject.NULL : subtitle);
+        emit("videoTracksChanged", o, false);
+    }
+
     /** Whether JS listens for {@code event} (seek requests are pointless without an answer). */
     boolean listens(String event) {
         EventSink s = sink;

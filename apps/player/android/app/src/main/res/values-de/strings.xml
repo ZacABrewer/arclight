@@ -3,7 +3,6 @@
 <resources>
     <string name="downloads_channel">Downloads</string>
     <string name="downloading">Wird für Offline-Wiedergabe geladen</string>
-    <string name="video_close">Schließen</string>
     <string name="video_play">Abspielen</string>
     <string name="video_pause">Pause</string>
     <string name="video_back_10">10 Sekunden zurück</string>
@@ -11,15 +10,17 @@
     <string name="video_audio">Audio</string>
     <string name="video_subtitles">Untertitel</string>
     <string name="video_subtitles_off">Aus</string>
-    <string name="video_next">Weiter</string>
-    <string name="video_next_title">Weiter: %1$s</string>
     <string name="video_skip_intro">Intro überspringen</string>
     <string name="video_skip_recap">Rückblick überspringen</string>
     <string name="video_skip_credits">Abspann überspringen</string>
     <string name="video_up_next">Als Nächstes</string>
-    <string name="video_playing_in">Startet in %1$d s</string>
     <string name="video_play_now">Jetzt abspielen</string>
     <string name="video_cancel">Abbrechen</string>
-    <string name="video_ends_at">endet %1$s</string>
     <string name="video_track_n">Spur %1$d</string>
+    <string name="video_next_episode">Nächste Folge</string>
+    <string name="video_episodes">Folgen</string>
+    <string name="video_audio_subtitles">Audio &amp; Untertitel</string>
+    <string name="video_now_playing">Läuft gerade</string>
+    <string name="video_next_in">Nächste Folge in {s} s</string>
+    <string name="video_ends_at_time">Endet um {time}</string>
 </resources>

@@ -1,11 +1,13 @@
 package com.moviemethat.arclight.video;
 
+import android.animation.ValueAnimator;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -13,25 +15,21 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.format.DateFormat;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Rational;
+import android.util.TypedValue;
 import android.view.FocusFinder;
+import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
-import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -50,20 +48,29 @@ import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DataSourceBitmapLoader;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.session.MediaSession;
+import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.player.PlaybackMapping;
+import com.moviemethat.arclight.video.ui.ControlsView;
+import com.moviemethat.arclight.video.ui.EpisodesPanel;
+import com.moviemethat.arclight.video.ui.ImageLoader;
+import com.moviemethat.arclight.video.ui.Overlay;
+import com.moviemethat.arclight.video.ui.PauseGlyphView;
+import com.moviemethat.arclight.video.ui.PauseInfoView;
+import com.moviemethat.arclight.video.ui.SheetCache;
+import com.moviemethat.arclight.video.ui.SidePanel;
+import com.moviemethat.arclight.video.ui.SkipButton;
+import com.moviemethat.arclight.video.ui.TracksPanel;
+import com.moviemethat.arclight.video.ui.Ui;
+import com.moviemethat.arclight.video.ui.UpNextCard;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -72,19 +79,21 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * The full-screen video player (playVideo). Media3 ExoPlayer plays the progressive stream the
  * server chose (direct file, remuxed fragmented MP4 or a transcode); PlayerView draws the picture
- * and subtitles; the overlay controls are ours and work with touch and TV remotes (D-pad focus,
- * media keys). Times shown and reported are media time: player time + {@code streamStartMs}.
+ * and subtitles; the overlay ({@code video/ui}, the redesign's §5) is ours and works with touch and
+ * TV remotes (D-pad focus, media keys). Times shown and reported are media time: player time +
+ * {@code streamStartMs}.
  *
  * <ul>
  *   <li>Seekable (direct) streams seek in the player. Otherwise a seek becomes a
@@ -92,18 +101,19 @@ import java.util.concurrent.Executors;
  *   <li>Subtitles are the WebVTT links JS gives, side-loaded; when the stream starts later than
  *       media time 0 they are fetched and shifted ({@link VttShifter}) so cues line up.</li>
  *   <li>Audio: the file's own tracks in direct play; the JS list otherwise (a change re-requests).</li>
- *   <li>Skip intro / recap / credits, up-next card with a countdown, resume position, screen on,
- *       a media session for remotes, picture-in-picture on phones.</li>
+ *   <li>The overlay: controls with scrub thumbnails and chapter notches, the pause screen, the
+ *       Episodes and Audio &amp; Subtitles panels, Skip intro / recap / credits, the up-next card.
+ *       Every size is in the template's 1280x720 stage px, scaled to the window.</li>
+ *   <li>Resume position, screen on, a media session for remotes, picture-in-picture on phones.</li>
  * </ul>
  */
 @UnstableApi
-public final class VideoActivity extends AppCompatActivity implements VideoSeekBar.Listener {
+public final class VideoActivity extends AppCompatActivity implements VideoSeekBar.Listener, Overlay.Listener {
 
     private static final String TAG = "ArclightVideo";
     private static final String USER_AGENT = "ArclightPlayer (android)";
-    private static final long TICK_MS = 500;
+    private static final long TICK_MS = 250;
     private static final long PROGRESS_INTERVAL_MS = 10_000;
-    private static final long HIDE_CONTROLS_MS = 5_000;
     private static final long SEEK_REQUEST_DEBOUNCE_MS = 500;
     private static final int SUBTITLE_TIMEOUT_MS = 10_000;
 
@@ -112,34 +122,26 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** Raw WebVTT per subtitle id (media time), so a stream change only re-shifts. */
     private final Map<String, String> rawVtt = new HashMap<>();
     private final VideoController controller = VideoController.get();
+    private final ImageLoader images = new ImageLoader();
+    private final SheetCache sheets = new SheetCache();
 
     private ExoPlayer player;
     @Nullable private MediaSession session;
     private PlayerView playerView;
-    private View controls;
     private ProgressBar loading;
-    private TextView eyebrow;
-    private TextView title;
-    private TextView streamInfo;
-    private TextView time;
-    private TextView chapter;
-    private TextView remaining;
-    private VideoSeekBar seekBar;
-    private ImageButton playPause;
-    private ImageButton close;
-    private Button rewind;
-    private Button forward;
-    private Button audioButton;
-    private Button subtitlesButton;
-    private Button nextButton;
-    private Button skipButton;
-    private View upNextCard;
-    private ImageView upNextArt;
-    private TextView upNextLabel;
-    private TextView upNextTitle;
-    private TextView upNextSubtitle;
-    private Button upNextPlay;
-    private Button upNextCancel;
+    private Overlay overlay;
+
+    // The overlay, rebuilt when the window size (stage scale) or the request's style changes.
+    @Nullable private Ui ui;
+    @Nullable private String uiStyleKey;
+    private ControlsView controls;
+    private PauseGlyphView glyph;
+    private SkipButton skip;
+    private UpNextCard upNext;
+    private PauseInfoView pauseInfo;
+    private EpisodesPanel episodes;
+    private TracksPanel tracks;
+    private boolean controlsShown;
 
     @Nullable private VideoRequest req;
     private boolean tv;
@@ -148,19 +150,28 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private int generation;
     private boolean tracksApplied;
     private boolean everReady;
-    /** Waiting for JS: a replaceVideoStream (seek / audio change) or the next item. */
+    /** Waiting for JS: a replaceVideoStream (seek / audio change) or the next / picked item. */
     private boolean awaitingJs;
     /** A seek target sent (or about to be sent) to JS, shown on the bar meanwhile; -1 = none. */
     private long pendingSeekMs = -1;
     private boolean upNextShown;
     private boolean upNextCancelled;
     private boolean upNextFired;
+    /** Another episode was picked in the panel: JS answers with playVideo; progress is reported. */
+    private boolean pickFired;
     /** Whether the item that fired up next counted as watched (false: "Next episode" mid-way). */
     private boolean upNextCompleted;
     private long upNextStartedAt;
+    private long upNextHeldAt = -1;
     private long lastProgressAt;
-    @Nullable private AlertDialog dialog;
+    /** The intro was auto-skipped in this play ("Skip intros" pref: once per play). */
+    private boolean introAutoSkipped;
     @Nullable private VideoRequest.Segment shownSkip;
+    /** Since when the player is paused by the user (-1: playing / not paused). */
+    private long pausedSince = -1;
+    private long lastInputAt;
+    /** The down time of a key press already handled (its repeats and up are swallowed). */
+    private long swallowDownTime = -1;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -190,84 +201,20 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_video);
         enterImmersive();
-        bindViews();
+        playerView = findViewById(R.id.video_view);
+        loading = findViewById(R.id.video_loading);
+        overlay = findViewById(R.id.video_overlay);
+        overlay.setListener(this);
         createPlayer();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                finishWithClose(false, null);
+                onBack();
             }
         });
+        lastInputAt = SystemClock.elapsedRealtime();
         handler.post(tick);
         load(request);
-    }
-
-    private void bindViews() {
-        playerView = findViewById(R.id.video_view);
-        controls = findViewById(R.id.video_controls);
-        loading = findViewById(R.id.video_loading);
-        eyebrow = findViewById(R.id.video_eyebrow);
-        title = findViewById(R.id.video_title);
-        streamInfo = findViewById(R.id.video_stream_info);
-        time = findViewById(R.id.video_time);
-        chapter = findViewById(R.id.video_chapter);
-        remaining = findViewById(R.id.video_remaining);
-        seekBar = findViewById(R.id.video_seek);
-        playPause = findViewById(R.id.video_play_pause);
-        close = findViewById(R.id.video_close);
-        rewind = findViewById(R.id.video_rewind);
-        forward = findViewById(R.id.video_forward);
-        audioButton = findViewById(R.id.video_audio);
-        subtitlesButton = findViewById(R.id.video_subtitles);
-        nextButton = findViewById(R.id.video_next);
-        skipButton = findViewById(R.id.video_skip);
-        upNextCard = findViewById(R.id.video_up_next);
-        upNextArt = findViewById(R.id.video_up_next_art);
-        upNextLabel = findViewById(R.id.video_up_next_label);
-        upNextTitle = findViewById(R.id.video_up_next_title);
-        upNextSubtitle = findViewById(R.id.video_up_next_subtitle);
-        upNextPlay = findViewById(R.id.video_up_next_play);
-        upNextCancel = findViewById(R.id.video_up_next_cancel);
-
-        seekBar.setListener(this);
-        playPause.setOnClickListener(v -> {
-            togglePlayPause();
-            showControls(false);
-        });
-        rewind.setOnClickListener(v -> {
-            seekBy(-10_000);
-            showControls(false);
-        });
-        forward.setOnClickListener(v -> {
-            seekBy(10_000);
-            showControls(false);
-        });
-        close.setOnClickListener(v -> finishWithClose(false, null));
-        audioButton.setOnClickListener(v -> showAudioPicker());
-        subtitlesButton.setOnClickListener(v -> showSubtitlePicker());
-        nextButton.setOnClickListener(v -> fireNext(false));
-        skipButton.setOnClickListener(v -> skipSegment());
-        upNextPlay.setOnClickListener(v -> fireNext(true));
-        upNextCancel.setOnClickListener(v -> cancelUpNext());
-        // TV remotes have Back; the close button is for touch.
-        if (tv) close.setVisibility(View.GONE);
-
-        // Tap on the picture toggles the controls.
-        playerView.setOnTouchListener((v, e) -> {
-            if (e.getActionMasked() == MotionEvent.ACTION_UP) {
-                if (controls.getVisibility() == View.VISIBLE) hideControlsNow();
-                else showControls(false);
-                v.performClick();
-            }
-            return true;
-        });
-
-        // Subtitles follow the system caption settings (size, colours, edge).
-        SubtitleView subs = playerView.getSubtitleView();
-        if (subs != null) {
-            subs.setUserDefaultStyle();
-            subs.setUserDefaultTextSize();
-        }
     }
 
     private void createPlayer() {
@@ -296,6 +243,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 }
                 if (isPlaying) scheduleHide();
                 updatePipParams();
+            }
+
+            @Override
+            public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+                onPausedChanged();
             }
 
             @Override
@@ -336,7 +288,6 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
-        if (dialog != null) dialog.dismiss();
         if (req != null && !closed) {
             // Gone without our own close path (PiP window dismissed, task removed, or recreated by
             // the system for a change not in configChanges: the new instance has no request and
@@ -354,6 +305,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             player = null;
         }
         io.shutdownNow();
+        images.shutdown();
+        sheets.shutdown();
         deleteSubtitleFiles();
         super.onDestroy();
     }
@@ -372,13 +325,213 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     // =====================================================================================
+    // The overlay
+    // =====================================================================================
+
+    /** Screen px per stage px for a window of {@code wPx} x {@code hPx}. */
+    private float stageK(int wPx, int hPx) {
+        float d = getResources().getDisplayMetrics().density;
+        return OverlayMetrics.scale(wPx / d, hPx / d) * d;
+    }
+
+    /** The window size before the first layout (the overlay has no size yet). */
+    private float initialK() {
+        int w;
+        int h;
+        if (Build.VERSION.SDK_INT >= 30) {
+            Rect b = getWindowManager().getCurrentWindowMetrics().getBounds();
+            w = b.width();
+            h = b.height();
+        } else {
+            DisplayMetrics m = new DisplayMetrics();
+            //noinspection deprecation
+            getWindowManager().getDefaultDisplay().getRealMetrics(m);
+            w = m.widthPixels;
+            h = m.heightPixels;
+        }
+        return stageK(w, h);
+    }
+
+    private Map<String, String> fallbackStrings() {
+        Map<String, String> m = new HashMap<>();
+        m.put("upNext", getString(R.string.video_up_next));
+        m.put("playNow", getString(R.string.video_play_now));
+        m.put("cancel", getString(R.string.video_cancel));
+        m.put("nextIn", getString(R.string.video_next_in));
+        m.put("skipIntro", getString(R.string.video_skip_intro));
+        m.put("skipRecap", getString(R.string.video_skip_recap));
+        m.put("skipCredits", getString(R.string.video_skip_credits));
+        m.put("endsAt", getString(R.string.video_ends_at_time));
+        m.put("audioSubtitles", getString(R.string.video_audio_subtitles));
+        m.put("audio", getString(R.string.video_audio));
+        m.put("subtitles", getString(R.string.video_subtitles));
+        m.put("off", getString(R.string.video_subtitles_off));
+        m.put("episodes", getString(R.string.video_episodes));
+        m.put("nextEpisode", getString(R.string.video_next_episode));
+        m.put("nowPlaying", getString(R.string.video_now_playing));
+        return m;
+    }
+
+    private static boolean systemReducedMotion() {
+        return Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled();
+    }
+
+    private static String styleKey(VideoRequest r, float k) {
+        return k + "|" + r.theme + "|" + r.strings + "|" + r.prefs.reduceMotion + "|" + r.prefs.focusStyle + "|"
+                + r.prefs.subtitleSize;
+    }
+
+    /**
+     * Builds (or rebuilds) the overlay for {@code r} at {@code k}, keeping what is showing. False
+     * when the one built already fits (same scale and style).
+     */
+    private boolean buildOverlay(VideoRequest r, float k) {
+        String key = styleKey(r, k);
+        if (key.equals(uiStyleKey) && ui != null) return false;
+        uiStyleKey = key;
+        boolean wasShown = controls == null || controlsShown;
+        boolean pauseShowing = pauseInfo != null && pauseInfo.isShowing();
+        overlay.removeAllViews();
+        OverlayStrings strings = new OverlayStrings(r.strings, fallbackStrings());
+        Ui u = new Ui(this, k, new OverlayTheme(r.theme), strings, r.prefs.reduceMotion || systemReducedMotion(),
+                r.prefs.cyanGlow());
+        ui = u;
+        overlay.setUi(u);
+
+        glyph = new PauseGlyphView(this, u);
+        glyph.setVisibility(View.GONE);
+        overlay.addView(glyph, u.frame(u.px(96), u.px(96), Gravity.CENTER));
+
+        controls = new ControlsView(this, u, sheets);
+        overlay.addView(controls, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
+        controls.bar.setListener(this);
+        controls.toggle.setOnClickListener(v -> {
+            togglePlayPause();
+            showControls(false);
+        });
+        controls.back10.setOnClickListener(v -> {
+            seekBy(-10_000);
+            showControls(false);
+        });
+        controls.fwd10.setOnClickListener(v -> {
+            seekBy(10_000);
+            showControls(false);
+        });
+        controls.next.setOnClickListener(v -> fireNext(false));
+        controls.episodes.setOnClickListener(v -> openPanel(episodes));
+        controls.tracks.setOnClickListener(v -> openTracks());
+
+        skip = new SkipButton(this, u);
+        overlay.addView(skip, skip.params());
+        skip.setOnClickListener(v -> skipSegment());
+
+        upNext = new UpNextCard(this, u, images);
+        overlay.addView(upNext, upNext.params());
+        upNext.playNow.setOnClickListener(v -> fireNext(true));
+        upNext.cancel.setOnClickListener(v -> cancelUpNext());
+
+        pauseInfo = new PauseInfoView(this, u, images);
+        overlay.addView(pauseInfo, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
+
+        episodes = new EpisodesPanel(this, u, images);
+        overlay.addView(episodes, episodes.params());
+        episodes.setListener(this::pickEpisode);
+
+        tracks = new TracksPanel(this, u);
+        overlay.addView(tracks, tracks.params());
+        tracks.setListener(new TracksPanel.Listener() {
+            @Override
+            public void onAudioPicked(int position) {
+                pickAudio(position);
+            }
+
+            @Override
+            public void onSubtitlePicked(int position) {
+                pickSubtitle(position);
+            }
+        });
+
+        applyCaptionStyle(r, u);
+        bindOverlay(r);
+        // Restore what was on screen.
+        shownSkip = null;
+        controlsShown = !wasShown;
+        if (wasShown) showControlsNow(false);
+        else hideControlsImmediately();
+        if (upNextShown) {
+            upNext.setVisibility(View.VISIBLE);
+            upNext.setControlsShown(controlsShown);
+        }
+        if (pauseShowing) showPauseInfo();
+        updatePlayPause();
+        onTick();
+        return true;
+    }
+
+    /** Per-item content of the overlay. */
+    private void bindOverlay(VideoRequest r) {
+        controls.setTitles(r.title, r.subtitle);
+        controls.bar.setChapters(r.chapters);
+        controls.preview.bind(r.trickplay);
+        controls.next.setVisibility(r.next == null ? View.GONE : View.VISIBLE);
+        boolean hasEpisodes = !r.seasons.isEmpty() && controller.listens("videoPickItem");
+        controls.episodes.setVisibility(hasEpisodes ? View.VISIBLE : View.GONE);
+        if (hasEpisodes) episodes.bind(r.seasons, r.panelSeason(), r.itemKey);
+        upNext.bind(r.next, r.prefs.autoplayNext);
+        pauseInfo.bind(pauseFor(r));
+    }
+
+    /** The pause screen's content: from JS, else the title, sub line and backdrop we have. */
+    private static VideoRequest.Pause pauseFor(VideoRequest r) {
+        if (r.pause != null) return r.pause;
+        return new VideoRequest.Pause(r.title, r.subtitle, Collections.emptyList(), null, null, r.backdropUrl);
+    }
+
+    /** Captions as in the design: white 600 on black .6, 22 / 28 / 36 stage px. */
+    private void applyCaptionStyle(VideoRequest r, Ui u) {
+        SubtitleView subs = playerView.getSubtitleView();
+        if (subs == null) return;
+        subs.setStyle(new CaptionStyleCompat(Color.WHITE, 0x99000000, Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_NONE, Color.TRANSPARENT, Ui.font(600)));
+        subs.setApplyEmbeddedStyles(false);
+        subs.setApplyEmbeddedFontSizes(false);
+        subs.setFixedTextSize(TypedValue.COMPLEX_UNIT_PX, u.pxf(VideoTimeline.captionSize(r.prefs.subtitleSize)));
+        liftSubtitles(controlsShown);
+    }
+
+    @Override
+    public void onOverlaySizeChanged(int w, int h) {
+        VideoRequest r = req;
+        if (r == null || closed || isInPip() || w <= 0 || h <= 0) return;
+        buildOverlay(r, stageK(w, h));
+        liftSubtitles(controlsShown);
+    }
+
+    @Override
+    public void onBackgroundTap() {
+        noteInput();
+        if (pauseInfo.isShowing()) {
+            hidePauseInfo();
+            showControls(true);
+            return;
+        }
+        SidePanel open = openPanel();
+        if (open != null) {
+            closePanel(open);
+            return;
+        }
+        if (controlsShown) hideControlsNow();
+        else showControls(false);
+    }
+
+    // =====================================================================================
     // Loading (called by VideoController)
     // =====================================================================================
 
-    /** Plays {@code request} (first item, or up next / another playVideo while open). */
+    /** Plays {@code request} (first item, or up next / a picked episode / another playVideo). */
     void load(VideoRequest request) {
         VideoRequest old = req;
-        if (old != null && !upNextFired && !old.itemKey.equals(request.itemKey)) {
+        if (old != null && !upNextFired && !pickFired && !old.itemKey.equals(request.itemKey)) {
             // Replaced without going through up next: report where the old one stopped.
             controller.progress(old.itemKey, currentMediaMs(), durationMs(), true);
         }
@@ -390,27 +543,28 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         upNextShown = false;
         upNextCancelled = false;
         upNextFired = false;
+        pickFired = false;
         upNextCompleted = false;
+        upNextHeldAt = -1;
+        introAutoSkipped = false;
         lastProgressAt = SystemClock.elapsedRealtime();
         shownSkip = null;
         handler.removeCallbacks(sendSeek);
-        seekBar.cancelScrub();
         synchronized (rawVtt) {
             rawVtt.clear();
         }
-        if (dialog != null) dialog.dismiss();
+        images.setHeaders(request.headers);
+        sheets.bind(request.trickplay, request.headers);
 
-        setText(eyebrow, request.subtitle);
-        title.setText(request.title);
-        setText(streamInfo, request.streamInfo);
-        seekBar.setChapters(request.chapters);
-        nextButton.setVisibility(request.next == null ? View.GONE : View.VISIBLE);
-        if (request.next != null) nextButton.setText(getString(R.string.video_next_title, request.next.title));
-        audioButton.setVisibility(View.VISIBLE);
-        subtitlesButton.setVisibility(request.subtitles.isEmpty() ? View.GONE : View.VISIBLE);
-        upNextCard.setVisibility(View.GONE);
-        skipButton.setVisibility(View.GONE);
-        bindUpNext(request.next);
+        float k = overlay.getWidth() > 0 ? stageK(overlay.getWidth(), overlay.getHeight()) : initialK();
+        if (controls != null) {
+            controls.bar.cancelScrub();
+            closePanels();
+            hidePauseInfo();
+        }
+        if (!buildOverlay(request, k)) bindOverlay(request);
+        upNext.setVisibility(View.GONE);
+        skip.setVisibility(View.GONE);
 
         startStream(request.startPositionMs, true);
         showControls(true);
@@ -422,7 +576,6 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r == null) return;
         boolean play = player.getPlayWhenReady() || awaitingJs;
         r.apply(stream);
-        setText(streamInfo, r.streamInfo);
         awaitingJs = false;
         pendingSeekMs = -1;
         tracksApplied = false;
@@ -581,22 +734,22 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             return;
         }
         updateLoading();
+        onPausedChanged();
     }
 
     private void updateLoading() {
         boolean busy = awaitingJs || player == null || player.getPlaybackState() == Player.STATE_BUFFERING
                 || (player.getPlaybackState() == Player.STATE_IDLE && !closed);
         loading.setVisibility(busy ? View.VISIBLE : View.GONE);
+        updateGlyph();
     }
 
     private void onEnded() {
         VideoRequest r = req;
         if (r == null || awaitingJs || closed) return;
-        if (r.next != null && !upNextCancelled) {
-            fireNext(true);
-        } else {
-            finishWithClose(true, null);
-        }
+        VideoTimeline.EndAction a = VideoTimeline.endAction(r.next != null, upNextCancelled, r.prefs.autoplayNext);
+        if (a == VideoTimeline.EndAction.NEXT) fireNext(true);
+        else finishWithClose(true, null);
     }
 
     private void onError(PlaybackException error) {
@@ -682,34 +835,42 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private void onTick() {
         VideoRequest r = req;
         // Closed: finish() is pending; nothing may fire (an up-next countdown would reopen the screen).
-        if (r == null || player == null || closed) return;
+        if (r == null || player == null || closed || controls == null) return;
         long pos = currentMediaMs();
         long dur = durationMs();
-        long buffered = r.toMediaMs(player.getBufferedPosition());
-        seekBar.setPosition(pos, buffered, dur);
-        if (!seekBar.isScrubbing()) updateTimes(pos, dur);
+        controls.bar.setPosition(pos, dur);
+        if (!controls.bar.isScrubbing()) updateTimes(pos, dur);
+        VideoRequest.Segment auto = VideoTimeline.autoSkip(r.segments, pos, r.prefs.skipIntros && !awaitingJs, introAutoSkipped);
+        if (auto != null) {
+            introAutoSkipped = true;
+            seekTo(auto.endMs);
+            pos = currentMediaMs();
+        } else if (!introAutoSkipped && r.prefs.skipIntros && pos > 0) {
+            // Started (or sought) past the intro: it is not skipped later in this play.
+            for (VideoRequest.Segment s : r.segments) {
+                if (s.type.equals("intro") && pos >= s.endMs) introAutoSkipped = true;
+            }
+        }
         updateSkip(r, pos);
         updateUpNext(r, pos, dur);
+        updatePauseInfo();
         if (player.isPlaying() && SystemClock.elapsedRealtime() - lastProgressAt >= PROGRESS_INTERVAL_MS) emitProgress(false);
     }
 
     private void updateTimes(long pos, long dur) {
-        VideoRequest r = req;
-        time.setText(dur > 0 ? VideoTimeline.clock(pos) + " / " + VideoTimeline.clock(dur) : VideoTimeline.clock(pos));
-        String ch = r == null ? null : VideoTimeline.chapterAt(r.chapters, pos);
-        chapter.setText(ch == null ? "" : ch);
-        if (dur > 0) {
-            long left = Math.max(0, dur - pos);
-            String ends = DateFormat.getTimeFormat(this).format(new Date(System.currentTimeMillis() + left));
-            remaining.setText("−" + VideoTimeline.clock(left) + " · " + getString(R.string.video_ends_at, ends));
-        } else {
-            remaining.setText("");
-        }
+        controls.time.setText(dur > 0 ? VideoTimeline.clock(pos) + " / " + VideoTimeline.clock(dur) : VideoTimeline.clock(pos));
+    }
+
+    private String endsAtText() {
+        long left = Math.max(0, durationMs() - currentMediaMs());
+        Locale locale = getResources().getConfiguration().getLocales().get(0);
+        String t = EndsAt.format(System.currentTimeMillis(), left, TimeZone.getDefault(), locale, DateFormat.is24HourFormat(this));
+        return ui == null ? t : ui.strings.endsAt(t);
     }
 
     private void emitProgress(boolean paused) {
         VideoRequest r = req;
-        if (r == null || closed || upNextFired) return;
+        if (r == null || closed || upNextFired || pickFired) return;
         lastProgressAt = SystemClock.elapsedRealtime();
         controller.progress(r.itemKey, currentMediaMs(), durationMs(), paused);
     }
@@ -750,17 +911,37 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     @Override
     public void onScrubMove(long positionMs) {
+        VideoRequest r = req;
+        if (r == null) return;
+        handler.removeCallbacks(hideControls);
         updateTimes(positionMs, durationMs());
+        controls.preview.show(positionMs, VideoTimeline.chapterAt(r.chapters, positionMs));
+        controls.placePreview(positionMs);
     }
 
     @Override
     public void onScrubCommit(long positionMs) {
+        controls.preview.hide();
         seekTo(positionMs);
         scheduleHide();
     }
 
     @Override
+    public void onScrubCancel() {
+        controls.preview.hide();
+        updateTimes(currentMediaMs(), durationMs());
+        scheduleHide();
+    }
+
+    @Override
+    public void onBarSelect() {
+        togglePlayPause();
+        showControls(false);
+    }
+
+    @Override
     public void onInteraction() {
+        noteInput();
         showControls(false);
     }
 
@@ -777,9 +958,68 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     private void updatePlayPause() {
+        if (controls == null) return;
         boolean playing = player != null && player.getPlayWhenReady() && player.getPlaybackState() != Player.STATE_ENDED;
-        playPause.setImageResource(playing ? R.drawable.ic_video_pause : R.drawable.ic_video_play);
-        playPause.setContentDescription(getString(playing ? R.string.video_pause : R.string.video_play));
+        controls.toggle.setPlaying(playing);
+        controls.toggle.setContentDescription(getString(playing ? R.string.video_pause : R.string.video_play));
+        updateGlyph();
+    }
+
+    // =====================================================================================
+    // Paused: the glyph and the pause screen
+    // =====================================================================================
+
+    private boolean userPaused() {
+        return player != null && !player.getPlayWhenReady() && player.getPlaybackState() != Player.STATE_ENDED
+                && player.getPlaybackState() != Player.STATE_IDLE && !awaitingJs && !closed;
+    }
+
+    private void onPausedChanged() {
+        boolean paused = userPaused();
+        if (paused && pausedSince < 0) pausedSince = SystemClock.elapsedRealtime();
+        if (!paused) {
+            pausedSince = -1;
+            hidePauseInfo();
+        }
+        updateGlyph();
+    }
+
+    /** The 96 px centred pause glyph, while paused and the pause screen is not up. */
+    private void updateGlyph() {
+        if (glyph == null) return;
+        boolean show = userPaused() && !pauseInfo.isShowing() && !isInPip() && loading.getVisibility() != View.VISIBLE;
+        glyph.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private void noteInput() {
+        lastInputAt = SystemClock.elapsedRealtime();
+    }
+
+    private void updatePauseInfo() {
+        if (pauseInfo == null) return;
+        if (pauseInfo.isShowing()) {
+            pauseInfo.setEndsAt(endsAtText());
+            return;
+        }
+        boolean blocked = isInPip() || openPanel() != null || controls.bar.isScrubbing() || upNextShown;
+        if (!blocked && VideoTimeline.pauseInfoDue(pausedSince, lastInputAt, SystemClock.elapsedRealtime())) showPauseInfo();
+    }
+
+    private void showPauseInfo() {
+        pauseInfo.setEndsAt(endsAtText());
+        hideControlsImmediately();
+        skip.setVisibility(View.GONE);
+        shownSkip = null;
+        pauseInfo.show();
+        overlay.setRingHidden(true);
+        updateGlyph();
+    }
+
+    private void hidePauseInfo() {
+        if (pauseInfo == null || !pauseInfo.isShowing()) return;
+        pauseInfo.hide();
+        overlay.setRingHidden(false);
+        updateGlyph();
     }
 
     // =====================================================================================
@@ -787,82 +1027,76 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     // =====================================================================================
 
     private void updateSkip(VideoRequest r, long pos) {
-        VideoRequest.Segment s = isInPip() ? null : VideoTimeline.activeSkip(r.segments, pos, r.next != null);
+        boolean blocked = isInPip() || pauseInfo.isShowing() || awaitingJs;
+        VideoRequest.Segment s = blocked ? null : VideoTimeline.activeSkip(r.segments, pos, r.next != null);
         if (s == shownSkip) return;
         shownSkip = s;
         if (s == null) {
-            boolean hadFocus = skipButton.isFocused();
-            skipButton.setVisibility(View.GONE);
-            if (hadFocus && controls.getVisibility() == View.VISIBLE) playPause.requestFocus();
+            boolean hadFocus = skip.isFocused();
+            skip.setVisibility(View.GONE);
+            if (hadFocus && controlsShown) controls.toggle.requestFocus();
             return;
         }
-        int label = s.type.equals("credits") ? R.string.video_skip_credits : s.type.equals("recap") ? R.string.video_skip_recap : R.string.video_skip_intro;
-        skipButton.setText(label);
-        skipButton.setVisibility(View.VISIBLE);
+        String key = s.type.equals("credits") ? "skipCredits" : s.type.equals("recap") ? "skipRecap" : "skipIntro";
+        skip.setText(ui.strings.get(key));
+        skip.setControlsShown(controlsShown);
+        skip.setVisibility(View.VISIBLE);
         // With the controls hidden, OK on the remote presses Skip.
-        if (controls.getVisibility() != View.VISIBLE) skipButton.requestFocus();
+        if (!controlsShown && openPanel() == null) skip.requestFocus();
     }
 
     private void skipSegment() {
+        VideoRequest r = req;
         VideoRequest.Segment s = shownSkip;
-        if (s == null) return;
+        if (r == null || s == null) return;
+        noteInput();
+        if (VideoTimeline.skipEndsPlayback(s, r.next != null)) {
+            // Credits with nothing next: the end (counted as completed).
+            finishWithClose(true, null);
+            return;
+        }
         seekTo(s.endMs);
     }
 
-    private void bindUpNext(@Nullable VideoRequest.Next next) {
-        upNextArt.setImageDrawable(null);
-        if (next == null) return;
-        upNextTitle.setText(next.title);
-        setText(upNextSubtitle, next.subtitle);
-        if (next.artworkUrl == null) return;
-        try {
-            ListenableFuture<Bitmap> f = new DataSourceBitmapLoader(this).loadBitmap(Uri.parse(next.artworkUrl));
-            final VideoRequest forReq = req;
-            Futures.addCallback(f, new FutureCallback<Bitmap>() {
-                @Override
-                public void onSuccess(Bitmap bmp) {
-                    if (req == forReq && !isDestroyed()) upNextArt.setImageBitmap(bmp);
-                }
-
-                @Override
-                public void onFailure(@NonNull Throwable t) {
-                    // No artwork: the card shows the title only.
-                }
-            }, ContextCompat.getMainExecutor(this));
-        } catch (RuntimeException e) {
-            Log.w(TAG, "Up-next artwork failed", e);
-        }
-    }
-
     private void updateUpNext(VideoRequest r, long pos, long dur) {
-        if (r.next == null || upNextFired || upNextCancelled || isInPip()) {
+        if (r.next == null || upNextFired || upNextCancelled || isInPip() || pickFired) {
             if (upNextShown && (upNextCancelled || isInPip())) hideUpNext();
             return;
         }
         long at = VideoTimeline.upNextAtMs(dur, r.segments);
         boolean due = at >= 0 && pos >= at && pendingSeekMs < 0;
+        long now = SystemClock.elapsedRealtime();
         if (due && !upNextShown) {
             upNextShown = true;
-            upNextStartedAt = SystemClock.elapsedRealtime();
-            upNextCard.setVisibility(View.VISIBLE);
-            upNextPlay.requestFocus();
+            upNextStartedAt = now;
+            upNextHeldAt = -1;
+            hidePauseInfo();
+            upNext.setControlsShown(controlsShown);
+            upNext.setVisibility(View.VISIBLE);
+            if (openPanel() == null) upNext.playNow.requestFocus();
         } else if (!due && upNextShown) {
             // Sought back before the credits.
             hideUpNext();
         }
-        if (!upNextShown) return;
-        // The countdown runs while playing; a pause holds it.
-        if (!player.isPlaying()) upNextStartedAt += TICK_MS;
-        long left = VideoTimeline.UP_NEXT_COUNTDOWN_MS - (SystemClock.elapsedRealtime() - upNextStartedAt);
-        upNextLabel.setText(getString(R.string.video_up_next) + " · " + getString(R.string.video_playing_in, Math.max(0, (int) Math.ceil(left / 1000.0))));
+        if (!upNextShown || !r.prefs.autoplayNext) return;
+        // The countdown runs while playing; a pause (or an open panel) holds it.
+        boolean running = player.isPlaying() && openPanel() == null;
+        if (!running && upNextHeldAt < 0) upNextHeldAt = now;
+        if (running && upNextHeldAt >= 0) {
+            upNextStartedAt += now - upNextHeldAt;
+            upNextHeldAt = -1;
+        }
+        long elapsed = (upNextHeldAt >= 0 ? upNextHeldAt : now) - upNextStartedAt;
+        long left = VideoTimeline.UP_NEXT_COUNTDOWN_MS - elapsed;
+        upNext.setCountdown(left, VideoTimeline.UP_NEXT_COUNTDOWN_MS, running);
         if (left <= 0) fireNext(true);
     }
 
     private void hideUpNext() {
         upNextShown = false;
-        boolean hadFocus = upNextCard.hasFocus();
-        upNextCard.setVisibility(View.GONE);
-        if (hadFocus && controls.getVisibility() == View.VISIBLE) playPause.requestFocus();
+        boolean hadFocus = upNext.hasFocus();
+        upNext.setVisibility(View.GONE);
+        if (hadFocus && controlsShown) controls.toggle.requestFocus();
     }
 
     private void cancelUpNext() {
@@ -878,100 +1112,146 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
      */
     private void fireNext(boolean atEnd) {
         VideoRequest r = req;
-        if (r == null || r.next == null || upNextFired || closed) return;
+        if (r == null || r.next == null || upNextFired || pickFired || closed) return;
         controller.progress(r.itemKey, currentMediaMs(), durationMs(), false);
         upNextCompleted = atEnd || isCompleted();
         upNextFired = true;
         awaitingJs = true;
         hideUpNext();
-        skipButton.setVisibility(View.GONE);
+        skip.setVisibility(View.GONE);
+        closePanels();
         player.pause();
         updateLoading();
         controller.next(r.next.itemKey, upNextCompleted);
     }
 
     // =====================================================================================
-    // Track pickers
+    // Panels: Episodes, Audio & Subtitles
     // =====================================================================================
 
-    private void showAudioPicker() {
+    @Nullable
+    private SidePanel openPanel() {
+        if (episodes != null && episodes.isOpen()) return episodes;
+        if (tracks != null && tracks.isOpen()) return tracks;
+        return null;
+    }
+
+    private void openPanel(SidePanel p) {
+        if (isInPip()) return;
+        noteInput();
+        closePanels();
+        hidePauseInfo();
+        handler.removeCallbacks(hideControls);
+        p.open();
+    }
+
+    private void closePanel(SidePanel p) {
+        p.close();
+        View back = p == episodes ? controls.episodes : controls.tracks;
+        if (controlsShown && back.getVisibility() == View.VISIBLE) back.requestFocus();
+        else if (controlsShown) controls.toggle.requestFocus();
+        scheduleHide();
+    }
+
+    private void closePanels() {
+        if (episodes != null) episodes.close();
+        if (tracks != null) tracks.close();
+    }
+
+    /** Another episode picked in the panel: report, pause, and ask JS to play it (§5.4). */
+    private void pickEpisode(VideoRequest.Episode e) {
         VideoRequest r = req;
-        if (r == null || player == null) return;
-        final List<String> labels = new ArrayList<>();
-        int checked = -1;
-        if (r.seekable) {
-            // Direct play: the file's own tracks (labelled from JS when the lists line up).
-            final List<Tracks.Group> audio = groups(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO);
-            if (audio.isEmpty()) return;
-            boolean useJs = r.audioTracks.size() == audio.size();
-            for (int i = 0; i < audio.size(); i++) {
-                labels.add(useJs ? r.audioTracks.get(i).label : formatLabel(audio.get(i).getTrackFormat(0), i));
-                if (audio.get(i).isSelected()) checked = i;
-            }
-            showPicker(R.string.video_audio, labels, checked, which -> {
-                r.selectedAudio = which;
-                player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
-                        .setOverrideForType(new TrackSelectionOverride(audio.get(which).getMediaTrackGroup(), 0))
-                        .build());
-            });
+        if (r == null || closed) return;
+        if (e.itemKey.equals(r.itemKey) || upNextFired || pickFired) {
+            closePanel(episodes);
             return;
         }
-        if (r.audioTracks.isEmpty()) return;
-        for (int i = 0; i < r.audioTracks.size(); i++) {
-            labels.add(r.audioTracks.get(i).label);
-            if (r.selectedAudio != null && r.audioTracks.get(i).index == r.selectedAudio) checked = i;
-        }
-        if (checked < 0) checked = 0;
-        final int current = checked;
-        showPicker(R.string.video_audio, labels, checked, which -> {
-            if (which == current || !controller.listens("videoSeekRequest")) return;
-            int ordinal = r.audioTracks.get(which).index;
-            long pos = currentMediaMs();
-            r.selectedAudio = ordinal;
-            awaitingJs = true;
-            updateLoading();
-            controller.seekRequest(r.itemKey, pos, ordinal, r.selectedSubtitle);
-        });
+        long pos = currentMediaMs();
+        // Not marked completed: the position as it stands.
+        controller.progress(r.itemKey, pos, durationMs(), true);
+        pickFired = true;
+        awaitingJs = true;
+        hideUpNext();
+        skip.setVisibility(View.GONE);
+        closePanels();
+        player.pause();
+        updateLoading();
+        controller.pickItem(e.itemKey, r.itemKey, pos);
     }
 
-    private void showSubtitlePicker() {
+    /** The file's audio groups in direct play (empty otherwise). */
+    private List<Tracks.Group> fileAudio() {
+        VideoRequest r = req;
+        if (r == null || player == null || !r.seekable) return Collections.emptyList();
+        return groups(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO);
+    }
+
+    private void openTracks() {
         VideoRequest r = req;
         if (r == null || player == null) return;
-        List<String> labels = new ArrayList<>();
-        labels.add(getString(R.string.video_subtitles_off));
-        int checked = 0;
-        for (int i = 0; i < r.subtitles.size(); i++) {
-            labels.add(r.subtitles.get(i).label);
-            if (r.subtitles.get(i).id.equals(r.selectedSubtitle)) checked = i + 1;
+        List<String> audio = new ArrayList<>();
+        int audioSel = -1;
+        List<Tracks.Group> file = fileAudio();
+        if (r.seekable && !file.isEmpty()) {
+            // Direct play: the file's own tracks (labelled from JS when the lists line up).
+            boolean useJs = r.audioTracks.size() == file.size();
+            for (int i = 0; i < file.size(); i++) {
+                audio.add(useJs ? r.audioTracks.get(i).label : formatLabel(file.get(i).getTrackFormat(0), i));
+                if (file.get(i).isSelected()) audioSel = i;
+            }
+        } else if (!r.seekable) {
+            for (int i = 0; i < r.audioTracks.size(); i++) {
+                audio.add(r.audioTracks.get(i).label);
+                if (r.selectedAudio != null && r.audioTracks.get(i).index == r.selectedAudio) audioSel = i;
+            }
+            if (audioSel < 0 && !audio.isEmpty()) audioSel = 0;
         }
-        showPicker(R.string.video_subtitles, labels, checked, which -> {
-            r.selectedSubtitle = which == 0 ? null : r.subtitles.get(which - 1).id;
-            TrackSelectionParameters.Builder p = player.getTrackSelectionParameters().buildUpon();
-            applySubtitleTo(p, player.getCurrentTracks(), r.selectedSubtitle);
-            player.setTrackSelectionParameters(p.build());
-        });
+        List<String> subs = new ArrayList<>();
+        int subSel = 0;
+        for (int i = 0; i < r.subtitles.size(); i++) {
+            subs.add(r.subtitles.get(i).label);
+            if (r.subtitles.get(i).id.equals(r.selectedSubtitle)) subSel = i + 1;
+        }
+        tracks.bind(audio, audioSel, subs, subSel);
+        openPanel(tracks);
     }
 
-    private interface Pick {
-        void picked(int which);
+    private void pickAudio(int which) {
+        VideoRequest r = req;
+        if (r == null || player == null) return;
+        noteInput();
+        if (r.seekable) {
+            List<Tracks.Group> file = fileAudio();
+            if (which < 0 || which >= file.size()) return;
+            r.selectedAudio = which;
+            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                    .setOverrideForType(new TrackSelectionOverride(file.get(which).getMediaTrackGroup(), 0))
+                    .build());
+            boolean useJs = r.audioTracks.size() == file.size();
+            controller.tracksChanged(r.itemKey, useJs ? r.audioTracks.get(which).index : which, r.selectedSubtitle);
+            return;
+        }
+        if (which < 0 || which >= r.audioTracks.size()) return;
+        int ordinal = r.audioTracks.get(which).index;
+        if (r.selectedAudio != null && r.selectedAudio == ordinal) return;
+        if (!controller.listens("videoSeekRequest")) return;
+        long pos = currentMediaMs();
+        r.selectedAudio = ordinal;
+        awaitingJs = true;
+        updateLoading();
+        controller.seekRequest(r.itemKey, pos, ordinal, r.selectedSubtitle);
+        controller.tracksChanged(r.itemKey, ordinal, r.selectedSubtitle);
     }
 
-    private void showPicker(int titleRes, List<String> labels, int checked, Pick pick) {
-        handler.removeCallbacks(hideControls);
-        if (dialog != null) dialog.dismiss();
-        dialog = new AlertDialog.Builder(this, R.style.VideoDialog)
-                .setTitle(titleRes)
-                .setSingleChoiceItems(labels.toArray(new CharSequence[0]), checked, (d, which) -> {
-                    d.dismiss();
-                    pick.picked(which);
-                })
-                .setOnDismissListener(d -> {
-                    dialog = null;
-                    enterImmersive();
-                    scheduleHide();
-                })
-                .create();
-        dialog.show();
+    private void pickSubtitle(int which) {
+        VideoRequest r = req;
+        if (r == null || player == null) return;
+        noteInput();
+        r.selectedSubtitle = which <= 0 || which > r.subtitles.size() ? null : r.subtitles.get(which - 1).id;
+        TrackSelectionParameters.Builder p = player.getTrackSelectionParameters().buildUpon();
+        applySubtitleTo(p, player.getCurrentTracks(), r.selectedSubtitle);
+        player.setTrackSelectionParameters(p.build());
+        controller.tracksChanged(r.itemKey, r.selectedAudio, r.selectedSubtitle);
     }
 
     private String formatLabel(Format f, int index) {
@@ -990,44 +1270,94 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     // =====================================================================================
 
     private void showControls(boolean focusPlay) {
-        if (isInPip()) return;
-        boolean wasHidden = controls.getVisibility() != View.VISIBLE;
-        // Always: the controls start out visible (layout default), so "was hidden" misses the first show.
+        if (isInPip() || controls == null) return;
+        hidePauseInfo();
+        showControlsNow(focusPlay);
+    }
+
+    private void showControlsNow(boolean focusPlay) {
+        boolean wasHidden = !controlsShown;
+        controlsShown = true;
         liftSubtitles(true);
+        skip.setControlsShown(true);
+        upNext.setControlsShown(true);
+        controls.animate().cancel();
         if (wasHidden) {
-            controls.setAlpha(0f);
             controls.setVisibility(View.VISIBLE);
-            controls.animate().alpha(1f).setDuration(150).start();
+            long d = ui.anim(150);
+            if (d == 0) {
+                controls.setAlpha(1f);
+            } else {
+                controls.setAlpha(0f);
+                controls.animate().alpha(1f).setDuration(d).setUpdateListener(a -> overlay.invalidate()).start();
+            }
         }
-        View focused = getCurrentFocus();
-        boolean focusOutside = focused == null || (!isInside(focused, controls) && focused != skipButton && !upNextCard.hasFocus());
-        if ((focusPlay || wasHidden) && focusOutside && !upNextCard.hasFocus()) playPause.requestFocus();
+        if (openPanel() == null) {
+            View focused = getCurrentFocus();
+            boolean focusOutside = focused == null || (!isInside(focused, controls) && focused != skip && !upNext.hasFocus());
+            if ((focusPlay || wasHidden) && focusOutside) controls.toggle.requestFocus();
+        }
         scheduleHide();
     }
 
     private void hideControlsNow() {
         handler.removeCallbacks(hideControls);
-        if (controls.getVisibility() != View.VISIBLE) return;
-        if (seekBar.isScrubbing() || dialog != null) {
+        if (!controlsShown || controls == null) return;
+        if (controls.bar.isScrubbing() || openPanel() != null) {
             scheduleHide();
             return;
         }
-        controls.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+        controlsShown = false;
+        skip.setControlsShown(false);
+        upNext.setControlsShown(false);
+        liftSubtitles(false);
+        controls.animate().cancel();
+        long d = ui.anim(200);
+        Runnable done = () -> {
             controls.setVisibility(View.INVISIBLE);
-            liftSubtitles(false);
-            if (skipButton.getVisibility() == View.VISIBLE) skipButton.requestFocus();
-        }).start();
+            if (skip.getVisibility() == View.VISIBLE) skip.requestFocus();
+            else if (upNext.getVisibility() == View.VISIBLE) upNext.playNow.requestFocus();
+        };
+        if (d == 0) {
+            controls.setAlpha(0f);
+            done.run();
+        } else {
+            controls.animate().alpha(0f).setDuration(d).setUpdateListener(a -> overlay.invalidate()).withEndAction(done).start();
+        }
     }
 
-    /** Subtitles move above the bottom controls while those show. */
+    /** Hides the controls at once (the pause screen, PiP, a rebuild while hidden). */
+    private void hideControlsImmediately() {
+        handler.removeCallbacks(hideControls);
+        if (controls == null) return;
+        controls.bar.cancelScrub();
+        controls.animate().cancel();
+        controls.setAlpha(0f);
+        controls.setVisibility(View.INVISIBLE);
+        controlsShown = false;
+        skip.setControlsShown(false);
+        upNext.setControlsShown(false);
+        liftSubtitles(false);
+    }
+
+    /** Captions at bottom 232 stage px with the controls shown, 72 without (§5.1). */
     private void liftSubtitles(boolean lifted) {
         SubtitleView subs = playerView.getSubtitleView();
-        if (subs != null) subs.setBottomPaddingFraction(lifted ? 0.24f : SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION);
+        Ui u = ui;
+        if (subs == null || u == null) return;
+        // Bottom padding, not setBottomPaddingFraction: WebVTT cues without a line setting carry an
+        // explicit line of -1, and Media3 ignores the padding fraction for positioned cues. The
+        // view's own padding shrinks the box every cue is laid out in.
+        subs.setBottomPaddingFraction(0f);
+        int pad = u.px(OverlayMetrics.captionBottom(lifted));
+        if (subs.getPaddingBottom() != pad) subs.setPadding(0, 0, 0, pad);
     }
 
     private void scheduleHide() {
         handler.removeCallbacks(hideControls);
-        if (player != null && player.isPlaying()) handler.postDelayed(hideControls, HIDE_CONTROLS_MS);
+        if (player != null && player.isPlaying() && openPanel() == null) {
+            handler.postDelayed(hideControls, VideoTimeline.CONTROLS_IDLE_MS);
+        }
     }
 
     private static boolean isInside(View v, View parent) {
@@ -1039,44 +1369,115 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         return false;
     }
 
+    /** Back: the pause screen, then a scrub preview, then a panel, then the player (§5.1, §5.3). */
+    private void onBack() {
+        noteInput();
+        if (controls != null) {
+            if (pauseInfo.isShowing()) {
+                hidePauseInfo();
+                showControls(true);
+                return;
+            }
+            if (controls.bar.isScrubbing()) {
+                controls.bar.cancelScrub();
+                return;
+            }
+            SidePanel p = openPanel();
+            if (p != null) {
+                closePanel(p);
+                return;
+            }
+        }
+        finishWithClose(false, null);
+    }
+
+    private static boolean isEnter(int code) {
+        return code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
+    }
+
+    private static boolean isDirection(int code) {
+        return code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT
+                || code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN;
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        // Finishing from onCreate (no request): the views were never bound.
+        // Finishing from onCreate (no request): the views were never built.
         if (req == null || controls == null) return super.dispatchKeyEvent(event);
         int code = event.getKeyCode();
-        if (handleMediaKey(code, event)) return true;
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
-        boolean hidden = controls.getVisibility() != View.VISIBLE;
-        if (hidden && !isInPip()) {
+        if (down) noteInput();
+
+        // The rest of a press already handled (its repeats and its up).
+        if (swallowDownTime >= 0 && event.getDownTime() == swallowDownTime) {
+            if (!down) swallowDownTime = -1;
+            return true;
+        }
+
+        if (handleMediaKey(code, event)) return true;
+        if (code == KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event);
+
+        // The pause screen: any key goes back to the normal paused UI.
+        if (pauseInfo.isShowing() && !isInPip()) {
+            if (down) {
+                swallowDownTime = event.getDownTime();
+                hidePauseInfo();
+                showControls(true);
+            }
+            return true;
+        }
+
+        // A panel is open: the focus stays inside it.
+        SidePanel panel = openPanel();
+        if (panel != null) {
+            if (isDirection(code)) {
+                if (down) panel.moveFocus(code);
+                return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
+
+        if (!controlsShown && !isInPip()) {
             switch (code) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    if (upNextCard.hasFocus()) break;
-                    // Left / right with the controls hidden: show them and scrub on the bar.
+                    if (upNext.hasFocus()) break;
+                    // Left / right with the UI hidden: ±10 s, and the UI wakes with the bar focused.
                     if (down) {
+                        swallowDownTime = event.getDownTime();
+                        seekBy(code == KeyEvent.KEYCODE_DPAD_RIGHT ? 10_000 : -10_000);
                         showControls(false);
-                        seekBar.requestFocus();
-                        seekBar.onKeyDown(code, event);
+                        controls.bar.requestFocus();
                     }
                     return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
                 case KeyEvent.KEYCODE_NUMPAD_ENTER:
-                    if (skipButton.isFocused() || upNextCard.hasFocus()) break;
-                    if (down && event.getRepeatCount() == 0) {
-                        togglePlayPause();
-                        showControls(true);
+                    if (upNext.hasFocus()) break;
+                    if (down) {
+                        swallowDownTime = event.getDownTime();
+                        // Enter presses Skip when it shows, else toggles play.
+                        if (skip.getVisibility() == View.VISIBLE) {
+                            skipSegment();
+                        } else {
+                            togglePlayPause();
+                            showControls(true);
+                        }
                     }
                     return true;
                 case KeyEvent.KEYCODE_DPAD_UP:
                 case KeyEvent.KEYCODE_DPAD_DOWN:
-                    if (skipButton.isFocused() || upNextCard.hasFocus()) break;
-                    if (down) showControls(true);
+                    if (skip.isFocused() || upNext.hasFocus()) break;
+                    if (down) {
+                        swallowDownTime = event.getDownTime();
+                        showControls(true);
+                    }
                     return true;
                 default:
+                    if (down && event.getRepeatCount() == 0) showControls(false);
                     break;
             }
-        } else if (down && code != KeyEvent.KEYCODE_BACK) {
+        } else if (down) {
             scheduleHide();
             if ((code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) && staysInRow(code)) return true;
         }
@@ -1084,18 +1485,18 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     /**
-     * Left / right on the transport row or the bottom button row stays in that row: at its end the
-     * focus stays put instead of jumping diagonally to the other row (Android's fallback search).
-     * True when the key was consumed.
+     * Left / right on the button row stays in that row: at its end the focus stays put instead of
+     * jumping diagonally to the bar or the corner buttons (Android's fallback search). True when
+     * the key was consumed.
      */
     private boolean staysInRow(int code) {
         View focused = getCurrentFocus();
-        if (focused == null || !(focused.getParent() instanceof ViewGroup)) return false;
-        ViewGroup row = (ViewGroup) focused.getParent();
-        if (row != rewind.getParent() && row != audioButton.getParent()) return false;
+        if (focused == null || focused.getParent() != controls.buttonRow) return false;
         int dir = code == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT;
-        View next = FocusFinder.getInstance().findNextFocus((ViewGroup) controls, focused, dir);
-        return next == null || next.getParent() != row;
+        View next = FocusFinder.getInstance().findNextFocus((ViewGroup) controls.buttonRow, focused, dir);
+        if (next == null) return true;
+        next.requestFocus(dir);
+        return true;
     }
 
     /** Remote / keyboard media keys, wherever the focus is. */
@@ -1139,7 +1540,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 if (down) finishWithClose(false, null);
                 return true;
             case KeyEvent.KEYCODE_CAPTIONS:
-                if (down && event.getRepeatCount() == 0) showSubtitlePicker();
+                if (down && event.getRepeatCount() == 0 && !isInPip()) {
+                    hidePauseInfo();
+                    showControls(false);
+                    openTracks();
+                }
                 return true;
             default:
                 return false;
@@ -1205,21 +1610,29 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Override
     public void onPictureInPictureModeChanged(boolean inPip, @NonNull Configuration newConfig) {
         super.onPictureInPictureModeChanged(inPip, newConfig);
+        if (controls == null) return;
         if (inPip) {
-            handler.removeCallbacks(hideControls);
-            controls.setVisibility(View.INVISIBLE);
-            liftSubtitles(false);
-            skipButton.setVisibility(View.GONE);
-            upNextCard.setVisibility(View.GONE);
+            hideControlsImmediately();
+            hidePauseInfo();
+            closePanels();
+            overlay.setVisibility(View.INVISIBLE);
+            skip.setVisibility(View.GONE);
+            upNext.setVisibility(View.GONE);
             shownSkip = null;
             upNextShown = false;
-            if (dialog != null) dialog.dismiss();
         } else if (getLifecycle().getCurrentState() == Lifecycle.State.CREATED) {
             // The PiP window was dismissed (swiped away / closed).
             finishWithClose(false, null);
         } else {
-            showControls(true);
+            overlay.setVisibility(View.VISIBLE);
+            // The window is full size again: rebuild for it if the scale changed, then show.
+            overlay.post(() -> {
+                if (closed || req == null) return;
+                if (overlay.getWidth() > 0) buildOverlay(req, stageK(overlay.getWidth(), overlay.getHeight()));
+                showControls(true);
+            });
         }
+        updateGlyph();
     }
 
     // =====================================================================================
@@ -1232,7 +1645,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r != null && !upNextFired) {
             long pos = completed ? Math.max(currentMediaMs(), durationMs()) : currentMediaMs();
-            controller.closed(r.itemKey, pos, durationMs(), completed || isCompleted(), error);
+            controller.closed(r.itemKey, pos, durationMs(), completed || (!pickFired && isCompleted()), error);
         } else if (r != null) {
             // Up next fired and JS never followed up: still report the close (completed when the
             // up next counted it as watched, else where it stopped).
@@ -1244,11 +1657,6 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (player != null) player.pause();
         finish();
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-    }
-
-    private static void setText(TextView v, @Nullable String text) {
-        v.setText(text == null ? "" : text);
-        v.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     // =====================================================================================

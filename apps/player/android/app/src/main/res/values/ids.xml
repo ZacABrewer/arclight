@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Video overlay: a view's corner radius in stage px, read by the focus ring (video/ui/Overlay). -->
+    <item name="video_focus_radius" type="id" />
+</resources>
