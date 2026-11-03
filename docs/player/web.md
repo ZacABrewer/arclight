@@ -42,8 +42,12 @@ Choosing a profile other than your own switches the whole browser session to it.
 active, the admin pages and the request portal send you back to `/player`. Choose your own
 profile again to get them back.
 
-The owner profile can **Manage profiles**: add a profile, change its name, colour and PIN,
-cap the movie and TV ratings it can see, or delete it.
+The owner profile can add a profile with the round **Add profile** tile, and the pencil
+**Manage profiles** button under the row turns the tiles into edit mode: choose one to change
+its name, colour and PIN, cap the movie and TV ratings it can see, or delete it. **Back**,
+**Esc** or **Done** returns to choosing. With only one profile there is no picker: use **Add
+profile** in the avatar menu or **Settings → Profiles**. See
+[Household profiles](../guides/profiles.md#adding-and-editing-profiles-in-the-player).
 
 ## Home
 

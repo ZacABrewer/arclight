@@ -16,6 +16,7 @@ import { usePlaybackCapabilities } from '../api.js';
 import { usePlayer } from '../player-context.js';
 import { PlayerLink } from '../browse/kit.js';
 import { AppSignInDialog } from '../ui/app-sign-in.js';
+import { AddProfileMenuItem } from './add-profile.js';
 import { useHouseholdProfiles, useIsOwnerProfile, useProfileSettings, useSelectProfile } from './api.js';
 import { RdIcon, type RdIconName } from './icons.js';
 import { useLayout, tileScale, type PlayerLayout } from './layout.js';
@@ -359,6 +360,7 @@ export function AvatarMenu({ layout }: { layout: 'wide' | 'portrait' }) {
           <span>{t('player.redesign.profiles.manage')}</span>
         </button>
       ) : null}
+      <AddProfileMenuItem onPick={() => setOpen(false)} />
       {owner && appLink ? (
         <a className="rd-menu__item" href={appLink}>
           <RdIcon name="chevronRight" />

@@ -9,6 +9,7 @@ import { useT } from '../../../../i18n/index.js';
 import { useThemeCatalog } from '../../../themes/use-themes.js';
 import { QUALITIES } from '../../video/playback.js';
 import { languageName } from '../../video/format.js';
+import { useCanAddProfile, useOpenAddProfile } from '../add-profile.js';
 import { useIsOwnerProfile, useProfileSettings, useSaveProfileSettings } from '../api.js';
 import { RdIcon } from '../icons.js';
 import { useLayout } from '../layout.js';
@@ -221,6 +222,8 @@ function ProfilesPane({ extra }: { extra?: ReactNode }) {
   const navigate = useNavigate();
   const { me, canManage } = useProfilesView();
   const owner = useIsOwnerProfile();
+  const canAdd = useCanAddProfile();
+  const openAdd = useOpenAddProfile();
   return (
     <div className="rd-settings__opts">
       <ActionRow label={t('player.redesign.settings.profiles.switch')} value={me.name} onClick={() => void navigate({ to: redesignPaths.profiles as '/player' })} />
@@ -231,6 +234,7 @@ function ProfilesPane({ extra }: { extra?: ReactNode }) {
           onClick={() => void navigate({ to: redesignPaths.profiles as '/player', search: { manage: 1 } as never })}
         />
       ) : null}
+      {owner && canAdd ? <ActionRow label={t('player.redesign.profiles.add')} onClick={openAdd} /> : null}
       {extra}
     </div>
   );

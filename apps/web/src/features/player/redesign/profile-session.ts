@@ -1,4 +1,4 @@
-import type { Session } from '@arclight/shared';
+import { HOUSEHOLD_PROFILE_COLORS, type Session } from '@arclight/shared';
 
 // Who's watching on the web (redesign spec §4.6, §9 Q1). The picker shows on entering /player
 // when the account has two or more profiles and none was picked in this tab yet. Choosing a
@@ -48,16 +48,37 @@ export function profileRedirect(session: Pick<Session, 'activeProfile'> | null |
   return '/player';
 }
 
-/** Search params of /player/profiles: `select` opens that profile's PIN, `manage=1` Manage profiles. */
+/**
+ * Search params of /player/profiles: `select` opens that profile's PIN, `manage=1` Manage profiles,
+ * `add=1` (with manage) the editor for a new profile.
+ */
 export interface ProfilesSearch {
   select?: number | undefined;
   manage?: 1 | undefined;
+  add?: 1 | undefined;
 }
+
+const flag = (v: unknown): 1 | undefined => (v === 1 || v === '1' ? 1 : undefined);
 
 export function parseProfilesSearch(raw: Record<string, unknown>): ProfilesSearch {
   const select = Number(raw.select);
   return {
     select: Number.isInteger(select) && select > 0 ? select : undefined,
-    manage: raw.manage === 1 || raw.manage === '1' ? 1 : undefined,
+    manage: flag(raw.manage),
+    add: flag(raw.add),
   };
+}
+
+/** Where "Add profile" goes (account menu, Settings): Manage profiles with the new-profile editor open. */
+export const ADD_PROFILE_SEARCH = { manage: 1, add: 1 } as const satisfies ProfilesSearch;
+
+/** The owner profile may add one while the account is below the server's maximum. */
+export function canAddProfile(view: { canManage: boolean; count: number; max: number }): boolean {
+  return view.canManage && view.count < view.max;
+}
+
+/** A new profile's colour: the first of the editor's colours no profile has yet (the first when all are taken). */
+export function firstFreeColor(profiles: readonly { color: string }[]): string {
+  const used = new Set(profiles.map((p) => p.color.toLowerCase()));
+  return HOUSEHOLD_PROFILE_COLORS.find((c) => !used.has(c.toLowerCase())) ?? HOUSEHOLD_PROFILE_COLORS[0];
 }

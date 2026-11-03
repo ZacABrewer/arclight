@@ -7,6 +7,8 @@ import { ProfileAvatar } from './profile-avatar.js';
 import { RdIcon } from './icons.js';
 
 // "Who's watching?" (redesign spec §4.2, §4.4, the template's Profiles screen): touch and mouse.
+// The owner profile also gets an Add tile and the pencil Manage button, which turns the tiles
+// into edit mode (features spec §1).
 // A profile with a PIN asks for it in a 4-dot field typed on the system number pad (§9 Q5: four
 // digits; five wrong tries lock it for 15 minutes, enforced by the server).
 
@@ -23,14 +25,20 @@ export interface ProfilePickerProps {
   activeId?: number | null | undefined;
   /** Switch; rejects with the api error (pin-required, pin-wrong, pin-locked). */
   onSelect: (profile: PickerProfile, pin?: string) => Promise<void>;
-  /** The owner profile is active: show the Add profile tile. */
+  /** The owner profile is active: show the Add profile tile (while below `max`). */
   canAdd?: boolean | undefined;
+  /** The account's profile limit (the server's); no limit when absent. */
+  max?: number | undefined;
   onAdd?: (() => void) | undefined;
-  /** Manage mode: tapping a profile edits it instead of switching. */
+  /** Edit mode: tapping a profile edits it instead of switching. */
   managing?: boolean | undefined;
   onEdit?: ((profile: PickerProfile) => void) | undefined;
+  /** The pencil "Manage profiles" / "Done" button toggles edit mode (owner only: pass it with canManage). */
+  onManage?: (() => void) | undefined;
+  /** Move focus to this profile's tile (the one just added or edited). */
+  focusId?: number | null | undefined;
   layout: 'wide' | 'portrait';
-  /** Under the grid (Manage profiles / Done). */
+  /** An extra slot under the Manage button. */
   footer?: ReactNode;
   /** Back to the page this came from (the picker opened from the avatar). */
   onClose?: (() => void) | undefined;
@@ -38,12 +46,50 @@ export interface ProfilePickerProps {
 
 export const PIN_LENGTH = 4;
 
-export function ProfilePicker({ profiles, activeId, onSelect, canAdd, onAdd, managing, onEdit, layout, footer, onClose }: ProfilePickerProps) {
+/** Phone landscape: the wide picker scaled to the height (96 px tiles below 430 px). */
+const SHORT_QUERY = '(max-height: 429.98px)';
+
+function useShortScreen(): boolean {
+  const [short, setShort] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(SHORT_QUERY).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(SHORT_QUERY);
+    const on = () => setShort(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return short;
+}
+
+export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd, managing, onEdit, onManage, focusId, layout, footer, onClose }: ProfilePickerProps) {
   const t = useT();
   const [pinFor, setPinFor] = useState<PickerProfile | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const size = layout === 'portrait' ? 96 : 132;
+  const grid = useRef<HTMLUListElement>(null);
+  const short = useShortScreen();
+  const size = layout === 'portrait' || short ? 96 : 132;
+  const showAdd = Boolean(canAdd && onAdd) && (max === undefined || profiles.length < max);
+
+  // Back (Escape) in edit mode returns to pick mode first.
+  const manageRef = useRef(onManage);
+  manageRef.current = onManage;
+  useEffect(() => {
+    if (!managing || pinFor) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      manageRef.current?.();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [managing, pinFor]);
+
+  useEffect(() => {
+    if (focusId == null) return;
+    grid.current?.querySelector<HTMLElement>(`[data-profile-id="${focusId}"]`)?.focus();
+  }, [focusId, profiles]);
 
   const pick = async (p: PickerProfile) => {
     if (managing) {
@@ -75,7 +121,7 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, onAdd, man
   }
 
   return (
-    <div className={cx('rd-picker', `rd-picker--${layout}`)}>
+    <div className={cx('rd-picker', `rd-picker--${layout}`, managing && 'is-managing')}>
       {layout === 'wide' ? <Lockup height={22} label="Arclight" className="rd-picker__brand" /> : null}
       {onClose ? (
         <button type="button" className="rd-iconbtn rd-picker__close" aria-label={t('player.redesign.close')} onClick={onClose}>
@@ -83,15 +129,22 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, onAdd, man
         </button>
       ) : null}
       <h1 className="rd-picker__title">{managing ? t('player.redesign.profiles.manageTitle') : t('player.redesign.profiles.title')}</h1>
-      <ul className="rd-picker__grid">
+      <ul className="rd-picker__grid" ref={grid}>
         {profiles.map((p) => (
           <li key={p.id}>
-            <button type="button" className={cx('rd-picker__profile', managing && 'is-managing')} aria-busy={busy === p.id || undefined} onClick={() => void pick(p)}>
+            <button
+              type="button"
+              className={cx('rd-picker__profile', managing && 'is-managing')}
+              data-profile-id={p.id}
+              aria-busy={busy === p.id || undefined}
+              aria-label={managing ? t('player.redesign.profiles.editNamed', { name: p.name }) : undefined}
+              onClick={() => void pick(p)}
+            >
               <span className="rd-picker__avatar">
                 <ProfileAvatar color={p.color} initial={p.initial} size={size} />
                 {managing ? (
-                  <span className="rd-picker__badge" aria-hidden="true">
-                    <RdIcon name="settings" size={18} />
+                  <span className="rd-picker__edit-scrim" aria-hidden="true">
+                    <RdIcon name="pencil" size={Math.round(size * 0.27)} />
                   </span>
                 ) : p.hasPin ? (
                   <span className="rd-picker__badge" aria-hidden="true">
@@ -100,11 +153,10 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, onAdd, man
                 ) : null}
               </span>
               <span className="rd-picker__name">{p.name}</span>
-              {managing ? <span className="rd-visually-hidden">{t('player.redesign.profiles.editNamed', { name: p.name })}</span> : null}
             </button>
           </li>
         ))}
-        {canAdd && onAdd ? (
+        {showAdd ? (
           <li>
             <button type="button" className="rd-picker__profile rd-picker__profile--add" onClick={onAdd}>
               <span className="rd-picker__add" style={{ width: size, height: size }}>
@@ -119,6 +171,14 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, onAdd, man
         <p className="rd-picker__error" role="alert">
           {error}
         </p>
+      ) : null}
+      {onManage ? (
+        <button type="button" className={cx('rd-picker__manage', managing && 'is-on')} onClick={onManage}>
+          <span className="rd-picker__manage-icon" aria-hidden="true">
+            <RdIcon name={managing ? 'check' : 'pencil'} size={20} />
+          </span>
+          <span className="rd-picker__manage-label">{managing ? t('player.redesign.profiles.done') : t('player.redesign.profiles.manage')}</span>
+        </button>
       ) : null}
       {footer}
     </div>

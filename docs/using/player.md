@@ -8,6 +8,8 @@ The player is a preview. It is off until an admin turns it on.
 
 For the layouts, profiles, settings and the video controls in the browser, see [The player in the browser](../player/web.md).
 
+While your own (owner) profile is active you can add and edit profiles right in the player: the round **Add profile** tile and the pencil **Manage profiles** button on the **Who's watching?** screen, or **Add profile** in the avatar menu and under **Settings > Profiles** when you have only one profile so far. See [Household profiles](../guides/profiles.md#adding-and-editing-profiles-in-the-player).
+
 ## Turning the player on (admins)
 
 1. Open **Settings > General > Features** and make sure **Movies**, **TV**, **Music** and **Audiobooks** are on as you need them. The player only shows the sections you have enabled.

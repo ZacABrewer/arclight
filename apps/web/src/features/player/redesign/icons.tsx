@@ -30,6 +30,7 @@ const STROKE: Record<string, string> = {
   mute: 'M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9.5l5 5M21 9.5l-5 5',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  pencil: 'M4 20h4L19.5 8.5a2.83 2.83 0 0 0-4-4L4 16zM14 6l4 4',
 };
 
 export type RdIconName = keyof typeof STROKE | 'play' | 'pause' | 'next' | 'previous';
