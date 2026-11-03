@@ -3,8 +3,9 @@ name: Player app release
 # Builds, signs and uploads the Arclight player app (apps/player, com.moviemethat.arclight) to the
 # stores: a signed App Bundle to a Google Play track, and an App Store Connect build (TestFlight).
 # Manual runs only (Actions > Player app release > Run workflow), so it never runs for a pull
-# request and fork PRs never reach the signing secrets. Each step that needs a secret is skipped
-# with a notice when that secret is missing.
+# request and fork PRs never reach the signing secrets. Only runs started from the main branch
+# build or upload; a run from any other branch or tag fails in the guard job. Each step that needs a
+# secret is skipped with a notice when that secret is missing.
 #
 # Build numbers are the run number + 30000 on both platforms, above the codes derived locally from
 # the version (major*10000 + minor*100 + patch), so CI uploads never collide with them.
@@ -45,8 +46,17 @@ permissions:
   contents: read
 
 jobs:
+  guard:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Main branch only
+        run: |
+          echo "::error::Player app releases run only from main (this run is on $GITHUB_REF)."
+          exit 1
+
   android:
-    if: github.event_name == 'workflow_dispatch' && inputs.android
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.android
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -130,7 +140,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/player-upload.keystore"
 
   ios:
-    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.ios
     runs-on: macos-latest
     timeout-minutes: 60
     env:

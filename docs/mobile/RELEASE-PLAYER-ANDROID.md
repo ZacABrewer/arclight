@@ -79,7 +79,7 @@ Recommendation: choose B if people already use the sideload APK or you want the 
 
 ### Store CI
 
-`.github/workflows/player-app-release.yml` builds, signs and uploads the player. It runs **only when started by hand** (Actions > Player app release > Run workflow), never on a push or a pull request, so pull requests (including ones from forks) never reach the signing secrets or decode the keystore.
+`.github/workflows/player-app-release.yml` builds, signs and uploads the player. It runs **only when started by hand** (Actions > Player app release > Run workflow), and only from the `main` branch (a run started on any other branch or tag fails in its guard job), never on a push or a pull request, so pull requests (including ones from forks) never reach the signing secrets or decode the keystore.
 
 Inputs:
 

@@ -48,7 +48,7 @@ iOS apps must be built and signed with Xcode on macOS. The Admin guide's route a
 
 ### Store CI
 
-`.github/workflows/player-app-release.yml` builds and uploads the player. It runs **only when started by hand** (Actions > Player app release > Run workflow; leave `ios` on, and switch `android` off for an iOS-only run), never on a push or a pull request, so pull requests (including ones from forks) never reach the signing secrets. The Android half and its inputs are described in [RELEASE-PLAYER-ANDROID.md](RELEASE-PLAYER-ANDROID.md), section 3, "Store CI".
+`.github/workflows/player-app-release.yml` builds and uploads the player. It runs **only when started by hand** (Actions > Player app release > Run workflow; leave `ios` on, and switch `android` off for an iOS-only run) and only from the `main` branch, never on a push or a pull request, so pull requests (including ones from forks) never reach the signing secrets. The Android half and its inputs are described in [RELEASE-PLAYER-ANDROID.md](RELEASE-PLAYER-ANDROID.md), section 3, "Store CI".
 
 The iOS job (`macos-latest`, latest stable Xcode):
 
