@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { pipeline } from 'node:stream/promises';
 import { AgentError, type EngineAgentCore } from './core.js';
 import { errorResponse, handleAgentRequest, MAX_AGENT_BODY_BYTES, tokenMatches, type AgentResponse } from './router.js';
+import { AuthThrottle } from './throttle.js';
 import { acceptWebSocket, type ServerSocket } from './ws.js';
 
 export interface AgentServerOptions {
@@ -13,6 +15,10 @@ export interface AgentServerOptions {
   pingIntervalMs?: number;
   /** Request log hook (method, path, status). */
   onRequest?: (info: { method: string; path: string; status: number }) => void;
+  /** Serve HTTPS with this certificate and key (PEM). */
+  tls?: { cert: string | Buffer; key: string | Buffer };
+  /** Back-off after failed authentication, per client address (default: 5 free, then 1 s doubling up to 15 min). */
+  throttle?: AuthThrottle;
 }
 
 export interface AgentServer {
@@ -65,14 +71,34 @@ async function send(res: ServerResponse, out: AgentResponse): Promise<void> {
 /** The standalone agent's HTTP + WebSocket server on node:http (no framework). */
 export function createAgentServer(opts: AgentServerOptions): AgentServer {
   const sockets = new Set<ServerSocket>();
+  const throttle = opts.throttle ?? new AuthThrottle();
 
-  const server = createServer((req, res) => {
+  /** null when the request may go on; otherwise the refusal (throttled or bad token). */
+  const authenticate = (req: IncomingMessage): { out: AgentResponse; retryAfter?: number } | null => {
+    const address = req.socket.remoteAddress;
+    const wait = throttle.retryAfterMs(address);
+    if (wait > 0) {
+      const retryAfter = Math.ceil(wait / 1000);
+      const out = errorResponse(new AgentError('rate-limited', `Too many failed sign-ins from this address; try again in ${retryAfter} s.`));
+      out.headers['retry-after'] = String(retryAfter);
+      return { out, retryAfter };
+    }
+    if (!tokenMatches(req.headers, opts.token)) {
+      throttle.fail(address);
+      return { out: errorResponse(new AgentError('unauthorized', 'A valid agent token is required.')) };
+    }
+    throttle.succeed(address);
+    return null;
+  };
+
+  const handler = (req: IncomingMessage, res: ServerResponse) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://agent');
       const method = req.method ?? 'GET';
       let out: AgentResponse;
-      if (!tokenMatches(req.headers, opts.token)) {
-        out = errorResponse(new AgentError('unauthorized', 'A valid agent token is required.'));
+      const refused = authenticate(req);
+      if (refused) {
+        out = refused.out;
         // Do not read (possibly large) bodies of unauthenticated requests.
         res.setHeader('connection', 'close');
       } else {
@@ -92,7 +118,8 @@ export function createAgentServer(opts: AgentServerOptions): AgentServer {
       opts.onRequest?.({ method, path: url.pathname, status: out.status });
       await send(res, out);
     })();
-  });
+  };
+  const server: Server = opts.tls ? createTlsServer({ cert: opts.tls.cert, key: opts.tls.key }, handler) : createServer(handler);
 
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://agent');
@@ -100,8 +127,10 @@ export function createAgentServer(opts: AgentServerOptions): AgentServer {
       socket.end('HTTP/1.1 404 Not Found\r\nconnection: close\r\n\r\n');
       return;
     }
-    if (!tokenMatches(req.headers, opts.token)) {
-      socket.end('HTTP/1.1 401 Unauthorized\r\nconnection: close\r\n\r\n');
+    const refused = authenticate(req);
+    if (refused) {
+      const status = refused.retryAfter !== undefined ? `429 Too Many Requests\r\nretry-after: ${refused.retryAfter}` : '401 Unauthorized';
+      socket.end(`HTTP/1.1 ${status}\r\nconnection: close\r\n\r\n`);
       return;
     }
     const ws = acceptWebSocket(req, socket, head, opts.pingIntervalMs);

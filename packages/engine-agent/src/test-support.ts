@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTorrent, Session, toMagnetUri, type SessionSettings } from '@arclight/torrent-engine';
 import { EngineAgentCore, type EngineAgentCoreOptions } from './core.js';
-import { createAgentServer, type AgentServer } from './server.js';
+import { createAgentServer, type AgentServer, type AgentServerOptions } from './server.js';
 
 // Test-only helpers: generated torrents, loopback sessions with fast timers and an agent
 // server over them. Not used by production code (main.ts never imports this file).
@@ -82,12 +82,12 @@ export class Cleanup {
   }
   /** An agent server over a fresh session rooted at a temp dir. */
   async agent(
-    opts: { session?: Partial<SessionSettings>; core?: Partial<EngineAgentCoreOptions>; token?: string } = {},
+    opts: { session?: Partial<SessionSettings>; core?: Partial<EngineAgentCoreOptions>; token?: string; server?: Partial<AgentServerOptions> } = {},
   ): Promise<{ session: Session; root: string; core: EngineAgentCore; server: AgentServer; url: string }> {
     const root = await this.tmp();
     const session = await this.session({ savePath: root, ...opts.session });
     const core = new EngineAgentCore({ session, downloadsRoot: root, kind: 'standalone', sessionPollMs: 50, ...opts.core });
-    const server = createAgentServer({ core, token: opts.token ?? TOKEN });
+    const server = createAgentServer({ core, token: opts.token ?? TOKEN, ...opts.server });
     const address = await server.listen(0, '127.0.0.1');
     this.add(() => server.close());
     return { session, root, core, server, url: `http://127.0.0.1:${address.port}` };

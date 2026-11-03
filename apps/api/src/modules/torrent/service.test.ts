@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, symlink } from 'node:fs/promises';
 import { createServer, type Server } from 'node:net';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Session } from '@arclight/torrent-engine';
+import { rootFolders } from '../../db/schema.js';
 import { torrentEngineCheck } from '../health/checks/torrent.js';
 import type { HealthDeps } from '../health/types.js';
 import { LOCKDOWN_ADDRESS, TorrentModuleError } from './service.js';
@@ -450,11 +451,25 @@ describe('torrent actions', () => {
     expect(t.sequential).toBe(true);
     await expect(h.service.setPriority(infoHash, { files: [{ index: 9, priority: 1 }] })).rejects.toMatchObject({ code: 'VALIDATION' });
 
+    // DATA-27: only into a configured folder. Outside every root (and relative) is refused.
     const target = join(h.dir, 'moved');
     await mkdir(target, { recursive: true });
+    await expect(h.service.move(infoHash, target)).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(h.service.move(infoHash, h.configDir)).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(h.service.move(infoHash, 'moved')).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(h.service.move(infoHash, join(root, '..', 'moved'))).rejects.toMatchObject({ code: 'VALIDATION' });
+    // A symlink (junction on Windows) inside the downloads folder cannot lead out of it.
+    await symlink(target, join(root, 'escape'), 'junction');
+    await expect(h.service.move(infoHash, join(root, 'escape', 'x'))).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect(t.savePath).not.toBe(target);
+    // A library root folder is a configured root.
+    h.db.insert(rootFolders).values({ path: target, mediaType: 'series' }).run();
     await h.service.move(infoHash, target);
     expect(t.savePath).toBe(target);
     expect(existsSync(join(target, 'pack', 'a.bin'))).toBe(true);
+    // Back inside the downloads folder (a new subfolder) is fine too.
+    await h.service.move(infoHash, join(root, 'sorted'));
+    expect(t.savePath).toBe(join(root, 'sorted'));
   });
 
   it('reports not found and not running', async () => {

@@ -130,6 +130,7 @@ export class RemoteEngineClient implements DownloadClient {
         throw new DownloadClientError('rejected', `The local download folder ${this.settings.localDownloadPath} is not writable.`, { cause: error });
       }
     }
+    warnings.push(...this.agent.warnings());
     this.ensureWatch();
     return { version: `Arclight engine agent ${status.agentVersion} (${status.kind})`, apiVersion: String(status.protocolVersion), warnings };
   }

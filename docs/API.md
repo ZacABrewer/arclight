@@ -2933,7 +2933,7 @@ fatal close code.
 | GET | `/torrent/torrents` | `?id=&category=`: detailed torrents. Each peer has `encrypted` and `transport` (`tcp` / `utp`); each torrent has `webSeeds` (url, rate, downloaded, active requests, failures, `retryAt`, `lastError`), `superSeeding` and `limits` |
 | POST | `/torrent/:id/recheck` | Re-hash the payload |
 | POST | `/torrent/:id/pause` / `resume` | Pause / resume (resume is 409 while the VPN kill switch holds) |
-| POST | `/torrent/:id/move` | `{ savePath }` |
+| POST | `/torrent/:id/move` | `{ savePath }`: an absolute folder inside the engine downloads folder, a built-in client's save or category folder, or a library root folder (compared by real path); anything else is 400 |
 | POST | `/torrent/:id/priority` | `{ files?: [{ index, priority 0..7 }], sequential? }` |
 | POST | `/torrent/:id/limits` | `{ uploadLimit?, downloadLimit?, peerUploadLimit?, peerDownloadLimit? }` in bytes/s (0 = unlimited); omitted keys keep their value; persisted in the resume data |
 | POST | `/torrent/:id/superseed` | `{ enabled }`: BEP 16 super-seeding |
@@ -2962,9 +2962,10 @@ trust a payload whose file sizes match (fast-resume data with every piece) and q
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/engineagent` | `{ enabled, path, engineRunning }` |
-| PUT | `/settings/engineagent` | `{ enabled? }` (admin) |
-| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the API key in `X-Api-Key` (a browser session is refused, 401). Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
+| GET | `/settings/engineagent` | `{ enabled, acceptApiKey, path, engineRunning, token, apiKeyLastUsedAt }` (admin; sessions and admin-scoped keys only, since it holds the agent token) |
+| PUT | `/settings/engineagent` | `{ enabled?, acceptApiKey? }` (admin) |
+| POST | `/settings/engineagent/token` | Replaces the agent token; returns the settings (admin) |
+| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the agent token in `X-Agent-Token` or `Authorization: Bearer` (a browser session is refused, 401). The token opens no other route. While `acceptApiKey` is on (instances upgraded from 0.23 with the agent on), the API key is also accepted and answers carry `x-agent-deprecation: api-key`. Repeated wrong tokens from one address get 429 `rate-limited` with `Retry-After`. Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
 | GET (WS) | `/engine-agent/events` | Agent event stream (`hello`, `added`, `removed`, `stateChange`, `completed`, `metadata`, `listenPort`) |
 
 The `remoteEngine` download client kind has settings `url`, `token` (write-only, masked like

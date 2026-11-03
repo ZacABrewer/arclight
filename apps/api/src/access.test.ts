@@ -59,6 +59,12 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/user/me/apikeys': 'portal',
   'DELETE /api/v1/user/me/apikeys/:id': 'portal',
   'GET /api/v1/calendar/feed.ics': 'public',
+  // engine-agent protocol: the route guard checks the agent token (engine-agent/routes.ts)
+  'GET /api/v1/engine-agent/events': 'public',
+  'GET /api/v1/engine-agent/*': 'public',
+  'POST /api/v1/engine-agent/*': 'public',
+  'PUT /api/v1/engine-agent/*': 'public',
+  'DELETE /api/v1/engine-agent/*': 'public',
   // the Arclight player app: password sign-in and QR pairing (rate-limited), then a device token
   'POST /api/v1/app/sign-in': 'public',
   'POST /api/v1/app/pair': 'public',
