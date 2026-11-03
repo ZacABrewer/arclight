@@ -76,6 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+/**
+ * A ready-made auth state for hosts that sign in another way: the Arclight app reuses the player
+ * pages with its own device token and builds this from /auth/me.
+ */
+export function AuthStateProvider({ value, children }: { value: AuthState; children: ReactNode }) {
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
 const FALLBACK: AuthState = {
   status: null,
   session: null,

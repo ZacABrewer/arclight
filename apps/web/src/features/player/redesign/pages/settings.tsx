@@ -33,9 +33,11 @@ const SUBTITLE_LANGUAGES = ['en', 'de', 'es', 'fr', 'nl', 'it', 'pt', 'sv', 'da'
 export interface RdSettingsPageProps {
   /** Extra device rows per category (the app adds "Play intro on launch" under Display, §9 Q16). */
   deviceRows?: Partial<Record<SettingsCategory, ReactNode>> | undefined;
+  /** The server shown under About (default: this page's host; the app passes its server's). */
+  server?: string | undefined;
 }
 
-export function RdSettingsPage({ deviceRows }: RdSettingsPageProps = {}) {
+export function RdSettingsPage({ deviceRows, server }: RdSettingsPageProps = {}) {
   const t = useT();
   const layout = useLayout();
   const [cat, setCat] = useState<SettingsCategory | null>(layout === 'portrait' ? null : 'library');
@@ -65,7 +67,7 @@ export function RdSettingsPage({ deviceRows }: RdSettingsPageProps = {}) {
           </button>
           <h1 className="rd-settings__pane-title">{label(cat)}</h1>
         </div>
-        <CategoryPane cat={cat} portrait extra={deviceRows?.[cat]} />
+        <CategoryPane cat={cat} portrait extra={deviceRows?.[cat]} server={server} />
       </RdPage>
     );
   }
@@ -86,13 +88,13 @@ export function RdSettingsPage({ deviceRows }: RdSettingsPageProps = {}) {
         <h2 className="rd-settings__pane-title" id="rd-settings-pane">
           {label(current)}
         </h2>
-        <CategoryPane cat={current} portrait={false} extra={deviceRows?.[current]} />
+        <CategoryPane cat={current} portrait={false} extra={deviceRows?.[current]} server={server} />
       </section>
     </RdPage>
   );
 }
 
-function CategoryPane({ cat, portrait, extra }: { cat: SettingsCategory; portrait: boolean; extra?: ReactNode }) {
+function CategoryPane({ cat, portrait, extra, server }: { cat: SettingsCategory; portrait: boolean; extra?: ReactNode; server?: string | undefined }) {
   const t = useT();
   const s = useProfileSettings();
   const save = useSaveProfileSettings();
@@ -170,7 +172,7 @@ function CategoryPane({ cat, portrait, extra }: { cat: SettingsCategory; portrai
     case 'profiles':
       return <ProfilesPane extra={extra} />;
     case 'about':
-      return <AboutPane extra={extra} />;
+      return <AboutPane extra={extra} server={server} />;
   }
 }
 
@@ -234,7 +236,7 @@ function ProfilesPane({ extra }: { extra?: ReactNode }) {
   );
 }
 
-function AboutPane({ extra }: { extra?: ReactNode }) {
+function AboutPane({ extra, server }: { extra?: ReactNode; server?: string | undefined }) {
   const t = useT();
   const { isAdmin } = useAuth();
   const { me } = useProfilesView();
@@ -242,7 +244,7 @@ function AboutPane({ extra }: { extra?: ReactNode }) {
   const version = (status.data as { version?: string } | undefined)?.version;
   return (
     <div className="rd-settings__opts">
-      <InfoRow label={t('player.redesign.settings.about.server')} value={typeof window === 'undefined' ? '' : window.location.host} />
+      <InfoRow label={t('player.redesign.settings.about.server')} value={server ?? (typeof window === 'undefined' ? '' : window.location.host)} />
       {version ? <InfoRow label={t('player.redesign.settings.about.version')} value={version} /> : null}
       <InfoRow label={t('player.redesign.settings.about.signedInAs')} value={me.name} />
       {extra}

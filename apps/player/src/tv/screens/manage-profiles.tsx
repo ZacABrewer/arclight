@@ -10,7 +10,7 @@ import {
 } from '@arclight/shared';
 import { useT } from '@web/i18n/index';
 import { householdKeys, householdsApi, useActiveProfile } from '../../households/api';
-import { ProfileAvatar } from '../../kit/profile-avatar';
+import { ProfileAvatar } from '@web/features/player/redesign/profile-avatar';
 import { NameKeyboard, PinPad, TvPanel } from '../profile-parts';
 import { cycle } from './settings';
 

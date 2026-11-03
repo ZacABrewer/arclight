@@ -9,8 +9,10 @@ import { MiniPlayer } from '@web/features/player/ui/mini-player';
 import '@web/features/player/player.css';
 import { useAccounts, useNet, useServices, useSession } from '../app/context';
 import { signOut } from '../core/sign-in';
-import { useActiveProfile, useProfileSettings } from '../households/api';
-import { ProfileAvatar } from '../kit/profile-avatar';
+import { DEFAULT_SETTINGS, useActiveProfile, useProfileSettings } from '../households/api';
+import { ProfileAvatar } from '@web/features/player/redesign/profile-avatar';
+import { RedesignFrame } from '@web/features/player/redesign/shell';
+import { rememberReduceMotion } from '../intro/launch';
 import { useProfileTheme } from './profile-theme';
 import { signedOutTarget } from '../app/router';
 import { useBrowseDownloads } from './downloads';
@@ -118,6 +120,12 @@ function Frame({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const settings = useProfileSettings();
   // The player follows the profile's theme (null: Cinema, §4.1, §9 Q7).
   useProfileTheme(settings.theme);
+  // The intro on the next cold launch follows the profile's Reduce motion (§9 Q16), once the
+  // settings are loaded (not from the defaults shown before).
+  const loaded = settings !== DEFAULT_SETTINGS;
+  useEffect(() => {
+    if (loaded) rememberReduceMotion(settings.reduceMotion);
+  }, [loaded, settings.reduceMotion]);
   if (services.tv) return <TvFrame bare={bare}>{children}</TvFrame>;
   return <PhoneFrame bare={bare}>{children}</PhoneFrame>;
 }
@@ -137,7 +145,7 @@ function AvatarSheet({ onClose }: { onClose: () => void }) {
     <div className="app-sheet" role="dialog" aria-modal="true" aria-label={profile?.name ?? t('app.tv.switchProfile')} onClick={onClose}>
       <div className="app-sheet__panel" onClick={(e) => e.stopPropagation()}>
         {profiles.length > 1 ? (
-          <button type="button" className="app-sheet__row" onClick={() => go('/profiles')}>
+          <button type="button" className="app-sheet__row" onClick={() => go('/player/profiles')}>
             <Icon name="user" size={20} />
             <span>{t('app.tv.switchProfile')}</span>
             <span className="app-sheet__value">{profile?.name}</span>
@@ -148,7 +156,7 @@ function AvatarSheet({ onClose }: { onClose: () => void }) {
           <span>{t('app.tv.tab.settings')}</span>
         </button>
         {canManage ? (
-          <button type="button" className="app-sheet__row" onClick={() => go('/profiles')}>
+          <button type="button" className="app-sheet__row" onClick={() => go('/player/profiles?manage=1')}>
             <Icon name="edit" size={20} />
             <span>{t('app.tv.settings.manageProfiles')}</span>
           </button>
@@ -186,9 +194,9 @@ function PhoneFrame({ children, bare }: { children: ReactNode; bare?: boolean | 
     { id: 'shows', to: '/player/watch/shows', icon: 'tv', label: t('app.tv.tab.shows'), match: (p) => p.startsWith('/player/watch/shows') },
     { id: 'movies', to: '/player/watch/movies', icon: 'film', label: t('app.tv.tab.movies'), match: (p) => p.startsWith('/player/watch/movies') },
     { id: 'my-list', to: '/player/watch/my-list', icon: 'star', label: t('app.tv.tab.myList'), match: (p) => p.startsWith('/player/watch/my-list') },
-    { id: 'search', to: '/player/search', icon: 'search', label: t('app.tv.tab.search'), match: (p) => p.startsWith('/player/search') },
+    { id: 'search', to: '/player/watch/search', icon: 'search', label: t('app.tv.tab.search'), match: (p) => p.startsWith('/player/watch/search') || p.startsWith('/player/search') },
   ];
-  const isRoot = ['/player', '/player/', '/player/watch', '/player/watch/shows', '/player/watch/movies', '/player/watch/my-list', '/player/music', '/player/books', '/player/search'].includes(pathname);
+  const isRoot = ['/player', '/player/', '/player/watch', '/player/watch/shows', '/player/watch/movies', '/player/watch/my-list', '/player/music', '/player/books', '/player/search', '/player/watch/search', '/player/settings'].includes(pathname);
   const onNowPlaying = pathname.startsWith('/player/now-playing');
   return (
     <div className="al-app pl-app app-shell">
@@ -233,7 +241,8 @@ function PhoneFrame({ children, bare }: { children: ReactNode; bare?: boolean | 
         </button>
       </header>
       <main className="pl-main app-main" id="player-main">
-        {children}
+        {/* The shared redesign pages (Home, browse, detail, My List, search, settings) need its layout and display classes. */}
+        <RedesignFrame>{children}</RedesignFrame>
       </main>
       {!bare ? (
         <div className="app-dock">

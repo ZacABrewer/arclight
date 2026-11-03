@@ -4,7 +4,7 @@ import { useT } from '@web/i18n/index';
 import { usePlayableItem } from '@web/features/player/api';
 import { browseKeys, playerBrowseApi } from '@web/features/player/browse/api';
 import { usePlayer, type PlayerApi } from '@web/features/player/player-context';
-import { artBackground } from '../../kit/placeholder';
+import { artBackground } from '@web/features/player/redesign/placeholder';
 import { clock, left, pct, type Translate } from '../format';
 import { PlayIcon } from '../tiles';
 

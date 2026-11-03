@@ -83,13 +83,28 @@ export function useProfilesView() {
   return { profiles: list.data?.profiles ?? [], canManage: list.data?.canManage ?? false, activeId: list.data?.activeProfileId ?? active?.id ?? null, me, loaded: !list.isPending };
 }
 
+interface RedesignRootProps {
+  children: ReactNode;
+  className?: string | undefined;
+  layoutOverride?: PlayerLayout | undefined;
+}
+
 /** Root wrapper: layout, tile scale, profile theme and display settings. */
-export function RedesignRoot({ children, className, layoutOverride }: { children: ReactNode; className?: string | undefined; layoutOverride?: PlayerLayout | undefined }) {
+export function RedesignRoot(props: RedesignRootProps) {
   const { user, isAdmin } = useAuth();
+  const settings = useProfileSettings();
+  usePlayerTheme(settings.theme, user ? readUiPreferences(user.settings).theme : null, isAdmin);
+  return <RedesignFrame {...props} />;
+}
+
+/**
+ * RedesignRoot without the theme: layout, tile scale and the profile's display settings. For a
+ * host that applies the profile theme itself (the Arclight app loads theme packs its own way).
+ */
+export function RedesignFrame({ children, className, layoutOverride }: RedesignRootProps) {
   const settings = useProfileSettings();
   const live = useLayout();
   const layout = layoutOverride ?? live;
-  usePlayerTheme(settings.theme, user ? readUiPreferences(user.settings).theme : null, isAdmin);
   const [width, setWidth] = useState(() => (typeof window === 'undefined' ? 1280 : window.innerWidth));
   useEffect(() => {
     const on = () => setWidth(window.innerWidth);

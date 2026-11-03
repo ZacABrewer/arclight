@@ -1,6 +1,6 @@
 import type { PlayableItem, PlayerSeriesDetails, ProfileSettings, TrickplayManifest, VideoPauseInfo } from '@arclight/shared';
 import { t } from '@web/i18n/index';
-import { chipLabels } from '../kit/chips';
+import { chipLabels } from '@web/features/player/redesign/chips';
 import type { NativeEpisodeSeason, NativePauseInfo, NativeTrickplay, NativeVideoPrefs, NativeVideoString, NativeVideoTheme } from '../native/definitions';
 
 // The redesign's extra PlayVideoOptions (spec §5.9), built in JS so the native overlay shows

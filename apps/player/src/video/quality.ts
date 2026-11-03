@@ -5,7 +5,7 @@ import type { VideoQuality } from '@arclight/shared';
 
 export const VIDEO_QUALITIES: readonly VideoQuality[] = ['auto', 'original', '1080p', '720p', '480p'];
 
-const key = (profileId: number | string | null | undefined) => `arclight.quality.${profileId ?? 'default'}`;
+const key = (profileId: number | string | null | undefined) => `arclight.quality.${profileId ?? 'owner'}`;
 
 function store(): Storage | null {
   try {

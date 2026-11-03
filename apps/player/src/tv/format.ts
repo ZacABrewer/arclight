@@ -1,5 +1,5 @@
 import type { FeaturedKicker, MediaChips, VideoProgress } from '@arclight/shared';
-import { chipLabels } from '../kit/chips';
+import { chipLabels } from '@web/features/player/redesign/chips';
 
 // Text the TV screens show, as the design writes it (template `left`, `playLabel`, `metaFor`,
 // kickers), with the words translated.

@@ -1,18 +1,18 @@
 import { Suspense, type ComponentType, type FC } from 'react';
-import { createHashHistory, createRootRouteWithContext, createRoute, createRouter, Outlet, redirect, type RouterHistory } from '@tanstack/react-router';
+import { createHashHistory, createRootRouteWithContext, createRoute, createRouter, Navigate, Outlet, redirect, type RouterHistory } from '@tanstack/react-router';
 import { Skeleton } from '@web/arclight/index';
 import { browseRoutes } from '@web/features/player/browse/index';
 import { NowPlayingPage } from '@web/features/player/ui/now-playing';
 import { getSession } from '../core/session';
 import { shouldShowPicker } from '../households/gate';
+import { AppAuthBridge } from '../households/web-auth';
 import { AddServerPage, SignInPage, WelcomePage } from '../ui/onboarding';
 import { AppHome } from '../ui/home';
 import { DownloadsPage } from '../ui/downloads';
 import { QueuePage } from '../ui/queue';
 import { SettingsPage } from '../ui/settings';
 import { Shell } from '../ui/shell';
-import { MyListPage } from '../ui/my-list';
-import { PhoneProfilesScreen } from '../ui/profiles';
+import { DEVICE_SETTINGS_PATH, PhoneProfilesPage, PhoneSettingsPage } from '../ui/phone-pages';
 import { isTvMode } from '../tv/tv-mode';
 import { TvMoviesScreen, TvMyListScreen, TvShowsScreen } from '../tv/screens/browse';
 import { TvMovieScreen, TvShowScreen } from '../tv/screens/detail';
@@ -48,7 +48,14 @@ function signedOutTarget(services: AppServices): { to: string; search?: SignInSe
   return { to: '/welcome' };
 }
 
-const rootRoute = createRootRouteWithContext<RouterContext>()({ component: () => <Outlet /> });
+// AppAuthBridge: the shared web pages read the signed-in user and profile from the web's auth state.
+const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: () => (
+    <AppAuthBridge>
+      <Outlet />
+    </AppAuthBridge>
+  ),
+});
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -104,8 +111,28 @@ const profilesRoute = createRoute({
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
   },
-  component: () => (isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesScreen />),
+  component: () => (isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage gate />),
 });
+
+/**
+ * The picker opened on purpose (avatar menu, Settings > Profiles): the web's /player/profiles,
+ * with `?select=<id>` (that profile's PIN) and `?manage=1` (Manage profiles). Outside the /player
+ * shell so the launch gate never sends it back to itself.
+ */
+const playerProfilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/player/profiles',
+  validateSearch: (s: Record<string, unknown>): { select?: unknown; manage?: unknown } => ({ select: s.select, manage: s.manage }),
+  beforeLoad: ({ context }) => {
+    if (!getSession()) throw redirect(signedOutTarget(context.services));
+  },
+  component: () => (isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage />),
+});
+
+/** Phones manage profiles on the shared picker page. */
+function PhoneManageProfiles() {
+  return <Navigate to="/player/profiles" search={{ manage: 1 }} replace />;
+}
 
 function lazyPage(Component: ComponentType) {
   return function LazyPage() {
@@ -126,6 +153,8 @@ const TV_PAGES: Record<string, FC> = {
   'watch/shows': TvShowsScreen,
   'watch/movies/$id': TvMovieScreen,
   'watch/shows/$id': TvShowScreen,
+  'watch/my-list': TvMyListScreen,
+  'watch/search': TvSearchScreen,
   search: TvSearchScreen,
   music: TvMusicScreen,
   books: TvBooksScreen,
@@ -143,9 +172,9 @@ const playerChildren = [
   createRoute({ getParentRoute: () => playerRoute, path: 'now-playing', component: byDevice(TvListenScreen, NowPlayingPage) }),
   createRoute({ getParentRoute: () => playerRoute, path: 'queue', component: QueuePage }),
   createRoute({ getParentRoute: () => playerRoute, path: 'downloads', component: DownloadsPage }),
-  createRoute({ getParentRoute: () => playerRoute, path: 'settings', component: byDevice(TvSettingsScreen, SettingsPage) }),
-  createRoute({ getParentRoute: () => playerRoute, path: childPath(MANAGE_PROFILES_PATH), component: byDevice(TvManageProfilesScreen, SettingsPage) }),
-  createRoute({ getParentRoute: () => playerRoute, path: 'watch/my-list', component: byDevice(TvMyListScreen, MyListPage) }),
+  createRoute({ getParentRoute: () => playerRoute, path: 'settings', component: byDevice(TvSettingsScreen, PhoneSettingsPage) }),
+  createRoute({ getParentRoute: () => playerRoute, path: childPath(DEVICE_SETTINGS_PATH), component: SettingsPage }),
+  createRoute({ getParentRoute: () => playerRoute, path: childPath(MANAGE_PROFILES_PATH), component: byDevice(TvManageProfilesScreen, PhoneManageProfiles) }),
   ...browseRoutes.map((r) => {
     const path = childPath(r.path);
     const web = lazyPage(r.component);
@@ -154,7 +183,7 @@ const playerChildren = [
   }),
 ];
 
-const routeTree = rootRoute.addChildren([indexRoute, welcomeRoute, addServerRoute, signInRoute, profilesRoute, playerRoute.addChildren(playerChildren)]);
+const routeTree = rootRoute.addChildren([indexRoute, welcomeRoute, addServerRoute, signInRoute, profilesRoute, playerProfilesRoute, playerRoute.addChildren(playerChildren)]);
 
 export function createAppRouter(services: AppServices, history: RouterHistory = createHashHistory()) {
   return createRouter({

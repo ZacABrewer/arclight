@@ -10,6 +10,8 @@ import { toasts } from '@web/lib/toast';
 import { I18nProvider } from '@web/i18n/index';
 import '@web/arclight/fonts';
 import '@web/styles/arclight/index.css';
+// The redesign kit's classes (avatars, tiles, picker); everything in it is scoped to .rd-* classes.
+import '@web/features/player/redesign/redesign.css';
 import './styles/app.css';
 import { AppServicesContext } from './app/context';
 import { createAppRouter } from './app/router';

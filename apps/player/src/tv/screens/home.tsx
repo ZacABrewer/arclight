@@ -5,9 +5,8 @@ import { useLocale, useT } from '@web/i18n/index';
 import { browseKeys, playerBrowseApi } from '@web/features/player/browse/api';
 import { useVideoHome } from '@web/features/player/video/api';
 import { useProfileSettings } from '../../households/api';
-import { useFeatured } from '../../video/featured';
-import { useMyList } from '../../video/my-list';
-import { artBackground } from '../../kit/placeholder';
+import { useFeatured, useMyList } from '@web/features/player/redesign/api';
+import { artBackground } from '@web/features/player/redesign/placeholder';
 import { bookLeft, cardArt, cardSub, continueSub, useAudioActions, useVideoActions } from '../actions';
 import { fraction, kickerLabel, leftLabel, metaItems, playLabel, type Translate } from '../format';
 import { HeroTitle, Kicker, MetaLine, PlayIcon, ProgressLine, Row, SquareTile, WideTile } from '../tiles';
@@ -101,7 +100,7 @@ function Hero({ items, rotate, t }: { items: VideoFeaturedItem[]; rotate: boolea
 export function TvHomeScreen() {
   const t = useT();
   const settings = useProfileSettings();
-  const featured = useFeatured(5);
+  const featured = useFeatured();
   const home = useVideoHome();
   const music = useQuery({ queryKey: browseKeys.musicHome(), queryFn: playerBrowseApi.musicHome, enabled: settings.showMusic, retry: false });
   const books = useQuery({ queryKey: browseKeys.audiobookHome(), queryFn: playerBrowseApi.audiobookHome, enabled: settings.showAudiobooks, retry: false });

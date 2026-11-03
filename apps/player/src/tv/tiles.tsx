@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { artBackground } from '../kit/placeholder';
+import { artBackground } from '@web/features/player/redesign/placeholder';
 import { pct, type MetaItem } from './format';
 
 // The template's building blocks at stage size: rows, the three tile shapes, the meta line, the

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useT } from '@web/i18n/index';
 import { useMovies, useSeriesList, useVideoHome } from '@web/features/player/video/api';
-import { useMyList } from '../../video/my-list';
+import { useMyList } from '@web/features/player/redesign/api';
 import { cardArt, useVideoActions } from '../actions';
 import { WideTile } from '../tiles';
 import type { Translate } from '../format';
