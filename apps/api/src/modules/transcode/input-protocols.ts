@@ -15,6 +15,11 @@ export function fileInput(path: string): string[] {
   return [...PROTOCOL_WHITELIST, '-i', path];
 }
 
+/** `-f lavfi -i <graph>`: a generated input (a test source), no file or protocol behind it. */
+export function generatedInput(graph: string): string[] {
+  return ['-f', 'lavfi', '-i', graph];
+}
+
 /** ffprobe arguments with the whitelist placed right before the input path (the last argument). */
 export function ffprobeArgs(options: readonly string[], path: string): string[] {
   return [...options, ...PROTOCOL_WHITELIST, path];

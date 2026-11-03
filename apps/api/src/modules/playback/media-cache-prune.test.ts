@@ -75,4 +75,20 @@ describe('player media cache pruning', () => {
     expect(readdirSync(join(root, 'subtitles'))).toEqual(['x1-1-1.vtt']);
     expect(readdirSync(join(root, 'trickplay'))).toEqual(['big.bin']);
   });
+
+  it('never touches the HLS segment cache or the keyframe index (they keep their own caps)', async () => {
+    const root = mkdtempSync(join(tmp, 'sweep-hls-'));
+    for (const sub of ['thumbs', 'hls/s1', 'keyframes']) mkdirSync(join(root, sub), { recursive: true });
+    const old = new Date(Date.now() - 999 * 60_000);
+    for (const [sub, name] of [['hls/s1', 'seg-00001.m4s'], ['hls/s1', '.123-tmp.m4s'], ['keyframes', 'f1-1-1.json']] as const) {
+      const p = join(root, sub, name);
+      writeFileSync(p, Buffer.alloc(5000));
+      utimesSync(p, old, old);
+    }
+    writeFileSync(join(root, 'thumbs', 'f1-1-1.jpg'), Buffer.alloc(400));
+    await sweepMediaCache(root, 0);
+    expect(readdirSync(join(root, 'thumbs'))).toEqual([]);
+    expect(readdirSync(join(root, 'hls', 's1')).sort()).toEqual(['.123-tmp.m4s', 'seg-00001.m4s']);
+    expect(readdirSync(join(root, 'keyframes'))).toEqual(['f1-1-1.json']);
+  });
 });

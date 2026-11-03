@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PortalHost, PortalPath } from './requests.js';
+import { VideoSessionHlsFields, VideoSessionRequestHlsFields } from './video-hls.js';
 
 // Arclight's own player (the /player portal): music and audiobooks first, video later.
 // Plan: "Arclight media player plan" (phases 0 and 1). Routes live under /api/v1/playback
@@ -106,6 +107,14 @@ export const PlayerSettings = z.object({
   segmentDetectionRecaps: z.boolean().default(true),
   /** Extra public addresses that open the player (see PublicPlayerAddress); /player always works. */
   address: PublicPlayerAddress.default({ paths: [], hosts: [] }),
+  /** How remux/transcode video goes out to clients that can play HLS. `progressive` is the kill switch (0.23 streams). */
+  videoDelivery: z.enum(['hls', 'progressive']).default('hls'),
+  /** HLS segment cache size; the oldest segments behind the playhead go first when it is full. */
+  videoCacheGb: z.number().int().min(1).max(10_000).default(100),
+  /** Where HLS segments are written. null: `<config>/cache/player/hls`. */
+  videoCachePath: z.string().max(500).nullable().default(null),
+  /** Cap for remote video streams (the height follows it). 0: no cap. Audio keeps `remoteMaxBitrateKbps`. */
+  remoteVideoMaxBitrateKbps: z.number().int().min(0).max(1_000_000).default(8000),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
@@ -528,6 +537,10 @@ export const ProgressReport = z.object({
   /** ISO time on the device when the report was made (offline queues send late). */
   clientTime: z.string(),
   playMethod: z.enum(['DirectPlay', 'Transcode']).optional(),
+  /** Video playback stats since `start` (optional): rebuffers after startup, their total time, and click to first frame. */
+  stalls: z.number().int().min(0).max(100_000).optional(),
+  stallMs: z.number().int().min(0).optional(),
+  startupMs: z.number().int().min(0).optional(),
 });
 export type ProgressReport = z.infer<typeof ProgressReport>;
 export const ProgressBeacon = ProgressReport.extend({ itemKey: ItemKey });
@@ -870,6 +883,7 @@ export const VideoSessionRequest = z.object({
   /** Media time to start at (remux/transcode begin here; direct play seeks there itself). */
   startMs: z.number().int().min(0).optional(),
   quality: VideoQuality.default('auto'),
+  ...VideoSessionRequestHlsFields,
 });
 export type VideoSessionRequest = z.input<typeof VideoSessionRequest>;
 
@@ -914,6 +928,7 @@ export const VideoSession = z.object({
   expiresAt: z.string(),
   /** Scrub thumbnails, signed like the stream URL; null when the setting is off. */
   trickplay: TrickplayManifest.nullable().optional(),
+  ...VideoSessionHlsFields,
 });
 export type VideoSession = z.infer<typeof VideoSession>;
 

@@ -11,7 +11,7 @@ import { t } from '../../../i18n/index.js';
 
 // Settings → Player: GET/PUT /settings/player (contract PlayerSettings). Turns the built-in
 // music, audiobook and Movies & TV player on, sets the live-video slots and the limits for streams from outside the home
-// network. Who may use it is set per user (Users → edit user → Player). The playback engine is
+// network, and how Movies & TV streams go out (HLS or single streams, the segment cache). Who may use it is set per user (Users → edit user → Player). The playback engine is
 // Arclight's own, or a Jellyfin/Emby server from Settings → Media servers (streams are proxied).
 
 export interface PlayerSettingsDraft {
@@ -34,6 +34,12 @@ export interface PlayerSettingsDraft {
   segmentDetectionRecaps: boolean;
   /** Extra player paths and player hostnames. */
   address: PlayerSettings['address'];
+  /** HLS for clients that play it, or single progressive streams (the kill switch). */
+  videoDelivery: PlayerSettings['videoDelivery'];
+  videoCacheGb: string;
+  /** '' = the default folder under the config directory. */
+  videoCachePath: string;
+  remoteVideoMaxBitrateKbps: string;
 }
 
 /** Enabled Jellyfin and Emby connections: the servers the player can stream through. */
@@ -63,6 +69,10 @@ export function toPlayerSettingsDraft(s: PlayerSettings): PlayerSettingsDraft {
     segmentDetection: s.segmentDetection,
     segmentDetectionRecaps: s.segmentDetectionRecaps,
     address: s.address,
+    videoDelivery: s.videoDelivery,
+    videoCacheGb: String(s.videoCacheGb),
+    videoCachePath: s.videoCachePath ?? '',
+    remoteVideoMaxBitrateKbps: String(s.remoteVideoMaxBitrateKbps),
   };
 }
 
@@ -84,6 +94,10 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     segmentDetection: d.segmentDetection,
     segmentDetectionRecaps: d.segmentDetectionRecaps,
     address: d.address,
+    videoDelivery: d.videoDelivery,
+    videoCacheGb: num(d.videoCacheGb),
+    videoCachePath: d.videoCachePath.trim() === '' ? null : d.videoCachePath.trim(),
+    remoteVideoMaxBitrateKbps: num(d.remoteVideoMaxBitrateKbps),
   });
   if (parsed.success) return { ok: true, body: parsed.data };
   const field = String(parsed.error.issues[0]?.path[0] ?? '');
@@ -91,6 +105,9 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     streamLinkHours: t('player.settings.streamLinkHours'),
     videoMaxStreams: t('player.settings.videoMaxStreams'),
     videoMaxStreamsPerUser: t('player.settings.videoMaxStreamsPerUser'),
+    videoCacheGb: t('player.settings.videoCacheGb'),
+    videoCachePath: t('player.settings.videoCachePath'),
+    remoteVideoMaxBitrateKbps: t('player.settings.remoteVideoMaxBitrate'),
   };
   const label = labels[field] ?? t('player.settings.remoteMaxBitrate');
   return { ok: false, field, error: t('player.settings.checkField', { field: label }) };
@@ -103,7 +120,7 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
   const set = <K extends keyof PlayerSettingsDraft>(key: K, value: PlayerSettingsDraft[K]) => draft.set((prev) => ({ ...prev, [key]: value }));
   const result = toPlayerSettingsBody(d);
   const invalid = result.ok ? null : result.field;
-  const ids = { enabled: useId(), remote: useId(), bitrate: useId(), hours: useId(), server: useId(), video: useId(), videoMax: useId(), videoPerUser: useId() };
+  const ids = { enabled: useId(), remote: useId(), bitrate: useId(), hours: useId(), server: useId(), video: useId(), videoMax: useId(), videoPerUser: useId(), cacheGb: useId(), cachePath: useId(), videoBitrate: useId() };
   const mediaServers = useMediaServers();
   const servers = playerEngineServers(mediaServers.data);
   const noServers = servers.length === 0;
@@ -159,6 +176,35 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
               value={d.videoMaxStreamsPerUser}
               onChange={(e) => set('videoMaxStreamsPerUser', e.currentTarget.value)}
             />
+          </FormRow>
+          <FormRow label={t('player.settings.videoDelivery')} caption={t('player.settings.videoDeliveryCaption')}>
+            <Segmented<PlayerSettings['videoDelivery']>
+              aria-label={t('player.settings.videoDelivery')}
+              variant="soft"
+              value={d.videoDelivery}
+              onChange={(v) => set('videoDelivery', v)}
+              options={[
+                { value: 'hls', label: t('player.settings.videoDeliveryHls') },
+                { value: 'progressive', label: t('player.settings.videoDeliveryProgressive') },
+              ]}
+            />
+          </FormRow>
+          <FormRow label={t('player.settings.videoCacheGb')} htmlFor={ids.cacheGb} caption={t('player.settings.videoCacheGbCaption')}>
+            <Input
+              id={ids.cacheGb}
+              type="number"
+              mono
+              className="al-input--num"
+              end={t('player.settings.gb')}
+              min={1}
+              max={10000}
+              invalid={invalid === 'videoCacheGb'}
+              value={d.videoCacheGb}
+              onChange={(e) => set('videoCacheGb', e.currentTarget.value)}
+            />
+          </FormRow>
+          <FormRow label={t('player.settings.videoCachePath')} htmlFor={ids.cachePath} caption={t('player.settings.videoCachePathCaption')}>
+            <Input id={ids.cachePath} mono maxLength={500} invalid={invalid === 'videoCachePath'} value={d.videoCachePath} onChange={(e) => set('videoCachePath', e.currentTarget.value)} />
           </FormRow>
         </FormSection>
         <PlayerMediaSection
@@ -231,6 +277,20 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
               invalid={invalid === 'remoteMaxBitrateKbps'}
               value={d.remoteMaxBitrateKbps}
               onChange={(e) => set('remoteMaxBitrateKbps', e.currentTarget.value)}
+            />
+          </FormRow>
+          <FormRow label={t('player.settings.remoteVideoMaxBitrate')} htmlFor={ids.videoBitrate} caption={t('player.settings.remoteVideoMaxBitrateCaption')}>
+            <Input
+              id={ids.videoBitrate}
+              type="number"
+              mono
+              className="al-input--num"
+              end={t('player.settings.kbps')}
+              min={0}
+              max={1000000}
+              invalid={invalid === 'remoteVideoMaxBitrateKbps'}
+              value={d.remoteVideoMaxBitrateKbps}
+              onChange={(e) => set('remoteVideoMaxBitrateKbps', e.currentTarget.value)}
             />
           </FormRow>
           <FormRow label={t('player.settings.streamLinkHours')} htmlFor={ids.hours} caption={t('player.settings.streamLinkHoursCaption')}>

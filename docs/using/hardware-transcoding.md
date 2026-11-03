@@ -125,6 +125,27 @@ Common reasons and what they mean:
 
 Backends that fail their test are disabled in the rule editor's **Hardware encoding** list. A rule that already uses one keeps it, and the editor and the Hardware acceleration pane show a warning naming the rule and the reason.
 
+## Movies & TV in the player
+
+The [player](player.md#how-video-reaches-you) converts video live, as adaptive (HLS) streams. It does not use transcode rules: it picks the backend itself, from the same kind of test, and needs the same `/dev/dri` pass-through.
+
+- **Intel Quick Sync** keeps the whole chain on the GPU: decode (`h264_qsv`, `hevc_qsv`, `av1_qsv`, `vp9_qsv` and others, when the GPU can decode the codec), scale (`vpp_qsv`), tone-map and encode (`h264_qsv`; `hevc_qsv` for 4K, and for 1080p from a 4K file, when the device plays HEVC). Picture subtitles are laid over the frame on the GPU (`overlay_qsv`).
+- **HDR to SDR** on Quick Sync uses OpenCL (`tonemap_opencl`) when the Intel OpenCL runtime works in the container, otherwise the VPP tone-mapper. The amd64 image ships the runtime; nothing to install.
+- **VA-API** (Intel or AMD) works the same way with `scale_vaapi`, `tonemap_vaapi` and `overlay_vaapi`.
+- **Software** (libx264 on the CPU) is used when no GPU works, and for a job that needs a filter the GPU lacks (for example a tone-map without OpenCL or VPP). When a GPU chain fails before its first segment, that stream goes on in software.
+
+At startup Arclight runs one short test per feature (decode, scale, tone-map, overlay, encode) and keeps what passes. The player's **health** shows the backend in use (`hwaccel`), and each stream reports its live encode speed.
+
+### Measuring the player video speed
+
+A quality (rung) is only offered when the server can encode it at 1.3 times real time or faster; 4K is only offered once that speed has been measured on your server. To see what your hardware can do before you tune anything, run the probe script from the repository inside the container, against two of your own files (a 4K HDR10 HEVC film and a 1080p H.264 one):
+
+```sh
+docker exec -i arclight sh -s -- /movies/film-4k-hdr.mkv /movies/film-1080p.mkv < scripts/hls-nas-probe.sh
+```
+
+It encodes two minutes of each variant to nowhere (nothing is written) and prints one speed per line: Quick Sync with the VPP and the OpenCL tone-map, 4K HDR kept as HEVC Main 10, 1080p to 720p on the GPU and on the CPU, and two and three jobs at once. A line that says `failed` means that chain does not work in this container; check `/dev/dri` as above. Use `-` in place of a file to skip its lines, and `PROBE_SECONDS=30` (with `docker exec -e`) for a shorter run.
+
 ## Software fallback
 
 The **Fall back to software** switch in the Hardware acceleration pane is on by default. When a job's hardware backend cannot start (ffmpeg reports that the device, driver or session could not be created), Arclight retries that job once on the CPU with the same settings. Presets that only exist on the GPU encoders (such as NVENC's `p5`) are dropped for the retry. The job's message under **Activity > Transcode jobs**, and the history entry, say which backend was unavailable, why, and that software was used.

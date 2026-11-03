@@ -7,6 +7,8 @@ import { FfmpegRunner, parseHwaccels } from '../transcode/runner.js';
 import { testBackends } from '../transcode/hwaccel.js';
 import { buildSubtitleArgs, buildThumbnailArgs } from './video-info.js';
 import { removeOtherStamps, scheduleMediaCacheSweep } from './media-cache-prune.js';
+import { detectPipelineCaps } from './hls/caps.js';
+import { SOFTWARE_CAPS, type PipelineCaps } from './hls/pipeline.js';
 
 // The machinery behind live video: which encoder backend to use (the transcode module's
 // capability test, run once on first use), the WebVTT and thumbnail disk caches, and a helper
@@ -34,6 +36,8 @@ export const nodeExec: Exec = (bin, args, timeoutMs) =>
 export interface EncoderDetectorOptions {
   /** Test seam: the available backends without running ffmpeg. */
   detect?: (bin: string) => Promise<EncoderChoice>;
+  /** Test seam: the HLS pipeline caps of a backend without running ffmpeg. */
+  detectCaps?: (bin: string, hwaccel: TranscodeHwaccel) => Promise<PipelineCaps>;
 }
 
 /**
@@ -44,6 +48,7 @@ export interface EncoderDetectorOptions {
 export class EncoderDetector {
   private choice: Promise<EncoderChoice> | undefined;
   private readonly broken = new Set<TranscodeHwaccel>();
+  private readonly pipelineCaps = new Map<TranscodeHwaccel, Promise<PipelineCaps>>();
 
   constructor(private readonly opts: EncoderDetectorOptions = {}) {}
 
@@ -51,6 +56,17 @@ export class EncoderDetector {
     this.choice ??= (this.opts.detect ?? detectEncoders)(bin).catch(() => ({ hwaccel: 'none' as const, zscale: false }));
     const c = await this.choice;
     return this.broken.has(c.hwaccel) ? { ...c, hwaccel: 'none' } : c;
+  }
+
+  /** What the HLS pipelines may use with the picked backend (tested once per process). */
+  async caps(bin: string): Promise<PipelineCaps> {
+    const { hwaccel, zscale } = await this.pick(bin);
+    let caps = this.pipelineCaps.get(hwaccel);
+    if (!caps) {
+      caps = (this.opts.detectCaps ?? ((b, hw) => detectPipelineCaps(b, hw, nodeExec)))(bin, hwaccel).catch(() => ({ ...SOFTWARE_CAPS, hwaccel, zscale }));
+      this.pipelineCaps.set(hwaccel, caps);
+    }
+    return caps;
   }
 
   markBroken(hw: TranscodeHwaccel): void {

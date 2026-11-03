@@ -94,9 +94,10 @@ describe('ffmpeg and ffprobe inputs only open local files and pipes (DATA-32)', 
         if (statSync(p).isDirectory()) walk(p);
         else if (name.endsWith('.ts') && !name.endsWith('.test.ts')) {
           const text = readFileSync(p, 'utf8');
-          // The capability test's lavfi source is the only literal `-i`.
+          // The capability test's lavfi source is the only literal `-i`; input-protocols.ts holds
+          // fileInput() and generatedInput().
           const hits = text.match(/'-i'/g)?.length ?? 0;
-          const allowed = p.endsWith(join('transcode', 'ffmpeg.ts')) || p.endsWith('input-protocols.ts') ? 1 : 0;
+          const allowed = p.endsWith(join('transcode', 'ffmpeg.ts')) ? 1 : p.endsWith('input-protocols.ts') ? 2 : 0;
           if (hits > allowed) offenders.push(p);
         }
       }

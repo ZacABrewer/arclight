@@ -197,11 +197,21 @@ export class AudioTranscoder {
     const proc = this.launcher(bin, args);
     let released = false;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    // eslint-disable-next-line prefer-const -- assigned below, used by slot.kill
+    let watched: Transform;
+    const stop = () => {
+      proc.kill();
+      release();
+    };
+    // A stall or a pre-emption must look like a broken connection to the client (it reconnects at
+    // its position), not like the end of the stream: the response is destroyed with an error.
     const slot: Slot = {
       owner,
       kill: () => {
-        proc.kill();
-        release();
+        stop();
+        // The response may already be gone: nobody else listens for the error then.
+        watched.once('error', () => undefined);
+        watched.destroy(new Error(`${this.label} stream stopped`));
       },
     };
     const release = () => {
@@ -218,16 +228,16 @@ export class AudioTranscoder {
     // respects backpressure), so no chunk for stallMs means a stalled client.
     stallTimer = setTimeout(() => slot.kill(), this.stallMs);
     stallTimer.unref?.();
-    const watched = new Transform({
+    watched = new Transform({
       transform(chunk, _enc, cb) {
         stallTimer?.refresh();
         cb(null, chunk);
       },
     });
-    // A kill (stall, preempted) ends ffmpeg's stdout, and with it the client's response.
     pipeline(proc.stdout, watched, () => {
       if (stallTimer) clearTimeout(stallTimer);
     });
-    return { stdout: watched, done: proc.done, kill: slot.kill };
+    // The caller's kill (the client went away) ends the process quietly.
+    return { stdout: watched, done: proc.done, kill: stop };
   }
 }

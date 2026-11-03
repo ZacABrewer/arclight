@@ -321,7 +321,7 @@ describe('access guard', () => {
     const admin = await signIn(h, { role: 'admin' });
     expect((await get(h, '/api/v1/settings/player', user.cookie)).statusCode).toBe(403);
     const saved = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/player', headers: { cookie: admin.cookie }, payload: { enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2 } });
-    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true, segmentDetectionRecaps: true, address: { paths: [], hosts: [] } });
+    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true, segmentDetectionRecaps: true, address: { paths: [], hosts: [] }, videoDelivery: 'hls', videoCacheGb: 100, videoCachePath: null, remoteVideoMaxBitrateKbps: 8000 });
     expect((await h.app.inject({ method: 'POST', url: '/api/v1/settings/player/engine-test', headers: { cookie: user.cookie }, payload: {} })).statusCode).toBe(403);
   });
 
