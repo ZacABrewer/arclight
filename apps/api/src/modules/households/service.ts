@@ -75,19 +75,20 @@ export class HouseholdError extends Error {
   }
 }
 
-/** Wrong PINs allowed per (credential, profile) inside the window before the lockout. */
+/** Wrong PINs in a row allowed per profile before the lockout. */
 export const PIN_MAX_FAILURES = 5;
-export const PIN_WINDOW_MS = 15 * 60_000;
+/** The first lockout; each further one (without a right PIN between) doubles, up to PIN_LOCK_MAX_MS. */
+export const PIN_LOCK_BASE_MS = 15 * 60_000;
+export const PIN_LOCK_MAX_MS = 24 * 60 * 60_000;
 /** A credential this young has just proven the password: it may re-select its own profile without the PIN. */
 export const FRESH_CREDENTIAL_MS = 10 * 60_000;
 /** How long a profile read for a request is reused. Cleared on every change. */
 export const PROFILE_CACHE_MS = 30_000;
 const MAX_TRACKED = 10_000;
 
-interface PinAttempts {
-  failures: number[];
-  inflight: number;
-  lockedUntil: number;
+/** How long the lockout after `previous` earlier lockouts lasts. */
+export function pinLockMs(previous: number): number {
+  return Math.min(PIN_LOCK_MAX_MS, PIN_LOCK_BASE_MS * 2 ** Math.min(Math.max(0, previous), 16));
 }
 
 export function settingsOfRow(stored: unknown): ProfileSettings {
@@ -141,7 +142,8 @@ export class HouseholdService {
   private readonly now: () => Date;
   private readonly cache = new Map<number, { row: HouseholdProfileRow | null; at: number }>();
   private readonly owners = new Map<number, number>();
-  private readonly attempts = new Map<string, PinAttempts>();
+  /** PIN checks running now per profile (counted as failures until they finish). */
+  private readonly pinInflight = new Map<number, number>();
 
   constructor(opts: HouseholdServiceOptions) {
     this.db = opts.db;
@@ -293,7 +295,13 @@ export class HouseholdService {
     if (patch.initial !== undefined) set.initial = patch.initial.trim();
     if (patch.color !== undefined) set.color = patch.color;
     if (patch.contentRestrictions !== undefined && !row.isOwner) set.contentRestrictions = patch.contentRestrictions;
-    if (patch.pin !== undefined) set.pinHash = patch.pin === null ? null : await hashPassword(patch.pin);
+    if (patch.pin !== undefined) {
+      set.pinHash = patch.pin === null ? null : await hashPassword(patch.pin);
+      // Setting or clearing the PIN is how the owner lifts a lockout.
+      set.failedPinAttempts = 0;
+      set.pinLockedUntil = null;
+      set.pinLockouts = 0;
+    }
     if (patch.settings !== undefined) set.settings = { ...stripUndefined(ProfileSettingsPatch.parse(row.settings ?? {})), ...stripUndefined(patch.settings) };
     if (patch.sortOrder !== undefined) set.sortOrder = row.isOwner ? 0 : patch.sortOrder;
     set.updatedAt = this.now().toISOString();
@@ -305,8 +313,9 @@ export class HouseholdService {
 
   /**
    * Deletes a profile and everything that is its own; its sessions and devices go back to the
-   * owner profile. Done explicitly (not only through the foreign keys): columns added by
-   * ALTER TABLE in a migration do not carry their ON DELETE action in SQLite.
+   * owner profile. The profile_id columns declare ON DELETE (cascade / set null) in migration
+   * 0032, but the rows are handled explicitly too so the cleanup does not depend on the
+   * foreign_keys pragma being on for the connection.
    */
   remove(userId: number, id: number): void {
     const row = this.mustFind(userId, id);
@@ -323,28 +332,10 @@ export class HouseholdService {
       tx.delete(householdProfiles).where(and(eq(householdProfiles.id, id), eq(householdProfiles.userId, userId))).run();
     });
     this.invalidate(id);
-    for (const key of this.attempts.keys()) if (key.endsWith(`|${id}`)) this.attempts.delete(key);
+    this.pinInflight.delete(id);
   }
 
   // ------------------------------------------------------------------------- selecting
-
-  private attemptsFor(key: string, t: number): PinAttempts {
-    let a = this.attempts.get(key);
-    if (!a) {
-      if (this.attempts.size >= MAX_TRACKED) this.pruneAttempts(t);
-      a = { failures: [], inflight: 0, lockedUntil: 0 };
-      this.attempts.set(key, a);
-    }
-    a.failures = a.failures.filter((f) => t - f < PIN_WINDOW_MS);
-    return a;
-  }
-
-  private pruneAttempts(t: number): void {
-    for (const [k, a] of this.attempts) {
-      if (a.inflight === 0 && a.lockedUntil <= t && a.failures.every((f) => t - f >= PIN_WINDOW_MS)) this.attempts.delete(k);
-    }
-    if (this.attempts.size >= MAX_TRACKED) this.attempts.clear();
-  }
 
   private auditPin(cred: ProfileCredential, action: string, profileId: number, details: Record<string, unknown> = {}): void {
     audit(this.db).record({
@@ -360,8 +351,10 @@ export class HouseholdService {
   /**
    * Switches a session or app device to a profile of its account. A profile with a PIN needs
    * it, also when it is already the active one, except for a credential younger than ten
-   * minutes re-selecting the profile it is on. Five wrong PINs per (credential, profile) inside
-   * fifteen minutes lock that pair for fifteen minutes.
+   * minutes re-selecting the profile it is on. Five wrong PINs in a row (from any credential)
+   * lock the profile for fifteen minutes, doubling with every further lockout up to a day; the
+   * counters live on the profile row, so signing in again or a restart does not reset them. A
+   * right PIN, or the owner setting or clearing the PIN, resets them.
    */
   async select(cred: ProfileCredential, targetId: number, pin: string | undefined): Promise<HouseholdProfile> {
     const credentialKey = cred.via === 'session' && cred.sessionId !== undefined ? `s${cred.sessionId}` : cred.via === 'app' && cred.appDeviceId !== undefined ? `a${cred.appDeviceId}` : null;
@@ -371,7 +364,7 @@ export class HouseholdService {
       const t = this.now().getTime();
       const created = cred.createdAt ? Date.parse(cred.createdAt) : NaN;
       const fresh = Number.isFinite(created) && t - created >= 0 && t - created < FRESH_CREDENTIAL_MS && cred.activeProfileId === targetId;
-      if (!fresh) await this.checkPin(cred, credentialKey, row, pin, t);
+      if (!fresh) await this.checkPin(cred, row.id, pin, t);
     }
     if (cred.via === 'session') {
       this.db.update(sessions).set({ profileId: row.isOwner ? null : row.id }).where(and(eq(sessions.id, cred.sessionId!), eq(sessions.userId, cred.userId))).run();
@@ -381,33 +374,57 @@ export class HouseholdService {
     return toHouseholdProfile(row);
   }
 
-  private async checkPin(cred: ProfileCredential, credentialKey: string, row: HouseholdProfileRow, pin: string | undefined, t: number): Promise<void> {
-    const key = `${credentialKey}|${row.id}`;
-    const a = this.attemptsFor(key, t);
-    if (a.lockedUntil > t || a.failures.length + a.inflight >= PIN_MAX_FAILURES) {
-      const until = a.lockedUntil > t ? a.lockedUntil : t + PIN_WINDOW_MS;
-      this.auditPin(cred, 'household.profile.pin-locked', row.id);
+  /** The PIN state read fresh from the database (the profile cache may be up to 30 s old). */
+  private pinState(id: number) {
+    return this.db
+      .select({ pinHash: householdProfiles.pinHash, failed: householdProfiles.failedPinAttempts, lockedUntil: householdProfiles.pinLockedUntil, lockouts: householdProfiles.pinLockouts })
+      .from(householdProfiles)
+      .where(eq(householdProfiles.id, id))
+      .get();
+  }
+
+  private async checkPin(cred: ProfileCredential, profileId: number, pin: string | undefined, t: number): Promise<void> {
+    const state = this.pinState(profileId);
+    if (!state) throw new HouseholdError('not-found');
+    if (state.pinHash === null) return;
+    const inflight = this.pinInflight.get(profileId) ?? 0;
+    const lockedUntil = state.lockedUntil ?? 0;
+    if (lockedUntil > t || state.failed + inflight >= PIN_MAX_FAILURES) {
+      const until = lockedUntil > t ? lockedUntil : t + pinLockMs(state.lockouts);
+      this.auditPin(cred, 'household.profile.pin-locked', profileId);
       throw new HouseholdError('pin-locked', Math.max(1, Math.ceil((until - t) / 1000)));
     }
     if (pin === undefined) throw new HouseholdError('pin-required');
-    a.inflight++;
+    this.pinInflight.set(profileId, inflight + 1);
     let ok = false;
     try {
-      ok = await verifyPassword(pin, row.pinHash!);
+      ok = await verifyPassword(pin, state.pinHash);
     } finally {
-      a.inflight--;
+      const left = (this.pinInflight.get(profileId) ?? 1) - 1;
+      if (left > 0) this.pinInflight.set(profileId, left);
+      else this.pinInflight.delete(profileId);
     }
     if (ok) {
-      this.attempts.delete(key);
+      if (state.failed !== 0 || state.lockedUntil !== null || state.lockouts !== 0) {
+        this.db.update(householdProfiles).set({ failedPinAttempts: 0, pinLockedUntil: null, pinLockouts: 0 }).where(eq(householdProfiles.id, profileId)).run();
+        this.invalidate(profileId);
+      }
       return;
     }
+    // Read-modify-write in one synchronous step (better-sqlite3), so concurrent failures all count.
     const at = this.now().getTime();
-    a.failures.push(at);
-    this.auditPin(cred, 'household.profile.pin-wrong', row.id, { failures: a.failures.length });
-    if (a.failures.length >= PIN_MAX_FAILURES) {
-      a.lockedUntil = at + PIN_WINDOW_MS;
-      this.auditPin(cred, 'household.profile.pin-locked', row.id, { lockedForSeconds: PIN_WINDOW_MS / 1000 });
+    const now = this.pinState(profileId);
+    if (!now) throw new HouseholdError('pin-wrong');
+    const failures = now.failed + 1;
+    this.auditPin(cred, 'household.profile.pin-wrong', profileId, { failures });
+    if (failures >= PIN_MAX_FAILURES) {
+      const lockMs = pinLockMs(now.lockouts);
+      this.db.update(householdProfiles).set({ failedPinAttempts: 0, pinLockedUntil: at + lockMs, pinLockouts: now.lockouts + 1 }).where(eq(householdProfiles.id, profileId)).run();
+      this.auditPin(cred, 'household.profile.pin-locked', profileId, { lockedForSeconds: lockMs / 1000 });
+    } else {
+      this.db.update(householdProfiles).set({ failedPinAttempts: failures }).where(eq(householdProfiles.id, profileId)).run();
     }
+    this.invalidate(profileId);
     throw new HouseholdError('pin-wrong');
   }
 
