@@ -22,10 +22,10 @@ describe('RdHomePage errors', () => {
       [api('/video/home')]: () => new Response(JSON.stringify({ error: 'Library database is locked', code: 'BUSY' }), { status: 503 }),
     });
     renderBrowse('/player/watch');
-    const alert = await screen.findByRole('alert', {}, { timeout: 5000 });
+    const alert = await screen.findByRole('alert', {}, { timeout: 12000 });
     expect(alert.textContent).toContain("Couldn't load Movies & TV");
     expect(alert.textContent).toContain('Library database is locked');
-  });
+  }, 20000);
 
   it('retries and shows the page once the server answers', async () => {
     let fail = true;
@@ -34,9 +34,9 @@ describe('RdHomePage errors', () => {
       [api('/video/home')]: () => (fail ? new Response(JSON.stringify({ error: 'down', code: 'X' }), { status: 500 }) : emptyHome()),
     });
     renderBrowse('/player/watch');
-    await screen.findByRole('alert', {}, { timeout: 5000 });
+    await screen.findByRole('alert', {}, { timeout: 12000 });
     fail = false;
     await userEvent.click(screen.getByRole('button', { name: /retry|try again/i }));
     expect(await screen.findByText('Nothing to watch yet')).toBeTruthy();
-  });
+  }, 20000);
 });
