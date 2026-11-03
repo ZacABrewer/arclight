@@ -11,5 +11,6 @@
   "app.tv.code.starting": "Obteniendo un código…",
   "app.tv.code.expired": "El código ha caducado. Pide uno nuevo para seguir.",
   "app.tv.code.newCode": "Pedir un código nuevo",
-  "app.tv.code.instead": "Iniciar sesión con un código"
+  "app.tv.code.instead": "Iniciar sesión con un código",
+  "app.tv.languageSystem": "Igual que en el televisor"
 }

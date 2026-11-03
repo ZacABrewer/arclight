@@ -229,6 +229,7 @@ On Google TV and Android TV, the app opens a layout made for the remote:
 - A rail on the left with **Home**, **Movies**, **Shows**, **Search**, **Music** and **Settings**. Press left from the page to open it.
 - The TV home shows the backdrop and details of whatever has focus, with rows of **Continue watching**, **Next up**, **Recently added movies**, **New episodes** and genres underneath. **OK** on a Continue watching or Next up card plays it straight away.
 - The arrows move to the nearest item in that direction and the focused item is always highlighted. **Back** closes an open panel, then goes back a page, then moves to the rail, and from the rail leaves the app. Each page remembers where you were.
+- In the video player, **OK** pauses and plays. With the controls hidden, left and right show them and scrub the timeline. Up and down move between the buttons, the timeline and **Audio** / **Subtitles**. The remote's captions button opens the subtitle choices. **Back** closes the player and returns to the page you came from.
 - Downloads and Android Auto are not shown on a TV.
 
 To try the TV layout in a browser while developing, add `?tv=1` to the app's address (`?tv=0` turns it off).

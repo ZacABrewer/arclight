@@ -94,9 +94,16 @@ public final class VideoRequest {
         @Nullable public final List<Subtitle> subtitles;
         /** Null = unchanged. */
         @Nullable public final Integer selectedAudio;
+        /** The "Direct play · 1080p" line for the new stream; null = unchanged. */
+        @Nullable public final String streamInfo;
 
         Stream(String url, String mimeType, long streamStartMs, boolean seekable, long positionMs,
                 @Nullable List<Subtitle> subtitles, @Nullable Integer selectedAudio) {
+            this(url, mimeType, streamStartMs, seekable, positionMs, subtitles, selectedAudio, null);
+        }
+
+        Stream(String url, String mimeType, long streamStartMs, boolean seekable, long positionMs,
+                @Nullable List<Subtitle> subtitles, @Nullable Integer selectedAudio, @Nullable String streamInfo) {
             this.url = url;
             this.mimeType = mimeType;
             this.streamStartMs = streamStartMs;
@@ -104,6 +111,7 @@ public final class VideoRequest {
             this.positionMs = positionMs;
             this.subtitles = subtitles;
             this.selectedAudio = selectedAudio;
+            this.streamInfo = streamInfo;
         }
 
         public static Stream parse(JSONObject o) {
@@ -111,7 +119,7 @@ public final class VideoRequest {
             List<Subtitle> subs = o.has("subtitles") && !o.isNull("subtitles") ? parseSubtitles(o.optJSONArray("subtitles")) : null;
             Integer audio = o.has("selectedAudio") && !o.isNull("selectedAudio") ? o.optInt("selectedAudio") : null;
             return new Stream(url, o.optString("mimeType", ""), nonNegative(o, "streamStartMs"), o.optBoolean("seekable", false),
-                    nonNegative(o, "positionMs"), subs, audio);
+                    nonNegative(o, "positionMs"), subs, audio, optString(o, "streamInfo"));
         }
     }
 
@@ -119,7 +127,8 @@ public final class VideoRequest {
     public final Map<String, String> headers;
     public final String title;
     @Nullable public final String subtitle;
-    @Nullable public final String streamInfo;
+    /** Replaced with the stream (see {@link Stream#streamInfo}). */
+    @Nullable public String streamInfo;
     @Nullable public final String artworkUrl;
     @Nullable public final String backdropUrl;
     public final long durationMs;
@@ -183,6 +192,7 @@ public final class VideoRequest {
             if (selectedSubtitle != null && findSubtitle(selectedSubtitle) == null) selectedSubtitle = null;
         }
         if (s.selectedAudio != null) selectedAudio = s.selectedAudio;
+        if (s.streamInfo != null) streamInfo = s.streamInfo;
     }
 
     @Nullable

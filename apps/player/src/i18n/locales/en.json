@@ -148,5 +148,6 @@
   "app.tv.code.starting": "Getting a code…",
   "app.tv.code.expired": "The code expired. Get a new one to keep going.",
   "app.tv.code.newCode": "Get a new code",
-  "app.tv.code.instead": "Sign in with a code instead"
+  "app.tv.code.instead": "Sign in with a code instead",
+  "app.tv.languageSystem": "Same as the TV"
 }

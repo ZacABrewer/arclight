@@ -15,9 +15,11 @@ import android.os.SystemClock;
 import android.text.format.DateFormat;
 import android.util.Log;
 import android.util.Rational;
+import android.view.FocusFinder;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -413,6 +415,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r == null) return;
         boolean play = player.getPlayWhenReady() || awaitingJs;
         r.apply(stream);
+        setText(streamInfo, r.streamInfo);
         awaitingJs = false;
         pendingSeekMs = -1;
         tracksApplied = false;
@@ -973,8 +976,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private void showControls(boolean focusPlay) {
         if (isInPip()) return;
         boolean wasHidden = controls.getVisibility() != View.VISIBLE;
+        // Always: the controls start out visible (layout default), so "was hidden" misses the first show.
+        liftSubtitles(true);
         if (wasHidden) {
-            liftSubtitles(true);
             controls.setAlpha(0f);
             controls.setVisibility(View.VISIBLE);
             controls.animate().alpha(1f).setDuration(150).start();
@@ -1056,8 +1060,24 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             }
         } else if (down && code != KeyEvent.KEYCODE_BACK) {
             scheduleHide();
+            if ((code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) && staysInRow(code)) return true;
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    /**
+     * Left / right on the transport row or the bottom button row stays in that row: at its end the
+     * focus stays put instead of jumping diagonally to the other row (Android's fallback search).
+     * True when the key was consumed.
+     */
+    private boolean staysInRow(int code) {
+        View focused = getCurrentFocus();
+        if (focused == null || !(focused.getParent() instanceof ViewGroup)) return false;
+        ViewGroup row = (ViewGroup) focused.getParent();
+        if (row != rewind.getParent() && row != audioButton.getParent()) return false;
+        int dir = code == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT;
+        View next = FocusFinder.getInstance().findNextFocus((ViewGroup) controls, focused, dir);
+        return next == null || next.getParent() != row;
     }
 
     /** Remote / keyboard media keys, wherever the focus is. */

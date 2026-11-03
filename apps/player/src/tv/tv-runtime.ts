@@ -28,7 +28,8 @@ export function startTvRuntime(router: TvRouterLike): TvRuntime {
   const focus = new FocusManager({ pageKey: () => router.state.location.pathname });
   const detach = focus.attach();
   const unsubscribe = router.subscribe('onResolved', () => focus.restore());
-  focus.restore();
+  // A cold start (WebView, lazy chunks, the first queries) can take a while before anything renders.
+  focus.restore(10_000);
 
   const back = (canGoBack: boolean): boolean => {
     if (focus.hasOpenScope()) {

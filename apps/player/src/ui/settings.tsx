@@ -8,6 +8,7 @@ import { STREAM_QUALITIES, type AppSettings, type StreamQuality } from '../core/
 import { signOut } from '../core/sign-in';
 import { APP_VERSION } from '../config';
 import { hostOf } from './onboarding';
+import { isTvMode } from '../tv/tv-mode';
 
 // Settings: accounts (switch, add, sign out), streaming and download quality, storage, language,
 // progress sync, about.
@@ -225,7 +226,7 @@ export function SettingsPage() {
             <Select
               id="set-lang"
               value={settings.language}
-              options={[{ value: 'system', label: t('app.settings.languageSystem') }, ...LOCALES.map((l) => ({ value: l.code, label: l.nativeName }))]}
+              options={[{ value: 'system', label: t(isTvMode() ? 'app.tv.languageSystem' : 'app.settings.languageSystem') }, ...LOCALES.map((l) => ({ value: l.code, label: l.nativeName }))]}
               onChange={(e) => {
                 const language = e.target.value;
                 void update({ language }).then(() => applyAppLanguage(language));

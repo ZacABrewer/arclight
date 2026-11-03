@@ -11,5 +11,6 @@
   "app.tv.code.starting": "Code wird angefordert…",
   "app.tv.code.expired": "Der Code ist abgelaufen. Hol dir einen neuen, um weiterzumachen.",
   "app.tv.code.newCode": "Neuen Code holen",
-  "app.tv.code.instead": "Stattdessen mit einem Code anmelden"
+  "app.tv.code.instead": "Stattdessen mit einem Code anmelden",
+  "app.tv.languageSystem": "Wie auf dem Fernseher"
 }

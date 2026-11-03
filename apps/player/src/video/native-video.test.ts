@@ -140,6 +140,12 @@ describe('start position and labels', () => {
   it('episode subtitle line carries the code and the show', () => {
     expect(itemSubtitle(ep)).toContain('The Show');
   });
+
+  it('does not repeat a server subtitle that is only the episode code', () => {
+    const line = itemSubtitle(episode(3, { subtitle: 'S1:E3', context: null }));
+    expect(line).toBeTruthy();
+    expect(line!.replace(/[^a-z0-9]/gi, '').toLowerCase()).toBe('s1e3');
+  });
 });
 
 describe('NativeVideoLauncher', () => {
@@ -200,6 +206,7 @@ describe('NativeVideoLauncher', () => {
     await flush();
     expect(plugin.replaceVideoStream).toHaveBeenCalledTimes(1);
     expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ positionMs: 600_000, streamStartMs: 600_000, selectedAudio: 0 });
+    expect(typeof (plugin.replaceVideoStream.mock.calls[0]![0] as { streamInfo?: unknown }).streamInfo).toBe('string');
     const last = deps.requestSession.mock.calls.at(-1)![0];
     expect(last).toMatchObject({ startMs: 600_000, audioTrack: 0 });
     expect(reports.at(-1)!.report).toMatchObject({ event: 'seek', positionMs: 600_000 });

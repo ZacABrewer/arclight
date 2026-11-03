@@ -82,7 +82,8 @@ export function DeviceCodeSignIn({ server, onSignedIn, onPassword }: { server: s
           {t('app.tv.code.newCode')}
         </Button>
       ) : null}
-      <Button variant="ghost" block data-tv-autofocus={state.status === 'waiting' ? true : undefined} onClick={onPassword}>
+      {/* Always marked: the page's first focus can land while the code is still being fetched. */}
+      <Button variant="ghost" block data-tv-autofocus onClick={onPassword}>
         {t('app.signIn.passwordInstead')}
       </Button>
     </div>

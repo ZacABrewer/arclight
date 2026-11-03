@@ -407,6 +407,8 @@ export interface ReplaceVideoStreamOptions {
   subtitles?: NativeVideoSubtitle[];
   /** The audio ordinal this stream carries (after an audio change). */
   selectedAudio?: number;
+  /** The "Direct play · 1080p" line for the new stream (it can change with the audio track). */
+  streamInfo?: string;
 }
 
 /** Every 10 s while playing, on pause, and once before `videoNext`. Times are media time. */

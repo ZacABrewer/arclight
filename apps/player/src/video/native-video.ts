@@ -86,7 +86,11 @@ export function streamInfo(item: PlayableItem, session: VideoSession): string {
 export function itemSubtitle(item: PlayableItem): string | undefined {
   if (item.kind === 'episode') {
     const code = item.seasonNumber != null || item.episodeNumber != null ? episodeCode(item.seasonNumber, item.episodeNumber) : null;
-    return [code, item.context ?? item.subtitle].filter(Boolean).join(' · ') || undefined;
+    // The server's own subtitle can be just the code again ("S1:E1"): show it once.
+    const norm = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const extra = item.context ?? item.subtitle;
+    const dup = code && extra && norm(code) === norm(extra);
+    return [code, dup ? null : extra].filter(Boolean).join(' · ') || undefined;
   }
   return item.year ? String(item.year) : (item.subtitle ?? undefined);
 }
@@ -295,6 +299,7 @@ export class NativeVideoLauncher {
         positionMs: e.positionMs,
         subtitles: subtitlesOf(session),
         ...(c.audioTrack !== null ? { selectedAudio: c.audioTrack } : {}),
+        streamInfo: streamInfo(c.item, session),
       })
       .catch(() => undefined);
     this.report('seek', c);

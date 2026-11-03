@@ -11,5 +11,6 @@
   "app.tv.code.starting": "Code ophalen…",
   "app.tv.code.expired": "De code is verlopen. Vraag een nieuwe aan om verder te gaan.",
   "app.tv.code.newCode": "Nieuwe code aanvragen",
-  "app.tv.code.instead": "Aanmelden met een code"
+  "app.tv.code.instead": "Aanmelden met een code",
+  "app.tv.languageSystem": "Zelfde als de tv"
 }

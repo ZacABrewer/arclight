@@ -92,6 +92,13 @@ describe('FocusManager', () => {
     expect(active()).toBe('d1');
   });
 
+  it('enters a group for the first time on its current-page entry', () => {
+    document.getElementById('r-movies')!.setAttribute('aria-current', 'page');
+    document.getElementById('d1')!.focus();
+    key('ArrowLeft'); // nearest would be Search (same height); the current page wins
+    expect(active()).toBe('r-movies');
+  });
+
   it('keeps focus inside an open dialog', () => {
     render(`${LAYOUT}<div role="dialog" aria-modal="true" data-box="150,30,200,200">
       <button id="ok" data-box="160,40,80,40">OK</button><button id="cancel" data-box="260,40,80,40">Cancel</button></div>`);
@@ -115,6 +122,39 @@ describe('FocusManager', () => {
     input.setSelectionRange(3, 3);
     key('ArrowRight');
     expect(active()).toBe('go');
+  });
+
+  it('right at the end of a row stays put; down stays in the page before the rail', () => {
+    render(`<nav data-tv-group="rail"><a id="r1" href="#/1" data-box="0,140,60,50">R</a></nav>
+      <main data-tv-group="main"><a id="back" href="#/b" data-box="100,0,80,30">Back</a>
+      <a id="t1" href="#/t" data-box="100,40,60,30">T</a><a id="t2" href="#/u" data-box="300,40,60,30">U</a>
+      <a id="card" href="#/c" data-box="100,100,100,150">C</a><a id="next-row" href="#/n" data-box="260,300,100,150">N</a></main>`);
+    document.getElementById('card')!.focus();
+    key('ArrowRight'); // nothing in its row: not up to t2, not down to next-row
+    expect(active()).toBe('card');
+    document.getElementById('back')!.focus();
+    key('ArrowDown'); // t1 below, even though the rail is nearer than the card
+    expect(active()).toBe('t1');
+  });
+
+  it('up / down at the ends of the rail stays in the rail', () => {
+    render(`<nav data-tv-group="rail"><a id="r1" href="#/1" data-box="0,100,60,50">R1</a><a id="r2" href="#/2" data-box="0,160,60,50">R2</a></nav>
+      <main data-tv-group="main"><a id="top" href="#/t" data-box="100,0,100,60">T</a><a id="low" href="#/l" data-box="100,300,100,60">L</a></main>`);
+    document.getElementById('r2')!.focus();
+    key('ArrowDown'); // the page has an item lower down, but the rail's end is an end
+    expect(active()).toBe('r2');
+    document.getElementById('r1')!.focus();
+    key('ArrowUp');
+    expect(active()).toBe('r1');
+    document.getElementById('low')!.focus();
+    key('ArrowUp'); // and the page's up goes to the page, not into the rail beside it
+    expect(active()).toBe('top');
+  });
+
+  it('does not start on a text box unless it is marked to', () => {
+    render(`<main data-tv-group="main"><input id="q" data-box="0,0,200,40" /><a id="first" href="#/f" data-box="0,60,60,40">F</a></main>`);
+    key('ArrowDown', window);
+    expect(active()).toBe('first');
   });
 
   it('OK clicks a non-native focusable', () => {

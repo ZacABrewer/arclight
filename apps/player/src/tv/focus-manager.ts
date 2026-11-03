@@ -138,16 +138,38 @@ export class FocusManager {
     const scope = this.scope();
     if (!from || !scope.contains(from)) return this.focusFirst(scope);
     const candidates = this.focusables(scope).filter((el) => el !== from && !from.contains(el));
-    const boxes = candidates.map((el) => this.rectOf(el));
-    const i = pickNext(this.rectOf(from), boxes, dir);
-    if (i < 0) return false;
-    let target = candidates[i]!;
-    // Entering another group: land on what was focused there last, if it is still around.
+    const origin = this.rectOf(from);
     const fromGroup = this.groupOf(from);
+    // Stay in the group when it has something that way (down from the page never jumps into the
+    // rail); left / right inside a group only along the row, so the end of a row is an end.
+    const horizontal = dir === 'left' || dir === 'right';
+    const inLane = (b: Box) => b.bottom > origin.top && b.top < origin.bottom;
+    const own = candidates.filter((el) => this.groupOf(el) === fromGroup && (!horizontal || inLane(this.rectOf(el))));
+    // The rail is a column: up / down never leaves it or enters it (its last item is an end).
+    const isRail = (g: Element | null) => g?.getAttribute(GROUP_ATTR) === 'rail';
+    const other = candidates.filter((el) => {
+      const g = this.groupOf(el);
+      return g !== fromGroup && (horizontal || (!isRail(g) && !isRail(fromGroup)));
+    });
+    let target: HTMLElement | undefined;
+    for (const tier of [own, other]) {
+      const i = pickNext(origin, tier.map((el) => this.rectOf(el)), dir);
+      if (i >= 0) {
+        target = tier[i]!;
+        break;
+      }
+    }
+    if (!target) return false;
+    // Entering another group: land on what was focused there last, if it is still around.
     const toGroup = this.groupOf(target);
     if (toGroup && toGroup !== fromGroup) {
       const last = this.groupMemory.get(toGroup.getAttribute(GROUP_ATTR) ?? '');
       if (last && last.isConnected && toGroup.contains(last) && scope.contains(last) && this.visible(last)) target = last;
+      else {
+        // First time in (e.g. the rail): the current page's entry, not whichever is nearest.
+        const current = toGroup.querySelector<HTMLElement>('[aria-current="page"]');
+        if (current && candidates.includes(current)) target = current;
+      }
     }
     this.focus(target, dir);
     return true;
@@ -160,7 +182,13 @@ export class FocusManager {
     const wanted = page !== undefined ? this.pageMemory.get(page) : undefined;
     const main = within.querySelector<HTMLElement>('[data-tv-group="main"]');
     const pool = main ? list.filter((el) => main.contains(el)) : list;
-    const el = (wanted ? pool.find((x) => focusKey(x) === wanted) : undefined) ?? pool.find((x) => x.hasAttribute('data-tv-autofocus')) ?? pool[0] ?? list[0];
+    // A text box is not a good first stop (the on-screen keyboard is one OK away), unless asked for.
+    const el =
+      (wanted ? pool.find((x) => focusKey(x) === wanted) : undefined) ??
+      pool.find((x) => x.hasAttribute('data-tv-autofocus')) ??
+      pool.find((x) => !isTextInput(x)) ??
+      pool[0] ??
+      list[0];
     if (!el) return false;
     this.focus(el);
     return true;
