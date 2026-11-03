@@ -61,12 +61,15 @@ export const tagSyncModule: AppModule = (ctx) => async (app) => {
   const service = tagSyncServiceFor(ctx);
   registerTagSyncJobs(ctx.scheduler, service);
   // Manual edits and tag rules publish library updates; a renamed or deleted tag publishes a
-  // tags settings event, which can touch every title.
+  // tags settings event, which can touch every title. Saving a media server's settings gives
+  // each server with sync on a full pass.
   const unsubscribe = ctx.bus.subscribe((event) => {
     if (event.type === 'library' && (event.action === 'added' || event.action === 'updated' || event.action === 'deleted')) {
       service.markDirty({ type: event.mediaType, id: event.id });
     } else if (event.type === 'settings' && event.section === 'tags') {
       service.markDirty('all');
+    } else if (event.type === 'settings' && event.section === 'mediaServers') {
+      service.markSyncingServersDirty();
     }
   });
   app.addHook('onClose', async () => {

@@ -188,6 +188,8 @@ export class TagSyncService {
   private readonly queues = new Map<string, Queue>();
   private dirty = new Set<string>();
   private dirtyAll = false;
+  /** Servers whose settings were saved with sync on: each gets a full pass at the next flush. */
+  private dirtyServers = new Set<string>();
   private quietTimer: ReturnType<typeof setTimeout> | null = null;
   private maxTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -459,6 +461,21 @@ export class TagSyncService {
   markDirty(key: EntityKey | 'all'): void {
     if (key === 'all') this.dirtyAll = true;
     else this.dirty.add(keyOf(key));
+    this.arm();
+  }
+
+  /**
+   * Media server settings were saved: every enabled server with sync on gets a full pass on the
+   * same debounce, so a new filter, prefix or newly turned-on sync applies about 30 s later.
+   */
+  markSyncingServersDirty(): void {
+    const syncing = this.opts.servers().filter((c) => c.enabled && isTagSyncKind(c.kind) && tagSyncSettings(c).enabled);
+    if (syncing.length === 0) return;
+    for (const c of syncing) this.dirtyServers.add(c.id);
+    this.arm();
+  }
+
+  private arm(): void {
     const fire = () => void this.flush().catch((err: unknown) => this.opts.log?.warn({ err }, 'tag sync flush failed'));
     if (this.quietTimer) clearTimeout(this.quietTimer);
     this.quietTimer = setTimeout(fire, this.opts.debounceMs ?? 30_000);
@@ -469,15 +486,21 @@ export class TagSyncService {
     }
   }
 
-  /** Syncs the dirty titles on every server that syncs tags (or still owns some). */
+  /** Syncs the dirty titles on every server that syncs tags (or still owns some), and saved servers in full. */
   async flush(): Promise<void> {
     this.clearTimers();
     const all = this.dirtyAll;
     const keys = [...this.dirty].map(parseKey);
+    const servers = this.dirtyServers;
     this.dirty = new Set();
     this.dirtyAll = false;
-    if (!all && keys.length === 0) return;
-    await Promise.all(this.candidates().map((c) => this.schedule(c.id, all ? 'all' : keys)));
+    this.dirtyServers = new Set();
+    if (!all && keys.length === 0 && servers.size === 0) return;
+    await Promise.all(
+      this.candidates()
+        .filter((c) => all || keys.length > 0 || servers.has(c.id))
+        .map((c) => this.schedule(c.id, all || servers.has(c.id) ? 'all' : keys)),
+    );
   }
 
   dispose(): void {

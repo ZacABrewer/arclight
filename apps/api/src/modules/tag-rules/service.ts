@@ -133,6 +133,7 @@ export class TagRulesService {
   /** Deletes a rule; `removeTags` first takes off the tags only this rule added. */
   deleteRule(id: number, opts: { removeTags: boolean }): void {
     this.row(id);
+    const touched: { type: TagEntityType; id: number }[] = [];
     this.db.transaction((tx) => {
       if (opts.removeTags) {
         const mine = tx.select().from(s.tagRuleApplications).where(eq(s.tagRuleApplications.ruleId, id)).all();
@@ -153,11 +154,23 @@ export class TagRulesService {
             if (others.has(`${r.entityId}:${r.tagId}`)) continue;
             byItem.set(r.entityId, [...(byItem.get(r.entityId) ?? []), r.tagId]);
           }
-          for (const [entityId, tagIds] of byItem) writeItemTags(tx, type, entityId, [], tagIds);
+          for (const [entityId, tagIds] of byItem) {
+            writeItemTags(tx, type, entityId, [], tagIds);
+            touched.push({ type, id: entityId });
+          }
         }
       }
       tx.delete(s.tagRules).where(eq(s.tagRules.id, id)).run();
     });
+    // Same events as a run, so live views and media-server tag sync pick the removals up.
+    if (touched.length > 0) {
+      if (touched.length <= MAX_ITEM_EVENTS) {
+        for (const item of touched) {
+          if (item.type === 'movie' || item.type === 'series') this.opts.bus?.publish({ type: 'library', action: 'updated', mediaType: item.type, id: item.id });
+        }
+      }
+      this.opts.bus?.publish({ type: 'settings', section: 'tags' });
+    }
   }
 
   reorder(ids: readonly number[]): TagRule[] {

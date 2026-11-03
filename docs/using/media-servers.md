@@ -253,7 +253,8 @@ Save the server, then use **Preview** to see what a sync would change (a table o
 
 ### When it runs
 
-- A few seconds after a change: when you edit a title's tags, a tag rule runs, or a tag is renamed or deleted, the change is sent after 30 seconds without further changes (at most 5 minutes later while changes keep coming).
+- A few seconds after a change: when you edit a title's tags (one at a time or in bulk), a tag rule runs or is deleted with its tags, or a tag is renamed or deleted, the change is sent after 30 seconds without further changes (at most 5 minutes later while changes keep coming).
+- About 30 seconds after you save a server with sync on: a full pass applies the new settings to every title.
 - Every night at 03:50, as the task **MediaServerTagSync** in **System > Tasks**, a full pass catches anything missed.
 - When you press **Sync now**.
 

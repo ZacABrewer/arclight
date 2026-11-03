@@ -314,6 +314,31 @@ describe('TagSyncService', () => {
     t.svc.dispose();
   });
 
+  it('gives every syncing server a full pass 30 s after server settings are saved', async () => {
+    vi.useFakeTimers();
+    const t = await harness({ enabled: true });
+    const runs: [string, unknown][] = [];
+    const schedule = t.svc.schedule.bind(t.svc);
+    t.svc.schedule = (id, scope) => {
+      runs.push([id, scope]);
+      return schedule(id, scope);
+    };
+    t.svc.markSyncingServersDirty();
+    t.svc.markDirty({ type: 'movie', id: t.ids.heat });
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(runs).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(runs).toEqual([['jf1', 'all']]);
+
+    // With sync off nothing is queued (owned labels wait for the next change or Remove all).
+    runs.length = 0;
+    t.setSync({ enabled: false });
+    t.svc.markSyncingServersDirty();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(runs).toEqual([]);
+    t.svc.dispose();
+  });
+
   it('runs one pass at a time per server, folding ids that arrive meanwhile into the next', async () => {
     const t = await harness({ enabled: true });
     t.setTags('movie', t.ids.arrival, [t.ids.kids]);
