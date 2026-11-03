@@ -168,6 +168,8 @@ All under **Settings > Subtitles**.
 
 **Run post-processing** (off by default) runs a command after each subtitle is saved, with placeholders such as the subtitle path and language. It runs without a shell. You can limit it to episodes or movies below a score with **Only for episodes below a score** and **Only for movies below a score**. The settings page lists the available placeholders.
 
+Some placeholders, such as `{{release_info}}` and `{{uploader}}`, come from the subtitle provider and can start with `-`. Put `--` before them in the command so the program reads them as values and not as options, for example `my-script --lang {{subtitles_language_code2}} -- {{subtitles}} {{release_info}}` (if your program understands `--`). The command gets the same reduced environment as a [custom script notification](notifications.md#custom-script), plus its `ARCLIGHT_*` variables.
+
 ## Sync and sync check
 
 Subtitles from the internet sometimes drift out of time with your file. Arclight has two separate things here.

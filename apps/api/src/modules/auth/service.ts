@@ -35,6 +35,10 @@ import { audit } from '../audit/recorder.js';
 import { hashToken } from './hash.js';
 import { householdsFor, type RequestProfile } from '../households/service.js';
 import { ownerProfileOf } from '../households/backfill.js';
+import { pruneMap } from '../../bounded-map.js';
+
+/** Addresses with failed sign-ins tracked at once. */
+const MAX_TRACKED_FAILURES = 10_000;
 
 export type AuthErrorCode =
   | 'VALIDATION'
@@ -626,8 +630,11 @@ export class AuthService {
   recordFailure(address: string): void {
     const t = this.now().getTime();
     const entry = this.failures.get(address);
-    if (!entry || t - entry.first > this.lockoutWindowMs) this.failures.set(address, { count: 1, first: t });
-    else entry.count++;
+    if (!entry || t - entry.first > this.lockoutWindowMs) {
+      // Bounded: expired windows go first, then the oldest addresses.
+      if (!entry && this.failures.size >= MAX_TRACKED_FAILURES) pruneMap(this.failures, MAX_TRACKED_FAILURES - 1, (e) => t - e.first > this.lockoutWindowMs);
+      this.failures.set(address, { count: 1, first: t });
+    } else entry.count++;
   }
 
   /** Checks a username/password pair. Unknown users cost the same as wrong passwords. */

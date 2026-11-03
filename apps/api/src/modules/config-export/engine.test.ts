@@ -122,6 +122,19 @@ describe('config import round trip', () => {
 });
 
 describe('config import planning', () => {
+  it('refuses filesystem-root, relative and nested root folders and writes nothing', async () => {
+    const db = await seededDb();
+    for (const bad of ['/', 'relative/x']) {
+      const out = importDocument(db, { rootFolders: { [bad]: { mediaType: 'series' } } });
+      expect(out.applied).toBe(false);
+      expect(out.errors.map((e) => e.path)).toEqual([`rootFolders.${bad}.path`]);
+    }
+    const nested = importDocument(db, { rootFolders: { '/tv/inner': { mediaType: 'series' } } });
+    expect(nested.applied).toBe(false);
+    expect(nested.errors[0]?.message).toMatch(/may not nest/);
+    expect(db.select().from(rootFolders).all().map((r) => r.path).sort()).toEqual(['/movies', '/tv']);
+  });
+
   it('dry run reports the diff and writes nothing', async () => {
     const db = await seededDb();
     const out = importDocument(

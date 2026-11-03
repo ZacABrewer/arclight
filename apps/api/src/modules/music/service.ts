@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, isNotNull, like, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, or, type SQL } from 'drizzle-orm';
+import { likeContains } from '../../db/like-contains.js';
 import { listSearchCondition } from '../../db/list-search.js';
 import { rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
@@ -403,7 +404,7 @@ export function listArtists(db: MusicDb, query: ArtistListQuery): Artist[] {
   if (query.mbArtistId) where.push(eq(artists.mbArtistId, query.mbArtistId.toLowerCase()));
   if (query.search) {
     const needle = query.search.toLowerCase();
-    where.push(or(like(artists.cleanName, `%${libraryService.toCleanTitle(query.search)}%`), like(artists.aliases, `%${needle}%`))!);
+    where.push(or(likeContains(artists.cleanName, libraryService.toCleanTitle(query.search)), likeContains(artists.aliases, needle))!);
   }
   const bySize = query.sortKey === 'sizeOnDisk';
   const column = query.sortKey === 'sizeOnDisk' ? artists.sortName : artistSort[query.sortKey];

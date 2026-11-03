@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, like, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
@@ -38,6 +38,7 @@ import { toIsbn13 as isbn13Of, type CatalogAuthor, type CatalogAuthorWithBooks, 
 import { isQualityCutoffMet } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import { listSearchCondition } from '../../db/list-search.js';
+import { likeContains } from '../../db/like-contains.js';
 import {
   audioFiles,
   audioImportExclusions,
@@ -421,7 +422,7 @@ export function listAuthors(db: AudiobookDb, query: AuthorListQuery): Author[] {
   if (query.olAuthorId) where.push(eq(authors.olAuthorId, query.olAuthorId.toUpperCase()));
   if (query.search) {
     const needle = query.search.toLowerCase();
-    where.push(or(like(authors.cleanName, `%${libraryService.toCleanTitle(query.search)}%`), like(authors.aliases, `%${needle}%`))!);
+    where.push(or(likeContains(authors.cleanName, libraryService.toCleanTitle(query.search)), likeContains(authors.aliases, needle))!);
   }
   const byStats = query.sortKey === 'sizeOnDisk' || query.sortKey === 'bookCount';
   const column = query.sortKey === 'sizeOnDisk' || query.sortKey === 'bookCount' ? authors.sortName : authorSort[query.sortKey];

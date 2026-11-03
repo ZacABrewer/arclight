@@ -19,6 +19,7 @@ import { downloadClientSettingsSchemas } from '@arclight/download-clients';
 import { isAgentKind, parseAgentSettings } from '@arclight/notifications';
 import { DOWNLOAD_CLIENT_PROTOCOLS } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { isStrictlyInside, rootFolderPathProblem } from '../library/root-path.js';
 import {
   customFormats,
   delayProfiles,
@@ -146,8 +147,8 @@ export interface ResourceKindDef<S extends z.ZodTypeAny = z.ZodTypeAny> {
   list(db: Db, refs: Refs): Array<ResourceItem<z.infer<S>>>;
   /** References to other collections (tags included). */
   refsOf(entry: z.infer<S>): EntryRef[];
-  /** Implementation-specific checks after the structural parse. */
-  check?(entry: z.infer<S>): EntryCheck[];
+  /** Implementation-specific checks after the structural parse (`key` is the matched key). */
+  check?(entry: z.infer<S>, key: string): EntryCheck[];
   /** The stable key the importer matches on; default: the document key. */
   keyOf?(entry: z.infer<S>, docKey: string): string;
   insert(db: Db, key: string, entry: z.infer<S>, refs: Refs, now: string): void;
@@ -496,7 +497,17 @@ const rootFolderKind = define({
   list: (db) =>
     keyed(byId(db.select().from(rootFolders).all()).map((r) => ({ id: r.id, key: r.path, entry: { mediaType: r.mediaType } }))),
   refsOf: () => [],
+  // The key is the folder path: the same structural rules as adding one in settings.
+  check: (_e, key) => {
+    const problem = rootFolderPathProblem(key);
+    return problem ? [{ field: 'path', message: problem, level: 'error' }] : [];
+  },
   insert: (db, key, e) => {
+    for (const existing of db.select({ path: rootFolders.path }).from(rootFolders).all()) {
+      if (isStrictlyInside(existing.path, key) || isStrictlyInside(key, existing.path)) {
+        throw new Error(`rootFolders.${key}: root folders may not nest (overlaps ${existing.path})`);
+      }
+    }
     db.insert(rootFolders).values({ path: key, mediaType: e.mediaType }).run();
   },
   update: (db, id, key, e) => {
