@@ -6,7 +6,7 @@ Everything needed to take the Arclight player from a developer account to one pu
 
 Google changes requirements often. Before each section, check the linked Play Console help page for the current rule.
 
-> **No store CI for the player yet.** `.github/workflows/mobile.yml` builds and uploads **Arclight Admin only**. The player has `.github/workflows/player-app.yml` (typecheck, tests, unsigned debug APK) and `player-app-ios.yml` (iOS simulator build), but nothing that signs a bundle or uploads to Play. Until a player workflow exists, the first releases are built locally (section 3), which also lists the secrets the Admin workflow uses as the pattern to follow.
+> **Store CI.** `.github/workflows/player-app-release.yml` (manual runs only) builds a signed App Bundle for the player and uploads it to a Play track; its secrets and caveats are in section 3, "Store CI". `.github/workflows/player-app.yml` runs on every change (typecheck, tests, unsigned debug APK). `.github/workflows/mobile.yml` is **Arclight Admin only**.
 
 ---
 
@@ -70,30 +70,46 @@ Recommendation: choose B if people already use the sideload APK or you want the 
 - [ ] Build with JDK 21 from `apps/player`: `pnpm build && npx cap sync android`, then in `apps/player/android`: `ARCLIGHT_VERSION_CODE=<n> ./gradlew bundleRelease`. The bundle is `app/build/outputs/bundle/release/app-release.aab`.
 - [ ] **Version rules.**
   - `versionName` is the repo version (`apps/player/package.json`, set by `scripts/bump-version.mjs`). `versionCode` is `ARCLIGHT_VERSION_CODE` when set (it must be greater than 1), else derived as major×10000 + minor×100 + patch (0.23.0 → 2300). Play requires a higher number on every upload, across all tracks, forever, so pick one scheme and keep it: once you upload a derived code, an override must stay above it.
-  - Use a counter that only grows, for example the CI run number or `major * 10000 + minor * 100 + patch`. Pick a scheme once and keep it: a code that has been used can never be reused, even by a deleted release.
-  - `versionName` is `1.0.0`, hard-coded in `build.gradle`; raise it by hand for each release and keep it in line with `apps/player/package.json` (the app puts that version in its user agent).
+  - Use a counter that only grows. Store CI uses **the run number + 30000** (see "Store CI" below), which stays above every derived code until version 3.0.0, so CI uploads never collide with a locally built derived code. Once CI has uploaded, a local upload must also use `ARCLIGHT_VERSION_CODE` above the last CI code. A code that has been used can never be reused, even by a deleted release.
   - With option B in section 2, the GitHub APK and the Play build share a package name and signature, so their version codes must come from the same counter or Android will refuse the "downgrade".
 - [ ] Target SDK at the level Play currently requires (the project targets API 36 / Android 16; check "Target API level requirements" in the Play Console help each August).
 - [ ] Play Console's pre-launch report and App bundle explorer show no warnings about 64-bit or 16 KB page size support.
 - [ ] `minifyEnabled` is `false` in release builds today, which is allowed. If R8 is enabled later, test Cast, Media3 and the Capacitor plugin on a release build first.
 - [ ] First .aab uploaded to the **Internal testing** track (section 9) and processed by Play.
 
-### Store CI: what exists and what would be needed
+### Store CI
 
-There is **no player store workflow yet**. To add one, copy the `android` job of `.github/workflows/mobile.yml` with `working-directory: apps/player` and package name `com.moviemethat.arclight`. That workflow uses these repository secrets, and a player workflow would use the same names (or player-specific ones if its upload key differs):
+`.github/workflows/player-app-release.yml` builds, signs and uploads the player. It runs **only when started by hand** (Actions > Player app release > Run workflow), never on a push or a pull request, so pull requests (including ones from forks) never reach the signing secrets or decode the keystore.
+
+Inputs:
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `track` | `internal` | Play track: `internal`, `alpha` (closed testing), `beta` (open testing) or `production` |
+| `android` | on | Run the Android job |
+| `ios` | on | Run the iOS job (TestFlight; see [RELEASE-PLAYER-IOS.md](RELEASE-PLAYER-IOS.md)) |
+| `play_status` | `draft` | Play release status: `draft` or `completed` |
+
+The Android job runs typecheck and tests, `pnpm --filter ./apps/player build`, `npx cap sync android`, then `./gradlew bundleRelease` with `ARCLIGHT_VERSION_CODE` set to **the run number + 30000**. It checks the bundle is signed (`jarsigner -verify`), keeps it as a run artifact for 30 days, and uploads it with `r0adkll/upload-google-play` (package `com.moviemethat.arclight`, the chosen track and status). The keystore is written to `$RUNNER_TEMP` with `umask 077` and deleted at the end of every run, pass or fail.
+
+Repository secrets. These are **the player's own**, separate from Arclight Admin's (`ANDROID_KEYSTORE_*`, `PLAY_SERVICE_ACCOUNT_JSON` in `mobile.yml`):
 
 | Secret | Used for |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | The upload keystore, base64 encoded; written to a temp file whose path becomes `ANDROID_KEYSTORE_PATH` |
-| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
-| `ANDROID_KEY_ALIAS` | Key alias |
-| `ANDROID_KEY_PASSWORD` | Key password |
-| `PLAY_SERVICE_ACCOUNT_JSON` | Play Console API service account, used by `r0adkll/upload-google-play` to upload to the internal track |
-| `GOOGLE_SERVICES_JSON` | Optional `google-services.json` for push; the player does not use push, so it is not needed |
+| `PLAYER_ANDROID_KEYSTORE_BASE64` | The player's upload keystore, base64 encoded (`base64 -w0 upload.keystore`); written to a temp file whose path becomes `ANDROID_KEYSTORE_PATH` |
+| `PLAYER_ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `PLAYER_ANDROID_KEY_ALIAS` | Key alias |
+| `PLAYER_ANDROID_KEY_PASSWORD` | Key password |
+| `PLAYER_PLAY_SERVICE_ACCOUNT_JSON` | Play Console API service account JSON, with release permission for this app |
 
-The workflow also passes `ARCLIGHT_VERSION_CODE` as the run number when uploading, and deletes the keystore at the end. The iOS job uses `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, `APPSTORE_API_KEY_P8` and `APPLE_TEAM_ID` (see [RELEASE-PLAYER-IOS.md](RELEASE-PLAYER-IOS.md)). Never put the offline sideload key into CI. With option B, a CI-held upload key that differs from the offline app signing key is the safe split.
+If the four keystore secrets are not all set, the job skips the signed bundle and the upload with a notice. If only the Play secret is missing, it builds and keeps the signed bundle but does not upload it.
 
-- [ ] Decision: build bundles locally for now, or add the player workflow first. If CI is added, the first upload of a brand-new app still has to be done by hand or with `status: draft`; the Play API cannot publish an app that has never been published.
+Caveats for the first upload:
+
+- [ ] **Play needs one manual upload first.** The Play API cannot create an app or publish one that has never been published. Upload the first `.aab` by hand in Play Console (the run artifact works), or run the workflow with `play_status: draft` and finish the release in Play Console.
+- [ ] Keep `play_status: draft` until the app has been published once; `completed` fails before that.
+- [ ] The service account must be invited in Play Console (Users and permissions) with access to this app.
+- [ ] Never put the offline sideload key into CI. With option B in section 2, a CI-held upload key that differs from the offline app signing key is the safe split.
 
 ## 4. Permissions and manifest review
 

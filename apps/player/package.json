@@ -12,7 +12,9 @@
     "assets": "node scripts/generate-assets.mjs",
     "sync": "pnpm build && cap sync",
     "sync:android": "pnpm build && cap sync android",
-    "sync:ios": "pnpm build && cap sync ios"
+    "sync:ios": "pnpm build && cap sync ios",
+    "ios:version": "node scripts/ios-version.mjs",
+    "capacitor:sync:after": "node scripts/ios-version.mjs --hook"
   },
   "dependencies": {
     "@arclight/shared": "workspace:*",

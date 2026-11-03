@@ -1,0 +1,2 @@
+// Base configuration for the App target's Release build (Debug uses debug.xcconfig).
+#include "App/version.xcconfig"

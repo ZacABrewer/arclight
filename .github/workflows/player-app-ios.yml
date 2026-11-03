@@ -3,6 +3,8 @@ name: Player app (iOS)
 # Builds the Arclight listening app (apps/player, Capacitor) for the iOS simulator, unsigned:
 # proves the Swift side (AVFoundation player, downloads, CarPlay, AirPlay) compiles on every
 # change. CarPlay stays off (CARPLAY_ENABLED=NO), so no Apple-granted entitlement is needed.
+# Also checks that version.xcconfig matches package.json and that the privacy manifest is in the
+# built app. No secrets: signing and store uploads are in player-app-release.yml (manual runs only).
 
 on:
   push:
@@ -50,6 +52,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         working-directory: .
+      - name: Version and build number match package.json
+        run: node scripts/ios-version.mjs --check
       - name: Build web assets
         run: pnpm build
       - name: Capacitor sync
@@ -61,6 +65,15 @@ jobs:
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build/xcodebuild.log | tail -n 80
+      - name: Check the built app
+        run: |
+          APP=build/sim/Build/Products/Debug-iphonesimulator/App.app
+          test -f "$APP/PrivacyInfo.xcprivacy" || { echo "::error::PrivacyInfo.xcprivacy is missing from the app bundle"; exit 1; }
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          WANT_VERSION=$(node -p "require('./package.json').version.replace(/-.*/, '')")
+          GOT_VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Info.plist")
+          echo "Version $GOT_VERSION, build $(plutil -extract CFBundleVersion raw "$APP/Info.plist")"
+          test "$GOT_VERSION" = "$WANT_VERSION" || { echo "::error::CFBundleShortVersionString is $GOT_VERSION, expected $WANT_VERSION"; exit 1; }
       - name: Swift errors and warnings from our sources
         if: always()
         run: |
