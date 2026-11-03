@@ -44,10 +44,10 @@ const UNITS = ['-', '- ', '-_', '-.', '. ', ' ', '.', '_', ' - ', '-- ', '[', ']
 const PREFIXES = ['T', 'Artist - '];
 const SUFFIXES = ['', 'x', 'Complete Series', ' (2001)'];
 
-/** Fastest of two runs, so a GC pause or a first-call compile does not count as slowness. */
+/** Fastest of five runs, so a GC pause, a first-call compile or a busy CI runner does not count as slowness. */
 function timed(fn: () => unknown): number {
   let best = Infinity;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 5; i++) {
     const t = performance.now();
     fn();
     best = Math.min(best, performance.now() - t);

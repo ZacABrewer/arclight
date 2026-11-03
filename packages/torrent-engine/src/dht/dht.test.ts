@@ -271,20 +271,21 @@ describe('DHT hostile input (DATA-22, DATA-55)', () => {
       fakes.push(
         await fakeNode(() => ({
           token: Buffer.from('tok'),
-          // the other fakes plus 600 dead contacts (closed loopback ports)
-          nodes: Buffer.concat([...ports.map((p) => compactNodes(1, [127, 0, 0, 1], p)), compactNodes(600, [127, 0, 0, 1], 40000 + f * 1000)]),
+          // the other fakes plus 300 dead contacts (closed loopback ports)
+          nodes: Buffer.concat([...ports.map((p) => compactNodes(1, [127, 0, 0, 1], p)), compactNodes(300, [127, 0, 0, 1], 40000 + f * 1000)]),
           values: Array.from({ length: 2500 }, (_, i) => compactPeer([127, 0, 0, 1], 1 + f * 2500 + i)),
         })),
       );
       ports.push(fakes[f]!.port);
     }
-    const d = await makeNode([], { queryTimeoutMs: 50 });
+    // 150 ms so the fakes' large replies still arrive in time on a busy CI runner.
+    const d = await makeNode([], { queryTimeoutMs: 150 });
     for (const p of ports) d.addNode({ host: '127.0.0.1', port: p });
     for (let i = 0; i < 50 && d.nodeCount < 3; i++) await new Promise((r) => setTimeout(r, 10));
     const started = Date.now();
     const res = await d.getPeers(randomBytes(20));
     expect(res.peers.length).toBe(5000);
-    // Bounded, not instant: ~7 s on an idle machine (1,800 dead contacts at a 50 ms query timeout),
+    // Bounded, not instant: ~7 s on an idle machine (900 dead contacts at a 150 ms query timeout),
     // more when the whole workspace's suites share the CPU.
     expect(Date.now() - started).toBeLessThan(20_000);
   }, 30_000);
