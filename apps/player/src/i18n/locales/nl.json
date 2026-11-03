@@ -163,5 +163,7 @@
   "app.tv.settings.cat.about": "Over",
   "app.tv.settings.size.small": "Klein",
   "app.tv.settings.size.medium": "Normaal",
-  "app.tv.settings.size.large": "Groot"
+  "app.tv.settings.size.large": "Groot",
+  "app.error.serverTimeout": "{host} heeft niet binnen {seconds} seconden geantwoord. Controleer of de server draait en of dit apparaat op het juiste netwerk zit.",
+  "app.error.serverUnreachable": "{host} is niet bereikbaar. Controleer of de server draait en of dit apparaat op het juiste netwerk zit."
 }

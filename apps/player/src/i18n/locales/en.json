@@ -300,5 +300,7 @@
   "app.tv.settings.cat.about": "About",
   "app.tv.settings.size.small": "Small",
   "app.tv.settings.size.medium": "Medium",
-  "app.tv.settings.size.large": "Large"
+  "app.tv.settings.size.large": "Large",
+  "app.error.serverTimeout": "{host} didn't answer within {seconds} seconds. Check that the server is running and that this device is on the right network.",
+  "app.error.serverUnreachable": "Couldn't reach {host}. Check that the server is running and that this device is on the right network."
 }

@@ -4,7 +4,7 @@ import type { PlayerCapabilities } from '@arclight/shared';
 import { toasts } from '@web/lib/toast';
 import { createQueryClient } from '@web/query-client';
 import { AccountStore, type Account } from '../core/accounts';
-import { onArtworkLinkRenewed, resetArtworkLink, setUnauthorizedHandler } from '../core/api';
+import { onArtworkLinkRenewed, resetArtworkLink, retryUnlessUnreachable, setUnauthorizedHandler } from '../core/api';
 import { preferencesStore } from '../core/kv';
 import { netState, onNetChange, startNetworkWatch } from '../core/network';
 import { getSession } from '../core/session';
@@ -70,6 +70,9 @@ async function nativeDeviceInfo(backend: PlayerBackend): Promise<DeviceInfo | nu
 
 export async function createServices(): Promise<AppServices> {
   const qc = createQueryClient(toasts);
+  // A server that did not answer within the connect timeout is not asked again at once: the
+  // screen says so after one wait instead of two (other failures keep the one retry).
+  qc.setDefaultOptions({ ...qc.getDefaultOptions(), queries: { ...qc.getDefaultOptions().queries, retry: retryUnlessUnreachable } });
   const accounts = new AccountStore();
   const settings = new SettingsStore();
   const index = new DownloadIndex();

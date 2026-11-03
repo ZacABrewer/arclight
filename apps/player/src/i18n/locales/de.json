@@ -163,5 +163,7 @@
   "app.tv.settings.cat.about": "Info",
   "app.tv.settings.size.small": "Klein",
   "app.tv.settings.size.medium": "Mittel",
-  "app.tv.settings.size.large": "Groß"
+  "app.tv.settings.size.large": "Groß",
+  "app.error.serverTimeout": "{host} hat nicht innerhalb von {seconds} Sekunden geantwortet. Prüfe, ob der Server läuft und dieses Gerät im richtigen Netzwerk ist.",
+  "app.error.serverUnreachable": "{host} ist nicht erreichbar. Prüfe, ob der Server läuft und dieses Gerät im richtigen Netzwerk ist."
 }

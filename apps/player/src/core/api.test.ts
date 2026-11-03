@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ApiError, buildApiUrl, isNetworkError, request, resetArtworkLink, rewriteArtwork, setFetch, setUnauthorizedHandler } from './api';
+import { ApiError, buildApiUrl, isNetworkError, isTimeoutError, request, resetArtworkLink, retryUnlessUnreachable, rewriteArtwork, setFetch, setUnauthorizedHandler } from './api';
+import { CONNECT_TIMEOUT_MS } from '../config';
 import { setSession } from './session';
 import { fakeFetch } from '../test/fetch';
 
@@ -43,6 +44,31 @@ describe('request', () => {
     setFetch(fakeFetch({ 'GET /x': () => new TypeError('Failed to fetch') }).impl);
     const err = await request('/x', null).catch((e: unknown) => e);
     expect(isNetworkError(err)).toBe(true);
+  });
+
+  it('gives up on a server that does not answer within the connect timeout, and does not retry it', async () => {
+    vi.useFakeTimers();
+    try {
+      // A host that never answers (off, or another network): only the abort ends the wait.
+      const hang = vi.fn((_u: string, init?: RequestInit) => new Promise<Response>((_r, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
+      setFetch(hang as unknown as typeof fetch);
+      const pending = request('/x', null).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS - 1);
+      expect(await Promise.race([pending, Promise.resolve('waiting')])).toBe('waiting');
+      await vi.advanceTimersByTimeAsync(1);
+      const err = await pending;
+      expect(CONNECT_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
+      expect(isNetworkError(err) && isTimeoutError(err)).toBe(true);
+      expect((err as ApiError).message).toMatch(/^music.example.com didn't answer within 9 seconds/);
+      expect(retryUnlessUnreachable(0, err)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+    setFetch(fakeFetch({ 'GET /y': () => new TypeError('Failed to fetch') }).impl);
+    const refused = await request('/y', null).catch((e: unknown) => e);
+    expect(isTimeoutError(refused)).toBe(false);
+    expect(retryUnlessUnreachable(0, refused)).toBe(true);
+    expect(retryUnlessUnreachable(1, refused)).toBe(false);
   });
 
   it('calls the sign-out handler on a 401 for the active account only', async () => {
