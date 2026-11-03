@@ -322,7 +322,7 @@ describe('JellyfinEngine cache', () => {
       log: { warn: () => undefined },
       now: () => now,
     });
-    const target = engine.target({ enabled: true, allowRemote: false, remoteMaxBitrateKbps: 0, streamLinkHours: 6, backend: 'jellyfin', jellyfinServerId: null })!;
+    const target = engine.target({ enabled: true, allowRemote: false, remoteMaxBitrateKbps: 0, streamLinkHours: 6, backend: 'jellyfin', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1 })!;
     const file = { id: 1, path: '/m/a/b.flac', title: 'B' };
     expect(await engine.resolve(target, file)).toBeNull();
     const first = lookups.length;

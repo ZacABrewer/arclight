@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Video player strings (the rest of the app's text lives in the web UI's locales). -->
+<resources>
+    <string name="downloads_channel">Téléchargements</string>
+    <string name="downloading">Téléchargement pour l\'écoute hors ligne</string>
+    <string name="video_close">Fermer</string>
+    <string name="video_play">Lire</string>
+    <string name="video_pause">Pause</string>
+    <string name="video_back_10">Reculer de 10 secondes</string>
+    <string name="video_forward_10">Avancer de 10 secondes</string>
+    <string name="video_audio">Audio</string>
+    <string name="video_subtitles">Sous-titres</string>
+    <string name="video_subtitles_off">Désactivés</string>
+    <string name="video_next">Suivant</string>
+    <string name="video_next_title">Suivant : %1$s</string>
+    <string name="video_skip_intro">Passer le générique</string>
+    <string name="video_skip_recap">Passer le résumé</string>
+    <string name="video_skip_credits">Passer le générique de fin</string>
+    <string name="video_up_next">À suivre</string>
+    <string name="video_playing_in">Lecture dans %1$d s</string>
+    <string name="video_play_now">Lire maintenant</string>
+    <string name="video_cancel">Annuler</string>
+    <string name="video_ends_at">fin à %1$s</string>
+    <string name="video_track_n">Piste %1$d</string>
+</resources>

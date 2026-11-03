@@ -16,6 +16,7 @@ import { createAppRouter } from './app/router';
 import { createServices } from './app/services';
 import { parsePairingLink } from './core/qr';
 import { applyAppLanguage } from './ui/settings';
+import { startTvRuntime } from './tv/tv-runtime';
 
 async function boot(): Promise<void> {
   const rootEl = document.getElementById('root');
@@ -25,6 +26,8 @@ async function boot(): Promise<void> {
   const services = await createServices();
   await applyAppLanguage(services.settings.get().language).catch(() => undefined);
   const router = createAppRouter(services);
+  // TV: D-pad focus across every screen, and Back that closes panels before leaving.
+  const tv = services.tv ? startTvRuntime(router) : null;
 
   // arclight://pair?server=…&code=… (the web player's QR code, opened by the camera app or a
   // link): go to sign-in, which pairs straight away.
@@ -40,6 +43,10 @@ async function boot(): Promise<void> {
       .catch(() => undefined);
     // Back button (Android): back in history, or leave the app from a top screen.
     void CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (tv) {
+        if (!tv.back(canGoBack)) void CapApp.minimizeApp();
+        return;
+      }
       if (canGoBack) router.history.back();
       else void CapApp.minimizeApp();
     });

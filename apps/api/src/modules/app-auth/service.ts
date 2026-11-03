@@ -1,12 +1,17 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import {
+  APP_DEVICE_CODE_INTERVAL_SEC,
+  APP_DEVICE_CODE_TTL_MS,
   APP_PAIR_CODE_ALPHABET,
   APP_PAIR_CODE_LENGTH,
   APP_PAIR_CODE_TTL_MS,
   APP_TOKEN_PREFIX,
   appPairingUri,
   type AppDevice,
+  type AppDeviceCode,
+  type AppDeviceCodePlatform,
+  type AppDeviceCodePollResponse,
   type AppDeviceInfo,
   type AppPairCode,
   type AppSignInResponse,
@@ -25,6 +30,11 @@ import { appDevices, type AppDeviceRow } from './schema.js';
 // pairing from a signed-in browser (POST /app/pair-codes, then POST /app/pair), the Bearer
 // resolver the auth hook calls, and device management. Pair codes live in memory only: they are
 // valid for five minutes and once, so a restart simply asks for a new one.
+//
+// TV sign-in (device codes): the TV asks for a code (POST /app/device-codes, public, limited per
+// address), shows it with <serverUrl>/player/link and polls with a secret poll token; a signed-in
+// browser with player access approves the code (POST /app/device-codes/approve) and the next poll
+// gets the device token, once. Device codes are in memory too (ten minutes, single use).
 
 export type AppAuthErrorCode =
   | 'NO_USER'
@@ -34,6 +44,7 @@ export type AppAuthErrorCode =
   | 'NOT_APP'
   | 'PAIR_CODE_INVALID'
   | 'PAIR_CODE_EXPIRED'
+  | 'DEVICE_CODE_INVALID'
   | 'PLAYER_DISABLED'
   | 'PLAYER_NOT_ALLOWED';
 
@@ -45,6 +56,7 @@ export const APP_AUTH_ERROR_STATUS: Record<AppAuthErrorCode, number> = {
   NOT_APP: 400,
   PAIR_CODE_INVALID: 401,
   PAIR_CODE_EXPIRED: 410,
+  DEVICE_CODE_INVALID: 404,
   PLAYER_DISABLED: 403,
   PLAYER_NOT_ALLOWED: 403,
 };
@@ -64,6 +76,14 @@ export const APP_DEVICE_TOUCH_MS = 60_000;
 /** Pair codes one user may create per window (each new one replaces the previous). */
 export const PAIR_CODES_PER_WINDOW = 10;
 export const PAIR_CODE_WINDOW_MS = 10 * 60_000;
+/** Device codes one address may ask for per window. */
+export const DEVICE_CODES_PER_WINDOW = 10;
+export const DEVICE_CODE_WINDOW_MS = 10 * 60_000;
+/** At most this many device codes wait at once (a flood of requests cannot grow memory). */
+export const MAX_PENDING_DEVICE_CODES = 500;
+/** Polls closer together than this answer 429. */
+export const DEVICE_CODE_MIN_POLL_MS = 2_000;
+
 /** Server name in sign-in answers. */
 export const SERVER_NAME = 'Arclight';
 
@@ -91,12 +111,28 @@ interface PendingCode {
   expiresAt: number;
 }
 
+interface PendingDeviceCode {
+  userCode: string;
+  pollToken: string;
+  deviceName: string;
+  platform: AppDeviceCodePlatform;
+  appVersion: string;
+  expiresAt: number;
+  lastPollAt: number;
+  /** Set by approve; the next poll issues the token. */
+  approvedUserId: number | null;
+}
+
 export class AppAuthService {
   private readonly db: Db;
   private readonly auth: AuthService;
   private readonly now: () => number;
   private readonly codes = new Map<string, PendingCode>();
   private readonly issued = new Map<number, number[]>();
+  /** Device codes by user code, and the user code of each poll token. */
+  private readonly deviceCodes = new Map<string, PendingDeviceCode>();
+  private readonly pollTokens = new Map<string, string>();
+  private readonly deviceCodeRequests = new Map<string, number[]>();
 
   constructor(private readonly opts: AppAuthServiceOptions) {
     this.db = opts.db;
@@ -116,7 +152,7 @@ export class AppAuthService {
   }
 
   /** Creates the device row and its token (returned once). */
-  private issue(user: User, info: AppDeviceInfo, method: 'password' | 'pairing', ip: string | undefined): AppSignInResponse {
+  private issue(user: User, info: AppDeviceInfo, method: 'password' | 'pairing' | 'device-code', ip: string | undefined): AppSignInResponse {
     const token = generateAppToken();
     const at = new Date(this.now()).toISOString();
     const row = this.db
@@ -174,6 +210,78 @@ export class AppAuthService {
     this.assertPlayerAllowed(user);
     audit(this.db).record({ action: 'login.success', userId: user.id, username: user.username, ip: ip ?? null, details: { method: 'app-pairing' } });
     return this.issue(user, input, 'pairing', ip);
+  }
+
+  // ---- TV sign-in ------------------------------------------------------------------------
+
+  /** POST /app/device-codes: a code for the TV to show, and the secret it polls with. */
+  createDeviceCode(input: { deviceName: string; platform: AppDeviceCodePlatform; appVersion: string; serverUrl?: string | undefined }, fallbackOrigin: string, ip?: string): AppDeviceCode {
+    const t = this.now();
+    this.purgeDeviceCodes(t);
+    const address = ip ?? 'unknown';
+    const recent = (this.deviceCodeRequests.get(address) ?? []).filter((at) => t - at < DEVICE_CODE_WINDOW_MS);
+    if (recent.length >= DEVICE_CODES_PER_WINDOW || this.deviceCodes.size >= MAX_PENDING_DEVICE_CODES) throw new AppAuthError('RATE_LIMITED', 'too many sign-in codes; wait a few minutes');
+    recent.push(t);
+    this.deviceCodeRequests.set(address, recent);
+    let userCode = generatePairCode();
+    while (this.deviceCodes.has(userCode)) userCode = generatePairCode();
+    const pollToken = randomBytes(32).toString('base64url');
+    const expiresAt = t + APP_DEVICE_CODE_TTL_MS;
+    this.deviceCodes.set(userCode, { userCode, pollToken, deviceName: input.deviceName, platform: input.platform, appVersion: input.appVersion, expiresAt, lastPollAt: 0, approvedUserId: null });
+    this.pollTokens.set(pollToken, userCode);
+    const base = deviceServerUrl(input.serverUrl) ?? this.opts.serverUrl() ?? fallbackOrigin.replace(/\/+$/, '');
+    return { userCode, pollToken, expiresAt: new Date(expiresAt).toISOString(), intervalSec: APP_DEVICE_CODE_INTERVAL_SEC, verifyUrl: `${base}/player/link` };
+  }
+
+  /** POST /app/device-codes/poll: pending, expired (or unknown), or the device token once approved. */
+  pollDeviceCode(pollToken: string, ip?: string): AppDeviceCodePollResponse {
+    const t = this.now();
+    this.purgeDeviceCodes(t);
+    const userCode = this.pollTokens.get(pollToken);
+    const pending = userCode ? this.deviceCodes.get(userCode) : undefined;
+    if (!pending || pending.expiresAt <= t) return { status: 'expired' };
+    if (t - pending.lastPollAt < DEVICE_CODE_MIN_POLL_MS) throw new AppAuthError('RATE_LIMITED', `poll at most every ${APP_DEVICE_CODE_INTERVAL_SEC} seconds`);
+    pending.lastPollAt = t;
+    if (pending.approvedUserId === null) return { status: 'pending' };
+    this.dropDeviceCode(pending);
+    const row = this.db.select().from(users).where(eq(users.id, pending.approvedUserId)).get();
+    if (!row) return { status: 'expired' };
+    const user = toUser(row);
+    this.assertPlayerAllowed(user);
+    audit(this.db).record({ action: 'login.success', userId: user.id, username: user.username, ip: ip ?? null, details: { method: 'app-device-code' } });
+    const info: AppDeviceInfo = { deviceName: pending.deviceName, platform: pending.platform === 'ios' ? 'ios' : 'android', appVersion: pending.appVersion };
+    return { status: 'approved', ...this.issue(user, info, 'device-code', ip) };
+  }
+
+  /** POST /app/device-codes/approve: the signed-in user (with player access) claims the code. */
+  approveDeviceCode(user: Pick<User, 'id' | 'role' | 'settings' | 'username'>, code: string, ip?: string): { deviceName: string; platform: AppDeviceCodePlatform } {
+    this.assertPlayerAllowed(user);
+    const address = ip ?? 'unknown';
+    this.auth.checkRateLimit(address);
+    const t = this.now();
+    this.purgeDeviceCodes(t);
+    const pending = this.deviceCodes.get(code);
+    if (!pending || pending.expiresAt <= t || pending.approvedUserId !== null) {
+      this.auth.recordFailure(address);
+      throw new AppAuthError('DEVICE_CODE_INVALID', 'that code is not valid or has expired; check the code on the TV');
+    }
+    pending.approvedUserId = user.id;
+    audit(this.db).record({ action: 'app.device-code.approve', userId: user.id, username: user.username, ip: ip ?? null, details: { name: pending.deviceName, platform: pending.platform } });
+    return { deviceName: pending.deviceName, platform: pending.platform };
+  }
+
+  private dropDeviceCode(pending: PendingDeviceCode): void {
+    this.deviceCodes.delete(pending.userCode);
+    this.pollTokens.delete(pending.pollToken);
+  }
+
+  private purgeDeviceCodes(t: number): void {
+    for (const pending of [...this.deviceCodes.values()]) if (pending.expiresAt <= t) this.dropDeviceCode(pending);
+    for (const [address, list] of this.deviceCodeRequests) {
+      const left = list.filter((at) => t - at < DEVICE_CODE_WINDOW_MS);
+      if (left.length === 0) this.deviceCodeRequests.delete(address);
+      else this.deviceCodeRequests.set(address, left);
+    }
   }
 
   /** Expired codes go; issue timestamps outside the window go. */
@@ -267,5 +375,18 @@ export class AppAuthService {
   /** Whether the user has any signed-in app device (signed stream links stay valid while one does). */
   hasDevice(userId: number): boolean {
     return this.db.select({ id: appDevices.id }).from(appDevices).where(eq(appDevices.userId, userId)).limit(1).get() !== undefined;
+  }
+}
+
+/** The address a device says it reached the server at, when it is a plain http(s) URL. */
+export function deviceServerUrl(raw: string | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.username || u.password || u.search || u.hash) return null;
+    return `${u.origin}${u.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return null;
   }
 }

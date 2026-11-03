@@ -27,6 +27,9 @@ import com.moviemethat.arclight.player.EventSink;
 import com.moviemethat.arclight.player.PlaybackHub;
 import com.moviemethat.arclight.player.QueueModel;
 import com.moviemethat.arclight.player.TrackInfo;
+import com.moviemethat.arclight.video.VideoController;
+import com.moviemethat.arclight.video.VideoProfile;
+import com.moviemethat.arclight.video.VideoRequest;
 import java.util.List;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -41,6 +44,7 @@ import org.json.JSONObject;
  *   <li>Downloads: {@link DownloadCenter} (WorkManager, HTTP Range resume).</li>
  *   <li>Car: {@link CarLibrary} (browse requests to JS, cached tree otherwise).</li>
  *   <li>Cast: {@link CastController} (Google Cast, optional at runtime).</li>
+ *   <li>Video: {@link VideoController} (full-screen Media3 player activity, movies / TV).</li>
  * </ul>
  *
  * This instance lives as long as the WebView; the player, downloads and car keep running
@@ -62,12 +66,14 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
     public void load() {
         hub = PlaybackHub.get(getContext());
         hub.setSink(this);
+        VideoController.get().setSink(this);
         main.post(() -> CastController.init(getContext()));
     }
 
     @Override
     protected void handleOnDestroy() {
         if (hub != null) hub.clearSink(this);
+        VideoController.get().clearSink(this);
         super.handleOnDestroy();
     }
 
@@ -135,11 +141,57 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
         features.put("car", true);
         features.put("cast", castSupported(getContext()));
         features.put("sleepTimer", true);
+        features.put("video", true);
         JSObject o = new JSObject();
         o.put("platform", "android");
         o.put("version", VERSION);
         o.put("features", features);
         call.resolve(o);
+    }
+
+    // ---- video (movies & TV) ----------------------------------------------------------------------
+
+    @PluginMethod
+    public void getDeviceInfo(PluginCall call) {
+        try {
+            call.resolve(JSObject.fromJSONObject(VideoProfile.deviceInfo(getContext())));
+        } catch (Exception e) {
+            reject(call, e);
+        }
+    }
+
+    @PluginMethod
+    public void playVideo(PluginCall call) {
+        final VideoRequest request;
+        try {
+            request = VideoRequest.parse(call.getData());
+        } catch (IllegalArgumentException e) {
+            reject(call, e);
+            return;
+        }
+        onMain(call, () -> {
+            Activity activity = getActivity();
+            VideoController.get().play(getContext(), activity, request);
+        });
+    }
+
+    @PluginMethod
+    public void replaceVideoStream(PluginCall call) {
+        final VideoRequest.Stream stream;
+        try {
+            stream = VideoRequest.Stream.parse(call.getData());
+        } catch (IllegalArgumentException e) {
+            reject(call, e);
+            return;
+        }
+        onMain(call, () -> {
+            if (!VideoController.get().replace(stream)) throw new IllegalStateException("No video is playing");
+        });
+    }
+
+    @PluginMethod
+    public void closeVideo(PluginCall call) {
+        onMain(call, () -> VideoController.get().close());
     }
 
     // ---- audio ---------------------------------------------------------------------------------

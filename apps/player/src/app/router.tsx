@@ -10,6 +10,8 @@ import { DownloadsPage } from '../ui/downloads';
 import { QueuePage } from '../ui/queue';
 import { SettingsPage } from '../ui/settings';
 import { Shell } from '../ui/shell';
+import { TvHome } from '../tv/tv-home';
+import { isTvMode } from '../tv/tv-mode';
 import type { AppServices } from './services';
 
 // Hash history: the bundle is served from capacitor://localhost / https://localhost as files,
@@ -87,7 +89,8 @@ function lazyPage(Component: ComponentType) {
 const childPath = (full: string) => full.replace(/^\/player\//, '');
 
 const playerChildren = [
-  createRoute({ getParentRoute: () => playerRoute, path: '/', component: AppHome }),
+  // On a TV: the 10-foot Movies & TV home (hero + rows).
+  createRoute({ getParentRoute: () => playerRoute, path: '/', component: () => (isTvMode() ? <TvHome /> : <AppHome />) }),
   createRoute({ getParentRoute: () => playerRoute, path: 'now-playing', component: NowPlayingPage }),
   createRoute({ getParentRoute: () => playerRoute, path: 'queue', component: QueuePage }),
   createRoute({ getParentRoute: () => playerRoute, path: 'downloads', component: DownloadsPage }),

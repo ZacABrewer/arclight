@@ -1,4 +1,5 @@
 import type { PluginListenerHandle } from '@capacitor/core';
+import type { VideoDeviceProfile } from '@arclight/shared';
 
 /**
  * The ArclightPlayer native plugin: the contract between the app's TypeScript (this package)
@@ -315,6 +316,147 @@ export interface CastState {
 }
 
 // ---------------------------------------------------------------------------------------
+// Video (movies & TV; Android only in this release, iOS rejects with UNIMPLEMENTED)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * What this device decodes, sent to the server's video session endpoint so it picks direct
+ * play, remux or transcode: the shared contract (packages/shared/src/playback.ts). Android fills
+ * it from MediaCodecList (maxHeight = the largest standard height a decoder handles, so a 1080p
+ * TV with a 4K decoder still direct-plays 4K), the display's HDR types and the audio output's
+ * passthrough formats; phones report 2 channels.
+ */
+export type { VideoDeviceProfile };
+
+export interface DeviceInfo {
+  /** Google TV / Android TV (leanback / television UI mode). */
+  isTv: boolean;
+  videoProfile: VideoDeviceProfile;
+}
+
+/** A side-loaded WebVTT subtitle track (cues in media time; native adds the stream offset). */
+export interface NativeVideoSubtitle {
+  /** 'e<ordinal>' embedded or 'x<subtitleFileId>' external (VideoSubtitleTrack.id). */
+  id: string;
+  /** Absolute signed WebVTT URL. */
+  url: string;
+  label: string;
+  language: string | null;
+  default?: boolean;
+  forced?: boolean;
+}
+
+export interface NativeVideoSegment {
+  type: 'intro' | 'credits' | 'recap';
+  /** Media time (absolute). */
+  startMs: number;
+  endMs: number;
+}
+
+export interface PlayVideoOptions {
+  /** 'movie:<id>' / 'episode:<id>'; echoed in every video event. */
+  itemKey: string;
+  /** Absolute signed stream URL (VideoSession.url). */
+  url: string;
+  headers?: Record<string, string>;
+  /** 'video/mp4', 'video/x-matroska', 'video/webm'. */
+  mimeType: string;
+  /** Media time the stream begins at (0 for direct play). Player time + this = media time. */
+  streamStartMs: number;
+  /** Absolute media time to start at (resume). */
+  startPositionMs: number;
+  /** True for direct play: native seeks itself. False: seeks become `videoSeekRequest`. */
+  seekable: boolean;
+  /** The whole item's length (the seek bar's scale; a remux stream does not know it). */
+  durationMs: number;
+  title: string;
+  /** "S02 · E05 · The Long Meridian", the year, ... */
+  subtitle?: string;
+  /** Small technical line shown under the title ("DIRECT PLAY · 4K HDR10"). */
+  streamInfo?: string;
+  /** Poster / thumbnail for the media session (lock screen, remotes). */
+  artworkUrl?: string;
+  backdropUrl?: string;
+  /** Text subtitle tracks (VideoSession.subtitles). */
+  subtitles: NativeVideoSubtitle[];
+  /** Subtitle id to show at start; null / absent = off. */
+  selectedSubtitle?: string | null;
+  /**
+   * The item's audio tracks (ordinal = VideoAudioTrack.index). In direct play native lists the
+   * file's own tracks and picks `selectedAudio` among them; otherwise picking another one fires
+   * `videoSeekRequest` with `audioTrack`.
+   */
+  audioTracks: { index: number; label: string }[];
+  selectedAudio?: number;
+  /** Chapter marks on the seek bar (media time). */
+  chapters?: { title: string; startMs: number }[];
+  /** Skip intro / recap / credits buttons. */
+  segments?: NativeVideoSegment[];
+  /** Up next: a card with a 10 s countdown at the credits (or 20 s before the end). */
+  next?: { itemKey: string; title: string; subtitle?: string; artworkUrl?: string };
+}
+
+export interface ReplaceVideoStreamOptions {
+  url: string;
+  mimeType: string;
+  streamStartMs: number;
+  seekable: boolean;
+  /** Absolute media time to continue at. */
+  positionMs: number;
+  /** New signed subtitle links (same ids); the current choice is kept. */
+  subtitles?: NativeVideoSubtitle[];
+  /** The audio ordinal this stream carries (after an audio change). */
+  selectedAudio?: number;
+  /** The "Direct play · 1080p" line for the new stream (it can change with the audio track). */
+  streamInfo?: string;
+}
+
+/** Every 10 s while playing, on pause, and once before `videoNext`. Times are media time. */
+export interface VideoProgressEvent {
+  itemKey: string;
+  positionMs: number;
+  durationMs: number;
+  paused: boolean;
+}
+
+/**
+ * The user sought outside a non-seekable stream or picked another audio track in remux /
+ * transcode mode. JS asks the server for a new session at `positionMs` and answers with
+ * `replaceVideoStream`.
+ */
+export interface VideoSeekRequestEvent {
+  itemKey: string;
+  positionMs: number;
+  /** The audio ordinal wanted (always the current one when only seeking). */
+  audioTrack?: number;
+  /** The subtitle shown (null = off), so the new session keeps it. */
+  subtitle?: string | null;
+}
+
+/**
+ * Up-next fired (countdown, "Play now", or the item ended). The video screen stays open with a
+ * spinner: JS calls `playVideo` for `itemKey` (replaces in place) or `closeVideo`.
+ */
+export interface VideoNextEvent {
+  itemKey: string;
+  /**
+   * The current item counts as watched (countdown, the end, "Play now" on the up-next card).
+   * False for the "Next episode" button / media key before the credits. Absent: true.
+   */
+  completed?: boolean;
+}
+
+export interface VideoClosedEvent {
+  itemKey: string;
+  positionMs: number;
+  durationMs: number;
+  /** Reached the end (or within the credits / last 2 %). */
+  completed: boolean;
+  /** Set when playback failed: a `PlayerErrorCode` ('auth', 'network', 'unsupported', ...). */
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------------------
 
@@ -323,8 +465,8 @@ export interface PlayerInfo {
   platform: 'ios' | 'android' | 'web';
   /** Native implementation version (free text). */
   version: string;
-  /** What this build implements; JS hides the rest. */
-  features: { audio: boolean; downloads: boolean; car: boolean; cast: boolean; sleepTimer: boolean };
+  /** What this build implements; JS hides the rest. `video`: the native video player (Android). */
+  features: { audio: boolean; downloads: boolean; car: boolean; cast: boolean; sleepTimer: boolean; video?: boolean };
 }
 
 export interface ArclightPlayerPlugin {
@@ -392,6 +534,19 @@ export interface ArclightPlayerPlugin {
    */
   endCastSession(): Promise<void>;
 
+  // ---- video -------------------------------------------------------------------------
+  /** TV detection and the video decode profile (web fallback: a browser profile, isTv false). */
+  getDeviceInfo(): Promise<DeviceInfo>;
+  /**
+   * Opens (or reuses) the full-screen native video player and starts `url`. Pauses the audio
+   * player. Resolves once the screen is opening; the outcome arrives as events.
+   */
+  playVideo(options: PlayVideoOptions): Promise<void>;
+  /** A new stream for the open video (answer to `videoSeekRequest`). Rejects 'invalid' when none is open. */
+  replaceVideoStream(options: ReplaceVideoStreamOptions): Promise<void>;
+  /** Closes the video player (fires `videoClosed`). Resolves when nothing is open. */
+  closeVideo(): Promise<void>;
+
   // ---- events ------------------------------------------------------------------------
   addListener(eventName: 'state', listener: (e: StateEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'position', listener: (e: PositionEvent) => void): Promise<PluginListenerHandle>;
@@ -407,6 +562,10 @@ export interface ArclightPlayerPlugin {
   addListener(eventName: 'browsePlay', listener: (e: BrowsePlayEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'carConnection', listener: (e: CarConnectionEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'castState', listener: (e: CastState) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoProgress', listener: (e: VideoProgressEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoSeekRequest', listener: (e: VideoSeekRequestEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoNext', listener: (e: VideoNextEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoClosed', listener: (e: VideoClosedEvent) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }
 
@@ -425,6 +584,10 @@ export interface PlayerEvents {
   browsePlay: BrowsePlayEvent;
   carConnection: CarConnectionEvent;
   castState: CastState;
+  videoProgress: VideoProgressEvent;
+  videoSeekRequest: VideoSeekRequestEvent;
+  videoNext: VideoNextEvent;
+  videoClosed: VideoClosedEvent;
 }
 
 export type PlayerEventName = keyof PlayerEvents;

@@ -8,6 +8,7 @@ import { STREAM_QUALITIES, type AppSettings, type StreamQuality } from '../core/
 import { signOut } from '../core/sign-in';
 import { APP_VERSION } from '../config';
 import { hostOf } from './onboarding';
+import { isTvMode } from '../tv/tv-mode';
 
 // Settings: accounts (switch, add, sign out), streaming and download quality, storage, language,
 // progress sync, about.
@@ -77,7 +78,7 @@ function AccountRow({ account, active }: { account: Account; active: boolean }) 
             {t('app.settings.switch')}
           </Button>
         ) : null}
-        <Button variant="ghost" onClick={() => setConfirm(true)}>
+        <Button variant="ghost" data-tv-not-first="" onClick={() => setConfirm(true)}>
           {t('app.settings.signOut')}
         </Button>
       </div>
@@ -165,12 +166,16 @@ export function SettingsPage() {
           <Row label={t('app.settings.wifiQuality')} htmlFor="set-wifi">
             <Select id="set-wifi" options={qualityOptions} value={settings.wifiQuality} onChange={(e) => setQuality('wifiQuality', e.target.value)} />
           </Row>
-          <Row label={t('app.settings.cellularQuality')} hint={t('app.settings.qualityHint')} htmlFor="set-cell">
-            <Select id="set-cell" options={qualityOptions} value={settings.cellularQuality} onChange={(e) => setQuality('cellularQuality', e.target.value)} />
-          </Row>
+          {/* A TV has no mobile data; it keeps no downloads either. */}
+          {!services.tv ? (
+            <Row label={t('app.settings.cellularQuality')} hint={t('app.settings.qualityHint')} htmlFor="set-cell">
+              <Select id="set-cell" options={qualityOptions} value={settings.cellularQuality} onChange={(e) => setQuality('cellularQuality', e.target.value)} />
+            </Row>
+          ) : null}
         </Pane>
       </section>
 
+      {!services.tv ? (
       <section className="app-section">
         <h2 className="app-section__title">{t('app.settings.downloads')}</h2>
         <Pane>
@@ -202,6 +207,7 @@ export function SettingsPage() {
           </Row>
         </Pane>
       </section>
+      ) : null}
 
       <section className="app-section">
         <h2 className="app-section__title">{t('app.settings.privacy')}</h2>
@@ -220,7 +226,7 @@ export function SettingsPage() {
             <Select
               id="set-lang"
               value={settings.language}
-              options={[{ value: 'system', label: t('app.settings.languageSystem') }, ...LOCALES.map((l) => ({ value: l.code, label: l.nativeName }))]}
+              options={[{ value: 'system', label: t(isTvMode() ? 'app.tv.languageSystem' : 'app.settings.languageSystem') }, ...LOCALES.map((l) => ({ value: l.code, label: l.nativeName }))]}
               onChange={(e) => {
                 const language = e.target.value;
                 void update({ language }).then(() => applyAppLanguage(language));

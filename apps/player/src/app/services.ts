@@ -16,7 +16,14 @@ import { DownloadManager } from '../offline/downloads';
 import { ProgressQueue } from '../offline/progress-queue';
 import { CarBrowser } from '../player/car';
 import { createCarLibrary } from '../player/car-library';
-import { appDeviceId, createAppPlayer, type AppPlayer } from '../player/setup';
+import { appDeviceId, createAppPlayer, progressSender, type AppPlayer } from '../player/setup';
+import { browseKeys } from '@web/features/player/browse/api';
+import { playbackApi, playerKeys } from '@web/features/player/api';
+import { videoApi } from '@web/features/player/video/api';
+import { setVideoLauncher } from '@web/features/player/video/video-launcher';
+import { ArclightPlayer, type DeviceInfo } from '../native';
+import { decideTvMode } from '../tv/tv-mode';
+import { NativeVideoLauncher } from '../video/native-video';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
 // React through AppServicesContext.
@@ -41,6 +48,21 @@ export interface AppServices {
   /** The app is in the foreground again. */
   resumed(): void;
   subscribePlayer(listener: () => void): () => void;
+  /** The 10-foot TV layout is on (Google TV / Android TV, or ?tv=1). */
+  tv: boolean;
+  /** The native video player (Android); null: videos open the web player page. */
+  video: NativeVideoLauncher | null;
+}
+
+/** The native plugin's device info, when this build has the native video player. */
+async function nativeDeviceInfo(backend: PlayerBackend): Promise<DeviceInfo | null> {
+  if (!Capacitor.isNativePlatform() || !backend.native || backend.info.features.video !== true) return null;
+  try {
+    return await ArclightPlayer.getDeviceInfo();
+  } catch (e) {
+    console.warn('getDeviceInfo', e);
+    return null;
+  }
 }
 
 export async function createServices(): Promise<AppServices> {
@@ -63,6 +85,8 @@ export async function createServices(): Promise<AppServices> {
 
   const deviceId = await appDeviceId(preferencesStore);
   const { deviceName } = await deviceInfo();
+  const device = await nativeDeviceInfo(backend);
+  const tv = decideTvMode(device?.isTv ?? false);
 
   let caps: PlayerCapabilities | undefined;
   let player: AppPlayer | null = null;
@@ -129,7 +153,37 @@ export async function createServices(): Promise<AppServices> {
       playerListeners.add(listener);
       return () => playerListeners.delete(listener);
     },
+    tv,
+    video: null,
   };
+
+  // Movies & TV on Android: play buttons open the native player instead of the web page.
+  if (device) {
+    const { sendProgress } = progressSender({ progressQueue, settings: () => settings.get(), qc });
+    const video = new NativeVideoLauncher({
+      plugin: ArclightPlayer,
+      profile: async () => device.videoProfile,
+      fetchItem: (key) => qc.fetchQuery({ queryKey: playerKeys.item(key), queryFn: () => playbackApi.item(key), staleTime: 60_000 }),
+      fetchProgress: async (key) => (await playbackApi.progress([key])).items.find((p) => p.itemKey === key) ?? null,
+      requestSession: (body) => videoApi.session(body),
+      sendProgress,
+      markPlayed: (key) => videoApi.watched({ itemKeys: [key as never], played: true }),
+      pauseAudio: () => {
+        if (player?.controller.getState().playing) player.controller.pause();
+      },
+      refresh: () => {
+        void qc.invalidateQueries({ queryKey: browseKeys.all });
+        void qc.invalidateQueries({ queryKey: ['playback', 'progress'] });
+        void qc.invalidateQueries({ queryKey: playerKeys.continue });
+      },
+      onError: (message) => toasts.push({ tone: 'error', title: message }),
+      deviceId,
+      deviceName,
+    });
+    await video.start();
+    setVideoLauncher(video.launch);
+    services.video = video;
+  }
 
   // Back online: send what was queued.
   onNetChange((s) => {
@@ -137,7 +191,7 @@ export async function createServices(): Promise<AppServices> {
   });
   void flushProgress();
   // CarPlay / Android Auto browse lists (only in builds whose native side has the car UI).
-  if (backend.native && backend.info.features.car) {
+  if (backend.native && backend.info.features.car && !tv) {
     new CarBrowser({
       plugin: backend.plugin,
       library: createCarLibrary(qc, index),

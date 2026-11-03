@@ -1,0 +1,116 @@
+/* TV layout (html.tv-mode): 10-foot sizes, a rail on the left, focus you can see from the sofa.
+   A 1080p TV WebView is about 960 × 540 CSS px, so sizes here are in px of that space. Colours
+   are the theme's tokens. */
+
+html.tv-mode { --tv-rail: 76px; --tv-gutter: 28px; --tv-focus: var(--al-cyan, #4fd8ff); }
+html.tv-mode, html.tv-mode body { overflow-x: hidden; }
+
+/* Focus: a bright ring plus a lift; programmatic focus counts (the remote has no pointer). */
+html.tv-mode :is(a, button, input, select, textarea, summary, [tabindex]):focus {
+  outline: 3px solid var(--tv-focus); outline-offset: 3px; border-radius: 6px;
+}
+html.tv-mode :is(a, button, input, select, textarea, [tabindex]) { scroll-margin: 56px 40px; }
+html.tv-mode .al-btn { min-height: 48px; font-size: 17px; }
+
+/* ---------- frame ---------- */
+.tv-shell { position: relative; min-height: 100vh; }
+.tv-ambient {
+  position: fixed; inset: 0; z-index: 0; background-size: cover; background-position: center;
+  filter: blur(28px) saturate(1.1); opacity: 0.22; transform: scale(1.1); pointer-events: none;
+  transition: background-image 0.4s ease;
+}
+.tv-rail {
+  position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: var(--tv-rail);
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 22px 10px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--al-surface-solid) 96%, transparent), color-mix(in srgb, var(--al-surface-solid) 80%, transparent));
+  border-right: 1px solid var(--al-line-2); overflow: hidden; transition: width 0.18s ease, box-shadow 0.18s ease;
+}
+.tv-rail:focus-within { width: 220px; box-shadow: 12px 0 40px rgba(0, 0, 0, 0.55); }
+.tv-rail__brand { display: flex; justify-content: center; padding-bottom: 14px; }
+.tv-rail:focus-within .tv-rail__brand { justify-content: flex-start; padding-left: 10px; }
+.tv-rail__link {
+  display: flex; align-items: center; gap: 16px; min-height: 52px; padding: 0 15px; border-radius: 10px;
+  color: var(--al-text-3); text-decoration: none; white-space: nowrap; font-size: 18px;
+}
+.tv-rail__link:hover { text-decoration: none; }
+.tv-rail__link[aria-current='page'] { color: var(--al-cyan); background: color-mix(in srgb, var(--al-cyan) 10%, transparent); }
+html.tv-mode .tv-rail__link:focus { outline-offset: -3px; background: color-mix(in srgb, var(--al-cyan) 22%, transparent); color: var(--al-text-1); }
+.tv-rail__label { opacity: 0; transition: opacity 0.15s ease; }
+.tv-rail:focus-within .tv-rail__label { opacity: 1; }
+.tv-rail__offline { margin-top: auto; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--al-warn-text, #f2c37a); text-align: center; }
+
+.tv-main { position: relative; z-index: 1; margin-left: var(--tv-rail); padding: 24px var(--tv-gutter) 72px; min-height: 100vh; }
+.tv-shell .pb-page, .tv-shell .app-page { gap: 20px; }
+.tv-shell .pb-title, .tv-shell .app-page__title { font-size: 30px; }
+.tv-mini { position: fixed; z-index: 25; left: var(--tv-rail); right: 0; bottom: 0; }
+.tv-mini .pl-mini { position: relative; }
+
+/* The web pages, bigger: posters, chips, tabs and lists sized for a remote. */
+.tv-shell .vw-card__title, .tv-shell .pb-card__title { font-size: 16px; }
+.tv-shell .vw-card__sub, .tv-shell .pb-card__sub { font-size: 14px; }
+.tv-shell .pb-subnav__link { font-size: 18px; padding: 10px 18px; }
+/* Movies & TV's own Home / Movies / Shows tabs: the rail already has them. */
+.tv-shell .pb-subnav:has(.pb-subnav__link[href*="/watch/shows"]) { display: none; }
+.tv-shell .vw-chip { font-size: 16px; padding: 10px 18px; }
+.tv-shell .vw-card__play { opacity: 1; }
+.tv-shell .al-input, .tv-shell .al-select { min-height: 48px; font-size: 18px; }
+/* A focused card lifts so it is obvious which one OK will open. */
+html.tv-mode .vw-card__link:focus .vw-art, html.tv-mode .tv-card:focus .vw-art { transform: scale(1.06); box-shadow: 0 0 0 3px var(--tv-focus), 0 12px 32px rgba(0, 0, 0, 0.6); }
+html.tv-mode .vw-card__link:focus, html.tv-mode .tv-card:focus { outline: none; box-shadow: none; }
+html.tv-mode .vw-art { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+
+/* ---------- home ---------- */
+.tv-shell .tv-main:has(.tv-home) { padding: 0; height: 100vh; overflow: hidden; }
+.tv-home { display: grid; grid-template-rows: 40vh minmax(0, 1fr); height: 100vh; }
+.tv-hero { position: relative; overflow: hidden; }
+.tv-hero__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: tv-fade 0.35s ease; }
+.tv-hero__shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, var(--al-bg, #02070a) 0%, color-mix(in srgb, var(--al-bg, #02070a) 70%, transparent) 38%, transparent 70%),
+    linear-gradient(0deg, var(--al-bg, #02070a) 0%, transparent 45%);
+}
+.tv-hero__text { position: absolute; left: var(--tv-gutter); bottom: 18px; max-width: 58%; display: flex; flex-direction: column; gap: 8px; }
+.tv-hero__title { margin: 0; font-size: 36px; line-height: 1.1; color: var(--al-text-1); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+.tv-hero__meta { margin: 0; font-size: 16px; color: var(--al-text-2); }
+.tv-hero__progress { width: 240px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--al-text-1) 22%, transparent); overflow: hidden; }
+.tv-hero__progress span { display: block; height: 100%; background: var(--al-cyan); }
+@keyframes tv-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tv-hero__art { animation: none; } }
+
+.tv-rows { overflow-y: auto; overflow-x: hidden; padding: 4px 0 48px; scrollbar-width: none; }
+.tv-rows::-webkit-scrollbar { display: none; }
+.tv-row { padding: 6px 0 10px; }
+.tv-row__title { margin: 0 0 8px; padding: 0 var(--tv-gutter); font-size: 19px; font-weight: 600; color: var(--al-text-1); }
+.tv-row__list {
+  list-style: none; margin: 0; padding: 10px var(--tv-gutter) 14px; display: flex; gap: 18px;
+  overflow-x: auto; scroll-padding: 0 var(--tv-gutter); scrollbar-width: none;
+}
+.tv-row__list::-webkit-scrollbar { display: none; }
+.tv-row__list--chips { flex-wrap: nowrap; gap: 12px; }
+.tv-row__item { flex: none; }
+.tv-card {
+  display: flex; flex-direction: column; gap: 12px; padding: 0; border: 0; background: none; color: inherit;
+  text-align: left; font: inherit; cursor: pointer; text-decoration: none;
+}
+.tv-card:hover { text-decoration: none; }
+.tv-card--wide { width: 232px; }
+/* A whole poster row (title, art, caption) fits under the hero on a 540px-tall (1080p, 2x) screen. */
+.tv-card--poster { width: min(138px, calc((60vh - 126px) * 2 / 3)); }
+.tv-card__title { font-size: 16px; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-card__sub { font-size: 14px; color: var(--al-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+.tv-chip { white-space: nowrap; }
+.tv-message { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 48px var(--tv-gutter); }
+.tv-message h1 { margin: 0; font-size: 30px; color: var(--al-text-1); }
+.tv-message p { margin: 0; font-size: 18px; color: var(--al-text-3); }
+
+/* ---------- sign-in ---------- */
+html.tv-mode .app-onboarding__main { max-width: 860px; }
+.tv-code { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: center; }
+.tv-code__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 17px; color: var(--al-text-2); }
+.tv-code__url { font-family: var(--al-font-mono, monospace); color: var(--al-cyan); word-break: break-all; }
+.tv-code__value { margin: 6px 0 0; font-family: var(--al-font-mono, monospace); font-size: 44px; letter-spacing: 0.12em; color: var(--al-text-1); }
+.tv-code__qr { background: #fff; padding: 10px; border-radius: 8px; line-height: 0; }
+.tv-code__qr svg { width: 176px; height: 176px; display: block; }
+.tv-code__status { font-size: 15px; color: var(--al-text-4); }
+@media (max-width: 640px) { .tv-code { grid-template-columns: 1fr; } }

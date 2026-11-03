@@ -1,0 +1,16 @@
+{
+  "app.tv.movies": "Filme",
+  "app.tv.shows": "Serien",
+  "app.tv.welcomeHelp": "Danach bestätigst du einen Code auf dem Handy oder Computer, ohne ein Passwort mit der Fernbedienung einzutippen.",
+  "app.tv.code.open": "Öffne auf deinem Handy oder Computer",
+  "app.tv.code.enter": "Melde dich dort an, falls nötig, und gib diesen Code ein (oder scanne den QR-Code):",
+  "app.tv.code.label": "Anmeldecode",
+  "app.tv.code.waiting": "Warte auf deine Bestätigung…",
+  "app.tv.code.qr": "QR-Code, der die Bestätigungsseite mit dem Code öffnet",
+  "app.tv.code.approved": "Bestätigt. Anmeldung läuft…",
+  "app.tv.code.starting": "Code wird angefordert…",
+  "app.tv.code.expired": "Der Code ist abgelaufen. Hol dir einen neuen, um weiterzumachen.",
+  "app.tv.code.newCode": "Neuen Code holen",
+  "app.tv.code.instead": "Stattdessen mit einem Code anmelden",
+  "app.tv.languageSystem": "Wie auf dem Fernseher"
+}

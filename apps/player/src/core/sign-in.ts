@@ -72,7 +72,7 @@ export function signInFailure(err: unknown): { reason: SignInFailure; message: s
   return { reason: 'unknown', message };
 }
 
-async function remember(store: AccountStore, serverUrl: string, res: AppSignInResponse, method: 'password' | 'pairing'): Promise<Account> {
+export async function remember(store: AccountStore, serverUrl: string, res: AppSignInResponse, method: Account['method']): Promise<Account> {
   const account = await store.add({ serverUrl, token: res.token, deviceId: res.deviceId, user: res.user, server: res.server, method });
   resetArtworkLink();
   await store.activate();

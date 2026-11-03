@@ -38,6 +38,12 @@ export const PlayerSettings = z.object({
    * servers) to stream through. null: the first enabled Jellyfin/Emby connection.
    */
   jellyfinServerId: z.string().max(100).nullable().default(null),
+  /** Movies & TV in the player (needs `enabled`). */
+  video: z.boolean().default(true),
+  /** Live video remuxes/transcodes running at once, server-wide (direct play is not counted). */
+  videoMaxStreams: z.number().int().min(1).max(32).default(3),
+  /** Live video remuxes/transcodes one user may run at once. */
+  videoMaxStreamsPerUser: z.number().int().min(1).max(32).default(1),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
@@ -92,21 +98,25 @@ export type PlayerCapabilities = z.infer<typeof PlayerCapabilities>;
 // ---------------------------------------------------------------------------------------
 
 /**
- * Playable item keys, extending the watch-history scheme (`movie:<id>`, `episode:<id>`):
- * `track:<tracks.id>` and `audiobook:<books.id>`. An audiobook is one item however many files
+ * Playable item keys, the watch-history scheme (`movie:<movies.id>`, `episode:<episodes.id>`)
+ * plus `track:<tracks.id>` and `audiobook:<books.id>`. An audiobook is one item however many files
  * it spans. Later phases add `podcast-episode:`, `ebook:`, `comic-issue:`.
  */
-export const PlayableKind = z.enum(['track', 'audiobook']);
+export const PlayableKind = z.enum(['track', 'audiobook', 'movie', 'episode']);
 export type PlayableKind = z.infer<typeof PlayableKind>;
-export const ItemKey = z.string().regex(/^(track|audiobook):[1-9][0-9]*$/);
+export const ItemKey = z.string().regex(/^(track|audiobook|movie|episode):[1-9][0-9]*$/);
 export type ItemKey = z.infer<typeof ItemKey>;
 
 export function itemKey(kind: PlayableKind, id: number): ItemKey {
   return `${kind}:${id}`;
 }
 export function parseItemKey(key: string): { kind: PlayableKind; id: number } | null {
-  const m = /^(track|audiobook):([1-9][0-9]*)$/.exec(key);
+  const m = /^(track|audiobook|movie|episode):([1-9][0-9]*)$/.exec(key);
   return m ? { kind: m[1] as PlayableKind, id: Number(m[2]) } : null;
+}
+/** Movies and episodes play through the video routes (POST /playback/video/session). */
+export function isVideoKind(kind: PlayableKind): kind is 'movie' | 'episode' {
+  return kind === 'movie' || kind === 'episode';
 }
 
 /** One file of a playable item, placed on the item's timeline. */
@@ -130,6 +140,81 @@ export type PlayablePart = z.infer<typeof PlayablePart>;
 export const PlayableChapter = z.object({ title: z.string(), startMs: z.number().int(), durationMs: z.number().int() });
 export type PlayableChapter = z.infer<typeof PlayableChapter>;
 
+// ---------------------------------------------------------------------------------------
+// Video (movies and episodes)
+// ---------------------------------------------------------------------------------------
+
+export const VideoDynamicRange = z.enum(['sdr', 'hdr10', 'hdr10plus', 'hlg', 'dv']);
+export type VideoDynamicRange = z.infer<typeof VideoDynamicRange>;
+
+/** One audio track of a video file. `index` is its ordinal among the file's audio streams (0-based). */
+export const VideoAudioTrack = z.object({
+  index: z.number().int().min(0),
+  codec: z.string(),
+  channels: z.number().int().nullable(),
+  /** ISO 639-2 as tagged (`eng`); null when untagged. */
+  language: z.string().nullable(),
+  title: z.string().nullable(),
+  default: z.boolean(),
+});
+export type VideoAudioTrack = z.infer<typeof VideoAudioTrack>;
+
+/**
+ * One subtitle track. `id`: `e<ordinal>` for an embedded stream (ordinal among the file's
+ * subtitle streams, 0-based) or `x<subtitle_files.id>` for an external file. `text`: srt, ass,
+ * vtt, mov_text (served as WebVTT); false for image subtitles (PGS, VobSub), which can only be burned in.
+ */
+export const VideoSubtitleTrack = z.object({
+  id: z.string().regex(/^(e[0-9]+|x[1-9][0-9]*)$/),
+  source: z.enum(['embedded', 'external']),
+  codec: z.string(),
+  language: z.string().nullable(),
+  title: z.string().nullable(),
+  forced: z.boolean(),
+  hearingImpaired: z.boolean(),
+  default: z.boolean(),
+  text: z.boolean(),
+});
+export type VideoSubtitleTrack = z.infer<typeof VideoSubtitleTrack>;
+
+/** The file a video item plays (the chosen version), from its ffprobe media info. */
+export const VideoInfo = z.object({
+  mediaFileId: z.number().int(),
+  versionTag: z.string().nullable(),
+  /** Short container name: mp4, mkv, webm, mov, avi, ts, ... */
+  container: z.string(),
+  /** Probe codec id: h264, hevc, av1, vp9, mpeg2video, ... */
+  videoCodec: z.string(),
+  videoProfile: z.string().nullable(),
+  bitDepth: z.number().int().nullable(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  fps: z.number().nullable(),
+  dynamicRange: VideoDynamicRange,
+  sizeBytes: z.number().int(),
+  bitrateKbps: z.number().int().nullable(),
+  audioTracks: z.array(VideoAudioTrack),
+  subtitleTracks: z.array(VideoSubtitleTrack),
+});
+export type VideoInfo = z.infer<typeof VideoInfo>;
+
+/** One version of a movie or episode (several files: 4K HDR and 1080p, editions). */
+export const VideoVersion = z.object({
+  versionTag: z.string().nullable(),
+  /** "4K HDR", "1080p", "720p · Director's Cut". */
+  label: z.string(),
+  mediaFileId: z.number().int(),
+});
+export type VideoVersion = z.infer<typeof VideoVersion>;
+
+/** Intro/credits/recap ranges, from chapter names in the file ("Intro", "Opening", "Credits", "Recap" ...). */
+export const VideoSegment = z.object({
+  type: z.enum(['intro', 'credits', 'recap']),
+  startMs: z.number().int(),
+  endMs: z.number().int(),
+});
+export type VideoSegment = z.infer<typeof VideoSegment>;
+
 /** GET /playback/item/:itemKey. Everything a player needs to start an item. */
 export const PlayableItem = z.object({
   itemKey: ItemKey,
@@ -142,9 +227,12 @@ export const PlayableItem = z.object({
   /** Image URL the browser can load (same-origin, cookie auth). */
   artworkUrl: z.string().nullable(),
   durationMs: z.number().int(),
-  /** Tracks: one part. Audiobooks: every file in order (part/disc/track), on one timeline. */
-  parts: z.array(PlayablePart).min(1),
-  /** Audiobooks: chapters on the whole-book timeline. Tracks: empty. */
+  /**
+   * Tracks: one part. Audiobooks: every file in order (part/disc/track), on one timeline.
+   * Movies and episodes: empty (they play through `video`).
+   */
+  parts: z.array(PlayablePart),
+  /** Audiobooks: chapters on the whole-book timeline. Video: the file's chapters. Tracks: empty. */
   chapters: z.array(PlayableChapter),
   /** Links back for the UI. */
   albumId: z.number().int().nullable(),
@@ -152,6 +240,25 @@ export const PlayableItem = z.object({
   bookId: z.number().int().nullable(),
   /** ReplayGain from tags when present (dB). */
   replayGain: z.object({ trackGainDb: z.number().nullable(), albumGainDb: z.number().nullable() }).nullable(),
+  // ---- movies and episodes only ------------------------------------------------------
+  movieId: z.number().int().optional(),
+  seriesId: z.number().int().optional(),
+  seasonNumber: z.number().int().optional(),
+  episodeNumber: z.number().int().optional(),
+  year: z.number().int().nullable().optional(),
+  overview: z.string().nullable().optional(),
+  /** Wide artwork (movie/series fanart) for the player background. */
+  backdropUrl: z.string().nullable().optional(),
+  /** Title logo (clearlogo) when known. */
+  logoUrl: z.string().nullable().optional(),
+  /** The file that plays by default (the best version) and its tracks. */
+  video: VideoInfo.optional(),
+  /** Every version with a file, best first. */
+  versions: z.array(VideoVersion).optional(),
+  segments: z.array(VideoSegment).optional(),
+  /** Episodes: the next / previous episode with a file (up next, auto-play). */
+  next: ItemKey.optional(),
+  previous: ItemKey.optional(),
 });
 export type PlayableItem = z.infer<typeof PlayableItem>;
 
@@ -513,6 +620,9 @@ export const PlayerSearchResponse = z.object({
   albums: z.array(PlayerAlbum),
   artists: z.array(PlayerArtist),
   audiobooks: z.array(PlayerAudiobook),
+  /** Movies and shows with files (empty when Movies & TV is off for this user). */
+  movies: z.array(z.lazy(() => PlayerMovie)).default([]),
+  series: z.array(z.lazy(() => PlayerSeries)).default([]),
 });
 export type PlayerSearchResponse = z.infer<typeof PlayerSearchResponse>;
 
@@ -534,3 +644,316 @@ export const ContinueResponse = z.object({
   items: z.array(z.object({ item: PlayableItem, progress: PlaybackProgress })),
 });
 export type ContinueResponse = z.infer<typeof ContinueResponse>;
+
+// ---------------------------------------------------------------------------------------
+// Video playback: device profile, session, streams
+// ---------------------------------------------------------------------------------------
+
+/**
+ * What a client can play natively. Web builds it from MediaSource.isTypeSupported/canPlayType,
+ * Android from MediaCodecList and the display/audio capabilities.
+ */
+export const VideoDeviceProfile = z.object({
+  /** mp4, mkv, webm, mov. */
+  containers: z.array(z.string().max(20)).max(20),
+  /** h264, hevc, av1, vp9. */
+  videoCodecs: z.array(z.string().max(20)).max(20),
+  /** HEVC Main 10 decodes. */
+  hevc10bit: z.boolean().default(false),
+  hdr: z.array(z.enum(['hdr10', 'hlg', 'dv'])).max(3).default([]),
+  /** aac, mp3, opus, flac, ac3, eac3, dts, truehd. */
+  audioCodecs: z.array(z.string().max(20)).max(20),
+  maxAudioChannels: z.number().int().min(1).max(16).default(2),
+  maxHeight: z.number().int().min(144).max(4320).default(1080),
+  maxBitrateKbps: z.number().int().min(100).max(1_000_000).optional(),
+});
+export type VideoDeviceProfile = z.infer<typeof VideoDeviceProfile>;
+export type VideoDeviceProfileInput = z.input<typeof VideoDeviceProfile>;
+
+export const VideoPlayMethod = z.enum(['direct', 'remux', 'transcode']);
+export type VideoPlayMethod = z.infer<typeof VideoPlayMethod>;
+export const VideoQuality = z.enum(['auto', 'original', '1080p', '720p', '480p']);
+export type VideoQuality = z.infer<typeof VideoQuality>;
+
+/**
+ * Why a session is not direct play (`VideoSession.reasons`; clients translate the codes):
+ * container, video-codec, video-profile (10-bit HEVC on a device without Main 10, ...),
+ * audio-codec, audio-channels, hdr (HDR file, SDR device: tone-mapped), resolution (over
+ * maxHeight or the chosen quality), bitrate (over the device/user/remote cap), burn-subtitle (an
+ * image subtitle was chosen), quality (the user picked a lower quality).
+ */
+export const VIDEO_REASONS = [
+  'container',
+  'video-codec',
+  'video-profile',
+  'audio-codec',
+  'audio-channels',
+  'hdr',
+  'resolution',
+  'bitrate',
+  'burn-subtitle',
+  'quality',
+] as const;
+export const VideoReason = z.enum(VIDEO_REASONS);
+export type VideoReason = z.infer<typeof VideoReason>;
+
+/** POST /playback/video/session. Call again (with `startMs`) to seek in a stream that is not seekable. */
+export const VideoSessionRequest = z.object({
+  itemKey: ItemKey,
+  /** A version (media_files.id) of the item; default: the item's best version. */
+  mediaFileId: z.number().int().positive().optional(),
+  profile: VideoDeviceProfile,
+  /** Audio ordinal (VideoAudioTrack.index); default: the file's default track. */
+  audioTrack: z.number().int().min(0).optional(),
+  /** VideoSubtitleTrack.id; an image subtitle here is burned in (transcode). null/absent: none. */
+  subtitle: z.string().max(20).nullable().optional(),
+  /** Media time to start at (remux/transcode begin here; direct play seeks there itself). */
+  startMs: z.number().int().min(0).optional(),
+  quality: VideoQuality.default('auto'),
+});
+export type VideoSessionRequest = z.input<typeof VideoSessionRequest>;
+
+export const VideoSessionSubtitle = z.object({
+  id: z.string(),
+  label: z.string(),
+  language: z.string().nullable(),
+  forced: z.boolean(),
+  default: z.boolean(),
+  /**
+   * Absolute signed WebVTT URL (GET /stream/subtitle/:mediaFileId/:subId.vtt). Cue times are
+   * always media time: the server never offsets them. With a remux/transcode stream that begins
+   * at `streamStartMs`, clients subtract `streamStartMs` from cue times (or add it to the
+   * player's clock) themselves.
+   */
+  url: z.string(),
+});
+export type VideoSessionSubtitle = z.infer<typeof VideoSessionSubtitle>;
+
+export const VideoSession = z.object({
+  itemKey: ItemKey,
+  mediaFileId: z.number().int(),
+  method: VideoPlayMethod,
+  /** Empty for direct play; otherwise VideoReason codes. */
+  reasons: z.array(VideoReason),
+  /** Absolute signed stream URL (GET /stream/video/:mediaFileId?...). */
+  url: z.string(),
+  /** video/mp4, video/x-matroska, video/webm, ... (remux/transcode: video/mp4). */
+  mimeType: z.string(),
+  /** 0 for direct; for remux/transcode the media time the stream's time 0 is at. */
+  streamStartMs: z.number().int(),
+  /** Byte ranges work (direct only). Otherwise seek by asking for a new session with `startMs`. */
+  seekable: z.boolean(),
+  durationMs: z.number().int(),
+  /** The audio ordinal that plays. */
+  audioTrack: z.number().int(),
+  /** Text subtitle tracks as WebVTT (image subtitles are never listed here). */
+  subtitles: z.array(VideoSessionSubtitle),
+  /** The subtitle id burned into the picture, when one is. */
+  burnedSubtitle: z.string().nullable(),
+  /** When the signed URLs stop working. */
+  expiresAt: z.string(),
+});
+export type VideoSession = z.infer<typeof VideoSession>;
+
+/**
+ * GET|HEAD /stream/video/:mediaFileId?u&exp&sig&m=&a=&s=&h=&k=&b=. Signature domain
+ * `video:<userId>:<mediaFileId>:<exp>`. `m`: method; `a`: audio ordinal; `s`: start ms
+ * (remux/transcode); `h`: max height; `k`: video kbps cap; `b`: subtitle id to burn in; `ac`: audio
+ * copy|aac2|aac6; `vc`: h264|hevc. Clients use the session's URL as it is.
+ */
+export const VideoStreamQuery = z.object({
+  u: z.coerce.number().int().positive(),
+  exp: z.coerce.number().int(),
+  sig: z.string().max(200),
+  m: VideoPlayMethod.default('direct'),
+  a: z.coerce.number().int().min(0).optional(),
+  s: z.coerce.number().int().min(0).optional(),
+  h: z.coerce.number().int().min(144).max(4320).optional(),
+  k: z.coerce.number().int().min(100).max(1_000_000).optional(),
+  b: z.string().max(20).optional(),
+  /** Remux/transcode audio: copy the track, or AAC stereo / 5.1 (set by the session). */
+  ac: z.enum(['copy', 'aac2', 'aac6']).optional(),
+  /** Transcode video codec (set by the session). */
+  vc: z.enum(['h264', 'hevc']).optional(),
+});
+export type VideoStreamQuery = z.infer<typeof VideoStreamQuery>;
+
+// ---------------------------------------------------------------------------------------
+// Video browse (/playback/video/home, /playback/movies, /playback/series): only items with files,
+// within the user's content restrictions
+// ---------------------------------------------------------------------------------------
+
+export const VideoProgress = z.object({ positionMs: z.number().int(), durationMs: z.number().int(), played: z.boolean() });
+export type VideoProgress = z.infer<typeof VideoProgress>;
+
+/** GET /playback/artwork/movie|series/:id?type=poster|fanart|logo&w=342|780|1280|original (302 to TMDB). */
+export const VideoArtworkType = z.enum(['poster', 'fanart', 'logo']);
+export type VideoArtworkType = z.infer<typeof VideoArtworkType>;
+
+export const VideoCard = z.object({
+  /** What plays (movie/episode); null for a series card. */
+  itemKey: ItemKey.nullable(),
+  kind: z.enum(['movie', 'series', 'episode']),
+  id: z.number().int(),
+  /** Episode: the series title. */
+  title: z.string(),
+  /** Episode: "S1:E2 · Episode title"; series: network; movie: null. */
+  subtitle: z.string().nullable(),
+  year: z.number().int().nullable(),
+  posterUrl: z.string().nullable(),
+  backdropUrl: z.string().nullable(),
+  /** Episode frame thumbnail (16:9). */
+  thumbUrl: z.string().nullable(),
+  progress: VideoProgress.nullable(),
+  seriesId: z.number().int().optional(),
+  seasonNumber: z.number().int().optional(),
+  episodeNumber: z.number().int().optional(),
+  /** '4K', 'HDR', 'DV'. */
+  badges: z.array(z.string()),
+});
+export type VideoCard = z.infer<typeof VideoCard>;
+
+/** GET /playback/video/home. */
+export const VideoHome = z.object({
+  continueWatching: z.array(VideoCard),
+  /** Per series watched in the last 60 days: the first unplayed episode with a file after the last played one. */
+  nextUp: z.array(VideoCard),
+  recentMovies: z.array(VideoCard),
+  recentEpisodes: z.array(VideoCard),
+  /** Genres of the movies and shows that have files. */
+  genres: z.array(z.string()),
+});
+export type VideoHome = z.infer<typeof VideoHome>;
+
+/** GET /playback/movies and /playback/series. */
+export const VideoBrowseQuery = z.object({
+  search: z.string().max(200).optional(),
+  sort: z.enum(['title', 'added', 'year', 'rating']).default('title'),
+  order: z.enum(['asc', 'desc']).default('asc'),
+  genre: z.string().max(100).optional(),
+  /** First letter of the sort title ("#" for digits and symbols). */
+  letter: z.string().max(1).optional(),
+  watched: z.enum(['all', 'unwatched', 'watched']).default('all'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(60),
+});
+export type VideoBrowseQuery = z.infer<typeof VideoBrowseQuery>;
+export type VideoBrowseQueryInput = z.input<typeof VideoBrowseQuery>;
+
+export const PlayerMovie = z.object({
+  id: z.number().int(),
+  itemKey: ItemKey,
+  title: z.string(),
+  year: z.number().int().nullable(),
+  posterUrl: z.string().nullable(),
+  backdropUrl: z.string().nullable(),
+  runtimeMinutes: z.number().int().nullable(),
+  certification: z.string().nullable(),
+  /** TMDB (else IMDb) rating, 0-10. */
+  rating: z.number().nullable(),
+  genres: z.array(z.string()),
+  addedAt: z.string().nullable(),
+  progress: VideoProgress.nullable(),
+  played: z.boolean(),
+  badges: z.array(z.string()),
+});
+export type PlayerMovie = z.infer<typeof PlayerMovie>;
+export const PlayerMoviePage = pageOf(PlayerMovie);
+export type PlayerMoviePage = z.infer<typeof PlayerMoviePage>;
+
+/** A version on a details page. */
+export const PlayerVideoVersion = VideoVersion.extend({
+  badges: z.array(z.string()),
+  /** "HEVC 10-bit · EAC3 5.1 · 2160p". */
+  description: z.string().nullable(),
+  sizeBytes: z.number().int(),
+  audioLanguages: z.array(z.string()),
+  subtitleLanguages: z.array(z.string()),
+});
+export type PlayerVideoVersion = z.infer<typeof PlayerVideoVersion>;
+
+/** GET /playback/movies/:id. */
+export const PlayerMovieDetails = PlayerMovie.extend({
+  originalTitle: z.string().nullable(),
+  overview: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  ratings: z.object({ tmdb: z.number().nullable(), imdb: z.number().nullable(), rottenTomatoes: z.number().nullable() }),
+  studio: z.string().nullable(),
+  collection: z.string().nullable(),
+  versions: z.array(PlayerVideoVersion),
+});
+export type PlayerMovieDetails = z.infer<typeof PlayerMovieDetails>;
+
+export const PlayerSeries = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  posterUrl: z.string().nullable(),
+  backdropUrl: z.string().nullable(),
+  certification: z.string().nullable(),
+  rating: z.number().nullable(),
+  genres: z.array(z.string()),
+  network: z.string().nullable(),
+  status: z.string().nullable(),
+  addedAt: z.string().nullable(),
+  /** Episodes with a file, and of those, played by this user. */
+  episodeCount: z.number().int(),
+  playedCount: z.number().int(),
+  badges: z.array(z.string()),
+});
+export type PlayerSeries = z.infer<typeof PlayerSeries>;
+export const PlayerSeriesPage = pageOf(PlayerSeries);
+export type PlayerSeriesPage = z.infer<typeof PlayerSeriesPage>;
+
+export const PlayerEpisode = z.object({
+  itemKey: ItemKey,
+  id: z.number().int(),
+  seasonNumber: z.number().int(),
+  episodeNumber: z.number().int(),
+  title: z.string().nullable(),
+  overview: z.string().nullable(),
+  airDate: z.string().nullable(),
+  runtimeMinutes: z.number().int().nullable(),
+  thumbUrl: z.string().nullable(),
+  progress: VideoProgress.nullable(),
+  played: z.boolean(),
+});
+export type PlayerEpisode = z.infer<typeof PlayerEpisode>;
+
+export const PlayerSeason = z.object({
+  seasonNumber: z.number().int(),
+  /** "Season 1", or "Specials" for season 0 (clients may translate by number). */
+  title: z.string(),
+  episodeCount: z.number().int(),
+  playedCount: z.number().int(),
+  /** Episodes with a file, in order. */
+  episodes: z.array(PlayerEpisode),
+});
+export type PlayerSeason = z.infer<typeof PlayerSeason>;
+
+/** GET /playback/series/:id. */
+export const PlayerSeriesDetails = PlayerSeries.extend({
+  originalTitle: z.string().nullable(),
+  overview: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  seasons: z.array(PlayerSeason),
+  /** What "Play" starts: the in-progress or next unplayed episode; null when every episode is played. */
+  nextUp: ItemKey.nullable(),
+});
+export type PlayerSeriesDetails = z.infer<typeof PlayerSeriesDetails>;
+
+/**
+ * POST /playback/watched: mark items, a whole series or one season played/unplayed (writes
+ * playback_progress like a finished report). Give `itemKeys`, or `seriesId` (+ `seasonNumber`).
+ */
+export const VideoWatchedRequest = z
+  .object({
+    itemKeys: z.array(ItemKey).min(1).max(PLAYBACK_ITEMS_MAX).optional(),
+    seriesId: z.number().int().positive().optional(),
+    seasonNumber: z.number().int().min(0).optional(),
+    played: z.boolean(),
+  })
+  .refine((v) => (v.itemKeys !== undefined) !== (v.seriesId !== undefined), { message: 'give itemKeys or seriesId' });
+export type VideoWatchedRequest = z.infer<typeof VideoWatchedRequest>;
+export const VideoWatchedResponse = z.object({ updated: z.number().int() });
+export type VideoWatchedResponse = z.infer<typeof VideoWatchedResponse>;

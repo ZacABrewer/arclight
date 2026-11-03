@@ -1,10 +1,32 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Arclight</string>
-    <string name="title_activity_main">Arclight</string>
-    <string name="package_name">com.moviemethat.arclight</string>
-    <string name="custom_url_scheme">com.moviemethat.arclight</string>
+    <string name="app_name" translatable="false">Arclight</string>
+    <string name="title_activity_main" translatable="false">Arclight</string>
+    <string name="package_name" translatable="false">com.moviemethat.arclight</string>
+    <string name="custom_url_scheme" translatable="false">com.moviemethat.arclight</string>
     <!-- Native player plugin (downloads notification). -->
     <string name="downloads_channel">Downloads</string>
     <string name="downloading">Downloading for offline listening</string>
+    <!-- Video player (VideoActivity). -->
+    <string name="video_close">Close</string>
+    <string name="video_play">Play</string>
+    <string name="video_pause">Pause</string>
+    <string name="video_back_10">Back 10 seconds</string>
+    <string name="video_forward_10">Forward 10 seconds</string>
+    <string name="video_audio">Audio</string>
+    <string name="video_subtitles">Subtitles</string>
+    <string name="video_subtitles_off">Off</string>
+    <string name="video_next">Next</string>
+    <string name="video_next_title">Next: %1$s</string>
+    <string name="video_skip_intro">Skip intro</string>
+    <string name="video_skip_recap">Skip recap</string>
+    <string name="video_skip_credits">Skip credits</string>
+    <string name="video_up_next">Up next</string>
+    <string name="video_playing_in">Playing in %1$d s</string>
+    <string name="video_play_now">Play now</string>
+    <string name="video_cancel">Cancel</string>
+    <string name="video_ends_at">ends %1$s</string>
+    <string name="video_track_n">Track %1$d</string>
+    <string name="video_minus_10" translatable="false">−10</string>
+    <string name="video_plus_10" translatable="false">+10</string>
 </resources>

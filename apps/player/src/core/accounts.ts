@@ -21,7 +21,7 @@ export interface Account {
   displayName: string | null;
   /** Server-side device id (Settings → Devices on the server lists it). */
   deviceId: number | null;
-  method: 'password' | 'pairing';
+  method: 'password' | 'pairing' | 'device-code';
   addedAt: string;
 }
 
@@ -101,7 +101,7 @@ export interface SignedIn {
   deviceId: number;
   user: Pick<User, 'id' | 'username'> & { displayName?: string | null | undefined };
   server: { name: string; version: string };
-  method: 'password' | 'pairing';
+  method: 'password' | 'pairing' | 'device-code';
 }
 
 type Listener = (state: { accounts: Account[]; active: Account | null }) => void;

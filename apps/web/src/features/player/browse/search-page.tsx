@@ -5,10 +5,12 @@ import { usePlayerSearch } from './api.js';
 import { AlbumCard, ArtistCard, BookCard } from './cards.js';
 import { Empty, GridSkeleton, LoadError, PageTitle, useDebounced } from './kit.js';
 import { TrackList } from './tracks.js';
+import { MovieCard, SeriesCard } from '../video/cards.js';
+import '../video/watch.css';
 
 export const SEARCH_DEBOUNCE_MS = 300;
 
-/** /player/search: one box across tracks, albums, artists and audiobooks. */
+/** /player/search: one box across movies, shows, tracks, albums, artists and audiobooks. */
 export function PlayerSearchPage() {
   const t = useT();
   const [text, setText] = useState('');
@@ -21,11 +23,37 @@ export function PlayerSearchPage() {
   else if (res.isError) body = <LoadError title={t('player.browse.search.failed')} error={res.error} onRetry={() => void res.refetch()} />;
   else {
     const d = res.data;
-    const none = !d.tracks.length && !d.albums.length && !d.artists.length && !d.audiobooks.length;
+    const movies = d.movies ?? [];
+    const series = d.series ?? [];
+    const none = !d.tracks.length && !d.albums.length && !d.artists.length && !d.audiobooks.length && !movies.length && !series.length;
     body = none ? (
       <Empty title={t('player.browse.search.noResults', { query: q })}>{t('player.browse.search.noResultsBody')}</Empty>
     ) : (
       <>
+        {movies.length ? (
+          <section className="pb-section" aria-labelledby="pb-s-movies">
+            <h2 className="pb-section__title" id="pb-s-movies">
+              {t('player.video.nav.movies')}
+            </h2>
+            <ul className="vw-grid">
+              {movies.map((m) => (
+                <MovieCard key={m.id} movie={m} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {series.length ? (
+          <section className="pb-section" aria-labelledby="pb-s-shows">
+            <h2 className="pb-section__title" id="pb-s-shows">
+              {t('player.video.nav.shows')}
+            </h2>
+            <ul className="vw-grid">
+              {series.map((sr) => (
+                <SeriesCard key={sr.id} series={sr} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {d.artists.length ? (
           <section className="pb-section" aria-labelledby="pb-s-artists">
             <h2 className="pb-section__title" id="pb-s-artists">

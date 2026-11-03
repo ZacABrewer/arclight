@@ -4,6 +4,7 @@ import type {
   BrowseNode,
   BrowseTree,
   CastState,
+  DeviceInfo,
   DownloadRequest,
   DownloadTask,
   LoadOptions,
@@ -16,6 +17,7 @@ import type {
   RemoteConfig,
   RepeatMode,
   StorageInfo,
+  VideoDeviceProfile,
 } from './definitions';
 
 /**
@@ -297,4 +299,49 @@ export class ArclightPlayerWeb extends WebPlugin implements ArclightPlayerPlugin
     throw this.unimplemented('Casting needs the native app.');
   }
   async endCastSession(): Promise<void> {}
+
+  // ---- video (the app falls back to the web player page) ---------------------------------
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    return { isTv: false, videoProfile: browserVideoProfile() };
+  }
+  async playVideo(): Promise<void> {
+    throw this.unimplemented('The native video player needs the Android app.');
+  }
+  async replaceVideoStream(): Promise<void> {
+    throw this.unimplemented('The native video player needs the Android app.');
+  }
+  async closeVideo(): Promise<void> {}
+}
+
+/** A conservative profile from what this browser says it can play (`canPlayType`). */
+export function browserVideoProfile(video: Pick<HTMLVideoElement, 'canPlayType'> | null = typeof document === 'undefined' ? null : document.createElement('video')): VideoDeviceProfile {
+  const can = (type: string) => {
+    try {
+      return !!video && video.canPlayType(type) !== '';
+    } catch {
+      return false;
+    }
+  };
+  const containers = ['mp4', 'mov'];
+  if (can('video/webm')) containers.push('webm');
+  if (can('video/x-matroska') || can('video/webm; codecs="vp9"')) containers.push('mkv');
+  const videoCodecs = ['h264'];
+  if (can('video/mp4; codecs="hvc1.1.6.L93.B0"') || can('video/mp4; codecs="hev1.1.6.L93.B0"')) videoCodecs.push('hevc');
+  if (can('video/mp4; codecs="av01.0.05M.08"')) videoCodecs.push('av1');
+  if (can('video/webm; codecs="vp9"')) videoCodecs.push('vp9');
+  const audioCodecs = ['aac', 'mp3'];
+  if (can('audio/ogg; codecs="opus"') || can('audio/webm; codecs="opus"')) audioCodecs.push('opus');
+  if (can('audio/flac')) audioCodecs.push('flac');
+  if (can('audio/mp4; codecs="ac-3"')) audioCodecs.push('ac3');
+  if (can('audio/mp4; codecs="ec-3"')) audioCodecs.push('eac3');
+  return {
+    containers,
+    videoCodecs,
+    hevc10bit: can('video/mp4; codecs="hvc1.2.4.L153.B0"'),
+    hdr: [],
+    audioCodecs,
+    maxAudioChannels: 2,
+    maxHeight: 1080,
+  };
 }

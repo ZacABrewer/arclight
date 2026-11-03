@@ -62,6 +62,9 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/app/sign-in': 'public',
   'POST /api/v1/app/pair': 'public',
   'POST /api/v1/app/pair-codes': 'portal',
+  'POST /api/v1/app/device-codes': 'public',
+  'POST /api/v1/app/device-codes/poll': 'public',
+  'POST /api/v1/app/device-codes/approve': 'portal',
   'GET /api/v1/app/devices': 'portal',
   'DELETE /api/v1/app/devices/:id': 'portal',
   'POST /api/v1/app/sign-out': 'portal',
@@ -352,6 +355,19 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/playback/audiobooks': 'portal',
   'GET /api/v1/playback/audiobooks/:id': 'portal',
   'GET /api/v1/playback/search': 'portal',
+  // Movies & TV
+  'POST /api/v1/playback/video/session': 'portal',
+  'GET /api/v1/stream/video/:mediaFileId': 'portal publicWhen',
+  'GET /api/v1/stream/subtitle/:mediaFileId/:subId.vtt': 'portal publicWhen',
+  'GET /api/v1/playback/artwork/movie/:id': 'portal publicWhen',
+  'GET /api/v1/playback/artwork/series/:id': 'portal publicWhen',
+  'GET /api/v1/playback/artwork/episode/:id': 'portal publicWhen',
+  'GET /api/v1/playback/video/home': 'portal',
+  'GET /api/v1/playback/movies': 'portal',
+  'GET /api/v1/playback/movies/:id': 'portal',
+  'GET /api/v1/playback/series': 'portal',
+  'GET /api/v1/playback/series/:id': 'portal',
+  'POST /api/v1/playback/watched': 'portal',
 };
 
 const PERMISSION_NAMES = new Map<number, string>(Object.entries(Permission).map(([name, bit]) => [bit, name]));

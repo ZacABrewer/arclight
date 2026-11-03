@@ -8,6 +8,8 @@ import { connect } from '../core/probe';
 import { normalisePairCode } from '../core/qr';
 import { signInWithPairCode, signInWithPassword, type SignInFailure, type SignInOutcome } from '../core/sign-in';
 import { scanPairingCode } from './scan';
+import { DeviceCodeSignIn } from '../tv/device-code-panel';
+import { isTvMode } from '../tv/tv-mode';
 
 // First run and adding accounts: Welcome → (scan a pairing QR code | enter an address) → sign in.
 
@@ -57,21 +59,32 @@ export function WelcomePage() {
   const { accounts } = useServices();
   const { scan, error, busy } = useScan();
   const hasAccounts = accounts.list().length > 0;
+  const tv = isTvMode();
   return (
     <Onboarding back={hasAccounts ? () => void navigate({ to: '/player/settings' }) : undefined}>
       <div className="app-welcome">
         <Mark size={72} />
         <h1 className="app-welcome__title">{t('app.welcome.title')}</h1>
         <p className="app-welcome__body">{t('app.welcome.body')}</p>
-        <div className="app-stack">
-          <Button variant="primary" block loading={busy} icon={<Icon name="link" size={20} />} onClick={() => void scan()}>
-            {t('app.welcome.scan')}
-          </Button>
-          <p className="app-hint">{t('app.welcome.scanHelp')}</p>
-          <Button variant="secondary" block icon={<Icon name="server" size={20} />} onClick={() => void navigate({ to: '/add-server' })}>
-            {t('app.welcome.enter')}
-          </Button>
-        </div>
+        {tv ? (
+          // A TV has no camera: the address first, then a code confirmed on a phone.
+          <div className="app-stack">
+            <Button variant="primary" block data-tv-autofocus icon={<Icon name="server" size={20} />} onClick={() => void navigate({ to: '/add-server' })}>
+              {t('app.welcome.enter')}
+            </Button>
+            <p className="app-hint">{t('app.tv.welcomeHelp')}</p>
+          </div>
+        ) : (
+          <div className="app-stack">
+            <Button variant="primary" block loading={busy} icon={<Icon name="link" size={20} />} onClick={() => void scan()}>
+              {t('app.welcome.scan')}
+            </Button>
+            <p className="app-hint">{t('app.welcome.scanHelp')}</p>
+            <Button variant="secondary" block icon={<Icon name="server" size={20} />} onClick={() => void navigate({ to: '/add-server' })}>
+              {t('app.welcome.enter')}
+            </Button>
+          </div>
+        )}
         {error ? <Banner tone="warn">{error}</Banner> : null}
       </div>
     </Onboarding>
@@ -122,6 +135,7 @@ export function AddServerPage() {
               autoComplete="url"
               enterKeyHint="go"
               size="lg"
+              data-tv-autofocus
             />
           </Field>
           {found?.needsSetup ? <Banner tone="warn">{t('app.addServer.needsSetup')}</Banner> : null}
@@ -140,9 +154,11 @@ export function AddServerPage() {
           <Button type="submit" variant="primary" block loading={busy} disabled={!address.trim()}>
             {busy ? t('app.addServer.checking') : t('app.addServer.connect')}
           </Button>
-          <Button variant="ghost" block loading={scanning} icon={<Icon name="link" size={20} />} onClick={() => void scan()}>
-            {t('app.welcome.scan')}
-          </Button>
+          {!isTvMode() ? (
+            <Button variant="ghost" block loading={scanning} icon={<Icon name="link" size={20} />} onClick={() => void scan()}>
+              {t('app.welcome.scan')}
+            </Button>
+          ) : null}
           {scanError ? <Banner tone="warn">{scanError}</Banner> : null}
         </form>
       </Pane>
@@ -150,7 +166,7 @@ export function AddServerPage() {
   );
 }
 
-type Step = 'password' | 'totp' | 'recovery' | 'pair';
+type Step = 'password' | 'totp' | 'recovery' | 'pair' | 'device';
 
 export function SignInPage() {
   const t = useT();
@@ -158,7 +174,8 @@ export function SignInPage() {
   const services = useServices();
   const search = useSearch({ strict: false }) as SignInSearch;
   const server = search.server ?? '';
-  const [step, setStep] = useState<Step>(search.code ? 'pair' : 'password');
+  // TV: sign in with a code confirmed on a phone (typing a password with a remote is no fun).
+  const [step, setStep] = useState<Step>(search.code ? 'pair' : isTvMode() ? 'device' : 'password');
   const [username, setUsername] = useState(() => services.accounts.list().find((a) => a.serverUrl === server)?.username ?? '');
   const [password, setPassword] = useState('');
   const [totp, setTotp] = useState('');
@@ -225,7 +242,13 @@ export function SignInPage() {
         <h1 className="app-card__title">{t('app.signIn.title')}</h1>
         <p className="app-card__sub">{t('app.signIn.to', { server: hostOf(server) })}</p>
         {search.expired ? <Banner tone="warn">{t('app.signIn.expired', { server: hostOf(server) })}</Banner> : null}
-        {step === 'pair' ? (
+        {step === 'device' ? (
+          <DeviceCodeSignIn
+            server={server}
+            onSignedIn={(account) => void finish({ ok: true, account })}
+            onPassword={() => (setFailure(null), setStep('password'))}
+          />
+        ) : step === 'pair' ? (
           <form
             className="app-stack"
             onSubmit={(e) => {
@@ -298,8 +321,8 @@ export function SignInPage() {
               </Button>
             ) : null}
             {step === 'password' ? (
-              <Button variant="ghost" block onClick={() => (setFailure(null), setStep('pair'))}>
-                {t('app.signIn.pairInstead')}
+              <Button variant="ghost" block onClick={() => (setFailure(null), setStep(isTvMode() ? 'device' : 'pair'))}>
+                {isTvMode() ? t('app.tv.code.instead') : t('app.signIn.pairInstead')}
               </Button>
             ) : null}
           </form>

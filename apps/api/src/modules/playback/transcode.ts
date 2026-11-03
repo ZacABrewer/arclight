@@ -93,9 +93,12 @@ export interface AudioTranscoderOptions {
   launcher?: TranscodeLauncher;
   /** Resolves the ffmpeg binary (default: locateFfmpeg, cached). */
   locate?: () => Promise<string | null>;
-  max?: number;
-  maxPerUser?: number;
+  /** A number, or a getter read on every start (limits that follow settings). */
+  max?: number | (() => number);
+  maxPerUser?: number | (() => number);
   stallMs?: number;
+  /** Names the work in busy errors (default "audio"). */
+  label?: string;
 }
 
 /** Who a transcode runs for: the user id, or null (an API key without a user: no per-user cap). */
@@ -110,9 +113,10 @@ interface Slot {
 export class AudioTranscoder {
   private readonly launcher: TranscodeLauncher;
   private readonly locate: () => Promise<string | null>;
-  private readonly max: number;
-  private readonly maxPerUser: number;
+  private readonly maxOf: () => number;
+  private readonly maxPerUserOf: () => number;
   private readonly stallMs: number;
+  private readonly label: string;
   private binary: Promise<string | null> | undefined;
   /** Running transcodes, oldest first. */
   private readonly slots: Slot[] = [];
@@ -120,9 +124,20 @@ export class AudioTranscoder {
   constructor(opts: AudioTranscoderOptions = {}) {
     this.launcher = opts.launcher ?? spawnTranscode;
     this.locate = opts.locate ?? (() => locateFfmpeg());
-    this.max = opts.max ?? MAX_AUDIO_TRANSCODES;
-    this.maxPerUser = opts.maxPerUser ?? MAX_AUDIO_TRANSCODES_PER_USER;
+    const max = opts.max ?? MAX_AUDIO_TRANSCODES;
+    const maxPerUser = opts.maxPerUser ?? MAX_AUDIO_TRANSCODES_PER_USER;
+    this.maxOf = typeof max === 'function' ? max : () => max;
+    this.maxPerUserOf = typeof maxPerUser === 'function' ? maxPerUser : () => maxPerUser;
     this.stallMs = opts.stallMs ?? STALL_KILL_MS;
+    this.label = opts.label ?? 'audio';
+  }
+
+  private get max(): number {
+    return Math.max(1, this.maxOf());
+  }
+
+  private get maxPerUser(): number {
+    return Math.max(1, this.maxPerUserOf());
   }
 
   get active(): number {
@@ -149,13 +164,26 @@ export class AudioTranscoder {
     if (this.slots.length < this.max) return;
     const oldestMine = owner === null ? undefined : this.slots.find((s) => s.owner === owner);
     if (oldestMine) oldestMine.kill();
-    if (this.slots.length >= this.max) throw new TranscodeBusy(`too many audio transcodes running (${this.max}); try again shortly`);
+    if (this.slots.length >= this.max) throw new TranscodeBusy(`too many ${this.label} transcodes running (${this.max}); try again shortly`);
   }
 
   /** Starts a transcode; throws TranscodeBusy at the cap and FfmpegMissing without ffmpeg. */
-  async start(input: string, spec: AudioTranscodeSpec, owner: TranscodeOwner = null): Promise<RunningTranscode> {
+  start(input: string, spec: AudioTranscodeSpec, owner: TranscodeOwner = null): Promise<RunningTranscode> {
+    return this.startArgs(buildAudioTranscodeArgs(input, spec), owner);
+  }
+
+  /** The ffmpeg binary this transcoder runs, or null when there is none. */
+  async binaryPath(): Promise<string | null> {
+    this.binary ??= this.locate();
+    const bin = await this.binary;
+    if (!bin) this.binary = undefined;
+    return bin;
+  }
+
+  /** Starts ffmpeg with a ready argv (writing to pipe:1) under the same caps and watchdog. */
+  async startArgs(args: readonly string[], owner: TranscodeOwner = null): Promise<RunningTranscode> {
     if (!this.canStart(owner)) {
-      throw new TranscodeBusy(`too many audio transcodes running (${this.max}); try again shortly`);
+      throw new TranscodeBusy(`too many ${this.label} transcodes running (${this.max}); try again shortly`);
     }
     this.binary ??= this.locate();
     const bin = await this.binary;
@@ -165,7 +193,7 @@ export class AudioTranscoder {
       throw new FfmpegMissing('ffmpeg was not found (set ARCLIGHT_FFMPEG or put ffmpeg on PATH)');
     }
     this.makeRoom(owner);
-    const proc = this.launcher(bin, buildAudioTranscodeArgs(input, spec));
+    const proc = this.launcher(bin, args);
     let released = false;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
     const slot: Slot = {

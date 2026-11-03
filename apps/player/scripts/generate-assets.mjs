@@ -155,6 +155,16 @@ for (const [d, [w, h]] of Object.entries(splashSizes)) {
 }
 png(splash(480, 320), 480, join(androidRes, 'drawable/splash.png'));
 
+// Google TV / Android TV launcher banner (320x180 xhdpi): the Light Slice lockup on the dark gradient.
+const lockupSvg = readFileSync(join(brand, 'lockup-dark-bg.svg'), 'utf8');
+const tvBanner = () => {
+  const w = 240;
+  const h = (w * 80) / 404;
+  const nested = lockupSvg.replace(/<svg[^>]*>/, `<svg x="${(320 - w) / 2}" y="${(180 - h) / 2}" width="${w}" height="${h}" viewBox="0 0 404 80">`);
+  return svg(320, 180, `<rect width="320" height="180" fill="url(#bg)"/>${nested}`);
+};
+png(tvBanner(), 320, join(androidRes, 'drawable-xhdpi/tv_banner.png'));
+
 // ---------------------------------------------------------------- iOS
 const appIcon = join(iosAssets, 'AppIcon.appiconset');
 rmSync(appIcon, { recursive: true, force: true });

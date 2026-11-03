@@ -1,14 +1,14 @@
 # Player
 
-Arclight has a built-in player for your own music and audiobooks. It runs in the browser at `/player`, apart from the main app, so you can open it on a phone, a tablet or a computer and just listen.
+Arclight has a built-in player for your own movies, TV shows, music and audiobooks. It runs in the browser at `/player`, apart from the main app, so you can open it on a phone, a tablet or a computer and just listen.
 
-The player plays files that Arclight already has on disk. Items without a file do not show up. Music and audiobooks work now. Movies and TV, and podcasts, show as "Coming soon" and are planned for later.
+The player plays files that Arclight already has on disk. Items without a file do not show up. Movies & TV, music and audiobooks work now. Podcasts show as "Coming soon" and are planned for later.
 
 The player is a preview. It is off until an admin turns it on.
 
 ## Turning the player on (admins)
 
-1. Open **Settings > General > Features** and make sure **Music** and **Audiobooks** are on. The player only shows the sections you have enabled.
+1. Open **Settings > General > Features** and make sure **Movies**, **TV**, **Music** and **Audiobooks** are on as you need them. The player only shows the sections you have enabled.
 2. Open **Settings > Player** and switch on **Turn on the player**.
 3. Save.
 
@@ -24,6 +24,9 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Stream link lifetime | How long links for casting and other players keep working. 1 to 72 hours. | 6 hours |
 | Playback engine | **Arclight** plays files itself. **Jellyfin** streams them through a Jellyfin or Emby server. See [Playing through Jellyfin](#playing-through-jellyfin). | Arclight |
 | Jellyfin server | Which Jellyfin or Emby server to stream through. Shown when the engine is Jellyfin. | First enabled server |
+| Movies & TV | Lets the player show and play movies and episodes. | On |
+| Live video slots | How many videos the server may convert or repackage at once, for everyone together. Each one costs CPU or GPU time. | 3 |
+| Live video slots per user | How many of those one person may use. Starting a new video replaces that person's oldest one. | 1 |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -45,7 +48,9 @@ A user's own bitrate limit wins over the server's remote limit. Admins always ha
 
 ## Opening the player
 
-Go to `/player` on your Arclight address. The home page shows **Continue listening**: albums and audiobooks you started, so you can pick up where you left off. The top bar has **Music**, **Books** (audiobooks) and search. Movies & TV and Podcasts are greyed out for now.
+Go to `/player` on your Arclight address. The top bar has **Movies & TV**, **Music**, **Books** (audiobooks) and search. Podcasts are greyed out for now.
+
+When the server has movies or shows, the home page is **Movies & TV** (see below), with **Continue listening** for albums and audiobooks underneath. Without them, the home page shows **Continue listening**: albums and audiobooks you started, so you can pick up where you left off.
 
 ## Music
 
@@ -79,9 +84,49 @@ While a book plays you can:
 
 Your place is saved as you listen, so you can start on one device and continue on another.
 
+## Movies & TV
+
+Open **Movies & TV** for the video home. It has shelves for **Continue watching**, **Next up** (the next episode of shows you are watching), **Recently added movies** and **New episodes**, and a row of genres.
+
+- **Movies** and **Shows** are poster grids. Search by title, sort by title, date added, year or rating, pick a genre, jump to a letter, and show only **Unwatched** or **Watched** titles. **S**, **M** and **L** change the poster size.
+- A **movie** page shows the backdrop, the title, the year, the runtime, the rating and the overview. It lists the audio and subtitle languages. If the movie has more than one version (for example 4K HDR and 1080p), pick one under **Versions** before you play.
+- A **show** page has a tab for each season. Each episode shows a thumbnail, how much you have watched and a tick once watched. **Play** starts the next episode you have not finished.
+- **Mark watched** and **Mark unwatched** work on a movie, an episode, a season or a whole show.
+
+Press **Play** to start from the beginning, or **Resume** to continue. If you stopped between 2% and 90% of the way in, the player asks whether to resume or start over. Past 90% counts as watched.
+
+### Watching
+
+The video player fills the screen. Move the mouse, tap or press a key to show the controls. They hide again after a few seconds.
+
+- Play and pause, back and forward 10 seconds, and a seek bar with marks for chapters.
+- Volume and mute, picture in picture and full screen.
+- **Audio & subtitles**: pick the audio track and the subtitles. If subtitles are early or late, nudge them in steps of a quarter second.
+- **Playback settings**: the version, the quality (Auto, Original, 1080p, 720p or 480p) and the speed. It also shows how the video reaches you (see below).
+- **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts.
+- Near the end of an episode, an **Up next** card counts down 10 seconds and then plays the next episode. Press **Cancel** to stay, or **Play now** to go straight away.
+
+| Key | What it does |
+| --- | --- |
+| Space or K | Play or pause |
+| Left arrow / Right arrow | Back / forward 10 seconds |
+| F | Full screen |
+| M | Mute |
+| C | Next subtitle track (then off) |
+| N | Next episode |
+| Esc or Backspace | Leave full screen, close a panel or the up-next card, then leave the player |
+
+TV remotes and game pads work too: the arrows move between buttons, and **OK** presses one. The media keys play, pause and skip.
+
+### How video reaches you
+
+Arclight sends the original file when your browser can play it (**direct play**). When it cannot, for example because of the file type, the video or audio format, HDR, or your bitrate limit, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power. A converted stream starts again from the new point when you seek, which can take a moment.
+
+Subtitles that are text (SRT, ASS, WebVTT) are drawn by the player. Picture subtitles (PGS, VobSub) are burned into the video, which means converting it.
+
 ## Search
 
-Press the search button in the top bar. Type a song, album, artist, audiobook, author or narrator. Results cover music and audiobooks. Only items with files can be found.
+Press the search button in the top bar. Type a movie, a show, a song, an album, an artist, an audiobook, an author or a narrator. Results cover movies, shows, music and audiobooks. Only items with files can be found.
 
 ## The queue, the mini-player and Now playing
 
@@ -127,6 +172,22 @@ The **format badge** on Now playing shows how the file reaches you:
 
 Converting costs server power, so Arclight only does it when it has to. A converted stream cannot be fetched in ranges, so a seek starts a new conversion from that point. This can take a moment.
 
+## Movies & TV
+
+Movies and episodes play in the same player. Shows open on their next episode, and an episode can go straight on to the next one. Content restrictions on a user (certification limits, hiding adult content) hide those titles from that person everywhere, including search and links.
+
+How a video reaches you depends on what your device can play:
+
+- **Direct**: the original file is sent as it is, with full seeking. This is the best quality and costs the server nothing.
+- **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
+- **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
+
+The player says which one it uses and why. Remuxed and converted streams cannot be fetched in ranges, so seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+
+Text subtitles (SRT, ASS, WebVTT, embedded or next to the file) can be turned on and off at any time. Picture subtitles (PGS, VobSub) have to be burned into the picture, which means a transcode.
+
+To run conversions in Docker with Intel graphics, pass the GPU into the container (for example `--device /dev/dri:/dev/dri`).
+
 ## Sign in to the Arclight app
 
 The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
@@ -139,6 +200,39 @@ The code works once and expires after five minutes. Press **New code** for anoth
 **Your devices**, under the code, lists every phone or tablet signed in with your account. **Remove** signs that device out at once. Changing your password, or an admin resetting it, signs every device out too.
 
 The app needs the same player access as the browser. If the player is off, or your account may not use it, the app cannot sign in.
+
+## Sign in a TV
+
+The Arclight app on a TV signs in with a code, so you never type a password with a remote.
+
+1. On the TV, open Arclight and choose **Enter server address**. Type your Arclight address with the remote and press **Continue**.
+2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`) and a QR code.
+3. On your phone or computer, scan the QR code, or open that address and type the code. Sign in there if asked.
+4. Press **Sign in the TV**. The TV signs in as you within a few seconds.
+
+The code works once and expires after ten minutes. The TV gets a fresh code on its own a few times; after that it asks you to press **Get a new code**. **Sign in with a password instead** is there too, for accounts that have one.
+
+The TV is then signed in as the person who confirmed the code, so it shows that person's library, restrictions and progress. It appears under **Your devices** like any other device, where **Remove** signs it out.
+
+## Movies & TV in the Arclight app
+
+With Movies & TV turned on, the app's **Home** tab is the Movies & TV home, with the same shelves and pages as the browser. On Android, video plays in the app's own full-screen player, which plays more files directly than a browser can (for example HEVC, HDR and surround sound, when the device supports them).
+
+- **Resume** continues where you stopped. **Play** on a title you are part way through also continues; use **Restart** on the movie or episode page to start over.
+- The player has **Audio & subtitles**, the chapters, **Skip intro** / **Skip credits** and an **Up next** countdown that plays the next episode in the same player.
+- Your place is saved as you watch. Without a connection, the app keeps the updates and sends them once it is back online.
+
+## Arclight on a TV
+
+On Google TV and Android TV, the app opens a layout made for the remote:
+
+- A rail on the left with **Home**, **Movies**, **Shows**, **Search**, **Music** and **Settings**. Press left from the page to open it.
+- The TV home shows the backdrop and details of whatever has focus, with rows of **Continue watching**, **Next up**, **Recently added movies**, **New episodes** and genres underneath. **OK** on a Continue watching or Next up card plays it straight away.
+- The arrows move to the nearest item in that direction and the focused item is always highlighted. **Back** closes an open panel, then goes back a page, then moves to the rail, and from the rail leaves the app. Each page remembers where you were.
+- In the video player, **OK** pauses and plays. With the controls hidden, left and right show them and scrub the timeline. Up and down move between the buttons, the timeline and **Audio** / **Subtitles**. The remote's captions button opens the subtitle choices. **Back** closes the player and returns to the page you came from.
+- Downloads and Android Auto are not shown on a TV.
+
+To try the TV layout in a browser while developing, add `?tv=1` to the app's address (`?tv=0` turns it off).
 
 ## Continue listening
 

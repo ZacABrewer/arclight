@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import type { QueryClient } from '@tanstack/react-query';
-import type { PlayableItem, PlayerCapabilities, ProgressBeacon, StreamLinksResponse } from '@arclight/shared';
+import type { PlayableItem, PlayerCapabilities, ProgressBeacon, ProgressReport, StreamLinksResponse } from '@arclight/shared';
 import { playbackApi, playerKeys } from '@web/features/player/api';
 import type { AudioEngine } from '@web/features/player/engine/audio-engine';
 import { codecLabel } from '@web/features/player/engine/stream';
@@ -116,6 +116,32 @@ function retryable(err: unknown): boolean {
   return isNetworkError(err) || (err instanceof ApiError && (err.status >= 500 || err.status === 429));
 }
 
+/**
+ * Progress reports for the active account: sent now when online, else (or when the server is
+ * unreachable) kept in the offline queue. Used by the audio controller and the native video player.
+ */
+export function progressSender(s: Pick<PlayerSetup, 'progressQueue' | 'settings' | 'qc'>): {
+  sendProgress: (itemKey: string, report: ProgressReport) => Promise<void>;
+  queueReport: (body: ProgressBeacon) => void;
+} {
+  const queueReport = (body: ProgressBeacon) => {
+    const session = getSession();
+    if (session) void s.progressQueue.enqueue(session.accountId, body);
+  };
+  const sendProgress = async (key: string, report: ProgressReport) => {
+    if (!s.settings().reportProgress) return;
+    if (!netState().online) return queueReport({ ...report, itemKey: key } as ProgressBeacon);
+    try {
+      await appPlaybackApi.report(key, report);
+      if (report.event === 'stop' || report.event === 'pause') void s.qc.invalidateQueries({ queryKey: playerKeys.continue });
+    } catch (err) {
+      if (retryable(err)) queueReport({ ...report, itemKey: key } as ProgressBeacon);
+      else throw err;
+    }
+  };
+  return { sendProgress, queueReport };
+}
+
 export interface AppPlayer {
   controller: PlayerController;
   engine: NativeEngine;
@@ -137,10 +163,7 @@ export function createAppPlayer(s: PlayerSetup): AppPlayer {
     return session ? s.index.offlineItem(session.accountId, key, toWebUrl) : null;
   };
 
-  const queueReport = (body: ProgressBeacon) => {
-    const session = getSession();
-    if (session) void s.progressQueue.enqueue(session.accountId, body);
-  };
+  const { sendProgress, queueReport } = progressSender(s);
 
   const controller = new PlayerController({
     // The controller only uses AudioEngine's public surface, which NativeEngine implements.
@@ -166,17 +189,7 @@ export function createAppPlayer(s: PlayerSetup): AppPlayer {
     loadQueue: async () => (netState().online ? playbackApi.queue() : null),
     saveQueue: (q) => (netState().online ? playbackApi.saveQueue(q).catch(() => undefined) : Promise.resolve()),
     savePrefs: (key, p) => (netState().online ? playbackApi.updateProgress(key, { prefs: p }).catch(() => undefined) : Promise.resolve()),
-    sendProgress: async (key, report) => {
-      if (!s.settings().reportProgress) return;
-      if (!netState().online) return queueReport({ ...report, itemKey: key });
-      try {
-        await appPlaybackApi.report(key, report);
-        if (report.event === 'stop' || report.event === 'pause') void s.qc.invalidateQueries({ queryKey: playerKeys.continue });
-      } catch (err) {
-        if (retryable(err)) queueReport({ ...report, itemKey: key });
-        else throw err;
-      }
-    },
+    sendProgress,
     beacon: (body) => {
       if (!s.settings().reportProgress) return true;
       // The app is not going away like a tab: send it now, keep it if that fails.

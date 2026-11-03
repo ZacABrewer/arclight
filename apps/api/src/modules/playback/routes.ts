@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   ArtworkLinkResponse,
@@ -15,6 +15,7 @@ import {
   BookmarkUpdate,
   BrowseQuery,
   ContinueResponse,
+  isVideoKind,
   ItemKey,
   MusicHome,
   PlayableItem,
@@ -49,16 +50,16 @@ import {
   UserPlaylistInput,
   UserPlaylistSummary,
   parseItemKey,
+  type PlayableKind,
   type PlaybackEngine,
   type PlayerCapabilities as Capabilities,
   type PlayerSettings as Settings,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { sessions, userApiKeys, users } from '../auth/schema.js';
-import { appDevices } from '../app-auth/schema.js';
+import { users } from '../auth/schema.js';
 import { audioFiles } from '../library/schema.js';
 import { getSection, setSection } from '../settings/service.js';
-import { capabilitiesOf, decide, denialReply, isRemoteRequest, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
+import { capabilitiesOf, decide, denialReply, isRemoteRequest, linkUserStillActive as linkUserStillActiveIn, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
 import { findArtwork } from './artwork.js';
 import {
   albumDetails,
@@ -76,6 +77,9 @@ import {
 } from './browse.js';
 import { downloadDisposition, mimeOf } from './format.js';
 import { playableItem } from './items.js';
+import { videoSearch } from './video-browse.js';
+import { videoItem, type ChapterReader } from './video-items.js';
+import { restrictionsOfSettings } from '../requests/certification.js';
 import type { EngineTarget, JellyfinEngine } from './jellyfin.js';
 import { artworkLinkQuery, hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from './links.js';
 import type { ProgressStore } from './progress.js';
@@ -98,6 +102,8 @@ export interface PlaybackDeps {
   apiKey: () => string;
   /** The Jellyfin/Emby engine (Settings → Player → Playback engine); absent: Arclight only. */
   engine?: JellyfinEngine | undefined;
+  /** Chapter reader for movie/episode items (ffprobe, cached). */
+  chapters: ChapterReader;
   now?: () => number;
 }
 
@@ -160,7 +166,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   const audiobooks = { config: user, preHandler: sectionOn('audiobooks') } as const;
 
   /** Whether the section of a file or item kind is on (Settings → Features). */
-  function sectionEnabled(kind: 'music' | 'track' | 'audiobook'): boolean {
+  function sectionEnabled(kind: 'music' | PlayableKind): boolean {
+    if (kind === 'movie' || kind === 'episode') return playerSettings(db).video;
     const features = getSection(db, 'features');
     return kind === 'audiobook' ? features.audiobooks : features.music;
   }
@@ -168,9 +175,18 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   /** The playable item, or 404 when it is missing, has no file or its section is off. */
   function itemOr404(key: string): PlayableItem {
     const parsed = parseItemKey(key);
-    const item = parsed && sectionEnabled(parsed.kind) ? playableItem(browse, key) : null;
+    const item = parsed && !isVideoKind(parsed.kind) && sectionEnabled(parsed.kind) ? playableItem(browse, key) : null;
     if (!item) throw new PlayerNotFound(`${key} not found or has no file`);
     return item;
+  }
+
+  /** Any playable item: audio as above, movies/episodes within the caller's content restrictions. */
+  async function anyItem(req: FastifyRequest, key: string, probe: boolean): Promise<PlayableItem | null> {
+    const parsed = parseItemKey(key);
+    if (!parsed || !sectionEnabled(parsed.kind)) return null;
+    if (!isVideoKind(parsed.kind)) return playableItem(browse, key);
+    const restrictions = req.auth?.user ? restrictionsOfSettings(req.auth.user.settings) : null;
+    return videoItem({ db, basePath: deps.basePath, chapters: deps.chapters }, parsed.kind, parsed.id, { restrictions, probe });
   }
 
   /** The keys of a progress query, validated (400 on a bad or too long list). */
@@ -182,28 +198,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     return keys;
   }
 
-  /**
-   * A signed link stays usable while its user may still sign in: some unexpired session, a
-   * personal API key or a signed-in Arclight app device. "Sign out everywhere", a password
-   * change and deleting the user end it.
-   */
-  function linkUserStillActive(userId: number): boolean {
-    const device = db.select({ id: appDevices.id }).from(appDevices).where(eq(appDevices.userId, userId)).get();
-    if (device) return true;
-    const at = new Date(now()).toISOString();
-    const session = db
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, at)))
-      .get();
-    if (session) return true;
-    const key = db
-      .select({ id: userApiKeys.id })
-      .from(userApiKeys)
-      .where(and(eq(userApiKeys.userId, userId), or(isNull(userApiKeys.expiresAt), gt(userApiKeys.expiresAt, at))))
-      .get();
-    return key !== undefined;
-  }
+  const linkUserStillActive = (userId: number) => linkUserStillActiveIn(db, userId, now());
 
   /** The decision for a stream request: the signed-in caller, or the user of a valid link. */
   function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): { decision: PlayerDecision; userId: number | null } | PlayerHttpError {
@@ -334,14 +329,17 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     });
 
     // ---- items and stream links ------------------------------------------------------------
-    app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => itemOr404(req.params.itemKey));
+    app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => {
+      const item = await anyItem(req, req.params.itemKey, true);
+      if (!item) throw new PlayerNotFound(`${req.params.itemKey} not found or has no file`);
+      return item;
+    });
 
     // Several items at once (queues, offline downloads): missing ones and turned-off sections are left out, order kept.
     app.post('/playback/items', { ...player, config: { ...user, audit: false }, schema: { body: PlaybackItemsRequest, response: { 200: z.array(PlayableItem), ...errors } } }, async (req) => {
       const out: PlayableItem[] = [];
       for (const key of [...new Set(req.body.itemKeys)]) {
-        const parsed = parseItemKey(key);
-        const item = parsed && sectionEnabled(parsed.kind) ? playableItem(browse, key) : null;
+        const item = await anyItem(req, key, false);
         if (item) out.push(item);
       }
       return out;
@@ -523,7 +521,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     app.get('/playback/continue', { ...playerUser, schema: { response: { 200: ContinueResponse, ...errors } } }, async (req) => {
       const features = getSection(db, 'features');
       const items = deps.progress
-        .inProgress(userIdOf(req), 40)
+        .inProgress(userIdOf(req), 120)
+        .filter((p) => !p.itemKey.startsWith('movie:') && !p.itemKey.startsWith('episode:'))
         .filter((p) => (p.itemKey.startsWith('track:') ? features.music : features.audiobooks))
         .flatMap((progress) => {
           const item = playableItem(browse, progress.itemKey);
@@ -612,7 +611,9 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- search -------------------------------------------------------------------------------
     app.get('/playback/search', { ...player, schema: { querystring: SearchQuery, response: { 200: PlayerSearchResponse, ...errors } } }, async (req) => {
       const features = getSection(db, 'features');
-      return playerSearch(browse, browseUser(req), req.query.q, { music: features.music, audiobooks: features.audiobooks });
+      const out = playerSearch(browse, browseUser(req), req.query.q, { music: features.music, audiobooks: features.audiobooks });
+      if (playerSettings(db).video) Object.assign(out, videoSearch({ db, basePath: deps.basePath, progress: deps.progress, now }, browseUser(req), req.query.q));
+      return out;
     });
   };
 }

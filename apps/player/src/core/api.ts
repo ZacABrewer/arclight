@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  AppDeviceCode,
+  AppDeviceCodePollResponse,
   AppSignInResponse,
   ArtworkLinkResponse,
   ErrorResponse,
@@ -10,6 +12,7 @@ import {
   ProgressBatchResponse,
   StreamLinksResponse,
   User,
+  type AppDeviceCodeRequest,
   type AppDeviceInfo,
   type AppPairRequest,
   type AppPlatform,
@@ -255,6 +258,11 @@ export const appApi = {
   signIn: (serverUrl: string, body: AppSignInRequest) =>
     request('/app/sign-in', AppSignInResponse, { method: 'POST', json: body, target: { serverUrl, token: null } }),
   pair: (serverUrl: string, body: AppPairRequest) => request('/app/pair', AppSignInResponse, { method: 'POST', json: body, target: { serverUrl, token: null } }),
+  /** TV sign-in: a code the user confirms in a browser (/player/link). */
+  deviceCode: (serverUrl: string, body: AppDeviceCodeRequest) =>
+    request('/app/device-codes', AppDeviceCode, { method: 'POST', json: body, target: { serverUrl, token: null } }),
+  deviceCodePoll: (serverUrl: string, pollToken: string) =>
+    request('/app/device-codes/poll', AppDeviceCodePollResponse, { method: 'POST', json: { pollToken }, target: { serverUrl, token: null } }),
   /** Ends this device's token on the server. */
   signOut: (target: Target) => request('/app/sign-out', null, { method: 'POST', target }),
   me: (target?: Target) => request('/user/me', User, target ? { target } : {}),

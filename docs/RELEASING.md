@@ -21,6 +21,21 @@ CI on the tag builds a multi-arch (linux/amd64, linux/arm64) image, pushes it to
 Release with generated notes plus the compose files and `.env.example`. A tag containing a
 hyphen (`v0.2.0-rc.1`) is marked as a pre-release.
 
+### Android app download (phones and Google TV)
+
+Until the app is in Google Play, each release carries a signed APK of the Arclight player app.
+The signing key is kept offline by the maintainer, never in the repository or CI, and every
+APK must be signed with the same key so installs update in place.
+
+1. Load the signing variables (`ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`,
+   `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) into the shell.
+2. In `apps/player`: `pnpm build && npx cap sync android`, then in `apps/player/android`:
+   `./gradlew assembleRelease`.
+3. Upload `app/build/outputs/apk/release/app-release.apk` to the GitHub Release as
+   `arclight-android.apk`: `gh release upload vX.Y.Z arclight-android.apk`.
+4. Point the short links in [`site/public/_redirects`](../site/public/_redirects)
+   (`/tv`, `/android`) at the new release and push; the site deploys by itself.
+
 ## Image tags
 
 | Tag | Meaning |
