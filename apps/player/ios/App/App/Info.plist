@@ -37,11 +37,19 @@
 	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<!-- Plain http:// to LAN servers (IP addresses, .local and single-label host names). -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- Streams (AVPlayer) and the bundled UI's API calls (WKWebView) to an http:// server
+		     outside the LAN. Native downloads (URLSession) stay HTTPS-only for public hosts.
+		     See ios/README.md, "App Transport Security". -->
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
 	</dict>
+	<key>ArclightCarPlayEnabled</key>
+	<string>$(CARPLAY_ENABLED)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Arclight uses the camera to scan the pairing QR code shown by your Arclight server.</string>
 	<key>NSLocalNetworkUsageDescription</key>
@@ -73,6 +81,17 @@
             <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
             <key>UISceneStoryboardFile</key>
             <string>Main</string>
+        </dict>
+      </array>
+      <key>CPTemplateApplicationSceneSessionRoleApplication</key>
+      <array>
+        <dict>
+            <key>UISceneClassName</key>
+            <string>CPTemplateApplicationScene</string>
+            <key>UISceneConfigurationName</key>
+            <string>CarPlay Configuration</string>
+            <key>UISceneDelegateClassName</key>
+            <string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
         </dict>
       </array>
     </dict>
