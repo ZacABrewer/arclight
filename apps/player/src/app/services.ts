@@ -26,7 +26,7 @@ import { decideTvMode } from '../tv/tv-mode';
 import { NativeVideoLauncher } from '../video/native-video';
 import { documentTheme } from '../video/native-extras';
 import { householdKeys, householdsApi } from '../households/api';
-import { currentVideoQuality } from '../video/quality';
+import { currentVideoQuality, setActiveProfileId } from '../video/quality';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
 // React through AppServicesContext.
@@ -143,6 +143,8 @@ export async function createServices(): Promise<AppServices> {
       if (accountId) await accounts.setActive(accountId);
       resetArtworkLink();
       caps = undefined;
+      // The profile belonged to the old account; the hooks set the new one once it is loaded.
+      setActiveProfileId(null);
       await accounts.activate();
       qc.clear();
       for (const l of [...playerListeners]) l();
