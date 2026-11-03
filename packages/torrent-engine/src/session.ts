@@ -212,7 +212,11 @@ export class Session extends EventEmitter<SessionEvents> {
     });
     this.listener.on('warning', (m) => this.emit('warning', m));
     const userAccept = opts.utp?.accept;
-    this.utp = new UtpManager({ ...opts.utp, accept: () => this.settingsValue.utp && !this.stopping && (userAccept?.() ?? true) });
+    // Blocked IPs are refused at the SYN, before a uTP connection exists (TCP: in the listener).
+    this.utp = new UtpManager({
+      ...opts.utp,
+      accept: (address) => this.settingsValue.utp && !this.stopping && !(opts.isBlocked?.(address.host) ?? false) && (userAccept?.(address) ?? true),
+    });
     this.utp.on('connection', (sock, address) => this.listener.accept(sock, address, 'utp'));
     this.utp.on('warning', (m) => this.emit('warning', m));
   }

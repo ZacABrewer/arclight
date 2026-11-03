@@ -8,8 +8,8 @@ import { decodePacket, encodePacket, looksLikeUtp, ST_RESET, ST_SYN, type UtpPac
 import { UtpSocket, type UtpSocketInit, type UtpSocketOptions } from './socket.js';
 
 export interface UtpManagerOptions extends UtpSocketOptions {
-  /** Accept incoming connections (checked per SYN). Default true. */
-  accept?: () => boolean;
+  /** Accept an incoming connection from `address` (checked per SYN). Default true. */
+  accept?: (address: PeerAddress) => boolean;
   /** Incoming connections open at once (all addresses). Default 512. */
   maxIncoming?: number;
   /** Incoming connections open at once from one IP. Default 16. */
@@ -198,7 +198,7 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
       }
       const perIp = this.incomingByIp.get(addr.host) ?? 0;
       if (
-        (this.opts.accept && !this.opts.accept()) ||
+        (this.opts.accept && !this.opts.accept(addr)) ||
         this.incoming.size >= (this.opts.maxIncoming ?? DEFAULT_MAX_INCOMING) ||
         perIp >= (this.opts.maxIncomingPerIp ?? DEFAULT_MAX_INCOMING_PER_IP)
       ) {

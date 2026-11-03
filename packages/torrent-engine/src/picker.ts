@@ -213,6 +213,38 @@ export class PiecePicker {
     return out;
   }
 
+  /**
+   * Claims one whole piece for `peer` (web seeds, which fetch and hash a piece in memory before
+   * anything is written). Takes a piece nobody has started, else a started piece with no
+   * outstanding requests (its senders left); every free block is marked requested by `peer`.
+   * Returns the piece index and the blocks it now holds, or null.
+   */
+  claimPiece(peer: string): { index: number; blocks: PickedBlock[] } | null {
+    let best = -1;
+    let bestRank: [number, number] = [0, 0];
+    for (let i = 0; i < this.layout.pieceCount; i++) {
+      if (!this.isWanted(i)) continue;
+      const p = this.partial.get(i);
+      if (p && (p.state.includes(1) || !p.state.includes(0))) continue;
+      // fresh pieces before idle partial ones; then priority; then order or availability
+      const rank: [number, number] = [p ? 0 : 1, this.piecePriority(i)];
+      const better =
+        best < 0 ||
+        rank[0] > bestRank[0] ||
+        (rank[0] === bestRank[0] && rank[1] > bestRank[1]) ||
+        (rank[0] === bestRank[0] && rank[1] === bestRank[1] && !this.sequential && this.availabilityOf(i) < this.availabilityOf(best));
+      if (better) {
+        best = i;
+        bestRank = rank;
+      }
+    }
+    if (best < 0) return null;
+    const p = this.partialFor(best);
+    const blocks: PickedBlock[] = [];
+    for (let b = 0; b < p.state.length; b++) if (p.state[b] === 0) this.takeBlock(best, p, b, peer, blocks);
+    return { index: best, blocks };
+  }
+
   /** No free block remains in any wanted piece (all are requested or received). */
   isEndgame(): boolean {
     for (let i = 0; i < this.layout.pieceCount; i++) {
