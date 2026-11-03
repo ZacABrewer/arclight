@@ -14,6 +14,7 @@ import { createJsonTransport, type RequestOptions } from '../http.js';
 import { defaultRateLimiter, type RateLimiter, type RequestPriority } from '../rate-limit.js';
 import { MetadataError, isMetadataError } from '../types.js';
 import { cleanIsrc, cleanText, type SourcePlaylist, type SourcePlaylistTrack } from '../playlist-types.js';
+import { readLimitedJson } from '../body.js';
 
 export const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/';
 export const SPOTIFY_ACCOUNTS_URL = 'https://accounts.spotify.com/api/token';
@@ -179,7 +180,7 @@ export function createSpotifyClient(options: SpotifyClientOptions): SpotifyClien
       await response.body?.cancel().catch(() => {});
       throw new MetadataError('bad-response', `Spotify token request answered HTTP ${response.status}`, { httpStatus: response.status });
     }
-    const parsed = tokenSchema.safeParse(await response.json().catch(() => null));
+    const parsed = tokenSchema.safeParse(await readLimitedJson(response).catch(() => null));
     if (!parsed.success) throw new MetadataError('bad-response', 'Spotify token response has unexpected shape');
     const lifetime = (parsed.data.expires_in ?? 3600) * 1000;
     token = { value: parsed.data.access_token, expiresAt: now().getTime() + Math.max(0, lifetime - TOKEN_MARGIN_MS) };

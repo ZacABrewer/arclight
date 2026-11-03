@@ -14,6 +14,10 @@ import type { FeedStatusReport } from '../../feeds.js';
 import { STALE_INTERVALS } from '../../feeds.js';
 import { definitionSha256, type FetchLike } from './definition-feed.js';
 import type { DefinitionStore } from './definitions.js';
+import { readLimited, readLimitedText, SafeFetchError } from '@arclight/net';
+
+/** Largest catalogue listing read. */
+const MAX_LISTING_BYTES = 8 * 1024 * 1024;
 
 // Community catalogue: the Cardigann definitions the Prowlarr/Jackett community maintains,
 // fetched at runtime (never bundled) into `<config>/definitions/community/`.
@@ -308,8 +312,9 @@ export class CommunityCatalogue {
     if (!res.ok) return fail(`${url}: HTTP ${res.status}${rateLimitHint(res)}`);
     let raw: unknown;
     try {
-      raw = JSON.parse(await res.text()) as unknown;
-    } catch {
+      raw = JSON.parse(await readLimitedText(res, MAX_LISTING_BYTES)) as unknown;
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'tooLarge') return fail(`${url}: ${err.message}`);
       return fail(`${url}: not JSON`);
     }
     let listing: ListingFile[];
@@ -408,8 +413,14 @@ export class CommunityCatalogue {
     try {
       const res = await this.get(f.url, signal);
       if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
-      const data = new Uint8Array(await res.arrayBuffer());
-      if (data.byteLength > MAX_FILE_BYTES) return { ok: false, reason: `larger than ${MAX_FILE_BYTES} bytes` };
+      // The cap is enforced while streaming, not after buffering the whole body.
+      let data: Uint8Array;
+      try {
+        data = new Uint8Array(await readLimited(res, MAX_FILE_BYTES));
+      } catch (err) {
+        if (err instanceof SafeFetchError && err.code === 'tooLarge') return { ok: false, reason: `larger than ${MAX_FILE_BYTES} bytes` };
+        throw err;
+      }
       const hash = hashOf(f.hashKind, data);
       if (hash !== f.hash) return { ok: false, reason: `hash mismatch (listing ${f.hash.slice(0, 12)}, file ${hash.slice(0, 12)})` };
       return { ok: true, data };

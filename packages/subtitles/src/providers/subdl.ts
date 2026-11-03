@@ -155,7 +155,7 @@ export class SubdlProvider extends BaseProvider {
     let busyRetries = 0;
     for (;;) {
       const res = await this.request(`${API}?${qs.toString()}`, { headers: { Accept: 'application/json' } });
-      const text = await res.text();
+      const text = await this.readText(res);
       let body: SubdlResponse | undefined;
       try {
         body = JSON.parse(text) as SubdlResponse;
@@ -379,7 +379,7 @@ export class SubdlProvider extends BaseProvider {
     const res = await this.request(url);
     if (res.status === 429) throw this.error('daily-limit', 'download limit', { resetAt: nextSubdlReset(this.now()) });
     if (!res.ok) throw this.statusError(res, 'download');
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = await this.readBytes(res);
     if ((res.headers.get('content-type') ?? '').includes('text/html')) {
       throw this.error('bad-response', 'download returned an HTML page');
     }

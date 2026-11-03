@@ -7,7 +7,7 @@ import { ContainerUpdater, inWindow, orderParentsFirst, recreateBody } from './c
 import type { ContainerInspect } from './docker.js';
 import { createContainerUpdatesCheck } from './health.js';
 import { runContainerUpdateJob } from './index.js';
-import { parseChallenge, parseImageRef, remoteDigest } from './registry.js';
+import { parseChallenge, parseImageRef, realmAllowed, remoteDigest } from './registry.js';
 import { UpdatesService } from './service.js';
 
 // ---- a fake Docker Engine API ----------------------------------------------------------------
@@ -231,6 +231,29 @@ describe('image references and registry digests', () => {
     expect(digest).toBe('sha256:qbit1');
     expect(seen).toEqual(['HEAD lscr.io/v2/linuxserver/qbittorrent/manifests/latest', 'GET lscr.io/token', 'HEAD lscr.io/v2/linuxserver/qbittorrent/manifests/latest']);
     await expect(remoteDigest(parseImageRef('ghcr.io/nobody/nothing'), { fetchImpl: fakeRegistry(REMOTE) })).rejects.toThrow(/not in ghcr.io/);
+  });
+
+  it('refuses a token realm on another host (DATA-44)', async () => {
+    const seen: string[] = [];
+    const hostile = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      seen.push(`${init?.method ?? 'GET'} ${url.host} ${new Headers(init?.headers).get('authorization') ?? '-'}`);
+      return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer realm="https://collector.example.com/token",service="x"' } });
+    }) as typeof fetch;
+    await expect(remoteDigest(parseImageRef('ghcr.io/a/b'), { fetchImpl: hostile })).rejects.toThrow(/not part of that registry/);
+    expect(seen).toEqual(['HEAD ghcr.io -']);
+    expect(realmAllowed(new URL('https://auth.docker.io/token'), new URL('https://registry-1.docker.io'), 'registry-1.docker.io')).toBe(true);
+    expect(realmAllowed(new URL('https://ghcr.io/token'), new URL('https://lscr.io'), 'lscr.io')).toBe(true);
+    expect(realmAllowed(new URL('http://ghcr.io/token'), new URL('https://ghcr.io'), 'ghcr.io')).toBe(false);
+  });
+
+  it('caps the token answer', async () => {
+    const big = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/token') return new Response('x'.repeat(200_000));
+      return new Response(null, { status: 401, headers: { 'www-authenticate': `Bearer realm="https://${url.host}/token"` } });
+    }) as typeof fetch;
+    await expect(remoteDigest(parseImageRef('ghcr.io/a/b'), { fetchImpl: big })).rejects.toThrow(/oversized token/);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { basicAuth, buildBaseUrl, httpStatusError, parseJson, sendHttp, validate } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 import { NzbgetRpcEnvelope } from './schemas.js';
 
@@ -40,7 +41,7 @@ export class NzbgetRpc {
       },
       body: JSON.stringify({ version: '1.1', method, params, id: this.nextId++ }),
     });
-    const text = await response.text();
+    const text = await readBodyText(NAME, response);
 
     if (response.status === 401 || response.status === 403) {
       throw new DownloadClientError(

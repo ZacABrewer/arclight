@@ -143,6 +143,7 @@ import { matchRelease, type LibrarySnapshot, type MovieMatch, type SeriesMatch }
 import { pendingReleases, releaseSearchResults, releaseSearchState } from './schema.js';
 import { animeSeasonQueries, wantsSeasonSearch } from './season-search.js';
 import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, type ItemOutcome } from './search-status.js';
+import { readReleaseFile } from '../indexers/release-file.js';
 
 // The release pipeline: decide on releases (RSS, searches, pushes), act on the decisions
 // (grab / park as pending), and run the scheduled searches.
@@ -1690,6 +1691,7 @@ export class ReleasesService {
         const res = await this.fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout(this.downloadTimeoutMs) });
         if (res.status >= 300 && res.status < 400) {
           const location = res.headers.get('location');
+          await res.body?.cancel().catch(() => undefined);
           if (!location) break;
           if (location.startsWith('magnet:')) {
             if (release.protocol === 'usenet') throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
@@ -1702,8 +1704,10 @@ export class ReleasesService {
           throw new ReleasesError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${res.status})`);
         }
         if (!res.ok) throw new ReleasesError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytes.length === 0) throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
+        // Capped read (torrent 10 MB, NZB 50 MB); the timeout covers the body too.
+        const bytes = await readReleaseFile(res, release.protocol === 'usenet' ? 'usenet' : 'torrent').catch((err: unknown) => {
+          throw new ReleasesError('DOWNLOAD_FAILED', `Downloading the release failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        });        if (bytes.length === 0) throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
         return release.protocol === 'usenet' ? { nzb: bytes } : { torrentFile: bytes };
       }
       throw new ReleasesError('DOWNLOAD_FAILED', 'Too many redirects downloading the release');

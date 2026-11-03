@@ -1,7 +1,9 @@
 /**
- * Per-instance cookie jar (S13.7): name -> value only, no domain/path scoping. Every
- * request to the site carries the whole jar. Expiry is tracked for the jar as a whole
- * (S8.2) rather than per cookie.
+ * Per-instance cookie jar (S13.7): name -> value only, no per-cookie domain/path scoping.
+ * The jar as a whole is scoped to the definition's own hosts: the runtime attaches it (and
+ * imports Set-Cookie) only for requests to the site's links or their subdomains, never to a
+ * foreign host reached through a scraped link or a redirect. Expiry is tracked for the jar
+ * as a whole (S8.2) rather than per cookie.
  */
 export class CookieJar {
   private readonly cookies = new Map<string, string>();

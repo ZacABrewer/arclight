@@ -20,14 +20,23 @@ export function isXz(bytes: Uint8Array): boolean {
 
 /** Growable output buffer that doubles as the LZMA dictionary. */
 class Output {
-  buf = new Uint8Array(1 << 16);
+  buf: Uint8Array;
   pos = 0;
   /** Start of the current dictionary (after a dictionary reset). */
   dictStart = 0;
+  private readonly max: number;
+  constructor(max: number) {
+    this.max = max;
+    this.buf = new Uint8Array(Math.max(1, Math.min(1 << 16, max)));
+  }
   ensure(extra: number): void {
     if (this.pos + extra <= this.buf.length) return;
+    // Every write path reserves its space here first, so this is the one place the cap is
+    // enforced: a tiny stream that claims gigabytes of output stops before allocating them.
+    if (this.pos + extra > this.max) throw new XzError(`output is larger than ${this.max} bytes`);
     let n = this.buf.length * 2;
     while (n < this.pos + extra) n *= 2;
+    n = Math.min(n, this.max);
     const next = new Uint8Array(n);
     next.set(this.buf.subarray(0, this.pos));
     this.buf = next;
@@ -318,13 +327,16 @@ function decodeLzma2(input: Uint8Array, pos: number, out: Output): number {
   }
 }
 
-/** Decompress a complete .xz buffer. */
-export function xzDecompress(input: Uint8Array): Uint8Array {
+/** Default output cap: far above any real subtitle, far below what hurts the process. */
+export const XZ_MAX_OUTPUT = 20 * 1024 * 1024;
+
+/** Decompress a complete .xz buffer, refusing output larger than `maxOutput` bytes. */
+export function xzDecompress(input: Uint8Array, maxOutput = XZ_MAX_OUTPUT): Uint8Array {
   if (!isXz(input)) throw new XzError('not an xz stream');
   if (input.length < 12 + 12) throw new XzError('truncated stream');
   const checkType = input[7]! & 0x0f;
   const check = checkSize(checkType);
-  const out = new Output();
+  const out = new Output(maxOutput);
   let pos = 12;
   for (;;) {
     const sizeByte = input[pos];

@@ -1,5 +1,8 @@
 import type { z } from 'zod';
+import { readBodyBytes, readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
+
+const QBITTORRENT = 'qBittorrent';
 
 export interface SessionSettings {
   baseUrl: string;
@@ -111,7 +114,7 @@ export class QBittorrentSession {
         httpStatus: response.status,
       });
     }
-    const text = (await response.text()).trim();
+    const text = (await readBodyText(QBITTORRENT, response)).trim();
     // "Ok." on success, "Fails." on bad credentials. Some versions send an empty body.
     if (text !== '' && text !== 'Ok.') {
       throw new DownloadClientError('auth', 'qBittorrent rejected the username or password.');
@@ -127,12 +130,12 @@ export class QBittorrentSession {
 
   /** Performs an authenticated request and returns the raw response body. */
   async requestText(path: string, options: RequestOptions = {}): Promise<string> {
-    return (await this.requestOk(path, options)).text();
+    return readBodyText(QBITTORRENT, await this.requestOk(path, options));
   }
 
   /** Performs an authenticated request and returns the body as bytes (e.g. an exported .torrent). */
   async requestBytes(path: string, options: RequestOptions = {}): Promise<Uint8Array> {
-    return new Uint8Array(await (await this.requestOk(path, options)).arrayBuffer());
+    return readBodyBytes(QBITTORRENT, await this.requestOk(path, options));
   }
 
   /** An authenticated request whose response is 2xx; anything else is mapped to a DownloadClientError. */
@@ -160,7 +163,7 @@ export class QBittorrentSession {
     }
 
     if (response.ok) return response;
-    const text = await response.text();
+    const text = await readBodyText(QBITTORRENT, response);
 
     const detail = text.trim() === '' ? '' : `: ${text.trim().slice(0, 200)}`;
     switch (response.status) {

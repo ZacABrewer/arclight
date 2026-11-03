@@ -62,6 +62,7 @@ import { ProxiesService, type TunnelOpener } from './proxies.js';
 import { indexerCapsCache, indexerRssState, indexers, indexerStatus } from './schema.js';
 import { summarizeHealth } from './health.js';
 import { IndexerStatsRecorder } from './stats.js';
+import { readReleaseFile } from './release-file.js';
 
 export { IndexersError, type IndexersErrorCode } from './errors.js';
 /** Domain hint for a release's categories (`series | movie | music | audiobook | auto`). */
@@ -771,6 +772,7 @@ export class IndexersService {
       });
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location');
+        await res.body?.cancel().catch(() => undefined);
         if (!location) break;
         if (location.startsWith('magnet:')) {
           if (protocol === 'usenet') throw new IndexersError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
@@ -783,7 +785,10 @@ export class IndexersService {
         throw new IndexersError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${res.status})`);
       }
       if (!res.ok) throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
-      const data = new Uint8Array(await res.arrayBuffer());
+      // Capped read (torrent 10 MB, NZB 50 MB); the timeout covers the body too.
+      const data = await readReleaseFile(res, protocol).catch((err: unknown) => {
+        throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      });
       if (data.length === 0) throw new IndexersError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
       const ext = protocol === 'usenet' ? 'nzb' : 'torrent';
       return {

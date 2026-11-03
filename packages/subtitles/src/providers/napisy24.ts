@@ -93,7 +93,7 @@ export class Napisy24Provider extends BaseProvider {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     if (!res.ok) throw this.statusError(res, 'CheckSub');
-    const { head, body } = splitNapisy24Response(new Uint8Array(await res.arrayBuffer()));
+    const { head, body } = splitNapisy24Response(await this.readBytes(res));
     const status = parseNapisy24Status(head);
     if (/login error/i.test(head)) throw this.error('auth', 'login rejected');
     return { status, body };

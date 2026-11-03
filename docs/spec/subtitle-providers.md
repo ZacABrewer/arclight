@@ -158,6 +158,7 @@ Counted strikes (important and easy to miss):
 4. Some providers pass an episode hint into the extractor (Titlovi pack, Subdl pack); others simply take the first (Subdl single, TVSubtitles raises if more than one file).
 5. XZ (Animetosho) is a single-stream compression, not an archive: decompress and use as is.
 6. A gzip-wrapped payload (BSPlayer) is decompressed and treated as raw subtitle text.
+7. Size limits `[MT]`: decompressed output (gzip, deflate zip entries, XZ) is capped at 20 MiB. A zip entry that declares more than that, or that claims a compression ratio above 1000:1, is refused before inflating. Downloaded files are read with a 20 MiB cap and HTML/JSON pages with an 8 MiB cap while streaming. Going over a cap is a "bad archive" (decompression) or "bad response" (download) error, never an out-of-memory.
 
 ### 1.12 Language-code mapping
 
@@ -181,6 +182,7 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 2. Optional flags: use hash (default on), include AI-translated, include machine-translated.
 3. Login exchanges username and password for a bearer token plus a base host name. The token and the host name are cached for 12 hours (shared across workers); the provider's ping reports "stale" after 12 hours.
 4. VIP accounts are served from a host whose name starts with "vip"; for such hosts the bearer token is attached to every request. For non-VIP hosts the Authorization header is removed on API calls and used only for download.
+5. `[MT]` The base host from login is only used when it is a subdomain of opensubtitles.com; any other value is ignored and the default API host is kept. The file link returned by the download call is fetched without the API key or bearer token.
 
 **Flow**
 1. Login (POST login with JSON credentials, no redirect following) returns token and base host. Cache both.
@@ -467,7 +469,7 @@ Japanese subtitles for anime, keyed by AniList.
 4. For episodes of a non-movie entry, fetch entries/{id}/files with the episode filter. If the video's season is above 1 and the anidb offset is known, add the absolute offset to the episode number on the first try and fall back to the plain number on the retry; if there is no offset, retry with no episode filter and then prefer archives only (season packs).
 5. Remove 7z archives (unsupported). Split remaining into archives and plain subtitle files. If there are only archives, allow them even when the "archives" setting is off. If the archive setting is off and plain files exist, drop archives.
 6. Per file: skip AI-generated names (Whisper marks) when AI is off; skip files smaller than 500 bytes (corrupt); guess languages from the file name; skip if multiple languages detected; build a record with language Japanese.
-7. Download: GET the file URL. Archives (zip or rar) go through the shared episode picker with the video's episode and episode title; plain files are used as is.
+7. Download: GET the file URL. `[MT]` The API key goes with it only when the URL is on the API host (or a subdomain of it); links elsewhere are fetched without it. Archives (zip or rar) go through the shared episode picker with the video's episode and episode title; plain files are used as is.
 
 **Query capabilities**: AniList id, free text name, episode number. No hash, no imdb.
 **Limits and errors**

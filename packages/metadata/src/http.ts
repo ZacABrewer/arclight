@@ -6,6 +6,7 @@
 import type { z } from 'zod';
 import type { FetchLike } from './tmdb/client.js';
 import { MetadataError } from './types.js';
+import { MAX_ERROR_BODY_BYTES, readLimitedJson, readLimitedText } from './body.js';
 import { isThrottleStatus, type RateLimiter, type RequestPriority } from './rate-limit.js';
 
 export interface RequestOptions {
@@ -57,7 +58,7 @@ const NOT_FOUND = Symbol('not-found');
 
 async function errorDetail(response: Response): Promise<string> {
   try {
-    const text = await response.text();
+    const text = await readLimitedText(response, MAX_ERROR_BODY_BYTES);
     const body = JSON.parse(text) as { error?: unknown; message?: unknown };
     const detail = typeof body.error === 'string' ? body.error : body.message;
     return typeof detail === 'string' && detail.length > 0 ? `: ${detail}` : '';
@@ -148,7 +149,7 @@ export function createJsonTransport(options: JsonTransportOptions): JsonTranspor
 
     let body: unknown;
     try {
-      body = await response.json();
+      body = await readLimitedJson(response);
     } catch (cause) {
       throw new MetadataError('bad-response', `${label} returned non-JSON content`, {
         httpStatus: response.status,

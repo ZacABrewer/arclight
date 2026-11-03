@@ -326,6 +326,17 @@ describe('Letterboxd', () => {
     expect(parseLetterboxdRss(rss)).toEqual([{ mediaType: 'movie', tmdbId: 603, title: 'The Matrix', year: 1999 }]);
   });
 
+  it('parses hostile unclosed tags in linear time', () => {
+    let t0 = performance.now();
+    expect(parseLetterboxdRss('<item>'.repeat(50_000))).toEqual([]);
+    expect(performance.now() - t0).toBeLessThan(100);
+    t0 = performance.now();
+    expect(parseLetterboxdPage('<div data-item-slug="x" '.repeat(20_000)).posters).toEqual([]);
+    expect(parseLetterboxdPage('<a class="next" '.repeat(50_000)).next).toBeNull();
+    expect(parseLetterboxdPage(`${'<div '.repeat(50_000)}>`).posters).toEqual([]);
+    expect(performance.now() - t0).toBeLessThan(100);
+  });
+
   it('builds start URLs and validates the settings', () => {
     expect(letterboxdStartUrl(LetterboxdSettings.parse({ username: 'someone' }))).toBe('https://letterboxd.com/someone/watchlist/');
     expect(letterboxdStartUrl(LetterboxdSettings.parse({ source: 'list', username: 'someone', listSlug: 'best-of' }))).toBe(

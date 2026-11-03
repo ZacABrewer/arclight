@@ -41,6 +41,7 @@ import { importedDownloads } from '../schema.js';
 import { bookFolderOf, naturalCompare, orderParts } from './book-layout.js';
 import { discNumberFromFolder, isAudioExtension, scanAudioPath, type AudioExtraFile, type AudioScanFile, type AudioScanResult } from './scan-audio.js';
 import { createCombinedTagReader, type AudioTags, type TagReader } from './tags.js';
+import { readLimited } from '@arclight/net';
 
 // The audiobook importer (docs/design/music-audiobooks.md 9.3). A completed download (or a
 // folder picked for manual import) is scanned and split into books: one book is one folder (disc
@@ -495,8 +496,9 @@ export async function defaultFetchImage(url: string): Promise<Uint8Array | null>
     if (!res.ok) return null;
     const type = res.headers.get('content-type') ?? '';
     if (type && !type.startsWith('image/')) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    return bytes.length > 0 && bytes.length <= 15 * 1024 * 1024 ? bytes : null;
+    // The cap is enforced while streaming (not after buffering), inside the 20 s timer.
+    const bytes = await readLimited(res, 15 * 1024 * 1024).catch(() => null);
+    return bytes && bytes.length > 0 ? new Uint8Array(bytes) : null;
   } finally {
     clearTimeout(timer);
   }

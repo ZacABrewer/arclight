@@ -152,7 +152,7 @@ export class Addic7edProvider extends BaseProvider {
       headers: this.headers({ 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${BASE}/login.php` }),
       redirect: 'manual',
     });
-    const text = res.status === 302 ? '' : await res.text();
+    const text = res.status === 302 ? '' : await this.readText(res);
     if (/relax, slow down/i.test(text)) throw this.error('rate-limited', 'login throttled by the site');
     if (/wrong password|doesn't exist/i.test(text)) throw this.error('auth', 'login rejected');
     if (res.status !== 302) throw this.error('auth', `login failed (status ${res.status})`);
@@ -366,7 +366,7 @@ export class Addic7edProvider extends BaseProvider {
     if (/text\/html/i.test(res.headers.get('content-type') ?? '')) {
       throw this.error('daily-limit', 'download returned an HTML page (daily quota used)');
     }
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = await this.readBytes(res);
     // Counted after success; the content is returned even when this download hits the cap.
     this.downloadsLog.push(this.now());
     return this.file(bytes, 'addic7ed.srt');

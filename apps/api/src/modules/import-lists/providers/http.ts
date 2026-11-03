@@ -1,7 +1,22 @@
+import { readLimitedText, SafeFetchError } from '@arclight/net';
 import { ImportListFetchError } from '../errors.js';
 import type { ProviderContext } from './types.js';
 
 const TIMEOUT_MS = 20_000;
+/** Largest list page / API answer read; the timeout above keeps running while it streams. */
+export const MAX_LIST_BODY_BYTES = 8 * 1024 * 1024;
+
+/** Capped body read with the same error mapping as `request`. */
+export async function readBody(what: string, res: Response): Promise<string> {
+  try {
+    return await readLimitedText(res, MAX_LIST_BODY_BYTES);
+  } catch (cause) {
+    if (cause instanceof SafeFetchError && cause.code === 'tooLarge') {
+      throw new ImportListFetchError('bad-response', `${what} sent more than ${MAX_LIST_BODY_BYTES / 1024 / 1024} MB`, { cause });
+    }
+    throw new ImportListFetchError('unreachable', `${what} is unreachable`, { cause });
+  }
+}
 
 /** Sent to public sites that ask clients to identify themselves (AniList, Kitsu, Letterboxd). */
 export const USER_AGENT = 'Arclight/1 (+https://github.com/ZacABrewer/arclight)';
@@ -50,8 +65,9 @@ export async function getJson(
   init: RequestInit = {},
 ): Promise<unknown> {
   const res = await request(ctx, what, url, { ...init, headers: { Accept: 'application/json', ...headersOf(init) } });
+  const text = await readBody(what, res);
   try {
-    return await res.json();
+    return JSON.parse(text) as unknown;
   } catch (cause) {
     throw new ImportListFetchError('bad-response', `${what} returned non-JSON content`, { cause });
   }
@@ -63,7 +79,7 @@ export async function getText(
   url: string,
   init: RequestInit = {},
 ): Promise<string> {
-  return (await request(ctx, what, url, init)).text();
+  return readBody(what, await request(ctx, what, url, init));
 }
 
 function headersOf(init: RequestInit): Record<string, string> {

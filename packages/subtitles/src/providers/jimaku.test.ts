@@ -135,4 +135,16 @@ describe('JimakuProvider', () => {
     expect(file.format).toBe('srt');
     expect(seen.at(-1)!.auth).toBe('k');
   });
+
+  it('sends the API key only to the API host (DATA-44)', async () => {
+    const seen: Seen[] = [];
+    const p = new JimakuProvider({ apiKey: 'k' }, ctx(fakeFetch([['elsewhere.example.com', () => new Response('1\n00:00:01,000 --> 00:00:02,000\nx\n')]], seen)));
+    const base = { provider: 'jimaku' as const, id: 'x', language: 'ja', forced: false, hi: false, releaseInfo: 'a.srt', matches: new Set<never>(), score: 0, scoreWithoutHash: 0, hashVerifiable: false, hiVerifiable: false };
+    await p.download({ ...base, downloadUrl: 'https://elsewhere.example.com/a.srt' });
+    expect(seen.at(-1)!.auth).toBeNull();
+    await p.download({ ...base, downloadUrl: 'https://jimaku.cc.elsewhere.example.com/a.srt' });
+    expect(seen.at(-1)!.auth).toBeNull();
+    await p.download({ ...base, downloadUrl: 'https://jimaku.cc/entry/1/download/a.srt' });
+    expect(seen.at(-1)!.auth).toBe('k');
+  });
 });
