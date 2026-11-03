@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestDb } from './db/test-utils.js';
 import { setSection } from './modules/settings/service.js';
-import { hasPlayerAddress, playerOriginOf, playerUrlOf, portalUrlOf, publicUrlOf } from './public-urls.js';
+import { appUrlOf, hasPlayerAddress, playerOriginOf, playerUrlOf, portalUrlOf, publicUrlOf } from './public-urls.js';
 
 describe('publicUrlOf', () => {
   const none = { paths: [], hosts: [] };
@@ -38,5 +38,32 @@ describe('player and portal addresses from settings', () => {
     expect([playerUrlOf(db), playerOriginOf(db), hasPlayerAddress(db)]).toEqual(['https://watch.example.com', 'https://watch.example.com', true]);
     setSection(db, 'player', { address: { paths: ['/tv'] } });
     expect([playerUrlOf(db), playerOriginOf(db), hasPlayerAddress(db)]).toEqual(['https://media.example.com/tv', null, true]);
+  });
+});
+
+describe('appUrlOf ("Open Arclight")', () => {
+  const here = 'https://watch.example.com';
+
+  it('is the request address on any hostname but a player one', async () => {
+    const db = await createTestDb();
+    setSection(db, 'player', { enabled: true, address: { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] } });
+    expect(appUrlOf(db, 'nas.example.com:7878', 'http://nas.example.com:7878/arclight')).toBe('http://nas.example.com:7878/arclight');
+  });
+
+  it('is the Application URL on a player hostname, and null without one', async () => {
+    const db = await createTestDb();
+    setSection(db, 'player', { enabled: true, address: { paths: [], hosts: [{ hostname: 'watch.example.com', playerOnly: false }] } });
+    expect(appUrlOf(db, 'Watch.Example.com:443', here)).toBeNull();
+    setSection(db, 'requests', { applicationUrl: 'https://media.example.com/arclight/' });
+    expect(appUrlOf(db, 'watch.example.com', here)).toBe('https://media.example.com/arclight');
+    // An Application URL on the player hostname itself would only open the player again.
+    setSection(db, 'requests', { applicationUrl: 'https://watch.example.com' });
+    expect(appUrlOf(db, 'watch.example.com', here)).toBeNull();
+  });
+
+  it('treats player hostnames as plain hostnames while the player is off', async () => {
+    const db = await createTestDb();
+    setSection(db, 'player', { enabled: false, address: { paths: [], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] } });
+    expect(appUrlOf(db, 'watch.example.com', here)).toBe(here);
   });
 });

@@ -1,4 +1,4 @@
-import type { PlayerDocument, PortalDocument, PublicPlayerAddress, PublicPortalSettings } from '@arclight/shared';
+import { DEFAULT_PLAYER_PATH, type PlayerDocument, type PortalDocument, type PublicPlayerAddress, type PublicPortalSettings } from '@arclight/shared';
 import { isPlayerHostPath, PLAYER_HOST_EXTRAS, playerBaseOf } from './modules/playback/player-routing.js';
 import { normalizeHostname, portalBaseOf, spaDecision } from './modules/requests/portal-routing.js';
 
@@ -22,8 +22,34 @@ function playerPathDoc(player: PublicPlayerAddress, pathname: string): PlayerDoc
   return base ? { mode: 'path', base } : null;
 }
 
-export function spaRoute(portal: PublicPortalSettings, player: PublicPlayerAddress, hostname: string | undefined, pathname: string): SpaRoute {
+// While the player is off (Settings > Player), its addresses open what /player shows then:
+// the "player is off" page. A player hostname's root and every extra path redirect to /player,
+// a player-only hostname keeps the rest of the app off as before, and no page gets the player
+// mapping.
+function playerOffRoute(portal: PublicPortalSettings, player: PublicPlayerAddress, host: string, pathname: string): SpaRoute | null {
+  const seg = firstSegment(pathname);
+  const toPlayer: SpaRoute = { kind: 'redirect', location: DEFAULT_PLAYER_PATH };
+  const portalHost = portal.enabled && host !== '' ? portal.hosts.find((h) => h.hostname === host) : undefined;
+  // A portal-only hostname keeps its own rules.
+  if (portalHost?.portalOnly) return null;
+  const onPortalHost = portalHost !== undefined;
+  const playerHost = !onPortalHost && host ? player.hosts.find((h) => h.hostname === host) : undefined;
+  if (playerHost) {
+    if (seg === DEFAULT_PLAYER_PATH.slice(1) || PLAYER_HOST_EXTRAS.has(seg)) return { kind: 'serve', portal: null, player: null };
+    if (playerHost.playerOnly || seg === '') return toPlayer;
+  }
+  if (playerBaseOf(player, pathname)) return toPlayer;
+  return null;
+}
+
+/** `playerEnabled`: Settings > Player is on; while off, the player's addresses show the "player is off" page. */
+export function spaRoute(portal: PublicPortalSettings, player: PublicPlayerAddress, hostname: string | undefined, pathname: string, playerEnabled = true): SpaRoute {
   const host = normalizeHostname(hostname);
+  if (!playerEnabled) {
+    const off = playerOffRoute(portal, player, host, pathname);
+    if (off) return off;
+    return spaRoute(portal, { paths: [], hosts: [] }, hostname, pathname);
+  }
   if (portal.enabled && host && portal.hosts.some((h) => h.hostname === host)) {
     const decision = spaDecision(portal, hostname, pathname);
     if (decision.kind === 'redirect') return decision;

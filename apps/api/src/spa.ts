@@ -58,7 +58,8 @@ export async function registerSpa(app: FastifyInstance, ctx: AppContext, webDist
   app.setNotFoundHandler(async (req: FastifyRequest, reply: FastifyReply) => {
     if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not found' });
     const pathname = req.url.split('?')[0] ?? '/';
-    const decision = spaRoute(getSection(ctx.db, 'requests').publicPortal, getSection(ctx.db, 'player').address, req.host, pathname);
+    const playerSettings = getSection(ctx.db, 'player');
+    const decision = spaRoute(getSection(ctx.db, 'requests').publicPortal, playerSettings.address, req.host, pathname, playerSettings.enabled);
     if (decision.kind === 'redirect') return reply.redirect(withBasePath(basePath, decision.location), 302);
     const html = injectPlayerDocument(injectPortalDocument(await indexHtml(), decision.portal), decision.player);
     // The page differs per hostname and path; never let a shared cache mix them up.

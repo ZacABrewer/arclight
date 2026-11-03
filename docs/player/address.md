@@ -28,6 +28,19 @@ Player only hides the admin pages; it is not access control. The API checks ever
 itself, so keep using accounts and permissions as usual
 ([users and security](../using/users-and-security.md)).
 
+## While the player is off
+
+With the player turned off (Settings > Player), its addresses open the "player is off" page
+at `/player`: the root of a player hostname and every extra path redirect there. A player-only
+hostname still keeps the rest of Arclight off; on a hostname without **Player only**, the other
+pages answer as usual.
+
+## Open Arclight on a player hostname
+
+The root of a player hostname is the player's, so **Open Arclight** in the account menu opens
+your Application URL (Settings > Requests) there instead. Without an Application URL the item
+is hidden on player hostnames.
+
 ## Where Arclight uses the player address
 
 Arclight picks one public player address: the first hostname you added, else your Application
@@ -106,6 +119,8 @@ Paths Arclight uses itself, such as `/api`, `/settings` or `/library`, cannot be
 |---|---|
 | The hostname shows the full app, not the player | It is not under Hostnames, the settings were not saved, or the proxy changes the `Host` header |
 | A page on the hostname jumps back to the player | **Player only** is on for that hostname |
+| Every player address shows "The player isn't turned on" | The player is off in Settings > Player |
+| No **Open Arclight** on a player hostname | No Application URL is set (Settings > Requests) |
 | The TV still shows `/player/link` | No player address is set, or the Application URL is empty and there is no hostname |
 | "Already used by the request portal" | That path or hostname is a portal address. Remove it there first |
 

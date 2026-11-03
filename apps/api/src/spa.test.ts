@@ -18,14 +18,14 @@ afterEach(async () => {
   dir = null;
 });
 
-async function server(portal: object, player: object = {}, basePath = '') {
+async function server(portal: object, player: object = {}, basePath = '', playerEnabled = true) {
   dir = await mkdtemp(path.join(tmpdir(), 'arclight-spa-'));
   await writeFile(path.join(dir, 'index.html'), '<!doctype html><html><head><title>Arclight</title></head><body><div id="root"></div></body></html>');
   await mkdir(path.join(dir, 'assets'));
   await writeFile(path.join(dir, 'assets', 'app.js'), 'console.log(1)');
   const db = await createTestDb();
   setSection(db, 'requests', RequestsSettings.parse({ publicPortal: portal }));
-  setSection(db, 'player', PlayerSettings.parse({ address: player }));
+  setSection(db, 'player', PlayerSettings.parse({ enabled: playerEnabled, address: player }));
   const app = Fastify({ trustProxy: true });
   await registerSpa(app, { db } as AppContext, dir, basePath);
   return app;
@@ -81,5 +81,23 @@ describe('SPA fallback', () => {
     expect((await app.inject({ method: 'GET', url: '/setup', headers: { host: 'watch.example.com' } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'GET', url: '/assets/app.js', headers: { host: 'watch.example.com' } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'GET', url: '/api/v1/nothing', headers: { host: 'watch.example.com' } })).statusCode).toBe(404);
+  });
+
+  it('sends the player addresses to the "player is off" page while the player is off', async () => {
+    const player = { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] };
+    const app = await server(portal, player, '/arclight', false);
+    const pages: Array<{ url: string; host: string }> = [
+      { url: '/tv/watch/movies', host: 'nas.local' },
+      { url: '/', host: 'watch.example.com' },
+      { url: '/library/movies', host: 'watch.example.com' },
+    ];
+    for (const { url, host } of pages) {
+      const res = await app.inject({ method: 'GET', url, headers: { host } });
+      expect(res.statusCode, `${host}${url}`).toBe(302);
+      expect(res.headers.location).toBe('/arclight/player');
+    }
+    const off = await app.inject({ method: 'GET', url: '/player', headers: { host: 'watch.example.com' } });
+    expect(off.statusCode).toBe(200);
+    expect(off.body).not.toContain('arclight-player');
   });
 });

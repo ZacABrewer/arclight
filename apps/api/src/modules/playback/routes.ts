@@ -67,7 +67,7 @@ import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
 import { audioFiles } from '../library/schema.js';
 import { getSection, setSection } from '../settings/service.js';
-import { playerUrlOf, portalUrlOf, publicUrlOf } from '../../public-urls.js';
+import { appUrlOf, playerUrlOf, portalUrlOf, publicUrlOf } from '../../public-urls.js';
 
 const NO_ADDRESS = { paths: [], hosts: [] } as const;
 import { capabilitiesOf, decide, denialReply, isRemoteRequest, linkUserStillActive as linkUserStillActiveIn, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
@@ -371,6 +371,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         portalUrl: portalUrlOf(db, deps.basePath) ?? publicUrlOf(getSection(db, 'requests').applicationUrl, NO_ADDRESS, DEFAULT_PORTAL_PATH) ?? `${origin}${DEFAULT_PORTAL_PATH}`,
         canRequest: auth?.user ? admin || canRequest(perms) : false,
         appHome: auth?.user ? appHomeOf(admin, auth.appAccess, perms) : null,
+        appUrl: appUrlOf(db, req.host, origin),
       };
     });
 

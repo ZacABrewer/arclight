@@ -106,6 +106,7 @@ export function capabilitiesOf(db: Db, decision: PlayerDecision): PlayerCapabili
     portalUrl: null,
     canRequest: false,
     appHome: null,
+    appUrl: null,
   };
 }
 

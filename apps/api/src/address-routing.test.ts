@@ -60,6 +60,26 @@ describe('spaRoute', () => {
     expect(route('watch.example.com', '/requests-here', off)).toEqual({ kind: 'redirect', location: '/' });
   });
 
+  it('shows the "player is off" page at the player addresses while the player is off', () => {
+    const off = (host: string, path: string) => spaRoute(portal, player, host, path, false);
+    const toPlayer = { kind: 'redirect', location: '/player' };
+    const plain = { kind: 'serve', portal: null, player: null };
+    // Player-only hostname: /player (the off page), sign-in and setup; the rest goes there.
+    for (const path of ['/', '/watch/movies/12', '/music', '/library/movies', '/settings']) expect(off('watch.example.com', path), path).toEqual(toPlayer);
+    for (const path of ['/player', '/player/music', '/login', '/setup']) expect(off('watch.example.com', path), path).toEqual(plain);
+    // A hostname without "Player only": its root goes to the off page, the app answers elsewhere.
+    expect(off('media.example.com', '/')).toEqual(toPlayer);
+    expect(off('media.example.com', '/library/movies')).toEqual(plain);
+    expect(off('media.example.com', '/requests-here')).toEqual({ kind: 'serve', portal: { mode: 'path', base: '/requests-here' }, player: null });
+    // Extra paths on any hostname, and no player mapping anywhere.
+    expect(off('nas.example.com', '/watch')).toEqual(toPlayer);
+    expect(off('nas.example.com', '/TV/music')).toEqual(toPlayer);
+    expect(off('nas.example.com', '/player/music')).toEqual(plain);
+    expect(off('family.example.com', '/tv/music')).toEqual(toPlayer);
+    expect(off('requests.example.com', '/')).toEqual({ kind: 'serve', portal: { mode: 'host', portalOnly: true }, player: null });
+    expect(off('requests.example.com', '/tv')).toEqual({ kind: 'serve', portal: { mode: 'host', portalOnly: true }, player: null });
+  });
+
   it('works with no player address at all', () => {
     expect(spaRoute(portal, PublicPlayerAddress.parse({}), 'nas.local', '/watch')).toEqual({ kind: 'serve', portal: null, player: null });
   });

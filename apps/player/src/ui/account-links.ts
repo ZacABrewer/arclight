@@ -10,15 +10,18 @@ export interface AccountLinks {
   app: string | null;
 }
 
-type Caps = Pick<PlayerCapabilities, 'portalUrl' | 'canRequest' | 'appHome'>;
+type Caps = Pick<PlayerCapabilities, 'portalUrl' | 'canRequest' | 'appHome' | 'appUrl'>;
 
-/** `serverUrl`: the signed-in server ("https://nas.example.com/arclight"). */
+/** `serverUrl`: the signed-in server ("https://nas.example.com/arclight"), for the built-in portal. */
 export function accountLinks(caps: Partial<Caps> | undefined, owner: boolean, serverUrl: string | null | undefined): AccountLinks {
   if (!caps || !owner) return { portal: null, app: null };
   const server = serverUrl ? serverUrl.replace(/\/+$/, '') : null;
   // The portal's public address; signed-in users always have the built-in /portal too.
   const portal = caps.canRequest ? (caps.portalUrl ?? (server ? `${server}/portal` : null)) : null;
-  const app = server && typeof caps.appHome === 'string' ? `${server}${caps.appHome}` : null;
+  // The server names where the rest of Arclight answers (`appUrl`): the signed-in address,
+  // or the Application URL when that is a player hostname. Without one there is no link.
+  const appBase = caps.appUrl ? caps.appUrl.replace(/\/+$/, '') : null;
+  const app = appBase && typeof caps.appHome === 'string' ? `${appBase}${caps.appHome}` : null;
   return { portal, app };
 }
 

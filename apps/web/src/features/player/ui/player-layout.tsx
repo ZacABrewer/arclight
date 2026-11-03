@@ -5,7 +5,8 @@ import { useAuth } from '../../../auth/auth-context.js';
 import { appHomeFor } from '../../../auth/access.js';
 import { readPortalDocument } from '../../discover/portal-location.js';
 import { portalHref } from '../../discover/portal-href.js';
-import { withBase } from '../../../lib/base-path.js';
+import { appHref } from '../app-href.js';
+import { readPlayerDocument } from '../player-location.js';
 import { errorMessage } from '../../../api/client.js';
 import { t } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
@@ -138,8 +139,8 @@ export function PlayerOff({ error }: { error?: unknown }) {
   const { access } = useAuth();
   // The guard's answer, read from the cache: refetching a failed one here would loop.
   const caps = usePlaybackCapabilities(false);
-  const home = appHomeFor(access);
-  const back = home === null ? portalHref(caps.data?.portalUrl, location.origin, readPortalDocument()) : withBase(home);
+  const app = appHref(appHomeFor(access), readPlayerDocument(), caps.data?.appUrl, location.origin);
+  const back = app ?? portalHref(caps.data?.portalUrl, location.origin, readPortalDocument());
   return (
     <Pane chamfer="both" strong className="pl-card pl-off">
       {error && !isAccessError(error) ? (
@@ -149,7 +150,7 @@ export function PlayerOff({ error }: { error?: unknown }) {
           title={t('player.off.title')}
           action={
             <a href={back} className={buttonClass({ variant: 'primary' })}>
-              {home === null ? t('player.off.backPortal') : t('player.off.backApp')}
+              {app === null ? t('player.off.backPortal') : t('player.off.backApp')}
             </a>
           }
         >

@@ -20,6 +20,7 @@ const caps = (over: Record<string, unknown> = {}) => ({
   sections: { music: false, audiobooks: true, podcasts: false, books: false, video: false },
   playerUrl: `${location.origin}/player`,
   portalUrl: `${location.origin}/portal`,
+  appUrl: location.origin,
   ...over,
 });
 
@@ -79,6 +80,34 @@ describe('player account menu', { timeout: 30_000 }, () => {
   it('goes to the built-in portal when the server gives no portal address', async () => {
     open(user({ permissions: Permission.REQUEST }), { caps: { portalUrl: null } });
     expect(within(await menu()).getByRole('link', { name: 'Request portal' }).getAttribute('href')).toBe('/portal');
+  });
+
+  it('opens Arclight on the Application URL from a player hostname, never the player root', async () => {
+    const meta = document.createElement('meta');
+    meta.name = 'arclight-player';
+    meta.content = '{"mode":"host","playerOnly":true}';
+    document.head.append(meta);
+    try {
+      open(user({ role: 'admin', permissions: Permission.ADMIN }), { caps: { appUrl: 'https://media.example.com' } });
+      expect(within(await menu()).getByRole('link', { name: 'Open Arclight' }).getAttribute('href')).toBe('https://media.example.com/');
+    } finally {
+      meta.remove();
+    }
+  });
+
+  it('hides Open Arclight on a player hostname when no other address is known', async () => {
+    const meta = document.createElement('meta');
+    meta.name = 'arclight-player';
+    meta.content = '{"mode":"host","playerOnly":false}';
+    document.head.append(meta);
+    try {
+      open(user({ role: 'admin', permissions: Permission.ADMIN }), { caps: { appUrl: null } });
+      const list = await menu();
+      expect(within(list).queryByRole('link', { name: 'Open Arclight' })).toBeNull();
+      expect(within(list).getByRole('link', { name: 'Request portal' })).toBeTruthy();
+    } finally {
+      meta.remove();
+    }
   });
 
   it('links a portal hostname with its full address', async () => {

@@ -154,12 +154,18 @@ export const PlayerCapabilities = z.object({
   sections: z.object({ music: z.boolean(), audiobooks: z.boolean(), podcasts: z.boolean(), books: z.boolean(), video: z.boolean() }),
   /** The player's public address (first player hostname, else applicationUrl + path); null: none set. */
   playerUrl: z.string().nullable().default(null),
-  /** The request portal's public address, built the same way; null: none set or the portal is off. */
+  /** The request portal's public address, built the same way; the built-in /portal while the public portal is off. */
   portalUrl: z.string().nullable().default(null),
   /** May request in the portal (any request permission, or admin). */
   canRequest: z.boolean().default(false),
   /** Where "Open Arclight" goes for this account (appHomeOf); null: no app pages. */
   appHome: z.string().nullable().default(null),
+  /**
+   * Where the rest of Arclight answers for "Open Arclight" (origin plus base path): this
+   * request's address, or the Application URL when the request came in on a player hostname;
+   * null when there is none (the link is then hidden).
+   */
+  appUrl: z.string().nullable().default(null),
 });
 export type PlayerCapabilities = z.infer<typeof PlayerCapabilities>;
 

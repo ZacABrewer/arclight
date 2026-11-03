@@ -212,6 +212,7 @@ describe('access guard', () => {
       portalUrl: 'http://localhost:80/portal',
       canRequest: true,
       appHome: '/',
+      appUrl: 'http://localhost:80',
     });
   });
 
@@ -339,6 +340,10 @@ describe('access guard', () => {
     expect(ok.json().address).toEqual({ paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: false }] });
     expect((await get(h, '/api/v1/settings/player', admin.cookie)).json().address).toEqual(ok.json().address);
     expect((await get(h, '/api/v1/playback/me', admin.cookie)).json()).toMatchObject({ playerUrl: 'https://watch.example.com', portalUrl: 'https://requests.example.com' });
+    // "Open Arclight" on a player hostname: the Application URL, never the player's root.
+    setSection(h.db, 'player', { enabled: true, address: { paths: [], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] } });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie, { host: 'nas.example.com' })).json().appUrl).toBe('http://nas.example.com');
+    expect((await get(h, '/api/v1/playback/me', admin.cookie, { host: 'watch.example.com' })).json().appUrl).toBe('https://media.example.com');
   });
 });
 

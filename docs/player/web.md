@@ -26,7 +26,9 @@ app** and **Sign out**.
   portal) while the public portal is on, else the built-in `/portal`.
 - **Open Arclight** shows when your account may open part of the app: admins, users with
   [app access](../using/users-and-security.md#app-access), and users who may manage or view
-  requests or issues. It opens the first page you may use.
+  requests or issues. It opens the first page you may use. On a
+  [player hostname](address.md#open-arclight-on-a-player-hostname) it opens your Application
+  URL instead, and is hidden when none is set.
 
 Neither shows while a profile other than the owner is active (profiles cannot request).
 

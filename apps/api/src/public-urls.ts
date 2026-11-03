@@ -2,6 +2,7 @@ import { DEFAULT_PLAYER_PATH, DEFAULT_PORTAL_PATH } from '@arclight/shared';
 import type { Db } from './db/index.js';
 import { normaliseServerUrl } from './modules/mobile/service.js';
 import { getSection } from './modules/settings/service.js';
+import { normalizeHostname } from './modules/requests/portal-routing.js';
 
 // The one public address Arclight gives out for the player and for the request portal (TV
 // sign-in, the phone sign-in QR, share links, the account menus):
@@ -51,4 +52,18 @@ export function playerOriginOf(db: Db, basePath = ''): string | null {
 export function hasPlayerAddress(db: Db): boolean {
   const address = getSection(db, 'player').address;
   return address.paths.length > 0 || address.hosts.length > 0;
+}
+
+/**
+ * Where the rest of Arclight answers for a page on `host` ("Open Arclight"): `requestOrigin`
+ * (origin plus base path) unless `host` is a player hostname, whose root is the player's. Then
+ * the Application URL, unless that is a player hostname too; else null.
+ */
+export function appUrlOf(db: Db, host: string, requestOrigin: string): string | null {
+  const player = getSection(db, 'player');
+  const isPlayerHost = (h: string) => player.enabled && player.address.hosts.some((p) => p.hostname === h);
+  if (!isPlayerHost(normalizeHostname(host))) return requestOrigin;
+  const app = normaliseServerUrl(getSection(db, 'requests').applicationUrl);
+  if (!app || isPlayerHost(normalizeHostname(new URL(app).host))) return null;
+  return app;
 }
