@@ -1,6 +1,7 @@
 import { Button, ButtonGroup, Icon, Meter } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
 import { useAudiobook, useMarkPlayed, useProgress } from './api.js';
+import { DownloadButton } from './download.js';
 import { clockTime, isInProgress, lengthLabel, names, progressShare, timeLeftLabel } from './format.js';
 import { Artwork, DetailsSkeleton, Empty, LoadError, PlayerLink, playerPaths, useNumericParam } from './kit.js';
 import { usePlayerActions } from './player-hooks.js';
@@ -77,6 +78,7 @@ export function BookPage() {
             >
               {finished ? t('player.browse.book.markUnfinished') : t('player.browse.book.markFinished')}
             </Button>
+            <DownloadButton itemKeys={[book.itemKey]} />
           </ButtonGroup>
         </div>
       </section>

@@ -5,6 +5,7 @@ import { Button, Icon, Menu, Popover, type MenuItem } from '../../../arclight/in
 import { cx } from '../../../arclight/cx.js';
 import { useT } from '../../../i18n/index.js';
 import { AddToPlaylistDialog } from './add-to-playlist.js';
+import { downloadLabelKey } from './download.js';
 import { clockTime, groupByDisc } from './format.js';
 import { Artwork, NowPlayingBars, PlayerLink, playerPaths } from './kit.js';
 import { usePlayerActions } from './player-hooks.js';
@@ -125,10 +126,23 @@ export function TrackMenu({ track, showAlbum = true, onAddToPlaylist }: { track:
   const player = usePlayerActions();
   const navigate = useNavigate();
   const go = (to: string) => void navigate({ to } as unknown as Parameters<typeof navigate>[0]);
+  // The app's offline copies (the web player has no `download`, so no entry there).
+  const download = player.download;
+  const downloadState = download ? (player.downloadState?.(track.itemKey) ?? 'none') : null;
   const items: MenuItem[] = [
     { id: 'next', label: t('player.browse.track.playNext'), onSelect: () => player.playNext([track.itemKey]) },
     { id: 'queue', label: t('player.browse.track.addToQueue'), onSelect: () => player.addToQueue([track.itemKey]) },
     { id: 'playlist', label: t('player.browse.track.addToPlaylist'), onSelect: onAddToPlaylist },
+    ...(download && downloadState
+      ? [
+          {
+            id: 'download',
+            label: t(downloadLabelKey(downloadState)),
+            // Only a missing copy is an action; the other states just say where it stands.
+            onSelect: downloadState === 'none' ? () => download([track.itemKey]) : undefined,
+          },
+        ]
+      : []),
     { id: 'artist', label: t('player.browse.track.goToArtist'), onSelect: () => go(playerPaths.artist(track.artistId)), separatorBefore: true },
     ...(showAlbum ? [{ id: 'album', label: t('player.browse.track.goToAlbum'), onSelect: () => go(playerPaths.album(track.albumId)) }] : []),
   ];

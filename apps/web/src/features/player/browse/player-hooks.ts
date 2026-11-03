@@ -12,6 +12,9 @@ export interface PlayItemsOptions {
   source?: string;
 }
 
+/** Offline copy of one item, as far as the player knows. */
+export type DownloadState = 'none' | 'queued' | 'downloading' | 'done';
+
 export interface BrowsePlayerActions {
   /** Item key of the item loaded in the player ("track:5"), or null. */
   currentItemKey: string | null;
@@ -24,6 +27,13 @@ export interface BrowsePlayerActions {
   addToQueue: (itemKeys: string[]) => void;
   /** Play/pause the current item. */
   toggle: () => void;
+  /**
+   * Keep items for offline listening. Optional: only the mobile app provides it (the web has no
+   * offline copies), and the Download buttons and menu entries are hidden without it.
+   */
+  download?: ((itemKeys: string[]) => void) | undefined;
+  /** Where an item's offline copy stands (with `download`). */
+  downloadState?: ((itemKey: string) => DownloadState) | undefined;
 }
 
 const noop = () => {};
@@ -41,4 +51,22 @@ export const BrowsePlayerContext = createContext<BrowsePlayerActions>(IDLE);
 
 export function usePlayerActions(): BrowsePlayerActions {
   return useContext(BrowsePlayerContext);
+}
+
+/**
+ * One state for several items (an album, a playlist): 'none' while any is missing (the button
+ * downloads the rest), else 'downloading' / 'queued' while any is under way, else 'done'.
+ */
+export function aggregateDownloadState(states: readonly DownloadState[]): DownloadState {
+  if (states.length === 0 || states.includes('none')) return 'none';
+  if (states.includes('downloading')) return 'downloading';
+  if (states.includes('queued')) return 'queued';
+  return 'done';
+}
+
+/** The download state of these items, or null when the player has no downloads (the web). */
+export function useDownloadState(itemKeys: readonly string[]): DownloadState | null {
+  const { download, downloadState } = usePlayerActions();
+  if (!download || !downloadState) return null;
+  return aggregateDownloadState(itemKeys.map((k) => downloadState(k)));
 }

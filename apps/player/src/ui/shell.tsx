@@ -9,6 +9,7 @@ import { MiniPlayer } from '@web/features/player/ui/mini-player';
 import '@web/features/player/player.css';
 import { useNet, useServices, useSession } from '../app/context';
 import { signedOutTarget } from '../app/router';
+import { useBrowseDownloads } from './downloads';
 
 // Chrome of every signed-in screen: a slim top bar (back, mark, offline badge, settings), the
 // page, the mini-player and the bottom tabs. The player lives here so playback carries on
@@ -25,10 +26,11 @@ interface Tab {
 /** Gives the web browse pages the actions they use from the shared player. */
 function BrowsePlayerBridge({ children }: { children: ReactNode }) {
   const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
+  const downloads = useBrowseDownloads();
   const currentItemKey = state.current?.itemKey ?? null;
   const value = useMemo<BrowsePlayerActions>(
-    () => ({ currentItemKey, playing: state.playing, playItems, playItem: (key) => playItem(key), playNext, addToQueue, toggle }),
-    [currentItemKey, state.playing, playItems, playItem, playNext, addToQueue, toggle],
+    () => ({ currentItemKey, playing: state.playing, playItems, playItem: (key) => playItem(key), playNext, addToQueue, toggle, ...downloads }),
+    [currentItemKey, state.playing, playItems, playItem, playNext, addToQueue, toggle, downloads],
   );
   return <BrowsePlayerContext.Provider value={value}>{children}</BrowsePlayerContext.Provider>;
 }

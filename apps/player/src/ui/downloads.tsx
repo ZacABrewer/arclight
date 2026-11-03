@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useToast } from '@web/components/toast';
 import { Banner, Button, EmptyState, Icon, Meter, Pane, cx } from '@web/arclight/index';
@@ -9,9 +9,12 @@ import { PlayerIcon } from '@web/features/player/ui/player-icons';
 import { useDownloads, useServices, useSession } from '../app/context';
 import { entryBytes, entryProgress, entryStatus, type DownloadEntry } from '../offline/download-index';
 import { DownloadError } from '../offline/downloads';
+import { itemDownloadState } from '../offline/download-state';
+import type { BrowsePlayerActions } from '@web/features/player/browse/player-hooks';
 
 // Downloads: what is on this phone for the active account, its progress, and ways to add more
-// (what's playing, the whole queue). Browse pages start playback; downloading starts here.
+// (what's playing, the whole queue). Browse pages (album, playlist, book, track menus) start
+// downloads through the player context (`useBrowseDownloads`).
 
 const toWebUrl = (u: string) => (Capacitor.isNativePlatform() ? Capacitor.convertFileSrc(u) : u);
 
@@ -42,6 +45,42 @@ export function useStartDownload() {
       toasts.push({ tone: 'error', title });
     }
   };
+}
+
+/**
+ * The browse pages' download actions: start a download (toast on the outcome) and each item's
+ * state, refreshed as the index changes. Null when this build cannot download.
+ */
+export function useBrowseDownloads(): Pick<BrowsePlayerActions, 'download' | 'downloadState'> | null {
+  const { downloads, index } = useServices();
+  const session = useSession();
+  const start = useStartDownload();
+  // useStartDownload makes a new function every render; keep `download` stable.
+  const startRef = useRef(start);
+  startRef.current = start;
+  const entries = useDownloads();
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
+  const accountId = session?.accountId ?? null;
+  const download = useCallback(
+    (itemKeys: string[]) => {
+      setPending((p) => new Set([...p, ...itemKeys]));
+      void startRef.current(itemKeys).finally(() =>
+        setPending((p) => {
+          const next = new Set(p);
+          for (const k of itemKeys) next.delete(k);
+          return next;
+        }),
+      );
+    },
+    [],
+  );
+  const downloadState = useCallback(
+    (itemKey: string) => (accountId ? itemDownloadState(index, accountId, itemKey, pending) : 'none'),
+    // `entries` changes whenever the index does: a new function makes the pages re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [index, accountId, pending, entries],
+  );
+  return useMemo(() => (downloads.available && accountId ? { download, downloadState } : null), [downloads.available, accountId, download, downloadState]);
 }
 
 function statusText(t: ReturnType<typeof useT>, e: DownloadEntry): string {
@@ -116,6 +155,9 @@ export function DownloadsPage() {
   const session = useSession();
   const player = usePlayer();
   const start = useStartDownload();
+  // useStartDownload makes a new function every render; keep `download` stable.
+  const startRef = useRef(start);
+  startRef.current = start;
   const entries = useDownloads();
   const [storage, setStorage] = useState<{ usedBytes: number; freeBytes: number } | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);

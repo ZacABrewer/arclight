@@ -3,6 +3,7 @@ import { Button, ButtonGroup, Icon } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
 import { AddToPlaylistDialog } from './add-to-playlist.js';
 import { useAlbum } from './api.js';
+import { DownloadButton } from './download.js';
 import { lengthLabel, shuffled } from './format.js';
 import { Artwork, DetailsSkeleton, Empty, FormatBadge, LoadError, PlayerLink, ShuffleIcon, playerPaths, useNumericParam } from './kit.js';
 import { usePlayerActions } from './player-hooks.js';
@@ -58,6 +59,7 @@ export function AlbumPage() {
             <Button variant="ghost" icon={<Icon name="plus" />} disabled={!keys.length} onClick={() => setAdding(true)}>
               {t('player.browse.track.addToPlaylist')}
             </Button>
+            <DownloadButton itemKeys={keys} />
           </ButtonGroup>
         </div>
       </section>

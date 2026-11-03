@@ -63,7 +63,7 @@ export type MockPlayer = BrowsePlayerActions & {
   toggle: ReturnType<typeof vi.fn>;
 };
 
-export function mockPlayer(over: Partial<Pick<BrowsePlayerActions, 'currentItemKey' | 'playing'>> = {}): MockPlayer {
+export function mockPlayer(over: Partial<Pick<BrowsePlayerActions, 'currentItemKey' | 'playing' | 'download' | 'downloadState'>> = {}): MockPlayer {
   return {
     currentItemKey: null,
     playing: false,
