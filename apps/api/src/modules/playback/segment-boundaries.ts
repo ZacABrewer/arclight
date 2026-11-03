@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { setPriority } from 'node:os';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Boundary snapping for detected intros and recaps. An audio match puts an edge within a second
 // or two of where the shared audio starts or stops; the cut itself is usually a short black frame
@@ -41,8 +42,7 @@ export function buildBoundaryProbeArgs(input: string, audioOrdinal: number, hasV
     ...(startMs > 0 ? ['-ss', secs(startMs)] : []),
     '-t',
     secs(lengthMs),
-    '-i',
-    input,
+    ...fileInput(input),
     ...(hasVideo ? ['-map', '0:v:0', '-vf', 'scale=160:-2,blackdetect=d=0.1:pix_th=0.10'] : []),
     '-map',
     `0:a:${audioOrdinal}`,

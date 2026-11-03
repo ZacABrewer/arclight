@@ -9,7 +9,7 @@ describe('boundary probes', () => {
     expect(probeWindow(1_000, 1_200_000)).toEqual({ startMs: 0, lengthMs: 3_500 });
     expect(probeWindow(1_199_000, 1_200_000)).toEqual({ startMs: 1_196_500, lengthMs: 3_500 });
     expect(buildBoundaryProbeArgs('/m/e.mkv', 1, true, 57_500, 5_000)).toEqual([
-      '-nostdin', '-hide_banner', '-nostats', '-v', 'info', '-ss', '57.500', '-t', '5.000', '-i', '/m/e.mkv',
+      '-nostdin', '-hide_banner', '-nostats', '-v', 'info', '-ss', '57.500', '-t', '5.000', '-protocol_whitelist', 'file,pipe', '-i', '/m/e.mkv',
       '-map', '0:v:0', '-vf', 'scale=160:-2,blackdetect=d=0.1:pix_th=0.10',
       '-map', '0:a:1', '-af', 'silencedetect=n=-50dB:d=0.3',
       '-f', 'null', '-',
