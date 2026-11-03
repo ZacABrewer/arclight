@@ -148,7 +148,7 @@ const hlsParts = new WeakMap<AppContext, HlsParts>();
  * HLS sessions and keyframe indexes (0.24); `opts` apply only on creation (tests pass a fake
  * launcher and their own directories).
  */
-export function hlsPartsFor(ctx: AppContext, opts: { sessions?: Partial<HlsSessionsOptions>; keyframes?: Partial<KeyframeIndexerOptions>; capacityFile?: string | null } = {}): HlsParts {
+export function hlsPartsFor(ctx: AppContext, opts: { sessions?: Partial<HlsSessionsOptions>; keyframes?: Partial<KeyframeIndexerOptions>; capacityFile?: string | null; cpus?: number } = {}): HlsParts {
   let h = hlsParts.get(ctx);
   if (!h) {
     const playerCache = join(ctx.config.configDir, 'cache', 'player');
@@ -162,7 +162,7 @@ export function hlsPartsFor(ctx: AppContext, opts: { sessions?: Partial<HlsSessi
         maxPerDevice: () => playerSettings(ctx.db).videoMaxStreamsPerUser,
         legacyActive: () => videoTranscoderFor(ctx).active,
         locate: () => locateFfmpeg(),
-        capacity: new CapacityModel({ file: opts.capacityFile === undefined ? join(playerCache, 'capacity.json') : opts.capacityFile }),
+        capacity: new CapacityModel({ file: opts.capacityFile === undefined ? join(playerCache, 'capacity.json') : opts.capacityFile, ...(opts.cpus ? { cpus: opts.cpus } : {}) }),
         log,
         ...opts.sessions,
       }),

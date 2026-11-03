@@ -140,6 +140,8 @@ async function harness(opts: { real?: boolean; hold?: boolean; silent?: boolean;
         },
         keyframes: { dir: join(cacheDir, 'keyframes'), ...(opts.real ? {} : { locateProbe: async () => null }) },
         capacityFile: null,
+        // The capacity seeds scale with the CPU count: fix it so the ladder is the same on any machine.
+        cpus: 8,
       });
       if (opts.real) {
         videoPartsFor(c, { cache: { dir: cacheDir }, encoders: { detect: async () => ({ hwaccel: 'none', zscale: false }) } });
