@@ -241,6 +241,8 @@ public final class VideoRequest {
         @Nullable public final Integer selectedAudio;
         /** The "Direct play · 1080p" line for the new stream; null = unchanged. */
         @Nullable public final String streamInfo;
+        /** The new stream's HLS session; null: it is progressive (direct play or a legacy stream). */
+        @Nullable public final VideoHls hls;
 
         Stream(String url, String mimeType, long streamStartMs, boolean seekable, long positionMs,
                 @Nullable List<Subtitle> subtitles, @Nullable Integer selectedAudio) {
@@ -249,14 +251,22 @@ public final class VideoRequest {
 
         Stream(String url, String mimeType, long streamStartMs, boolean seekable, long positionMs,
                 @Nullable List<Subtitle> subtitles, @Nullable Integer selectedAudio, @Nullable String streamInfo) {
+            this(url, mimeType, streamStartMs, seekable, positionMs, subtitles, selectedAudio, streamInfo, null);
+        }
+
+        Stream(String url, String mimeType, long streamStartMs, boolean seekable, long positionMs,
+                @Nullable List<Subtitle> subtitles, @Nullable Integer selectedAudio, @Nullable String streamInfo,
+                @Nullable VideoHls hls) {
             this.url = url;
             this.mimeType = mimeType;
             this.streamStartMs = streamStartMs;
-            this.seekable = seekable;
+            // HLS seeks in the player (VOD playlist, media-time timestamps).
+            this.seekable = seekable || hls != null;
             this.positionMs = positionMs;
             this.subtitles = subtitles;
             this.selectedAudio = selectedAudio;
             this.streamInfo = streamInfo;
+            this.hls = hls;
         }
 
         public static Stream parse(JSONObject o) {
@@ -264,7 +274,7 @@ public final class VideoRequest {
             List<Subtitle> subs = o.has("subtitles") && !o.isNull("subtitles") ? parseSubtitles(o.optJSONArray("subtitles")) : null;
             Integer audio = o.has("selectedAudio") && !o.isNull("selectedAudio") ? o.optInt("selectedAudio") : null;
             return new Stream(url, o.optString("mimeType", ""), nonNegative(o, "streamStartMs"), o.optBoolean("seekable", false),
-                    nonNegative(o, "positionMs"), subs, audio, optString(o, "streamInfo"));
+                    nonNegative(o, "positionMs"), subs, audio, optString(o, "streamInfo"), VideoHls.parse(o));
         }
     }
 
@@ -295,6 +305,10 @@ public final class VideoRequest {
     @Nullable public final JSONObject theme;
     /** Overlay strings translated in JS (NativeVideoString keys). */
     public final Map<String, String> strings;
+    /** The streaming quality setting (VideoQuality: auto, original, 1080p, ...); null = auto. */
+    @Nullable public final String quality;
+    /** Last measured throughput for this server and network (kbit/s), the bandwidth meter's start; 0 = none. */
+    public final long bandwidthKbps;
 
     // Mutable: replaced by replaceVideoStream / the pickers.
     public String url;
@@ -306,6 +320,8 @@ public final class VideoRequest {
     @Nullable public String selectedSubtitle;
     /** Audio ordinal, null = the stream's default. */
     @Nullable public Integer selectedAudio;
+    /** The HLS session of the current stream; null = progressive (direct play or a legacy stream). */
+    @Nullable public VideoHls hls;
 
     private VideoRequest(JSONObject o) {
         itemKey = requireString(o, "itemKey");
@@ -339,6 +355,23 @@ public final class VideoRequest {
         prefs = Prefs.parse(o.optJSONObject("prefs"));
         theme = o.optJSONObject("theme");
         strings = parseHeaders(o.optJSONObject("strings"));
+        quality = optString(o, "quality");
+        bandwidthKbps = nonNegative(o, "bandwidthKbps");
+        hls = VideoHls.parse(o);
+        if (hls != null) seekable = true;
+    }
+
+    /** The stream is HLS (fully seekable, media-time timestamps, one muxed audio track per session). */
+    public boolean isHls() {
+        return hls != null;
+    }
+
+    /**
+     * Direct play: the file itself, so its own audio tracks are there to pick from. HLS is
+     * seekable too but carries only the session's audio track (another one is a new session).
+     */
+    public boolean directPlay() {
+        return seekable && hls == null;
     }
 
     /** The season the episodes panel opens on: {@link #currentSeason}, else the one holding this item, else the first. */
@@ -367,6 +400,7 @@ public final class VideoRequest {
         }
         if (s.selectedAudio != null) selectedAudio = s.selectedAudio;
         if (s.streamInfo != null) streamInfo = s.streamInfo;
+        hls = s.hls;
     }
 
     @Nullable

@@ -36,3 +36,14 @@ The phone shell (`ui/shell.tsx`) has tabs for Home, TV Shows, Movies, My List an
 ## Launch intro
 
 On a cold launch the app shows the Arclight intro (`intro/`) over the app while it loads: the MP4 with its sound, muted if the WebView blocks sound, or the still frame when the video does not start within 1.5 s. Any key or tap skips it, and Back only skips it while it is up. With Reduce motion on, the still shows for 1 s. It never plays before a video, on resume from the background, or on a WebView reload. Settings > Display > Play intro on launch turns it off on that device.
+
+## Video player (Android)
+
+Movies and episodes play in the native player (`video/native-video.ts` asks the server for a session and hands it to `VideoActivity`).
+
+- **Delivery.** The app tells the server it takes HLS as well as progressive streams. Anything that is not direct play then comes as an HLS session: fMP4 segments that carry media time, so seeking, ±10 s and scrubbing stay in the player and subtitles line up without shifting. A server older than 0.24 keeps sending progressive streams, and seeking in those still asks for a new stream.
+- **Quality.** On Auto the player adapts across the server's ladder, never above the screen's height. Original, 1080p, 720p and 480p lock one variant. When the server reports that its encoder cannot keep up (the session's health, or the `X-Arclight-Encode` header on segments), Auto stays at or below the rung it names.
+- **Buffering.** At least 30 s ahead, up to 120 s on phones and 60 s on TVs and low-memory devices, capped at a quarter of the app's memory (32 to 150 MB). 30 s stays behind the playhead, so seeking back is instant.
+- **Start rung.** The last throughput measured on this network type (Wi-Fi/other or cellular), kept per account on the device, seeds the bandwidth estimate. Without one, the player starts on the rung the server picked.
+- **Health.** Progress reports carry the startup time and the number and length of rebuffers after startup; seeks and short blips under 0.5 s are not counted. In direct play on Auto, two rebuffers within 60 s or one longer than 3 s make the player ask once for an HLS stream at the same position.
+- **Sessions.** When a video closes, moves on to the next episode, or is replaced, the app ends its HLS session so the server can free the encoder.

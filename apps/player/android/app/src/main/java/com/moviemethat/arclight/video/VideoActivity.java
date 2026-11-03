@@ -1,6 +1,7 @@
 package com.moviemethat.arclight.video;
 
 import android.animation.ValueAnimator;
+import android.app.ActivityManager;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.content.Intent;
@@ -47,11 +48,17 @@ import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DataSpec;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.datasource.TransferListener;
+import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.session.MediaSession;
 import androidx.media3.ui.CaptionStyleCompat;
@@ -97,11 +104,19 @@ import java.util.concurrent.Executors;
  * {@code streamStartMs}.
  *
  * <ul>
- *   <li>Seekable (direct) streams seek in the player. Otherwise a seek becomes a
- *       {@code videoSeekRequest} and JS answers with {@code replaceVideoStream}.</li>
+ *   <li>Direct play and HLS sessions (0.24: fMP4 segments, adaptive across the server's ladder)
+ *       seek in the player: HLS segments carry media time, so a seek back is a cache hit and one
+ *       forward fetches the target segment. Only an older server's progressive stream turns a
+ *       seek into a {@code videoSeekRequest}, answered by JS with {@code replaceVideoStream}.</li>
+ *   <li>Buffering and adaptation: {@link LoadControlConfig}; the bandwidth meter starts from the
+ *       last measured throughput; Auto adapts, a pinned quality locks one variant
+ *       ({@link VideoHls}); the server's "encoder cannot keep up" advice caps the height.</li>
+ *   <li>Playback health ({@link StallTracker}): startup and rebuffers go out with the progress
+ *       events; direct play that keeps stalling on Auto asks once for a converted stream.</li>
  *   <li>Subtitles are the WebVTT links JS gives, side-loaded; when the stream starts later than
  *       media time 0 they are fetched and shifted ({@link VttShifter}) so cues line up.</li>
- *   <li>Audio: the file's own tracks in direct play; the JS list otherwise (a change re-requests).</li>
+ *   <li>Audio: the file's own tracks in direct play; the JS list otherwise (a change re-requests;
+ *       an HLS session carries one audio track).</li>
  *   <li>The overlay: controls with scrub thumbnails and chapter notches, the pause screen, the
  *       Episodes and Audio &amp; Subtitles panels, Skip intro / recap / credits, the up-next card.
  *       Every size is in the template's 1280x720 stage px, scaled to the window.</li>
@@ -117,6 +132,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private static final long PROGRESS_INTERVAL_MS = 10_000;
     private static final long SEEK_REQUEST_DEBOUNCE_MS = 500;
     private static final int SUBTITLE_TIMEOUT_MS = 10_000;
+    /** How often an HLS session's encoder health is asked while playing. */
+    private static final long HEALTH_INTERVAL_MS = 10_000;
+    private static final int HEALTH_TIMEOUT_MS = 5_000;
+    /** Segment responses carry the server's downshift advice in this header (playback design §4.5). */
+    private static final String ENCODE_HEADER = "X-Arclight-Encode";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -125,8 +145,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private final VideoController controller = VideoController.get();
     private final ImageLoader images = new ImageLoader();
     private final SheetCache sheets = new SheetCache();
+    private final StallTracker stats = new StallTracker();
 
     private ExoPlayer player;
+    @Nullable private DefaultBandwidthMeter bandwidth;
     @Nullable private MediaSession session;
     private PlayerView playerView;
     private ProgressBar loading;
@@ -172,6 +194,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** Since when the player is paused by the user (-1: playing / not paused). */
     private long pausedSince = -1;
     private long lastInputAt;
+    /** HLS: the largest height adaptive playback may pick (the server's advice); MAX_VALUE = none. */
+    private int hlsCapHeight = Integer.MAX_VALUE;
+    private long lastHealthAt;
+    private boolean healthPending;
     /** The down time of a key press already handled (its repeats and up are swallowed). */
     private long swallowDownTime = -1;
 
@@ -208,7 +234,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         loading = findViewById(R.id.video_loading);
         overlay = findViewById(R.id.video_overlay);
         overlay.setListener(this);
-        createPlayer();
+        createPlayer(request);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -220,12 +246,28 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         load(request);
     }
 
-    private void createPlayer() {
+    private void createPlayer(VideoRequest first) {
         AudioAttributes attrs = new AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                 .build();
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        LoadControlConfig lc = LoadControlConfig.forDevice(tv, am != null && am.isLowRamDevice(), am == null ? 0 : am.getMemoryClass());
+        DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(lc.minBufferMs, lc.maxBufferMs, lc.bufferForPlaybackMs, lc.bufferForPlaybackAfterRebufferMs)
+                .setBackBuffer(lc.backBufferMs, lc.retainBackBufferFromKeyframe)
+                .setTargetBufferBytes(lc.targetBufferBytes)
+                .setPrioritizeTimeOverSizeThresholds(lc.prioritizeTimeOverSizeThresholds)
+                .build();
+        DefaultBandwidthMeter.Builder meter = new DefaultBandwidthMeter.Builder(this);
+        long hintBps = VideoHls.initialEstimateBps(first.bandwidthKbps, first.hls);
+        if (hintBps > 0) meter.setInitialBitrateEstimate(hintBps);
+        bandwidth = meter.build();
         player = new ExoPlayer.Builder(this)
+                .setLoadControl(loadControl)
+                .setBandwidthMeter(bandwidth)
+                // Viewport = the display (the default): Auto picks no variant taller than the screen.
+                .setTrackSelector(new DefaultTrackSelector(this))
                 .setAudioAttributes(attrs, /* handleAudioFocus= */ true)
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -250,7 +292,25 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
             @Override
             public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+                // A pause ends a running stall (the wait is the user's from here).
+                if (!playWhenReady) noteResumed();
                 onPausedChanged();
+            }
+
+            @Override
+            public void onPositionDiscontinuity(@NonNull Player.PositionInfo oldPosition, @NonNull Player.PositionInfo newPosition,
+                    int reason) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) stats.seek();
+            }
+
+            @Override
+            public void onRenderedFirstFrame() {
+                boolean first = stats.startupMs() < 0;
+                stats.firstFrame(SystemClock.elapsedRealtime());
+                VideoRequest r = req;
+                if (first && stats.startupMs() >= 0) {
+                    SafeLog.i(TAG, "Startup " + stats.startupMs() + " ms (" + (r != null && r.isHls() ? "hls" : "progressive") + ")");
+                }
             }
 
             @Override
@@ -296,7 +356,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             // the system for a change not in configChanges: the new instance has no request and
             // finishes at once, so this is the end of playback either way).
             closed = true;
-            controller.closed(req.itemKey, currentMediaMs(), durationMs(), isCompleted(), null);
+            controller.closed(req.itemKey, currentMediaMs(), durationMs(), isCompleted(), null, stats, bandwidthKbps());
         }
         controller.detach(this);
         if (session != null) {
@@ -551,6 +611,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         upNextHeldAt = -1;
         introAutoSkipped = false;
         lastProgressAt = SystemClock.elapsedRealtime();
+        stats.open(SystemClock.elapsedRealtime());
         shownSkip = null;
         handler.removeCallbacks(sendSeek);
         synchronized (rawVtt) {
@@ -598,6 +659,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r == null) return;
         final int gen = ++generation;
+        // A new stream's first buffering is not a stall; its session has its own advice.
+        stats.seek();
+        hlsCapHeight = Integer.MAX_VALUE;
+        lastHealthAt = SystemClock.elapsedRealtime();
+        healthPending = false;
         loading.setVisibility(View.VISIBLE);
         if (r.streamStartMs <= 0 || r.subtitles.isEmpty()) {
             List<MediaItem.SubtitleConfiguration> subs = new ArrayList<>();
@@ -661,33 +727,110 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 .setMediaId(r.itemKey)
                 .setMediaMetadata(meta.build())
                 .setSubtitleConfigurations(subs);
-        String mime = containerMime(r.mimeType);
+        String mime = r.isHls() ? MimeTypes.APPLICATION_M3U8 : containerMime(r.mimeType);
         if (mime != null) item.setMimeType(mime);
 
-        HttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
+        DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(USER_AGENT)
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(StartFailure.CONNECT_TIMEOUT_MS)
-                // A transcode can take a while to produce its first bytes.
+                // A transcode can take a while to produce its first bytes (HLS: the first segment
+                // after an encoder restart, which the server long-polls).
                 .setReadTimeoutMs(45_000)
                 .setDefaultRequestProperties(r.headers);
+        if (r.isHls()) http.setTransferListener(new EncodeAdviceListener(generation));
+        // HLS goes through the HLS module (picked by the M3U8 MIME type); side-loaded WebVTT
+        // merges in as for direct play (media time, no shifting).
         DefaultMediaSourceFactory sources = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, http))
-                .setLoadErrorHandlingPolicy(new StartPolicy());
+                .setLoadErrorHandlingPolicy(new StartPolicy(r.isHls()));
         player.setMediaSource(sources.createMediaSource(item.build()), r.seekable ? r.toPlayerMs(mediaPositionMs) : 0);
         player.prepare();
         player.setPlayWhenReady(playWhenReady);
     }
 
-    /** Media3's retries, except for a server that cannot be reached at the start (StartFailure). */
+    /**
+     * Media3's retries, except for a server that cannot be reached at the start (StartFailure).
+     * HLS: a segment still encoding (503 + Retry-After) is retried and never drops the variant; a
+     * rung the encoder cannot sustain (409 RUNG_UNSUSTAINABLE) drops that variant for a while, so
+     * adaptive playback moves to another one.
+     */
     private final class StartPolicy extends DefaultLoadErrorHandlingPolicy {
+        private final boolean hls;
+
+        StartPolicy(boolean hls) {
+            this.hls = hls;
+        }
+
         @Override
         public long getRetryDelayMsFor(@NonNull LoadErrorInfo info) {
             if (info.exception instanceof HttpDataSource.HttpDataSourceException) {
                 HttpDataSource.HttpDataSourceException e = (HttpDataSource.HttpDataSourceException) info.exception;
                 if (StartFailure.giveUp(everReady, e.type, e.reason)) return C.TIME_UNSET;
             }
+            if (hls && info.exception instanceof HttpDataSource.InvalidResponseCodeException) {
+                HttpDataSource.InvalidResponseCodeException e = (HttpDataSource.InvalidResponseCodeException) info.exception;
+                if (e.responseCode == 503) return VideoHls.retryAfterMs(header(e.headerFields, "Retry-After"));
+            }
             return super.getRetryDelayMsFor(info);
         }
+
+        @Nullable
+        @Override
+        public FallbackSelection getFallbackSelectionFor(@NonNull FallbackOptions options, @NonNull LoadErrorInfo info) {
+            if (hls && info.exception instanceof HttpDataSource.InvalidResponseCodeException) {
+                int code = ((HttpDataSource.InvalidResponseCodeException) info.exception).responseCode;
+                if (code == 503) return null;
+                if (code == 409) {
+                    SafeLog.i(TAG, "Variant refused by the server (encoder cannot sustain it)");
+                    return options.isFallbackAvailable(FALLBACK_TYPE_TRACK)
+                            ? new FallbackSelection(FALLBACK_TYPE_TRACK, DEFAULT_TRACK_EXCLUSION_MS)
+                            : null;
+                }
+            }
+            return super.getFallbackSelectionFor(options, info);
+        }
+
+        @Override
+        public int getMinimumLoadableRetryCount(int dataType) {
+            int base = super.getMinimumLoadableRetryCount(dataType);
+            // A segment can answer 503 a few times while an encoder restarts after a far seek.
+            return hls ? Math.max(VideoHls.MIN_RETRIES, base) : base;
+        }
+    }
+
+    @Nullable
+    private static String header(@Nullable Map<String, List<String>> headers, String name) {
+        if (headers == null) return null;
+        for (Map.Entry<String, List<String>> h : headers.entrySet()) {
+            if (h.getKey() != null && h.getKey().equalsIgnoreCase(name) && h.getValue() != null && !h.getValue().isEmpty()) {
+                return h.getValue().get(0);
+            }
+        }
+        return null;
+    }
+
+    /** Reads the downshift advice off HLS responses (segments carry {@link #ENCODE_HEADER}). */
+    private final class EncodeAdviceListener implements TransferListener {
+        private final int gen;
+
+        EncodeAdviceListener(int gen) {
+            this.gen = gen;
+        }
+
+        @Override
+        public void onTransferInitializing(@NonNull DataSource source, @NonNull DataSpec dataSpec, boolean isNetwork) {}
+
+        @Override
+        public void onTransferStart(@NonNull DataSource source, @NonNull DataSpec dataSpec, boolean isNetwork) {
+            String advice = VideoHls.adviceFromHeader(header(source.getResponseHeaders(), ENCODE_HEADER));
+            if (advice != null) handler.post(() -> applyAdvice(gen, advice));
+        }
+
+        @Override
+        public void onBytesTransferred(@NonNull DataSource source, @NonNull DataSpec dataSpec, boolean isNetwork, int bytesTransferred) {}
+
+        @Override
+        public void onTransferEnd(@NonNull DataSource source, @NonNull DataSpec dataSpec, boolean isNetwork) {}
     }
 
     private static MediaItem.SubtitleConfiguration subtitleConfig(VideoRequest.Subtitle s, Uri uri) {
@@ -706,14 +849,19 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         String m = mime.toLowerCase(Locale.ROOT);
         if (m.contains("matroska") || m.equals("video/mkv")) return MimeTypes.VIDEO_MATROSKA;
         if (m.contains("webm")) return MimeTypes.VIDEO_WEBM;
+        if (m.contains("mpegurl")) return MimeTypes.APPLICATION_M3U8;
         if (m.contains("mp4") || m.contains("quicktime")) return MimeTypes.VIDEO_MP4;
         return null;
     }
 
     private static String fetchText(String url, Map<String, String> headers) throws Exception {
+        return fetchText(url, headers, SUBTITLE_TIMEOUT_MS);
+    }
+
+    private static String fetchText(String url, Map<String, String> headers, int timeoutMs) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(SUBTITLE_TIMEOUT_MS);
-        c.setReadTimeout(SUBTITLE_TIMEOUT_MS);
+        c.setConnectTimeout(timeoutMs);
+        c.setReadTimeout(timeoutMs);
         c.setRequestProperty("User-Agent", USER_AGENT);
         for (Map.Entry<String, String> h : headers.entrySet()) c.setRequestProperty(h.getKey(), h.getValue());
         try {
@@ -750,6 +898,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     private void onStateChanged(int state) {
         if (state == Player.STATE_READY) everReady = true;
+        if (state == Player.STATE_BUFFERING) stats.buffering(SystemClock.elapsedRealtime(), player.getPlayWhenReady());
+        else noteResumed();
         if (state == Player.STATE_ENDED) {
             onEnded();
             return;
@@ -763,6 +913,17 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 || (player.getPlaybackState() == Player.STATE_IDLE && !closed);
         loading.setVisibility(busy ? View.VISIBLE : View.GONE);
         updateGlyph();
+    }
+
+    /** A running stall ended (READY again, paused, ended or idle); logged for soak runs. */
+    private void noteResumed() {
+        int before = stats.stalls();
+        long beforeMs = stats.stallMs();
+        stats.resumed(SystemClock.elapsedRealtime());
+        if (stats.stalls() > before) {
+            SafeLog.i(TAG, "Rebuffer " + (stats.stallMs() - beforeMs) + " ms at " + currentMediaMs() / 1000 + " s (stalls "
+                    + stats.stalls() + ", " + stats.stallMs() + " ms)");
+        }
     }
 
     private void onEnded() {
@@ -789,8 +950,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r == null || tracksApplied || tracks.isEmpty()) return;
         tracksApplied = true;
         TrackSelectionParameters.Builder p = player.getTrackSelectionParameters().buildUpon();
+        // Video: Auto adapts (within the advice cap); a pinned quality locks one HLS variant.
+        p.clearOverridesOfType(C.TRACK_TYPE_VIDEO);
+        p.setMaxVideoSize(Integer.MAX_VALUE, hlsCapHeight);
+        if (r.isHls()) pinVariant(p, tracks, r.quality);
         // Audio: in direct play pick the wanted ordinal among the file's tracks.
-        if (r.seekable && r.selectedAudio != null) {
+        if (r.directPlay() && r.selectedAudio != null) {
             List<Tracks.Group> audio = groups(tracks, C.TRACK_TYPE_AUDIO);
             int i = TrackMatch.groupFor(r.audioTracks, fileTracks(audio), r.selectedAudio);
             if (i >= 0 && i < audio.size() && audio.get(i).isSupported()) {
@@ -799,6 +964,71 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         }
         applySubtitleTo(p, tracks, r.selectedSubtitle);
         player.setTrackSelectionParameters(p.build());
+    }
+
+    /** A pinned quality (Original, 1080p, ...) locks the matching variant of the HLS ladder. */
+    private static void pinVariant(TrackSelectionParameters.Builder p, Tracks tracks, @Nullable String quality) {
+        if (VideoHls.adaptive(quality)) return;
+        Tracks.Group ladder = null;
+        for (Tracks.Group g : groups(tracks, C.TRACK_TYPE_VIDEO)) {
+            if (ladder == null || g.length > ladder.length) ladder = g;
+        }
+        if (ladder == null) return;
+        // Only variants this device can decode are candidates.
+        List<VideoHls.Variant> variants = new ArrayList<>();
+        List<Integer> index = new ArrayList<>();
+        for (int i = 0; i < ladder.length; i++) {
+            if (!ladder.isTrackSupported(i)) continue;
+            Format f = ladder.getTrackFormat(i);
+            variants.add(new VideoHls.Variant(f.height, f.bitrate));
+            index.add(i);
+        }
+        int i = VideoHls.pinnedVariant(variants, quality);
+        if (i >= 0) p.setOverrideForType(new TrackSelectionOverride(ladder.getMediaTrackGroup(), index.get(i)));
+    }
+
+    /**
+     * The server's advice for this session (health poll or a segment header): Auto stays at or
+     * under that rung's height. A pinned variant stays (the server refuses it with 409 if need be).
+     */
+    private void applyAdvice(int gen, @Nullable String maxSustainableRung) {
+        VideoRequest r = req;
+        if (gen != generation || r == null || r.hls == null || player == null || closed) return;
+        int cap = VideoHls.capHeight(r.hls.rungs, maxSustainableRung);
+        if (cap == hlsCapHeight) return;
+        hlsCapHeight = cap;
+        SafeLog.i(TAG, "Encoder advice: " + (cap == Integer.MAX_VALUE ? "no cap" : "at most " + cap + "p"));
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                .setMaxVideoSize(Integer.MAX_VALUE, cap)
+                .build());
+    }
+
+    /** Every {@link #HEALTH_INTERVAL_MS} while an HLS stream plays: GET the session's health. */
+    private void maybePollHealth(VideoRequest r, long now) {
+        VideoHls h = r.hls;
+        if (h == null || h.healthUrl == null || healthPending || !player.isPlaying() || now - lastHealthAt < HEALTH_INTERVAL_MS) return;
+        healthPending = true;
+        lastHealthAt = now;
+        final int gen = generation;
+        final String url = h.healthUrl;
+        final Map<String, String> headers = r.headers;
+        io.execute(() -> {
+            String advice = null;
+            boolean ok = false;
+            try {
+                advice = VideoHls.adviceFrom(fetchText(url, headers, HEALTH_TIMEOUT_MS));
+                ok = true;
+            } catch (Exception e) {
+                // Offline for a moment, or the session is gone: keep the current cap.
+            }
+            final boolean answered = ok;
+            final String a = advice;
+            handler.post(() -> {
+                if (gen != generation) return;
+                healthPending = false;
+                if (answered) applyAdvice(gen, a);
+            });
+        });
     }
 
     /** Shows subtitle {@code id} (one of ours, side-loaded) or none; the file's own text tracks stay off. */
@@ -875,7 +1105,28 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         updateSkip(r, pos);
         updateUpNext(r, pos, dur);
         updatePauseInfo();
-        if (player.isPlaying() && SystemClock.elapsedRealtime() - lastProgressAt >= PROGRESS_INTERVAL_MS) emitProgress(false);
+        long now = SystemClock.elapsedRealtime();
+        // A seek inside the buffer never leaves READY: its "seeking" mark ends here.
+        if (player.getPlaybackState() == Player.STATE_READY) noteResumed();
+        if (r.isHls()) maybePollHealth(r, now);
+        else maybeLeaveDirectPlay(r, now);
+        if (player.isPlaying() && now - lastProgressAt >= PROGRESS_INTERVAL_MS) emitProgress(false);
+    }
+
+    /**
+     * Direct play on Auto that keeps stalling (two rebuffers within 60 s, or one over 3 s): ask JS
+     * once for a converted stream at this point (§4.8). Playback goes on until it arrives.
+     */
+    private void maybeLeaveDirectPlay(VideoRequest r, long now) {
+        if (!r.directPlay() || !VideoHls.adaptive(r.quality) || awaitingJs || !controller.listens("videoSeekRequest")) return;
+        if (!stats.fallbackDue(now)) return;
+        SafeLog.i(TAG, "Direct play keeps stalling: asking for a converted stream");
+        controller.seekRequest(r.itemKey, currentMediaMs(), r.selectedAudio, r.selectedSubtitle, true);
+    }
+
+    /** The bandwidth meter's estimate in kbit/s once something was loaded; 0 before. */
+    private long bandwidthKbps() {
+        return bandwidth == null || !everReady ? 0 : bandwidth.getBitrateEstimate() / 1000;
     }
 
     private void updateTimes(long pos, long dur) {
@@ -893,7 +1144,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r == null || closed || upNextFired || pickFired) return;
         lastProgressAt = SystemClock.elapsedRealtime();
-        controller.progress(r.itemKey, currentMediaMs(), durationMs(), paused);
+        controller.progress(r.itemKey, currentMediaMs(), durationMs(), paused, stats, bandwidthKbps());
     }
 
     // =====================================================================================
@@ -910,6 +1161,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r == null || player == null) return;
         long target = VideoTimeline.clampSeek(mediaMs, durationMs());
         if (r.seekable) {
+            stats.seek();
             player.seekTo(r.toPlayerMs(target));
             if (player.getPlaybackState() == Player.STATE_ENDED) player.play();
             onTick();
@@ -1134,7 +1386,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private void fireNext(boolean atEnd) {
         VideoRequest r = req;
         if (r == null || r.next == null || upNextFired || pickFired || closed) return;
-        controller.progress(r.itemKey, currentMediaMs(), durationMs(), false);
+        controller.progress(r.itemKey, currentMediaMs(), durationMs(), false, stats, bandwidthKbps());
         upNextCompleted = atEnd || isCompleted();
         upNextFired = true;
         awaitingJs = true;
@@ -1203,7 +1455,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** The file's audio groups in direct play (empty otherwise). */
     private List<Tracks.Group> fileAudio() {
         VideoRequest r = req;
-        if (r == null || player == null || !r.seekable) return Collections.emptyList();
+        if (r == null || player == null || !r.directPlay()) return Collections.emptyList();
         return groups(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO);
     }
 
@@ -1231,7 +1483,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         List<String> audio = new ArrayList<>();
         int audioSel = -1;
         List<Tracks.Group> file = fileAudio();
-        if (r.seekable && !file.isEmpty()) {
+        if (r.directPlay() && !file.isEmpty()) {
             // Direct play: the file's own tracks, labelled from JS where one confidently matches.
             List<TrackMatch.FileTrack> mapped = fileTracks(file);
             for (int i = 0; i < file.size(); i++) {
@@ -1239,7 +1491,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 audio.add(js != null ? js.label : formatLabel(file.get(i).getTrackFormat(0), i));
                 if (file.get(i).isSelected()) audioSel = i;
             }
-        } else if (!r.seekable) {
+        } else if (!r.directPlay()) {
             for (int i = 0; i < r.audioTracks.size(); i++) {
                 audio.add(r.audioTracks.get(i).label);
                 if (r.selectedAudio != null && r.audioTracks.get(i).index == r.selectedAudio) audioSel = i;
@@ -1260,7 +1512,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r == null || player == null) return;
         noteInput();
-        if (r.seekable) {
+        if (r.directPlay()) {
             List<Tracks.Group> file = fileAudio();
             if (which < 0 || which >= file.size()) return;
             player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
@@ -1697,12 +1949,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r != null && !upNextFired) {
             long pos = completed ? Math.max(currentMediaMs(), durationMs()) : currentMediaMs();
-            controller.closed(r.itemKey, pos, durationMs(), completed || (!pickFired && isCompleted()), error);
+            controller.closed(r.itemKey, pos, durationMs(), completed || (!pickFired && isCompleted()), error, stats, bandwidthKbps());
         } else if (r != null) {
             // Up next fired and JS never followed up: still report the close (completed when the
             // up next counted it as watched, else where it stopped).
             long pos = upNextCompleted ? durationMs() : currentMediaMs();
-            controller.closed(r.itemKey, pos, durationMs(), upNextCompleted, error);
+            controller.closed(r.itemKey, pos, durationMs(), upNextCompleted, error, stats, bandwidthKbps());
         }
         handler.removeCallbacks(tick);
         handler.removeCallbacks(sendSeek);

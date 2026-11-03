@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile, VideoSession, VideoSessionRequest } from '@arclight/shared';
 import type { ArclightPlayerPlugin } from '../native/definitions';
 import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, itemTitles, startPosition } from './native-video';
+import { readBandwidth, writeBandwidth } from './bandwidth';
 import { ProfileSettings, type PlayerSeriesDetails } from '@arclight/shared';
 import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf, videoStrings } from './native-extras';
 
@@ -68,6 +69,8 @@ function session(req: VideoSessionRequest, over: Partial<VideoSession> = {}): Vi
     subtitles: [{ id: 'e0', label: 'English', language: 'eng', forced: false, default: true, url: 'http://server.example.com/sub/e0.vtt' }],
     burnedSubtitle: null,
     expiresAt: '2026-11-02T12:00:00Z',
+    delivery: 'progressive',
+    sessionId: null,
     ...over,
   };
 }
@@ -434,6 +437,170 @@ describe('NativeVideoLauncher', () => {
     // An audio index the item does not have: no audio language is saved from it.
     await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 7, subtitle: null });
     expect(save).toHaveBeenLastCalledWith({ subtitleLanguage: null });
+  });
+});
+
+describe('NativeVideoLauncher: HLS (0.24)', () => {
+  const hls = {
+    masterUrl: 'http://server.example.com/hls/s1/master.m3u8?sig=x',
+    rungs: [
+      { id: 'src', height: 2160, videoKbps: 40_000, codec: 'copy', range: 'hdr10', level: 0 },
+      { id: '1080', height: 1080, videoKbps: 8_000, codec: 'hevc', range: 'hdr10', level: 1 },
+    ],
+    startRung: '1080',
+    healthUrl: 'http://server.example.com/hls/s1/health?sig=x',
+  } as VideoSession['hls'];
+  const hlsSession = (req: VideoSessionRequest, id = 's1'): VideoSession =>
+    session(req, {
+      method: 'transcode',
+      url: hls!.masterUrl,
+      mimeType: 'application/vnd.apple.mpegurl',
+      streamStartMs: 0,
+      seekable: true,
+      delivery: 'hls',
+      sessionId: id,
+      hls: hls!,
+    });
+
+  function hlsSetup(extra: Record<string, unknown> = {}) {
+    const saved: number[] = [];
+    const ended: string[] = [];
+    const t = setup({ 'episode:1': episode(1, { next: 'episode:2' }), 'episode:2': episode(2) }, null, {
+      deliveries: ['hls', 'progressive'],
+      bandwidth: { get: () => 12_000, set: (k: number) => saved.push(k) },
+      endSession: vi.fn(async (id: string) => {
+        ended.push(id);
+      }),
+      ...extra,
+    });
+    let n = 0;
+    t.deps.requestSession.mockImplementation(async (req: VideoSessionRequest) => {
+      t.requests.push(req);
+      return hlsSession(req, `s${++n}`);
+    });
+    return { ...t, saved, ended };
+  }
+
+  it('asks for HLS with the device key and the bandwidth hint, and hands the session to native', async () => {
+    const { launcher, plugin, requests } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    expect(requests[0]).toMatchObject({ deliveries: ['hls', 'progressive'], deviceKey: 'device-1', bandwidthKbps: 12_000 });
+    expect(requests[0]!.avoidDirect).toBeUndefined();
+    expect(plugin.playVideo.mock.calls[0]![0]).toMatchObject({
+      url: hls!.masterUrl,
+      seekable: true,
+      streamStartMs: 0,
+      delivery: 'hls',
+      sessionId: 's1',
+      hls: { startRung: '1080', healthUrl: hls!.healthUrl },
+      quality: 'auto',
+      bandwidthKbps: 12_000,
+    });
+  });
+
+  it('an older build (no deliveries) asks as before', async () => {
+    const { launcher, requests, plugin } = setup({ 'episode:1': episode(1) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    expect(requests[0]!.deliveries).toBeUndefined();
+    expect(requests[0]!.deviceKey).toBeUndefined();
+    expect((plugin.playVideo.mock.calls[0]![0] as { delivery?: string }).delivery).toBeUndefined();
+  });
+
+  it('puts the stall / startup counts into the reports and keeps the measured bandwidth', async () => {
+    const { launcher, emit, reports, saved } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoProgress', { itemKey: 'episode:1', positionMs: 20_000, durationMs: 1_000_000, paused: false, stalls: 1, stallMs: 900, startupMs: 1400, bandwidthKbps: 30_000 });
+    expect(reports.at(-1)!.report).toMatchObject({ event: 'progress', stalls: 1, stallMs: 900, startupMs: 1400 });
+    expect(saved).toEqual([30_000]);
+    await emit('videoClosed', { itemKey: 'episode:1', positionMs: 30_000, durationMs: 1_000_000, completed: false, stalls: 2, stallMs: 1500, startupMs: 1400, bandwidthKbps: 25_000 });
+    expect(reports.at(-1)!.report).toMatchObject({ event: 'stop', stalls: 2, stallMs: 1500 });
+    expect(saved).toEqual([30_000, 25_000]);
+  });
+
+  it('ends the HLS session on close, up next and an episode picked in the panel', async () => {
+    const { launcher, emit, ended } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoNext', { itemKey: 'episode:2' });
+    await flush();
+    expect(ended).toEqual(['s1']);
+    await emit('videoPickItem', { itemKey: 'episode:1', fromItemKey: 'episode:2', positionMs: 5_000 });
+    await flush();
+    expect(ended).toEqual(['s1', 's2']);
+    await emit('videoClosed', { itemKey: 'episode:1', positionMs: 1_000, durationMs: 1_000_000, completed: false });
+    expect(ended).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('direct play that keeps stalling: a converted stream on Auto, with avoidDirect', async () => {
+    const { launcher, plugin, deps, emit, ended } = hlsSetup();
+    // Direct play first.
+    deps.requestSession.mockImplementationOnce(async (req: VideoSessionRequest) => session(req, { method: 'direct', seekable: true, streamStartMs: 0 }));
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 200_000, audioTrack: 1, subtitle: 'e0', avoidDirect: true });
+    await flush();
+    expect(deps.requestSession.mock.calls.at(-1)![0]).toMatchObject({ avoidDirect: true, startMs: 200_000, deliveries: ['hls', 'progressive'] });
+    expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ delivery: 'hls', sessionId: 's1', seekable: true, positionMs: 200_000 });
+    // The direct-play session had no HLS session to end.
+    expect(ended).toEqual([]);
+  });
+
+  it('a pinned quality ignores the stall fallback', async () => {
+    const { launcher, plugin, deps, emit } = hlsSetup({ quality: () => '1080p' });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    const asked = deps.requestSession.mock.calls.length;
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 200_000, avoidDirect: true });
+    await flush();
+    expect(deps.requestSession.mock.calls.length).toBe(asked);
+    expect(plugin.replaceVideoStream).not.toHaveBeenCalled();
+    expect(plugin.playVideo.mock.calls[0]![0]).toMatchObject({ quality: '1080p' });
+  });
+
+  it('an audio change under HLS replaces the session and ends the old one', async () => {
+    const { launcher, plugin, emit, ended } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 60_000, audioTrack: 0 });
+    await flush();
+    expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ sessionId: 's2', selectedAudio: 0 });
+    expect(ended).toEqual(['s1']);
+  });
+});
+
+describe('bandwidth hint storage', () => {
+  function mem(): Storage {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+      clear: () => m.clear(),
+      key: () => null,
+      get length() {
+        return m.size;
+      },
+    } as Storage;
+  }
+
+  it('keeps one estimate per account and network type, and ignores nonsense', () => {
+    const s = mem();
+    expect(readBandwidth('other', s, 'a1')).toBeNull();
+    writeBandwidth('other', 25_000.4, s, 'a1');
+    writeBandwidth('cellular', 4_000, s, 'a1');
+    expect(readBandwidth('other', s, 'a1')).toBe(25_000);
+    expect(readBandwidth('cellular', s, 'a1')).toBe(4_000);
+    expect(readBandwidth('other', s, 'a2')).toBeNull();
+    writeBandwidth('other', 0, s, 'a1');
+    writeBandwidth('other', Number.NaN, s, 'a1');
+    writeBandwidth('other', 20_000_000, s, 'a1');
+    expect(readBandwidth('other', s, 'a1')).toBe(25_000);
+    s.setItem('arclight.bandwidth.a1.other', 'junk');
+    expect(readBandwidth('other', s, 'a1')).toBeNull();
+    expect(readBandwidth('other', null, 'a1')).toBeNull();
   });
 });
 

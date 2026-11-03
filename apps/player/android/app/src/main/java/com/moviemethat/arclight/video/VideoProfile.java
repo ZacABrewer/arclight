@@ -50,7 +50,19 @@ public final class VideoProfile {
         JSONObject o = new JSONObject();
         o.put("isTv", tv);
         o.put("videoProfile", profile(ctx, tv));
+        o.put("deliveries", toArray(deliveries()));
         return o;
+    }
+
+    /**
+     * How this build takes converted video (VideoSessionRequest.deliveries): HLS through Media3's
+     * HLS module, and the progressive streams of older servers.
+     */
+    static List<String> deliveries() {
+        List<String> out = new ArrayList<>();
+        out.add("hls");
+        out.add("progressive");
+        return out;
     }
 
     public static boolean isTv(Context ctx) {
