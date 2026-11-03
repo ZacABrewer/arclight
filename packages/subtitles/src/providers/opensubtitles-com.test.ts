@@ -144,6 +144,10 @@ describe('OpenSubtitlesComProvider', () => {
     const dl = calls.find((c) => c.url.endsWith('/download'))!;
     expect(JSON.parse(dl.body!)).toEqual({ file_id: 9001, sub_format: 'srt' });
     expect(dl.headers.Authorization).toMatch(/^Bearer /);
+    // DATA-44: the file link comes from the response, so it gets no credentials.
+    const link = calls.find((c) => c.url.includes('/subfile/'))!;
+    expect(Object.keys(link.headers).map((h) => h.toLowerCase())).not.toContain('authorization');
+    expect(Object.keys(link.headers).map((h) => h.toLowerCase())).not.toContain('api-key');
   });
 
   it('maps 406 to daily-limit with reset time', async () => {
@@ -193,6 +197,16 @@ describe('OpenSubtitlesComProvider', () => {
     const s = f.calls.find((c) => c.url.includes('/subtitles?'))!;
     expect(s.headers.Authorization).toBe('Bearer t');
     expect(p.ping()).toBe(true);
+  });
+
+  it('ignores a login base_url outside opensubtitles.com (DATA-44)', async () => {
+    const f = fakeFetch([
+      (c) => (c.url.endsWith('/login') ? json({ token: 't', base_url: 'collector.example.com' }) : undefined),
+      (c) => (c.url.startsWith('https://api.opensubtitles.com/api/v1/subtitles') ? json({ data: [] }) : undefined),
+    ]);
+    const p = new OpenSubtitlesComProvider(config, { fetch: f.impl, sleep: async () => {} });
+    await p.search(episode);
+    expect(f.calls.some((c) => c.url.includes('example.com'))).toBe(false);
   });
 
   it('fails with bad-response when data is missing', async () => {

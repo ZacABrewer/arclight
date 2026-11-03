@@ -83,7 +83,7 @@ export class YifySubtitlesProvider extends BaseProvider {
       if (res.status >= 500) throw this.statusError(res, 'movie page');
       return [];
     }
-    const html = await res.text();
+    const html = await this.readText(res);
     const out: SubtitleCandidate[] = [];
     const table = byClass(html, 'table', 'other-subs')[0]?.inner ?? html;
     for (const row of findElements(table, 'tr')) {

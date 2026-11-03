@@ -17,8 +17,12 @@ import {
   type WantedLanguage,
 } from '../types.js';
 import { detectFormatFromBytes } from '../formats.js';
+import { readLimited, SafeFetchError } from '@arclight/net';
+import { MAX_SUBTITLE_BYTES } from '../archive.js';
 
 export const DEFAULT_USER_AGENT = 'Arclight/0.1';
+/** Largest JSON / HTML page read from a provider. */
+export const MAX_PAGE_BYTES = 8 * 1024 * 1024;
 
 export interface HttpOptions {
   method?: string | undefined;
@@ -185,8 +189,27 @@ export abstract class BaseProvider implements SubtitleProvider {
     return this.parseJson<T>(res);
   }
 
+  /**
+   * Read a response body with a byte cap: the stream is cancelled as soon as it passes `max`,
+   * so a hostile provider cannot stream gigabytes into memory. The request's timeout signal
+   * stays attached to the body, so a slow endless body also ends.
+   */
+  protected async readBytes(res: Response, max = MAX_SUBTITLE_BYTES): Promise<Uint8Array> {
+    try {
+      return new Uint8Array(await readLimited(res, max));
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'tooLarge') throw this.error('bad-response', err.message);
+      throw this.error('unreachable', `reading the response failed: ${(err as Error).message ?? String(err)}`, { cause: err });
+    }
+  }
+
+  /** `readBytes` for pages (JSON / HTML), decoded as UTF-8. */
+  protected async readText(res: Response, max = MAX_PAGE_BYTES): Promise<string> {
+    return new TextDecoder('utf-8').decode(await this.readBytes(res, max));
+  }
+
   protected async parseJson<T = unknown>(res: Response): Promise<T> {
-    const text = await res.text();
+    const text = await this.readText(res);
     try {
       return JSON.parse(text) as T;
     } catch {
@@ -197,13 +220,13 @@ export abstract class BaseProvider implements SubtitleProvider {
   protected async getText(url: string, opts: HttpOptions = {}): Promise<string> {
     const res = await this.request(url, opts);
     if (!res.ok) throw this.statusError(res, url);
-    return res.text();
+    return this.readText(res);
   }
 
   protected async getBytes(url: string, opts: HttpOptions = {}): Promise<Uint8Array> {
     const res = await this.request(url, opts);
     if (!res.ok) throw this.statusError(res, url);
-    return new Uint8Array(await res.arrayBuffer());
+    return this.readBytes(res);
   }
 
   /** Build a candidate with defaults from this provider's capabilities. */

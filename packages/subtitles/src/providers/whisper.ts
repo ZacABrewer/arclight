@@ -213,7 +213,7 @@ export class WhisperProvider extends BaseProvider {
     }
     const res = await this.request(this.asrUrl(candidate), { method: 'POST', body: this.form(audio), timeoutMs: this.transcribeTimeoutMs });
     if (!res.ok) throw this.statusError(res, 'asr');
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = await this.readBytes(res);
     return { bytes, format: 'srt', encoding: 'utf-8' };
   }
 
