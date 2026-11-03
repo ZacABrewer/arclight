@@ -353,6 +353,75 @@ export interface NativeVideoSegment {
   endMs: number;
 }
 
+// ---- redesign spec §1.4 ----------------------------------------------------------------
+
+export interface NativeTrickplay {
+  intervalMs: number; tileWidth: number; tileHeight: number; columns: number; rows: number; tileCount: number;
+  /** Absolute signed JPEG URLs in sheet order. */
+  sheets: string[];
+}
+export interface NativePauseInfo {
+  /** Already-translated strings, built in JS. */
+  title: string;
+  /** "S2 · E5 · The Long Meridian" or null for movies. */
+  episodeLine: string | null;
+  /** Meta line pieces in order: year, certification (boxed when `boxed`), runtime, then chip labels. */
+  meta: { text: string; boxed?: boolean; chip?: boolean }[];
+  overview: string | null;
+  logoUrl: string | null;
+  backdropUrl: string | null;
+}
+export interface NativeEpisode {
+  itemKey: string;
+  episodeNumber: number;
+  /** "5. The Long Meridian". */
+  title: string;
+  /** "45m". */
+  runtime: string | null;
+  overview: string | null;
+  thumbUrl: string | null;
+  /** 0..1, or null when unplayed. */
+  progress: number | null;
+  played: boolean;
+}
+export interface NativeEpisodeSeason { seasonNumber: number; title: string; episodes: NativeEpisode[] }
+export interface NativeVideoPrefs {
+  subtitleSize: 'small' | 'medium' | 'large';
+  skipIntros: boolean;
+  autoplayNext: boolean;
+  focusStyle: 'white-frame' | 'cyan-glow';
+  reduceMotion: boolean;
+}
+/** Colours and radii from the active theme, as #rrggbb / #aarrggbb and dp, so native matches the web layer. */
+export interface NativeVideoTheme {
+  bg: string; text: string; text2: string; text3: string; accent: string; primaryBg: string; primaryText: string;
+  radiusButton: number; radiusTile: number;
+}
+
+export type NativeVideoString =
+  | 'upNext' | 'playNow' | 'cancel' | 'nextIn' /* "Next episode in {s}s" */ | 'skipIntro' | 'skipRecap' | 'skipCredits'
+  | 'endsAt' /* "Ends at {time}" */ | 'audioSubtitles' | 'audio' | 'subtitles' | 'off' | 'episodes' | 'nextEpisode'
+  | 'nowPlaying';
+
+/** The user picked another episode in the native episodes panel. JS answers with playVideo (or closeVideo). */
+export interface VideoPickItemEvent { itemKey: string; fromItemKey: string; positionMs: number }
+
+/**
+ * The user changed a track in the native panel; JS saves it to the profile's per-item prefs and,
+ * when `rememberLanguage`, to ProfileSettings.audioLanguage / subtitleLanguage.
+ */
+export interface VideoTracksChangedEvent { itemKey: string; audioTrack: number | null; subtitle: string | null }
+
+/** Cold-launch info for the launch intro (§6). Consumed once per process. */
+export interface LaunchInfo {
+  /** First call in this process (true once), else false. */
+  coldStart: boolean;
+  /** How the activity was started on that cold start. */
+  source: 'launcher' | 'deep-link' | 'notification' | 'media-button' | 'car' | 'other';
+  /** System "remove animations" (animator scale 0) is on. */
+  systemReducedMotion: boolean;
+}
+
 export interface PlayVideoOptions {
   /** 'movie:<id>' / 'episode:<id>'; echoed in every video event. */
   itemKey: string;
@@ -392,8 +461,20 @@ export interface PlayVideoOptions {
   chapters?: { title: string; startMs: number }[];
   /** Skip intro / recap / credits buttons. */
   segments?: NativeVideoSegment[];
-  /** Up next: a card with a 10 s countdown at the credits (or 20 s before the end). */
+  /** Up next: a card with a 10 s countdown at the credits (or 20 s before the end). Shows `subtitle` and `artworkUrl`. */
   next?: { itemKey: string; title: string; subtitle?: string; artworkUrl?: string };
+  // ---- redesign spec §1.4 (all optional) ----
+  /** Pause info screen. */
+  pause?: NativePauseInfo;
+  /** Scrub thumbnails; null / absent: none. */
+  trickplay?: NativeTrickplay | null;
+  /** Episodes panel. */
+  seasons?: NativeEpisodeSeason[];
+  currentSeason?: number;
+  prefs?: NativeVideoPrefs;
+  theme?: NativeVideoTheme;
+  /** Overlay strings, translated in JS (R.string.video_* stay as fallbacks). */
+  strings?: Record<NativeVideoString, string>;
 }
 
 export interface ReplaceVideoStreamOptions {
@@ -547,6 +628,10 @@ export interface ArclightPlayerPlugin {
   /** Closes the video player (fires `videoClosed`). Resolves when nothing is open. */
   closeVideo(): Promise<void>;
 
+  // ---- app ---------------------------------------------------------------------------
+  /** Cold-launch info for the launch intro (web fallback: sessionStorage, source 'launcher'). */
+  consumeLaunchInfo?(): Promise<LaunchInfo>;
+
   // ---- events ------------------------------------------------------------------------
   addListener(eventName: 'state', listener: (e: StateEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'position', listener: (e: PositionEvent) => void): Promise<PluginListenerHandle>;
@@ -566,6 +651,8 @@ export interface ArclightPlayerPlugin {
   addListener(eventName: 'videoSeekRequest', listener: (e: VideoSeekRequestEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'videoNext', listener: (e: VideoNextEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'videoClosed', listener: (e: VideoClosedEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoPickItem', listener: (e: VideoPickItemEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoTracksChanged', listener: (e: VideoTracksChangedEvent) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }
 
@@ -588,6 +675,8 @@ export interface PlayerEvents {
   videoSeekRequest: VideoSeekRequestEvent;
   videoNext: VideoNextEvent;
   videoClosed: VideoClosedEvent;
+  videoPickItem: VideoPickItemEvent;
+  videoTracksChanged: VideoTracksChangedEvent;
 }
 
 export type PlayerEventName = keyof PlayerEvents;

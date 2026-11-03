@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { MediaType } from './library.js';
 import { MediaServerKind, Permission } from './requests.js';
 import { SignInOptions, TwoFactorChallenge } from './identity.js';
+import { ActiveProfileSummary } from './households.js';
+import { ThemeName } from './theme-name.js';
 
 // Authentication, users and first-run setup. Behaviour: docs/API.md "Authentication".
 // Users carry a `permissions` bitfield and a free-form `settings` record now so that the
@@ -37,8 +39,7 @@ export const AppAccess = z
 export type AppAccess = z.infer<typeof AppAccess>;
 
 /** A user's theme: a theme pack id (see themes.ts), `tron`, or `default` (the server default). */
-export const ThemeName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
-export type ThemeName = z.infer<typeof ThemeName>;
+export { ThemeName };
 
 /**
  * Keys of `users.settings` only managers may change (through their own routes); PUT /user/me
@@ -175,6 +176,8 @@ export const Session = z.object({
   twoFactorSetupRequired: z.boolean().optional(),
   /** `userkey`: the key's scope. */
   apiKeyScope: z.enum(['read', 'requests', 'admin']).optional(),
+  /** The household profile in use (redesign spec §1.3); null only for credentials without an account. */
+  activeProfile: ActiveProfileSummary.nullable().optional(),
 });
 export type Session = z.infer<typeof Session>;
 
