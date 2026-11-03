@@ -116,5 +116,7 @@ export function viaLabel(via: AuthVia): string {
       return t('auth.via.userkey');
     case 'forward':
       return t('auth.via.forward');
+    case 'app':
+      return t('auth.via.app');
   }
 }
