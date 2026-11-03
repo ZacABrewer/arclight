@@ -111,6 +111,13 @@ filtered: non-admins get their own request and issue events (everyone's with Vie
 View issues), library events with the Library, Calendar or Wanted area and queue, download,
 history, release and import events with the Activity area; nothing else.
 
+Local bypass and self-requests: with "Require for local addresses" off, local peers skip sign-in,
+but never a request this Arclight process made to itself. The server records the local address and
+port of every outbound socket it opens and refuses the bypass when an incoming request's TCP peer
+is one of them; every request made through the safe fetch (`@arclight/net`) also carries
+`x-arclight-outbound: 1`, and a request with that header never gets the bypass (this covers a loop
+back through a reverse proxy).
+
 WebSocket limits (all sockets: `/events`, `/log/stream`, `/engine-agent/events`): frames from the
 client may be at most 64 KiB (larger ones close the socket with code 1009); a client that falls
 more than 1 MB behind is closed with code 1013 and should reconnect; at most 10 sockets are open

@@ -18,3 +18,4 @@ export {
   type SafeFetchErrorCode,
   type SafeFetchOptions,
 } from './fetch.js';
+export { OUTBOUND_HEADER, isOwnOutboundSocket, trackOutboundSockets } from './self.js';

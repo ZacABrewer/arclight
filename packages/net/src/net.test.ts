@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import zlib from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSafeFetch, isBlockedAddress, isPrivateHostname, parseIpv6, readLimited, resolveAllowed, SafeFetchError } from './index.js';
+import { createSafeFetch, isOwnOutboundSocket, OUTBOUND_HEADER, trackOutboundSockets, isBlockedAddress, isPrivateHostname, parseIpv6, readLimited, resolveAllowed, SafeFetchError } from './index.js';
 
 describe('isBlockedAddress', () => {
   it.each([
@@ -211,5 +211,24 @@ describe('readLimited', () => {
     const res = new Response('x'.repeat(2000));
     await expect(readLimited(res, 1000)).rejects.toMatchObject({ code: 'tooLarge' });
     expect((await readLimited(new Response('abc'), 10)).toString()).toBe('abc');
+  });
+});
+
+describe('self-request marking (DATA-01)', () => {
+  it('stamps the outbound header and recognises our own sockets', async () => {
+    trackOutboundSockets();
+    let header: string | string[] | undefined;
+    let ours = false;
+    const a = await serve((q, s) => {
+      header = q.headers[OUTBOUND_HEADER];
+      ours = isOwnOutboundSocket(q.socket.remoteAddress, q.socket.remotePort);
+      s.end('ok');
+    });
+    await (await createSafeFetch({ allowPrivate: true })(`http://127.0.0.1:${a.port}/`)).text();
+    expect(header).toBe('1');
+    expect(ours).toBe(true);
+    await fetch(`http://127.0.0.1:${a.port}/`).then((r) => r.text());
+    expect(ours).toBe(true);
+    expect(isOwnOutboundSocket('127.0.0.1', 1)).toBe(false);
   });
 });

@@ -103,3 +103,34 @@ describe('AgentClient', () => {
     await waitFor(() => !sub.connected);
   });
 });
+
+describe('AgentClient response caps', () => {
+  function endless(status: number): { fetch: typeof fetch; pulled: () => number } {
+    let pulled = 0;
+    const f = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            pulled += 1024 * 1024;
+            c.enqueue(new Uint8Array(1024 * 1024).fill(0x20));
+          },
+        }),
+        { status, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    return { fetch: f, pulled: () => pulled };
+  }
+
+  it('refuses an endless success body at the cap', async () => {
+    const e = endless(200);
+    const err = await new AgentClient({ url: 'http://agent.example', token: TOKEN, fetch: e.fetch }).status().catch((x: unknown) => x);
+    expect(err).toBeInstanceOf(AgentClientError);
+    expect((err as AgentClientError).code).toBe('bad-response');
+    expect(e.pulled()).toBeLessThanOrEqual(66 * 1024 * 1024);
+  });
+
+  it('reads at most a little of an error body', async () => {
+    const e = endless(500);
+    await expect(new AgentClient({ url: 'http://agent.example', token: TOKEN, fetch: e.fetch }).status()).rejects.toBeInstanceOf(AgentClientError);
+    expect(e.pulled()).toBeLessThanOrEqual(2 * 1024 * 1024);
+  });
+});

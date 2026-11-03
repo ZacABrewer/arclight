@@ -4,6 +4,7 @@ import { isIP } from 'node:net';
 import { Readable, Transform } from 'node:stream';
 import zlib from 'node:zlib';
 import { BlockedAddressError, guardedLookup, resolveAllowed, type TargetPolicy } from './lookup.js';
+import { OUTBOUND_HEADER } from './self.js';
 
 // A drop-in `fetch` for outbound requests whose target someone other than the admin can
 // influence. Compared with the global fetch it:
@@ -108,6 +109,8 @@ export function createSafeFetch(options: SafeFetchOptions = {}): SafeFetch {
     }
     if (!headers.has('user-agent') && options.userAgent) headers.set('user-agent', options.userAgent);
     if (!headers.has('accept')) headers.set('accept', '*/*');
+    // Marks the request as Arclight's own, so it never gets the local-address login bypass (self.ts).
+    headers.set(OUTBOUND_HEADER, '1');
     if (!headers.has('accept-encoding')) headers.set('accept-encoding', 'gzip, deflate, br');
 
     let redirected = false;

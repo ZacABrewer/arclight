@@ -14,6 +14,7 @@ import {
   type AgentAddOptions,
   type AgentErrorCode,
 } from './protocol.js';
+import { readLimited, SafeFetchError } from '@arclight/net';
 
 export type AgentClientErrorCode = 'auth' | 'unreachable' | 'bad-response' | 'not-found' | 'rejected' | 'conflict' | 'not-running';
 
@@ -91,6 +92,13 @@ function isArclightAgentUrl(baseUrl: string): boolean {
   }
 }
 
+// Response caps (DATA-09 follow-up): a remote engine is admin-configured but sits on another
+// machine, so its answers are read through a byte cap instead of whole into memory. File lists
+// of very large torrents stay well inside the JSON cap.
+export const MAX_JSON_BYTES = 64 * 1024 * 1024;
+const MAX_ERROR_BYTES = 64 * 1024;
+const MAX_EVENT_CHARS = 1024 * 1024;
+
 /** HTTP + WebSocket client of the agent protocol. */
 export class AgentClient {
   readonly baseUrl: string;
@@ -165,7 +173,7 @@ export class AgentClient {
     }
     let body: AgentErrorBody | null = null;
     try {
-      const parsed = AgentErrorBody.safeParse(await res.json());
+      const parsed = AgentErrorBody.safeParse(JSON.parse((await readLimited(res, MAX_ERROR_BYTES)).toString('utf8')));
       if (parsed.success) body = parsed.data;
     } catch {
       body = null;
@@ -197,8 +205,11 @@ export class AgentClient {
     const res = await this.request(path, init);
     let raw: unknown;
     try {
-      raw = await res.json();
+      raw = JSON.parse((await readLimited(res, MAX_JSON_BYTES)).toString('utf8'));
     } catch (error) {
+      if (error instanceof SafeFetchError && error.code === 'tooLarge') {
+        throw new AgentClientError('bad-response', `The remote engine's answer for ${path} is larger than ${MAX_JSON_BYTES / 1024 / 1024} MiB.`, { cause: error });
+      }
       throw new AgentClientError('bad-response', `The remote engine sent invalid JSON for ${path}.`, { cause: error });
     }
     const parsed = schema.safeParse(raw);
@@ -208,7 +219,7 @@ export class AgentClient {
 
   private async noContent(path: string, init: RequestInit): Promise<void> {
     const res = await this.request(path, init);
-    await res.arrayBuffer().catch(() => undefined);
+    await res.body?.cancel().catch(() => undefined);
   }
 
   private static jsonInit(method: string, body: unknown): RequestInit {
@@ -316,7 +327,7 @@ export class AgentClient {
         options.onOpen?.();
       };
       ws.onmessage = (msg: MessageEvent) => {
-        if (typeof msg.data !== 'string') return;
+        if (typeof msg.data !== 'string' || msg.data.length > MAX_EVENT_CHARS) return;
         let raw: unknown;
         try {
           raw = JSON.parse(msg.data);

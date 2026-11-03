@@ -713,6 +713,23 @@ describe('first launch', () => {
   });
 });
 
+describe('local-address bypass and requests to itself (DATA-01)', () => {
+  it('lets a local browser in but never a request this process made to itself', async () => {
+    const h = await harness();
+    setSection(h.db, 'security', SecuritySettings.parse({ setupComplete: true, method: 'forms', requireForLocal: false }));
+    // Someone on the LAN (or on the same machine, another process): the opted-in bypass applies.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '127.0.0.1' })).statusCode).toBe(200);
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '192.168.1.5' })).statusCode).toBe(200);
+    // Looped back through a reverse proxy: the safe fetch's marker header is still there.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '127.0.0.1', headers: { 'x-arclight-outbound': '1' } })).statusCode).toBe(401);
+    // A real loopback connection opened by this process (any client: fetch here).
+    await h.app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (h.app.server.address() as { port: number }).port;
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/series`);
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('live event feed', () => {
   const owners: EventOwners = { requestOwner: (id) => (id === 1 ? 7 : 8), issueOwner: (id) => (id === 1 ? 7 : 8) };
   const portal: EventViewer = { isAdmin: false, userId: 7, appAccess: [], permissions: Permission.REQUEST };

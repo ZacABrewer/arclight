@@ -46,7 +46,23 @@ export type MultiDiscStyle = z.infer<typeof MultiDiscStyle>;
 
 /** True when `format` contains `{name}` or `{name:<zeros>}` (any case, spaces allowed). */
 export function formatHasToken(format: string, name: string): boolean {
-  return new RegExp(String.raw`\{\s*${name}\s*(?::0*)?\s*\}`, 'i').test(format);
+  // A linear scan: the equivalent regex backtracks over long runs of spaces.
+  const want = name.toLowerCase();
+  const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);
+  for (let start = format.indexOf('{'); start !== -1; start = format.indexOf('{', start + 1)) {
+    let i = start + 1;
+    while (isSpace(format[i])) i += 1;
+    if (format.slice(i, i + want.length).toLowerCase() !== want) continue;
+    i += want.length;
+    while (isSpace(format[i])) i += 1;
+    if (format[i] === ':') {
+      i += 1;
+      while (format[i] === '0') i += 1;
+      while (isSpace(format[i])) i += 1;
+    }
+    if (format[i] === '}') return true;
+  }
+  return false;
 }
 
 const nonEmpty = (label: string) => z.string().refine((s) => s.trim().length > 0, { message: `${label} cannot be empty` });
