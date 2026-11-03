@@ -5,6 +5,7 @@ import {
   searchWords,
   type AudiobookHome,
   type BrowseQuery,
+  type ContentRestrictions,
   type MusicHome,
   type PlaybackProgress,
   type PlayerAlbum,
@@ -20,7 +21,9 @@ import type { Db } from '../../db/index.js';
 import { listSearchCondition } from '../../db/list-search.js';
 import { commonLabel, formatLabel, isLossless, type FormatFields } from './format.js';
 import { artworkUrl, playableItem } from './items.js';
-import type { ProgressStore } from './progress.js';
+import type { PlaybackOwner, ProgressStore } from './progress.js';
+import type { FastifyRequest } from 'fastify';
+import { restrictionsFor } from '../requests/certification.js';
 
 // Browse queries of the player. Everything is limited to items with files: tracks joined to
 // their audio file, albums and artists through such tracks, books with at least one audio file.
@@ -33,6 +36,32 @@ export interface BrowseUser {
   /** Null for an admin credential without a user (API key): no personal state. */
   userId: number | null;
   settings: unknown;
+  /** The active household profile (null without a user): every personal row is keyed by it. */
+  profileId: number | null;
+  /** The owner profile is active (only it merges media-server watch state). */
+  isOwnerProfile: boolean;
+  /** The account's caps combined with the profile's (restrictionsFor); null: none. */
+  restrictions: ContentRestrictions | null;
+}
+
+/** The browse identity of a request: account, active household profile and combined caps. */
+export function browseUserOf(req: FastifyRequest): BrowseUser {
+  const auth = req.auth;
+  const user = auth?.user ?? null;
+  const profile = user ? (auth?.profile ?? null) : null;
+  return {
+    userId: user && profile ? user.id : null,
+    settings: user?.settings ?? null,
+    profileId: profile?.id ?? null,
+    isOwnerProfile: profile?.isOwner ?? false,
+    restrictions: restrictionsFor(auth),
+  };
+}
+
+/** Whose rows a browse user reads and writes; null without a user (or profile). */
+export function ownerOfBrowse(user: BrowseUser): PlaybackOwner | null {
+  if (user.userId === null || user.profileId === null) return null;
+  return { userId: user.userId, profileId: user.profileId, isOwnerProfile: user.isOwnerProfile };
 }
 
 export interface BrowseContext {
@@ -41,7 +70,8 @@ export interface BrowseContext {
   progress: ProgressStore;
 }
 
-const uid = (u: BrowseUser) => u.userId ?? -1;
+/** The profile id personal rows are matched on (-1: none, so nothing matches). */
+const uid = (u: BrowseUser) => u.profileId ?? -1;
 const and = (parts: Array<SQL | undefined>): SQL => {
   const list = parts.filter((p): p is SQL => p !== undefined);
   return list.length === 0 ? sql`1 = 1` : sql.join(list, sql` AND `);
@@ -132,7 +162,7 @@ export function trackPage(ctx: BrowseContext, user: BrowseUser, q: BrowseQuery) 
     letterCondition(sql`t.title`, q.letter),
     genreCondition(sql`al.genres`, q.genre),
   ]);
-  const played = sql`(SELECT p.last_played_at FROM playback_progress p WHERE p.user_id = ${uid(user)} AND p.item_key = 'track:' || t.id)`;
+  const played = sql`(SELECT p.last_played_at FROM playback_progress p WHERE p.profile_id = ${uid(user)} AND p.item_key = 'track:' || t.id)`;
   const order: Record<BrowseQuery['sort'], SQL> = {
     name: sql`t.title COLLATE NOCASE ${dir(q.desc)}, t.id`,
     added: sql`f.date_added ${dir(!q.desc)}, t.id`,
@@ -227,7 +257,7 @@ function albumQuery(ctx: BrowseContext, where: SQL, order: SQL, limit: number, o
 }
 
 const albumPlayed = (user: BrowseUser) =>
-  sql`(SELECT max(p.last_played_at) FROM playback_progress p JOIN tracks t2 ON p.item_key = 'track:' || t2.id WHERE t2.album_id = al.id AND p.user_id = ${uid(user)})`;
+  sql`(SELECT max(p.last_played_at) FROM playback_progress p JOIN tracks t2 ON p.item_key = 'track:' || t2.id WHERE t2.album_id = al.id AND p.profile_id = ${uid(user)})`;
 
 export function albumPage(ctx: BrowseContext, user: BrowseUser, q: BrowseQuery) {
   const where = and([
@@ -289,7 +319,7 @@ function toArtist(ctx: BrowseContext, r: ArtistRow): PlayerArtist {
 
 export function artistPage(ctx: BrowseContext, user: BrowseUser, q: BrowseQuery) {
   const where = and([listSearchCondition(q.search, [sql`ar.name`]), letterCondition(sql`ar.sort_name`, q.letter), genreCondition(sql`ar.genres`, q.genre)]);
-  const played = sql`(SELECT max(p.last_played_at) FROM playback_progress p JOIN tracks t2 ON p.item_key = 'track:' || t2.id JOIN albums al2 ON al2.id = t2.album_id WHERE al2.artist_id = ar.id AND p.user_id = ${uid(user)})`;
+  const played = sql`(SELECT max(p.last_played_at) FROM playback_progress p JOIN tracks t2 ON p.item_key = 'track:' || t2.id JOIN albums al2 ON al2.id = t2.album_id WHERE al2.artist_id = ar.id AND p.profile_id = ${uid(user)})`;
   const order: Record<BrowseQuery['sort'], SQL> = {
     name: sql`ar.sort_name COLLATE NOCASE ${dir(q.desc)}, ar.id`,
     artist: sql`ar.sort_name COLLATE NOCASE ${dir(q.desc)}, ar.id`,
@@ -308,7 +338,7 @@ export function artistDetails(ctx: BrowseContext, user: BrowseUser, id: number):
   const albums = albumQuery(ctx, sql`al.artist_id = ${id}`, sql`al.year IS NULL, al.year DESC, al.title COLLATE NOCASE`, 500);
   // Top tracks: this user's most played; album order when nothing was played yet.
   const top = ctx.db.all<TrackRow>(sql`${TRACK_FROM}
-    LEFT JOIN playback_progress p ON p.user_id = ${uid(user)} AND p.item_key = 'track:' || t.id
+    LEFT JOIN playback_progress p ON p.profile_id = ${uid(user)} AND p.item_key = 'track:' || t.id
     WHERE al.artist_id = ${id}
     ORDER BY coalesce(p.play_count, 0) DESC, p.last_played_at DESC, al.year DESC, ${TRACK_ORDER_IN_ALBUM}
     LIMIT 10`);
@@ -367,11 +397,12 @@ function parseCredits(json: string | null): string[] {
 function toBooks(ctx: BrowseContext, user: BrowseUser, rows: readonly BookRow[]): PlayerAudiobook[] {
   const ids = rows.map((r) => r.id);
   const series = bookSeries(ctx.db, ids);
+  const owner = ownerOfBrowse(user);
   const progress: Map<string, PlaybackProgress> =
-    user.userId === null
+    owner === null
       ? new Map()
       : ctx.progress.effective(
-          user.userId,
+          owner,
           user.settings,
           ids.map((id) => itemKey('audiobook', id)),
         );
@@ -407,7 +438,7 @@ export function audiobookPage(ctx: BrowseContext, user: BrowseUser, q: BrowseQue
     letterCondition(sql`b.sort_title`, q.letter),
     genreCondition(sql`b.genres`, q.genre),
   ]);
-  const played = sql`(SELECT p.last_played_at FROM playback_progress p WHERE p.user_id = ${uid(user)} AND p.item_key = 'audiobook:' || b.id)`;
+  const played = sql`(SELECT p.last_played_at FROM playback_progress p WHERE p.profile_id = ${uid(user)} AND p.item_key = 'audiobook:' || b.id)`;
   const order: Record<BrowseQuery['sort'], SQL> = {
     name: sql`b.sort_title COLLATE NOCASE ${dir(q.desc)}, b.id`,
     added: sql`b.added ${dir(!q.desc)}, b.id`,
@@ -444,7 +475,8 @@ export function audiobookDetails(ctx: BrowseContext, user: BrowseUser, id: numbe
 const HOME_ROW = 20;
 
 export function musicHome(ctx: BrowseContext, user: BrowseUser, playlists: MusicHome['playlists'], now = new Date()): MusicHome {
-  const recent = user.userId === null ? [] : ctx.progress.recent(user.userId, 100, 'track');
+  const owner = ownerOfBrowse(user);
+  const recent = owner === null ? [] : ctx.progress.recent(owner, 100, 'track');
   const recentlyPlayed = tracksByIds(
     ctx,
     recent.slice(0, HOME_ROW).map((p) => Number(p.itemKey.slice('track:'.length))),
@@ -471,8 +503,9 @@ export function musicHome(ctx: BrowseContext, user: BrowseUser, playlists: Music
 
 export function audiobookHome(ctx: BrowseContext, user: BrowseUser): AudiobookHome {
   const idOf = (p: PlaybackProgress) => Number(p.itemKey.slice('audiobook:'.length));
-  const going = user.userId === null ? [] : ctx.progress.inProgress(user.userId, HOME_ROW, 'audiobook');
-  const done = user.userId === null ? [] : ctx.progress.recent(user.userId, HOME_ROW, 'audiobook', { played: true });
+  const owner = ownerOfBrowse(user);
+  const going = owner === null ? [] : ctx.progress.inProgress(owner, HOME_ROW, 'audiobook');
+  const done = owner === null ? [] : ctx.progress.recent(owner, HOME_ROW, 'audiobook', { played: true });
   const seriesRows = ctx.db.all<{ id: number; title: string }>(sql`
     SELECT s.id AS id, s.name AS title FROM book_series s
     WHERE EXISTS (SELECT 1 FROM book_series_entries e JOIN audio_files f ON f.book_id = e.book_id WHERE e.series_id = s.id)

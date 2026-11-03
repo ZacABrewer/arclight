@@ -8,6 +8,7 @@ import {
   Permission,
   PlayerAccess,
   SignInSettings,
+  type ActiveProfileSummary,
   type ApiKeyScope,
   type AppArea,
   type AuthVia,
@@ -32,6 +33,8 @@ import { ApiKeyNotFoundError } from './api-keys.js';
 import { UserApiKeyService } from './api-keys.js';
 import { audit } from '../audit/recorder.js';
 import { hashToken } from './hash.js';
+import { householdsFor, type RequestProfile } from '../households/service.js';
+import { ownerProfileOf } from '../households/backfill.js';
 
 export type AuthErrorCode =
   | 'VALIDATION'
@@ -115,7 +118,22 @@ export interface RequestAuth {
   sessionMethod?: string;
   /** `via: 'app'`: the app device (app_devices.id) whose token this is. */
   appDeviceId?: number;
+  /**
+   * The active household profile; set for every credential with a user (sessions and app
+   * devices: the one they selected, else the owner profile; every other credential: the owner
+   * profile). A non-owner profile is never admin: `isAdmin`, `appAccess` and the user's role
+   * and permission bits are masked, and the hook confines it to PROFILE_ROUTES.
+   */
+  profile?: RequestProfile;
+  /** With a masked (non-owner) profile: whether the account itself is an admin (player access only). */
+  accountIsAdmin?: boolean;
+  /** `via: 'session' | 'app'`: the profile id stored on the credential row (null: owner). Read by resolve(). */
+  credentialProfileId?: number | null;
+  /** `via: 'session' | 'app'`: when the credential was created (the fresh-credential PIN exception). */
+  credentialCreatedAt?: string;
 }
+
+export type { RequestProfile };
 
 /** The credentials a request carried, extracted by the hook. */
 export interface RequestCredentials {
@@ -504,6 +522,7 @@ export class AuthService {
       })
       .returning()
       .get();
+    ownerProfileOf(this.db, row.id, this.now);
     return toUser(row);
   }
 
@@ -865,7 +884,15 @@ export class AuthService {
    * Looks up a session token. Expired sessions are deleted. A persistent session past half
    * its lifetime slides forward, so active users stay signed in.
    */
-  resolveSession(token: string): { user: User; sessionId: number; expiresAt: string; method: string | null; renewed?: { maxAgeSeconds: number | null } } | null {
+  resolveSession(token: string): {
+    user: User;
+    sessionId: number;
+    expiresAt: string;
+    method: string | null;
+    profileId: number | null;
+    createdAt: string;
+    renewed?: { maxAgeSeconds: number | null };
+  } | null {
     const found = this.db
       .select({ session: sessions, user: users })
       .from(sessions)
@@ -891,7 +918,15 @@ export class AuthService {
     // Throttle last-seen writes to one a minute per session.
     if (t - Date.parse(found.session.lastSeenAt) > 60_000) patch.lastSeenAt = now.toISOString();
     if (Object.keys(patch).length > 0) this.db.update(sessions).set(patch).where(eq(sessions.id, found.session.id)).run();
-    return { user: toUser(found.user), sessionId: found.session.id, expiresAt, method: found.session.method ?? null, ...(renewed ? { renewed } : {}) };
+    return {
+      user: toUser(found.user),
+      sessionId: found.session.id,
+      expiresAt,
+      method: found.session.method ?? null,
+      profileId: found.session.profileId ?? null,
+      createdAt: found.session.createdAt,
+      ...(renewed ? { renewed } : {}),
+    };
   }
 
   listSessions(userId: number, currentId?: number): SessionRecord[] {
@@ -958,6 +993,40 @@ export class AuthService {
    * anonymous.
    */
   async resolve(creds: RequestCredentials): Promise<ResolvedRequest> {
+    const resolved = await this.resolveCredentials(creds);
+    if (resolved.auth) resolved.auth = this.withProfile(resolved.auth);
+    return resolved;
+  }
+
+  /**
+   * Attaches the active household profile. Only sessions and app devices carry a selected one;
+   * every other credential with a user acts as the owner profile. A non-owner profile is masked
+   * so no check anywhere can see an admin or a manager behind it.
+   */
+  withProfile(auth: RequestAuth): RequestAuth {
+    const { credentialProfileId, ...rest } = auth;
+    if (!rest.user) return rest;
+    const selectable = rest.via === 'session' || rest.via === 'app';
+    const profile = householdsFor(this.db, { now: this.now }).forCredential(rest.user.id, selectable ? (credentialProfileId ?? null) : null);
+    if (!profile) return rest;
+    if (profile.isOwner) return { ...rest, profile };
+    return {
+      ...rest,
+      user: { ...rest.user, role: 'user', permissions: 0, appAccess: [] },
+      isAdmin: false,
+      appAccess: [],
+      accountIsAdmin: rest.isAdmin,
+      profile,
+    };
+  }
+
+  /** The active profile as /auth/me shows it (null without a user). */
+  activeProfileSummary(auth: RequestAuth): ActiveProfileSummary | null {
+    if (!auth.user || !auth.profile) return null;
+    return householdsFor(this.db, { now: this.now }).summary(auth.user.id, auth.profile.id);
+  }
+
+  private async resolveCredentials(creds: RequestCredentials): Promise<ResolvedRequest> {
     // An app token is decisive: a revoked one is anonymous (401), never the local bypass, so the
     // app knows to sign in again.
     if (creds.bearer && this.bearerAuth) return { auth: this.bearerAuth(creds.bearer, creds) };
@@ -974,6 +1043,8 @@ export class AuthService {
             sessionId: found.sessionId,
             expiresAt: found.expiresAt,
             ...(found.method ? { sessionMethod: found.method } : {}),
+            credentialProfileId: found.profileId,
+            credentialCreatedAt: found.createdAt,
           },
           ...(found.renewed ? { renewed: found.renewed } : {}),
         };
@@ -1057,6 +1128,7 @@ export class AuthService {
       })
       .returning()
       .get();
+    ownerProfileOf(this.db, row.id, this.now);
     return toUser(row);
   }
 

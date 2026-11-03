@@ -310,7 +310,16 @@ export class AppAuthService {
     }
     const user = toUser(found.user);
     const isAdmin = user.role === 'admin';
-    return { user, via: 'app', isAdmin, appAccess: effectiveAppAccess(user, isAdmin), appDeviceId: found.device.id };
+    return {
+      user,
+      via: 'app',
+      isAdmin,
+      appAccess: effectiveAppAccess(user, isAdmin),
+      appDeviceId: found.device.id,
+      // The household profile the device selected (AuthService.resolve attaches and masks it).
+      credentialProfileId: found.device.profileId ?? null,
+      credentialCreatedAt: found.device.createdAt,
+    };
   }
 
   private toResource(row: AppDeviceRow, currentId: number | undefined, userName?: string): AppDevice {

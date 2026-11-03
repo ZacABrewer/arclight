@@ -71,18 +71,20 @@ import {
   audiobookPage,
   musicHome,
   playerSearch,
+  browseUserOf,
+  ownerOfBrowse,
   trackPage,
   type BrowseContext,
-  type BrowseUser,
 } from './browse.js';
 import { downloadDisposition, mimeOf } from './format.js';
 import { playableItem } from './items.js';
 import { videoSearch } from './video-browse.js';
 import { videoItem, type ChapterReader } from './video-items.js';
-import { restrictionsOfSettings } from '../requests/certification.js';
+import { restrictionsFor } from '../requests/certification.js';
+import { householdsFor } from '../households/service.js';
 import type { EngineTarget, JellyfinEngine } from './jellyfin.js';
 import { artworkLinkQuery, hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from './links.js';
-import type { ProgressStore } from './progress.js';
+import type { PlaybackOwner, ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
 import { BookmarkStore, PlayerNotFound, PlaylistFull, PlaylistStore, QueueStore } from './stores.js';
 import { DEFAULT_BITRATE_KBPS, FfmpegMissing, TRANSCODE_MIME, TranscodeBusy, type AudioTranscoder, type TranscodeFormat } from './transcode.js';
@@ -118,7 +120,8 @@ const KeyParams = z.object({ itemKey: ItemKey });
 const FileParams = z.object({ fileId: z.coerce.number().int().positive() });
 const ArtworkParams = z.object({ kind: z.enum(['album', 'artist', 'book']), id: z.coerce.number().int().positive() });
 const SearchQuery = z.object({ q: z.string().max(200).default('') });
-const LinkParams = { u: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() };
+// `p`: the household profile a link plays as (links.ts); absent on owner links.
+const LinkParams = { u: z.string().max(20).optional(), p: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() };
 const StreamQueryWithLink = StreamQuery.extend(LinkParams);
 const ArtworkQuery = z.object(LinkParams);
 
@@ -134,15 +137,21 @@ class PlayerHttpError extends Error {
   }
 }
 
-function userIdOf(req: FastifyRequest): number {
-  const id = req.auth?.user?.id;
-  if (id === undefined) throw new PlayerHttpError(400, 'NO_USER', 'this request is not signed in as a user');
-  return id;
+/** Whose per-profile rows (progress, queue, bookmarks, playlists) a request reads and writes. */
+function ownerOf(req: FastifyRequest): PlaybackOwner {
+  const owner = ownerOfBrowse(browseUserOf(req));
+  if (owner === null) throw new PlayerHttpError(400, 'NO_USER', 'this request is not signed in as a user');
+  return owner;
+}
+
+/** The profile a signed link names: a non-owner profile's id, else null (the owner, no `p=`). */
+function linkProfileOf(req: FastifyRequest): number | null {
+  const profile = req.auth?.profile;
+  return profile && !profile.isOwner ? profile.id : null;
 }
 
 const headerText = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-const browseUser = (req: FastifyRequest): BrowseUser => ({ userId: req.auth?.user?.id ?? null, settings: req.auth?.user?.settings ?? null });
 
 export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   const { db } = deps;
@@ -185,7 +194,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     const parsed = parseItemKey(key);
     if (!parsed || !sectionEnabled(parsed.kind)) return null;
     if (!isVideoKind(parsed.kind)) return playableItem(browse, key);
-    const restrictions = req.auth?.user ? restrictionsOfSettings(req.auth.user.settings) : null;
+    const restrictions = restrictionsFor(req.auth);
     return videoItem({ db, basePath: deps.basePath, chapters: deps.chapters }, parsed.kind, parsed.id, { restrictions, probe });
   }
 
@@ -198,7 +207,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     return keys;
   }
 
-  const linkUserStillActive = (userId: number) => linkUserStillActiveIn(db, userId, now());
+  const linkUserStillActive = (userId: number, profileId: number | null) => linkUserStillActiveIn(db, userId, now(), profileId);
 
   /** The decision for a stream request: the signed-in caller, or the user of a valid link. */
   function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): { decision: PlayerDecision; userId: number | null } | PlayerHttpError {
@@ -208,7 +217,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     const check = verifyLink(linkKey(deps.apiKey()), fileId, query, now());
     if (!check.ok) return new PlayerHttpError(403, `LINK_${check.reason}`, check.reason === 'EXPIRED' ? 'this stream link has expired' : 'this stream link is not valid');
     const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
-    if (!row || !linkUserStillActive(row.id)) return new PlayerHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
+    if (!row || !linkUserStillActive(row.id, check.profileId)) return new PlayerHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
     return { decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote), userId: row.id };
   }
 
@@ -325,7 +334,11 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- access -------------------------------------------------------------------------
     app.get('/playback/me', { config: user, schema: { response: { 200: PlayerCapabilities } } }, async (req): Promise<Capabilities> => {
       const settings = playerSettings(db);
-      return { ...capabilitiesOf(db, decide(settings, subjectOf(req), isRemoteRequest(req))), engine: engineTarget(settings) ? 'jellyfin' : 'arclight' };
+      const caps = capabilitiesOf(db, decide(settings, subjectOf(req), isRemoteRequest(req)));
+      // The active household profile can hide music and audiobooks (its own settings).
+      const profile = req.auth?.user && req.auth.profile ? householdsFor(db).settings(req.auth.user.id, req.auth.profile.id) : null;
+      if (profile) caps.sections = { ...caps.sections, music: caps.sections.music && profile.showMusic, audiobooks: caps.sections.audiobooks && profile.showAudiobooks };
+      return { ...caps, engine: engineTarget(settings) ? 'jellyfin' : 'arclight' };
     });
 
     // ---- items and stream links ------------------------------------------------------------
@@ -346,7 +359,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     });
 
     app.post('/playback/stream-links', { ...playerUser, schema: { body: StreamLinksRequest, response: { 200: StreamLinksResponse, ...errors } } }, async (req) => {
-      const userId = userIdOf(req);
+      const { userId } = ownerOf(req);
+      const profileId = linkProfileOf(req);
       const item = itemOr404(req.body.itemKey);
       const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
       const key = linkKey(deps.apiKey());
@@ -356,7 +370,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       const backends = await backendsOf(item.parts.map((p) => p.fileId));
       const links = item.parts.map((p) => ({
         fileId: p.fileId,
-        url: `${origin}${deps.basePath}/api/v1/stream/audio/${p.fileId}?${format}${linkQuery(key, { userId, fileId: p.fileId, exp })}`,
+        url: `${origin}${deps.basePath}/api/v1/stream/audio/${p.fileId}?${format}${linkQuery(key, { userId, profileId, fileId: p.fileId, exp })}`,
         expiresAt: new Date(exp * 1000).toISOString(),
         backend: backends.get(p.fileId) ?? ('arclight' as const),
       }));
@@ -442,9 +456,9 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- artwork ------------------------------------------------------------------------------
     // A query string that opens every artwork URL without credentials (<img> in the Arclight app, cast receivers).
     app.post('/playback/artwork-link', { ...playerUser, config: { ...user, audit: false }, schema: { response: { 200: ArtworkLinkResponse, ...errors } } }, async (req) => {
-      const userId = userIdOf(req);
+      const { userId } = ownerOf(req);
       const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
-      return { query: artworkLinkQuery(linkKey(deps.apiKey()), { userId, exp }), expiresAt: new Date(exp * 1000).toISOString() };
+      return { query: artworkLinkQuery(linkKey(deps.apiKey()), { userId, profileId: linkProfileOf(req), exp }), expiresAt: new Date(exp * 1000).toISOString() };
     });
 
     /** Signed artwork links: the link's user must still be active and allowed to use the player. */
@@ -453,7 +467,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       const check = verifyArtworkLink(linkKey(deps.apiKey()), req.query as Record<string, unknown>, now());
       if (!check.ok) return reply.code(403).send({ error: check.reason === 'EXPIRED' ? 'this artwork link has expired' : 'this artwork link is not valid', code: `LINK_${check.reason}` });
       const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
-      if (!row || !linkUserStillActive(row.id)) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
+      if (!row || !linkUserStillActive(row.id, check.profileId)) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
       const decision = decide(playerSettings(db), { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, isRemoteRequest(req));
       if (decision.denial) return denialReply(reply, decision.denial);
     };
@@ -472,7 +486,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
 
     // ---- progress -----------------------------------------------------------------------------
     app.put('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressReport, response: { 200: PlaybackProgress, ...errors } } }, async (req) =>
-      deps.progress.report(userIdOf(req), req.params.itemKey, req.body, now()).progress,
+      deps.progress.report(ownerOf(req), req.params.itemKey, req.body, now()).progress,
     );
 
     // navigator.sendBeacon posts text/plain; the parser is scoped to this one route.
@@ -486,14 +500,14 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       });
       beacon.withTypeProvider<ZodTypeProvider>().post('/playback/progress/beacon', { ...playerUser, schema: { body: ProgressBeacon, response: { 204: z.null(), ...errors } } }, async (req, reply) => {
         const { itemKey: key, ...report } = req.body;
-        deps.progress.report(userIdOf(req), key, report, now());
+        deps.progress.report(ownerOf(req), key, report, now());
         return reply.code(204).send(null);
       });
     });
 
     // An offline queue: oldest device time first, each with the single-report rules (stale ones are not applied).
     app.post('/playback/progress/batch', { ...playerUser, config: { ...user, audit: false }, schema: { body: ProgressBatchRequest, response: { 200: ProgressBatchResponse, ...errors } } }, async (req) => {
-      const userId = userIdOf(req);
+      const owner = ownerOf(req);
       const time = (r: { clientTime?: string | undefined }) => {
         const t = r.clientTime ? Date.parse(r.clientTime) : Number.NaN;
         return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
@@ -502,26 +516,26 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       const results: ProgressBatchResponse['results'] = new Array(order.length);
       for (const { r, i } of order) {
         const { itemKey: key, ...report } = r;
-        const outcome = deps.progress.report(userId, key, report, now());
+        const outcome = deps.progress.report(owner, key, report, now());
         results[i] = { itemKey: key, accepted: outcome.accepted, progress: outcome.progress };
       }
       return { results };
     });
 
     app.patch('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressUpdate, response: { 200: PlaybackProgress, ...errors } } }, async (req) =>
-      deps.progress.update(userIdOf(req), req.params.itemKey, req.body, now()),
+      deps.progress.update(ownerOf(req), req.params.itemKey, req.body, now()),
     );
 
     app.get('/playback/progress', { ...playerUser, schema: { querystring: ProgressQuery, response: { 200: ProgressListResponse, ...errors } } }, async (req) => {
       const keys = keysOf(req.query.itemKeys);
-      const found = deps.progress.effective(userIdOf(req), req.auth?.user?.settings ?? null, keys);
+      const found = deps.progress.effective(ownerOf(req), req.auth?.user?.settings ?? null, keys);
       return { items: keys.flatMap((k) => (found.has(k) ? [found.get(k)!] : [])) };
     });
 
     app.get('/playback/continue', { ...playerUser, schema: { response: { 200: ContinueResponse, ...errors } } }, async (req) => {
       const features = getSection(db, 'features');
       const items = deps.progress
-        .inProgress(userIdOf(req), 120)
+        .inProgress(ownerOf(req), 120)
         .filter((p) => !p.itemKey.startsWith('movie:') && !p.itemKey.startsWith('episode:'))
         .filter((p) => (p.itemKey.startsWith('track:') ? features.music : features.audiobooks))
         .flatMap((progress) => {
@@ -533,77 +547,78 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     });
 
     // ---- queue ---------------------------------------------------------------------------------
-    app.get('/playback/queue', { ...playerUser, schema: { response: { 200: PlayQueue, ...errors } } }, async (req) => queue.get(userIdOf(req)));
-    app.put('/playback/queue', { ...playerUser, schema: { body: PlayQueue, response: { 200: PlayQueue, ...errors } } }, async (req) => queue.put(userIdOf(req), req.body, now()));
+    app.get('/playback/queue', { ...playerUser, schema: { response: { 200: PlayQueue, ...errors } } }, async (req) => queue.get(ownerOf(req)));
+    app.put('/playback/queue', { ...playerUser, schema: { body: PlayQueue, response: { 200: PlayQueue, ...errors } } }, async (req) => queue.put(ownerOf(req), req.body, now()));
 
     // ---- bookmarks ------------------------------------------------------------------------------
     app.get('/playback/bookmarks', { ...playerUser, schema: { querystring: BookmarkListQuery, response: { 200: z.array(Bookmark), ...errors } } }, async (req) =>
-      bookmarks.list(userIdOf(req), req.query.itemKey),
+      bookmarks.list(ownerOf(req), req.query.itemKey),
     );
     app.post('/playback/bookmarks', { ...playerUser, schema: { body: BookmarkInput, response: { 201: Bookmark, ...errors } } }, async (req, reply) =>
-      reply.code(201).send(bookmarks.create(userIdOf(req), req.body, now())),
+      reply.code(201).send(bookmarks.create(ownerOf(req), req.body, now())),
     );
     app.put('/playback/bookmarks/:id', { ...playerUser, schema: { params: IdParams, body: BookmarkUpdate, response: { 200: Bookmark, ...errors } } }, async (req) =>
-      bookmarks.update(userIdOf(req), req.params.id, req.body),
+      bookmarks.update(ownerOf(req), req.params.id, req.body),
     );
     app.delete('/playback/bookmarks/:id', { ...playerUser, schema: { params: IdParams, response: { 204: z.null(), ...errors } } }, async (req, reply) => {
-      bookmarks.remove(userIdOf(req), req.params.id);
+      bookmarks.remove(ownerOf(req), req.params.id);
       return reply.code(204).send(null);
     });
 
     // ---- user playlists ---------------------------------------------------------------------
-    app.get('/playback/playlists', { ...playerUser, schema: { response: { 200: z.array(UserPlaylistSummary), ...errors } } }, async (req) => playlists.list(userIdOf(req)));
+    app.get('/playback/playlists', { ...playerUser, schema: { response: { 200: z.array(UserPlaylistSummary), ...errors } } }, async (req) => playlists.list(ownerOf(req)));
     app.post('/playback/playlists', { ...playerUser, schema: { body: UserPlaylistInput, response: { 201: UserPlaylistDetails, ...errors } } }, async (req, reply) =>
-      reply.code(201).send(playlists.create(userIdOf(req), req.body, now())),
+      reply.code(201).send(playlists.create(ownerOf(req), req.body, now())),
     );
     app.get('/playback/playlists/:id', { ...playerUser, schema: { params: IdParams, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
-      playlists.get(userIdOf(req), req.params.id),
+      playlists.get(ownerOf(req), req.params.id),
     );
     app.put('/playback/playlists/:id', { ...playerUser, schema: { params: IdParams, body: UserPlaylistInput, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
-      playlists.update(userIdOf(req), req.params.id, req.body, now()),
+      playlists.update(ownerOf(req), req.params.id, req.body, now()),
     );
     app.delete('/playback/playlists/:id', { ...playerUser, schema: { params: IdParams, response: { 204: z.null(), ...errors } } }, async (req, reply) => {
-      playlists.remove(userIdOf(req), req.params.id);
+      playlists.remove(ownerOf(req), req.params.id);
       return reply.code(204).send(null);
     });
     // Incremental track edits: each is one transaction on the stored list, so two tabs editing
     // at once cannot drop each other's changes (or tracks that have no file yet).
     app.post('/playback/playlists/:id/tracks', { ...playerUser, schema: { params: IdParams, body: PlaylistTracksAdd, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
-      playlists.addTracks(userIdOf(req), req.params.id, req.body, now()),
+      playlists.addTracks(ownerOf(req), req.params.id, req.body, now()),
     );
     app.delete('/playback/playlists/:id/tracks/:entryId', { ...playerUser, schema: { params: EntryParams, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
-      playlists.removeEntry(userIdOf(req), req.params.id, req.params.entryId, now()),
+      playlists.removeEntry(ownerOf(req), req.params.id, req.params.entryId, now()),
     );
     app.patch('/playback/playlists/:id/tracks/:entryId', { ...playerUser, schema: { params: EntryParams, body: PlaylistTrackMove, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
-      playlists.moveEntry(userIdOf(req), req.params.id, req.params.entryId, req.body, now()),
+      playlists.moveEntry(ownerOf(req), req.params.id, req.params.entryId, req.body, now()),
     );
 
     // ---- browse: music ------------------------------------------------------------------------
     app.get('/playback/music/home', { ...music, schema: { response: { 200: MusicHome, ...errors } } }, async (req) => {
-      const u = browseUser(req);
-      return musicHome(browse, u, u.userId === null ? [] : playlists.list(u.userId), new Date(now()));
+      const u = browseUserOf(req);
+      const owner = ownerOfBrowse(u);
+      return musicHome(browse, u, owner === null ? [] : playlists.list(owner), new Date(now()));
     });
-    app.get('/playback/music/albums', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerAlbumPage, ...errors } } }, async (req) => albumPage(browse, browseUser(req), req.query));
+    app.get('/playback/music/albums', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerAlbumPage, ...errors } } }, async (req) => albumPage(browse, browseUserOf(req), req.query));
     app.get('/playback/music/albums/:id', { ...music, schema: { params: IdParams, response: { 200: PlayerAlbumDetails, ...errors } } }, async (req) => {
       const album = albumDetails(browse, req.params.id);
       if (!album) throw new PlayerNotFound(`album ${req.params.id} not found or has no files`);
       return album;
     });
-    app.get('/playback/music/artists', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerArtistPage, ...errors } } }, async (req) => artistPage(browse, browseUser(req), req.query));
+    app.get('/playback/music/artists', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerArtistPage, ...errors } } }, async (req) => artistPage(browse, browseUserOf(req), req.query));
     app.get('/playback/music/artists/:id', { ...music, schema: { params: IdParams, response: { 200: PlayerArtistDetails, ...errors } } }, async (req) => {
-      const artist = artistDetails(browse, browseUser(req), req.params.id);
+      const artist = artistDetails(browse, browseUserOf(req), req.params.id);
       if (!artist) throw new PlayerNotFound(`artist ${req.params.id} not found or has no files`);
       return artist;
     });
-    app.get('/playback/music/tracks', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerTrackPage, ...errors } } }, async (req) => trackPage(browse, browseUser(req), req.query));
+    app.get('/playback/music/tracks', { ...music, schema: { querystring: BrowseQuery, response: { 200: PlayerTrackPage, ...errors } } }, async (req) => trackPage(browse, browseUserOf(req), req.query));
 
     // ---- browse: audiobooks ---------------------------------------------------------------------
-    app.get('/playback/audiobooks/home', { ...audiobooks, schema: { response: { 200: AudiobookHome, ...errors } } }, async (req) => audiobookHome(browse, browseUser(req)));
+    app.get('/playback/audiobooks/home', { ...audiobooks, schema: { response: { 200: AudiobookHome, ...errors } } }, async (req) => audiobookHome(browse, browseUserOf(req)));
     app.get('/playback/audiobooks', { ...audiobooks, schema: { querystring: BrowseQuery, response: { 200: PlayerAudiobookPage, ...errors } } }, async (req) =>
-      audiobookPage(browse, browseUser(req), req.query),
+      audiobookPage(browse, browseUserOf(req), req.query),
     );
     app.get('/playback/audiobooks/:id', { ...audiobooks, schema: { params: IdParams, response: { 200: PlayerAudiobookDetails, ...errors } } }, async (req) => {
-      const book = audiobookDetails(browse, browseUser(req), req.params.id);
+      const book = audiobookDetails(browse, browseUserOf(req), req.params.id);
       if (!book) throw new PlayerNotFound(`audiobook ${req.params.id} not found or has no files`);
       return book;
     });
@@ -611,8 +626,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- search -------------------------------------------------------------------------------
     app.get('/playback/search', { ...player, schema: { querystring: SearchQuery, response: { 200: PlayerSearchResponse, ...errors } } }, async (req) => {
       const features = getSection(db, 'features');
-      const out = playerSearch(browse, browseUser(req), req.query.q, { music: features.music, audiobooks: features.audiobooks });
-      if (playerSettings(db).video) Object.assign(out, videoSearch({ db, basePath: deps.basePath, progress: deps.progress, now }, browseUser(req), req.query.q));
+      const out = playerSearch(browse, browseUserOf(req), req.query.q, { music: features.music, audiobooks: features.audiobooks });
+      if (playerSettings(db).video) Object.assign(out, videoSearch({ db, basePath: deps.basePath, progress: deps.progress, now }, browseUserOf(req), req.query.q));
       return out;
     });
   };

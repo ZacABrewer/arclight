@@ -53,7 +53,7 @@ describe('signed links', () => {
   const query = (q: string) => Object.fromEntries(new URLSearchParams(q));
 
   it('accepts a valid link for its file', () => {
-    expect(verifyLink(key, 7, query(linkQuery(key, { userId: 3, fileId: 7, exp })), now)).toEqual({ ok: true, userId: 3 });
+    expect(verifyLink(key, 7, query(linkQuery(key, { userId: 3, fileId: 7, exp })), now)).toEqual({ ok: true, userId: 3, profileId: null });
   });
 
   it('rejects expired, tampered and wrong-file links', () => {

@@ -132,6 +132,17 @@ function stateOf(row: PlaybackProgressRow): ProgressState {
   };
 }
 
+/**
+ * Whose player state a call reads or writes: the account and its active household profile.
+ * Rows are keyed by the profile; `userId` stays on them for account-level queries (stats,
+ * deletes). Only the owner profile merges linked media-server watch state.
+ */
+export interface PlaybackOwner {
+  userId: number;
+  profileId: number;
+  isOwnerProfile: boolean;
+}
+
 /** The user's linked media-server account (users.settings.mediaServerLink), if any. */
 function linkOf(settings: unknown): { kind: 'jellyfin' | 'emby' | 'plex'; externalId: string } | null {
   const link = ((settings ?? {}) as Record<string, unknown>)['mediaServerLink'] as { kind?: unknown; externalId?: unknown } | undefined;
@@ -143,43 +154,44 @@ function linkOf(settings: unknown): { kind: 'jellyfin' | 'emby' | 'plex'; extern
 export class ProgressStore {
   constructor(private readonly db: Db) {}
 
-  private row(userId: number, key: string): PlaybackProgressRow | undefined {
+  private row(owner: PlaybackOwner, key: string): PlaybackProgressRow | undefined {
     return this.db
       .select()
       .from(playbackProgress)
-      .where(and(eq(playbackProgress.userId, userId), eq(playbackProgress.itemKey, key)))
+      .where(and(eq(playbackProgress.profileId, owner.profileId), eq(playbackProgress.itemKey, key)))
       .get();
   }
 
-  private write(userId: number, key: string, state: ProgressState): void {
+  private write(owner: PlaybackOwner, key: string, state: ProgressState): void {
     const values = { ...state, prefs: ItemPrefs.parse(state.prefs) };
     this.db
       .insert(playbackProgress)
-      .values({ userId, itemKey: key, ...values })
-      .onConflictDoUpdate({ target: [playbackProgress.userId, playbackProgress.itemKey], set: values })
+      .values({ userId: owner.userId, profileId: owner.profileId, itemKey: key, ...values })
+      .onConflictDoUpdate({ target: [playbackProgress.profileId, playbackProgress.itemKey], set: values })
       .run();
   }
 
-  own(userId: number, key: string): PlaybackProgress | null {
-    const row = this.row(userId, key);
+  own(owner: PlaybackOwner, key: string): PlaybackProgress | null {
+    const row = this.row(owner, key);
     return row ? toProgress(row) : null;
   }
 
   /** Applies a report; returns the stored progress afterwards (unchanged when stale). */
-  report(userId: number, key: string, report: ProgressReport, nowMs = Date.now()): { accepted: boolean; progress: PlaybackProgress } {
-    const prev = this.row(userId, key);
+  report(owner: PlaybackOwner, key: string, report: ProgressReport, nowMs = Date.now()): { accepted: boolean; progress: PlaybackProgress } {
+    const prev = this.row(owner, key);
     const outcome = applyReport(prev ? stateOf(prev) : null, report, nowMs);
     if (outcome.accepted) {
       this.db.transaction((tx) => {
         const values = { ...outcome.next, prefs: ItemPrefs.parse(outcome.next.prefs) };
         tx.insert(playbackProgress)
-          .values({ userId, itemKey: key, ...values })
-          .onConflictDoUpdate({ target: [playbackProgress.userId, playbackProgress.itemKey], set: values })
+          .values({ userId: owner.userId, profileId: owner.profileId, itemKey: key, ...values })
+          .onConflictDoUpdate({ target: [playbackProgress.profileId, playbackProgress.itemKey], set: values })
           .run();
         if (outcome.completed) {
           tx.insert(playbackPlays)
             .values({
-              userId,
+              userId: owner.userId,
+              profileId: owner.profileId,
               itemKey: key,
               at: outcome.next.updatedAt,
               durationMs: outcome.next.durationMs,
@@ -191,7 +203,7 @@ export class ProgressStore {
         }
       });
     }
-    return { accepted: outcome.accepted, progress: this.own(userId, key)! };
+    return { accepted: outcome.accepted, progress: this.own(owner, key)! };
   }
 
   /**
@@ -199,8 +211,8 @@ export class ProgressStore {
    * unplayed moves `updatedAt` (it orders position reports): a favourite or a speed change made
    * mid-listen must not make the device's next reports look stale.
    */
-  update(userId: number, key: string, patch: ProgressUpdate, nowMs = Date.now()): PlaybackProgress {
-    const prev = this.row(userId, key);
+  update(owner: PlaybackOwner, key: string, patch: ProgressUpdate, nowMs = Date.now()): PlaybackProgress {
+    const prev = this.row(owner, key);
     const now = new Date(nowMs).toISOString();
     // A row made by a prefs-only PATCH has no position yet: it is older than any report.
     const state: ProgressState = prev
@@ -220,8 +232,8 @@ export class ProgressStore {
     if (patch.prefs) state.prefs = { ...state.prefs, ...patch.prefs };
     // Newer than any report so far, but never ahead of the server clock.
     if (movesPosition) state.updatedAt = new Date(Math.max(nowMs, Date.parse(state.updatedAt) || 0)).toISOString();
-    this.write(userId, key, state);
-    return this.own(userId, key)!;
+    this.write(owner, key, state);
+    return this.own(owner, key)!;
   }
 
   /** Linked media-server rows for `keys` (watch_state of the user's linked account). */
@@ -264,19 +276,22 @@ export class ProgressStore {
     return out;
   }
 
-  /** Effective progress for `keys` (items without any row are left out). */
-  effective(userId: number, userSettings: unknown, keys: readonly string[]): Map<string, PlaybackProgress> {
+  /**
+   * Effective progress for `keys` (items without any row are left out). Media-server watch
+   * state (the account's link) merges in for the owner profile only.
+   */
+  effective(owner: PlaybackOwner, userSettings: unknown, keys: readonly string[]): Map<string, PlaybackProgress> {
     const out = new Map<string, PlaybackProgress>();
     if (keys.length === 0) return out;
     const own = new Map(
       this.db
         .select()
         .from(playbackProgress)
-        .where(and(eq(playbackProgress.userId, userId), inArray(playbackProgress.itemKey, [...keys])))
+        .where(and(eq(playbackProgress.profileId, owner.profileId), inArray(playbackProgress.itemKey, [...keys])))
         .all()
         .map((r) => [r.itemKey, toProgress(r)]),
     );
-    const ext = this.external(userSettings, keys);
+    const ext = owner.isOwnerProfile ? this.external(userSettings, keys) : new Map<string, PlaybackProgress[]>();
     for (const key of keys) {
       const merged = mergeProgress(own.get(key) ?? null, ext.get(key) ?? []);
       if (merged) out.set(key, merged);
@@ -285,13 +300,13 @@ export class ProgressStore {
   }
 
   /** Unfinished items with something to resume, newest first. */
-  inProgress(userId: number, limit: number, kind?: PlayableKind): PlaybackProgress[] {
+  inProgress(owner: PlaybackOwner, limit: number, kind?: PlayableKind): PlaybackProgress[] {
     const rows = this.db
       .select()
       .from(playbackProgress)
       .where(
         and(
-          eq(playbackProgress.userId, userId),
+          eq(playbackProgress.profileId, owner.profileId),
           eq(playbackProgress.played, false),
           isNotNull(playbackProgress.lastPlayedAt),
           sql`${playbackProgress.durationMs} > 0 AND ${playbackProgress.positionMs} >= ${playbackProgress.durationMs} * ${RESUME_MIN}`,
@@ -304,14 +319,14 @@ export class ProgressStore {
     return rows.map(toProgress);
   }
 
-  /** Item keys this user played most recently (any state), newest first. */
-  recent(userId: number, limit: number, kind: PlayableKind, opts: { played?: boolean } = {}): PlaybackProgress[] {
+  /** Item keys this profile played most recently (any state), newest first. */
+  recent(owner: PlaybackOwner, limit: number, kind: PlayableKind, opts: { played?: boolean } = {}): PlaybackProgress[] {
     return this.db
       .select()
       .from(playbackProgress)
       .where(
         and(
-          eq(playbackProgress.userId, userId),
+          eq(playbackProgress.profileId, owner.profileId),
           isNotNull(playbackProgress.lastPlayedAt),
           sql`${playbackProgress.itemKey} LIKE ${`${kind}:%`}`,
           opts.played === undefined ? undefined : eq(playbackProgress.played, opts.played),

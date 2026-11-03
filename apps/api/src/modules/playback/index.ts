@@ -10,12 +10,14 @@ import { playerSettings } from './access.js';
 import { AudioTranscoder, type AudioTranscoderOptions } from './transcode.js';
 import { ChapterReader } from './video-items.js';
 import { videoRoutes } from './video-routes.js';
+import { myListRoutes } from './my-list.js';
 import { EncoderDetector, MediaCache, type EncoderDetectorOptions, type MediaCacheOptions } from './video-stream.js';
 
 export { playbackProgress, playbackPlays, playbackQueue, playbackBookmarks, userPlaylists, userPlaylistTracks } from './schema.js';
 export { decide, capabilitiesOf, type PlayerDecision } from './access.js';
 export { mergeProgress, applyReport, ProgressStore } from './progress.js';
 export { JellyfinEngine, matchAudioPath } from './jellyfin.js';
+export { myListHas } from './my-list.js';
 
 // Arclight's own player, phases 0 and 1 (music and audiobooks): settings section `player`,
 // per-user access in users.settings.player, the /playback routes (browse, items, progress, queue,
@@ -101,6 +103,8 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
       cache: parts.cache,
     }),
   );
+  // My List (per household profile).
+  await app.register(myListRoutes({ db: ctx.db, basePath, progress }));
   await app.register(
     playbackRoutes({
       db: ctx.db,

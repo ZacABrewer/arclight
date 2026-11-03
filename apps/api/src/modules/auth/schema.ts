@@ -1,5 +1,6 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AppArea, UserRole, UserSettings } from '@arclight/shared';
+import { householdProfiles } from '../households/schema.js';
 
 // Auth module tables. The API key and auth method live in the `settings` table (section
 // `security`), not here. `permissions` and `settings` exist now so the requests phase can
@@ -57,6 +58,8 @@ export const sessions = sqliteTable(
     ip: text('ip'),
     /** How it was opened: password, oidc:<provider>, passkey, jellyfin/emby/plex, setup; null for older sessions. */
     method: text('method'),
+    /** The household profile this session is on; null: the owner profile. */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'set null' }),
   },
   (t) => [uniqueIndex('sessions_token_hash_idx').on(t.tokenHash), index('sessions_user_idx').on(t.userId)],
 );

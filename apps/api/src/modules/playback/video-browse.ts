@@ -21,9 +21,8 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series } from '../library/schema.js';
-import { restrictionsOfSettings } from '../requests/certification.js';
-import type { BrowseUser } from './browse.js';
-import type { ProgressStore } from './progress.js';
+import { ownerOfBrowse, type BrowseUser } from './browse.js';
+import type { PlaybackOwner, ProgressStore } from './progress.js';
 import { badgesOf, dynamicRangeOf, resolutionLabel, versionDescription } from './video-info.js';
 import {
   episodeCode,
@@ -57,16 +56,18 @@ export const NEXT_UP_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
 const HOME_ROW = 20;
 const CHUNK = 500;
 
+/** The caps a browse user plays under: the account's combined with the active profile's (browseUserOf). */
 export function restrictionsOf(user: BrowseUser): ContentRestrictions | null {
-  return user.userId === null ? null : restrictionsOfSettings(user.settings);
+  return user.userId === null ? null : user.restrictions;
 }
 
 /** Effective progress for many keys (chunked: SQLite caps bound parameters). */
 export function progressFor(ctx: VideoBrowseContext, user: BrowseUser, keys: readonly string[]): Map<string, PlaybackProgress> {
   const out = new Map<string, PlaybackProgress>();
-  if (user.userId === null) return out;
+  const owner = ownerOfBrowse(user);
+  if (owner === null) return out;
   for (let i = 0; i < keys.length; i += CHUNK) {
-    for (const [k, v] of ctx.progress.effective(user.userId, user.settings, keys.slice(i, i + CHUNK))) out.set(k, v);
+    for (const [k, v] of ctx.progress.effective(owner, user.settings, keys.slice(i, i + CHUNK))) out.set(k, v);
   }
   return out;
 }
@@ -445,9 +446,10 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
   const movieById = new Map(movieList.map((m) => [m.row.id, m]));
   const home: VideoHome = { continueWatching: [], nextUp: [], recentMovies: [], recentEpisodes: [], genres: [] };
 
-  if (user.userId !== null) {
+  const owner = ownerOfBrowse(user);
+  if (owner !== null) {
     // Continue watching: the newest unfinished movies and episodes.
-    const resume = [...ctx.progress.inProgress(user.userId, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(user.userId, HOME_ROW * 2, 'episode')].sort((a, b) =>
+    const resume = [...ctx.progress.inProgress(owner, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(owner, HOME_ROW * 2, 'episode')].sort((a, b) =>
       (b.lastPlayedAt ?? '').localeCompare(a.lastPlayedAt ?? ''),
     );
     const resumeEpisodes = episodesWithSeries(
@@ -469,7 +471,7 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
 
     // Next up: per series watched lately, the first unplayed episode after the furthest played one.
     const since = new Date(nowMs - NEXT_UP_WINDOW_MS).toISOString();
-    const lately = ctx.progress.recent(user.userId, 500, 'episode').filter((p) => (p.lastPlayedAt ?? '') >= since);
+    const lately = ctx.progress.recent(owner, 500, 'episode').filter((p) => (p.lastPlayedAt ?? '') >= since);
     const touched = episodesWithSeries(
       ctx,
       r,
@@ -576,7 +578,7 @@ export function videoSearch(ctx: VideoBrowseContext, user: BrowseUser, q: string
 }
 
 /** Marks items, a series or a season played/unplayed; returns how many items changed. */
-export function markWatched(ctx: VideoBrowseContext, userId: number, req: VideoWatchedRequest): number {
+export function markWatched(ctx: VideoBrowseContext, owner: PlaybackOwner, req: VideoWatchedRequest): number {
   const nowMs = ctx.now?.() ?? Date.now();
   let keys: string[];
   if (req.itemKeys) keys = [...new Set(req.itemKeys)];
@@ -585,6 +587,6 @@ export function markWatched(ctx: VideoBrowseContext, userId: number, req: VideoW
       .filter((e) => req.seasonNumber === undefined || e.seasonNumber === req.seasonNumber)
       .map((e) => itemKey('episode', e.id));
   }
-  for (const key of keys) ctx.progress.update(userId, key, { played: req.played }, nowMs);
+  for (const key of keys) ctx.progress.update(owner, key, { played: req.played }, nowMs);
   return keys.length;
 }
