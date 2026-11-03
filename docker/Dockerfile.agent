@@ -31,8 +31,9 @@ VOLUME ["/data", "/downloads"]
 EXPOSE 7879 6881 6881/udp
 # Run as 1000:1000 by default; override with `user:` in compose to match the volume owner.
 USER 1000:1000
+# Plain HTTP, or HTTPS when AGENT_TLS_CERT is set (loopback, so the certificate name is not checked).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.AGENT_PORT||7879)+'/status',{headers:{'x-agent-token':process.env.AGENT_TOKEN||''}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "require(process.env.AGENT_TLS_CERT?'node:https':'node:http').get({host:'127.0.0.1',port:process.env.AGENT_PORT||7879,path:'/status',headers:{'x-agent-token':process.env.AGENT_TOKEN||''},rejectUnauthorized:false,timeout:4000},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 # tini forwards SIGTERM so the agent saves resume data and announces `stopped` before exiting.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "agent.mjs"]

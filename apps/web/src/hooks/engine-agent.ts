@@ -15,3 +15,9 @@ export function useSaveEngineAgentSettings() {
     errorTitle: t('hooks.engineAgent.couldNotSaveRemoteEngine'),
   });
 }
+
+export function useRegenerateEngineAgentToken() {
+  return useInvalidatingMutation(() => engineAgentApi.regenerateToken(), [engineAgentKeys.settings], {
+    errorTitle: t('hooks.engineAgent.couldNotRegenerateToken'),
+  });
+}

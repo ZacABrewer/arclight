@@ -117,7 +117,7 @@ Drives the engine agent on a seedbox or another Arclight. Setup, the agent's env
 | Setting | Default | What it does |
 |---|---|---|
 | Agent URL | `http://localhost:7879` (template) | `http://seedbox:7879` for the standalone agent, or `http://other-arclight:7878/api/v1/engine-agent` for another Arclight |
-| Token | empty | The agent's `AGENT_TOKEN`, or the other Arclight's API key. Never shown again after saving |
+| Token | empty | The agent's `AGENT_TOKEN`, or the other Arclight's agent token (its Remote engine panel). Never shown again after saving |
 | Category | `arclight` | Category on the agent |
 | Post-Import Category (advanced) | none | Category after import |
 | Pull Mode | Off | Copy finished downloads from the agent over HTTP (resumable, SHA-256 checked) into the local folder before importing. Off means the agent shares storage with Arclight |
@@ -125,7 +125,7 @@ Drives the engine agent on a seedbox or another Arclight. Setup, the agent's env
 | Copy Limit (KiB/s) (advanced) | empty (unlimited) | Pull mode: throttle for copying |
 | Follow VPN Port (advanced) | Off | Apply this Arclight's VPN forwarded port to the agent. Only for an agent behind the same VPN connection |
 
-To make this Arclight usable as an agent for another one, turn on **Act as remote engine** in the Remote engine panel on Settings > Download Clients. The panel shows the endpoint address to enter on the other side. The other instance signs in with this instance's API key (Settings > Security) as the token.
+To make this Arclight usable as an agent for another one, turn on **Act as remote engine** in the Remote engine panel on Settings > Download Clients. The panel shows the endpoint address and the **agent token** to enter on the other side (**Show**, **Copy**, and **Regenerate** to replace it). The token opens only the remote engine routes, not the rest of the API. Instances that were already remote engines before 0.24 also show **Also accept the API key (deprecated)**, on, so remotes set up with the API key keep working; switch them to the agent token, then turn it off. See [Upgrading from 0.23](../REMOTE-ENGINE.md#upgrading-from-023).
 
 ## Remote path mappings
 

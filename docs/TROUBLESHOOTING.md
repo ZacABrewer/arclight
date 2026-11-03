@@ -756,7 +756,7 @@ Source: `RemoteEngineUnreachable` (error).
 
 **How to confirm:** the Health message includes the engine name, its address and the error. Settings > Download Clients > **Test**.
 
-**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. Setup details: [Remote engine](REMOTE-ENGINE.md).
+**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. "rejected the token" means the Token field does not match: the agent's `AGENT_TOKEN`, or for another Arclight its agent token (from 0.24 its API key works only while that instance still accepts it). HTTP 429 means too many wrong tokens from this address; fix the token and wait for the back-off (up to 15 minutes). An `https://` agent with a self-signed certificate needs `NODE_EXTRA_CA_CERTS` on this Arclight. Setup details: [Remote engine](REMOTE-ENGINE.md).
 
 <a id="download-client-removes-completed-downloads"></a>
 ### Download client removes completed downloads

@@ -114,8 +114,11 @@ export function profileMay(method: string, routeUrl: string | undefined): boolea
   });
 }
 
-/** Route prefixes that answer without credentials; the setup routes guard themselves. */
-export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
+/**
+ * Route prefixes that answer without credentials; the setup routes guard themselves, and the
+ * engine-agent protocol checks its own agent token (a secret that opens only those routes).
+ */
+export const PUBLIC_PREFIXES: readonly string[] = ['/setup/', '/engine-agent/'];
 
 /** Routes a Jellyfin plugin key may call (decided on the matched route pattern). */
 export const PLUGIN_ROUTE_PREFIX = `${API_PREFIX}/jellyfin/`;
@@ -172,6 +175,9 @@ export const SECRET_ROUTES: ReadonlySet<string> = new Set([
   `${API_PREFIX}/apikeys/:id`,
   `${API_PREFIX}/config/export`,
   `${API_PREFIX}/system/backup/:id/download`,
+  // The engine agent token (shown and replaced there).
+  `${API_PREFIX}/settings/engineagent`,
+  `${API_PREFIX}/settings/engineagent/token`,
   '/api/v3/config/host',
 ]);
 
