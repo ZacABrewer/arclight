@@ -82,6 +82,136 @@ public final class VideoRequest {
         }
     }
 
+    // ---- redesign: pause screen, scrub thumbnails, episodes, prefs ----------------------------
+
+    /** One piece of the pause screen's meta line (NativePauseInfo.meta). */
+    public static final class MetaPiece {
+        public final String text;
+        /** The certification, drawn in a box. */
+        public final boolean boxed;
+        /** A media chip (resolution, HDR, audio...). */
+        public final boolean chip;
+
+        MetaPiece(String text, boolean boxed, boolean chip) {
+            this.text = text;
+            this.boxed = boxed;
+            this.chip = chip;
+        }
+    }
+
+    /** NativePauseInfo: already-translated strings built in JS. */
+    public static final class Pause {
+        public final String title;
+        @Nullable public final String episodeLine;
+        public final List<MetaPiece> meta;
+        @Nullable public final String overview;
+        @Nullable public final String logoUrl;
+        @Nullable public final String backdropUrl;
+
+        Pause(String title, @Nullable String episodeLine, List<MetaPiece> meta, @Nullable String overview,
+                @Nullable String logoUrl, @Nullable String backdropUrl) {
+            this.title = title;
+            this.episodeLine = episodeLine;
+            this.meta = meta;
+            this.overview = overview;
+            this.logoUrl = logoUrl;
+            this.backdropUrl = backdropUrl;
+        }
+    }
+
+    /** NativeTrickplay: sprite sheets of scrub thumbnails (see {@link TrickplayMath}). */
+    public static final class Trickplay {
+        public final long intervalMs;
+        public final int tileWidth;
+        public final int tileHeight;
+        public final int columns;
+        public final int rows;
+        public final int tileCount;
+        public final List<String> sheets;
+
+        public Trickplay(long intervalMs, int tileWidth, int tileHeight, int columns, int rows, int tileCount, List<String> sheets) {
+            this.intervalMs = intervalMs;
+            this.tileWidth = tileWidth;
+            this.tileHeight = tileHeight;
+            this.columns = columns;
+            this.rows = rows;
+            this.tileCount = tileCount;
+            this.sheets = sheets;
+        }
+    }
+
+    /** NativeEpisode (the episodes panel). */
+    public static final class Episode {
+        public final String itemKey;
+        public final int episodeNumber;
+        /** "5. The Long Meridian". */
+        public final String title;
+        @Nullable public final String runtime;
+        @Nullable public final String overview;
+        @Nullable public final String thumbUrl;
+        /** 0..1, or null when unplayed. */
+        @Nullable public final Float progress;
+        public final boolean played;
+
+        Episode(String itemKey, int episodeNumber, String title, @Nullable String runtime, @Nullable String overview,
+                @Nullable String thumbUrl, @Nullable Float progress, boolean played) {
+            this.itemKey = itemKey;
+            this.episodeNumber = episodeNumber;
+            this.title = title;
+            this.runtime = runtime;
+            this.overview = overview;
+            this.thumbUrl = thumbUrl;
+            this.progress = progress;
+            this.played = played;
+        }
+    }
+
+    public static final class Season {
+        public final int seasonNumber;
+        public final String title;
+        public final List<Episode> episodes;
+
+        Season(int seasonNumber, String title, List<Episode> episodes) {
+            this.seasonNumber = seasonNumber;
+            this.title = title;
+            this.episodes = episodes;
+        }
+    }
+
+    /** NativeVideoPrefs, with the profile defaults when JS sends none. */
+    public static final class Prefs {
+        /** 'small' | 'medium' | 'large'. */
+        public final String subtitleSize;
+        public final boolean skipIntros;
+        public final boolean autoplayNext;
+        /** 'white-frame' | 'cyan-glow'. */
+        public final String focusStyle;
+        public final boolean reduceMotion;
+
+        Prefs(String subtitleSize, boolean skipIntros, boolean autoplayNext, String focusStyle, boolean reduceMotion) {
+            this.subtitleSize = subtitleSize;
+            this.skipIntros = skipIntros;
+            this.autoplayNext = autoplayNext;
+            this.focusStyle = focusStyle;
+            this.reduceMotion = reduceMotion;
+        }
+
+        public boolean cyanGlow() {
+            return "cyan-glow".equals(focusStyle);
+        }
+
+        static final Prefs DEFAULT = new Prefs("medium", false, true, "white-frame", false);
+
+        static Prefs parse(@Nullable JSONObject o) {
+            if (o == null) return DEFAULT;
+            String size = o.optString("subtitleSize", "medium");
+            if (!size.equals("small") && !size.equals("large")) size = "medium";
+            String focus = "cyan-glow".equals(o.optString("focusStyle")) ? "cyan-glow" : "white-frame";
+            return new Prefs(size, o.optBoolean("skipIntros", false), o.optBoolean("autoplayNext", true), focus,
+                    o.optBoolean("reduceMotion", false));
+        }
+    }
+
     /** The parts of a request that {@code replaceVideoStream} replaces. */
     public static final class Stream {
         public final String url;
@@ -137,6 +267,19 @@ public final class VideoRequest {
     public final List<Chapter> chapters;
     public final List<Segment> segments;
     @Nullable public final Next next;
+    /** Pause screen; null: built from the title / subtitle. */
+    @Nullable public final Pause pause;
+    /** Scrub thumbnails; null: time and chapter only. */
+    @Nullable public final Trickplay trickplay;
+    /** Episodes panel (episodes only); empty: no panel. */
+    public final List<Season> seasons;
+    /** The season of the playing episode (the panel opens on it); null: the one holding it. */
+    @Nullable public final Integer currentSeason;
+    public final Prefs prefs;
+    /** NativeVideoTheme as sent (parsed by OverlayTheme); null: the cinema defaults. */
+    @Nullable public final JSONObject theme;
+    /** Overlay strings translated in JS (NativeVideoString keys). */
+    public final Map<String, String> strings;
 
     // Mutable: replaced by replaceVideoStream / the pickers.
     public String url;
@@ -174,6 +317,22 @@ public final class VideoRequest {
         next = n == null || optString(n, "itemKey") == null
                 ? null
                 : new Next(n.optString("itemKey"), n.optString("title", ""), optString(n, "subtitle"), optString(n, "artworkUrl"));
+        pause = parsePause(o.optJSONObject("pause"));
+        trickplay = parseTrickplay(o.optJSONObject("trickplay"));
+        seasons = parseSeasons(o.optJSONArray("seasons"));
+        currentSeason = o.has("currentSeason") && !o.isNull("currentSeason") ? o.optInt("currentSeason") : null;
+        prefs = Prefs.parse(o.optJSONObject("prefs"));
+        theme = o.optJSONObject("theme");
+        strings = parseHeaders(o.optJSONObject("strings"));
+    }
+
+    /** The season the episodes panel opens on: {@link #currentSeason}, else the one holding this item, else the first. */
+    @Nullable
+    public Season panelSeason() {
+        if (seasons.isEmpty()) return null;
+        if (currentSeason != null) for (Season s : seasons) if (s.seasonNumber == currentSeason) return s;
+        for (Season s : seasons) for (Episode e : s.episodes) if (e.itemKey.equals(itemKey)) return s;
+        return seasons.get(0);
     }
 
     /** Parses PlayVideoOptions. Throws IllegalArgumentException for a missing itemKey / url. */
@@ -280,6 +439,77 @@ public final class VideoRequest {
             out.add(new Chapter(c.optString("title", ""), nonNegative(c, "startMs")));
         }
         out.sort((a, b) -> Long.compare(a.startMs, b.startMs));
+        return out;
+    }
+
+    @Nullable
+    static Pause parsePause(@Nullable JSONObject p) {
+        if (p == null) return null;
+        String title = optString(p, "title");
+        if (title == null) return null;
+        List<MetaPiece> meta = new ArrayList<>();
+        JSONArray arr = p.optJSONArray("meta");
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject m = arr.optJSONObject(i);
+                String text = m == null ? null : optString(m, "text");
+                if (text == null) continue;
+                meta.add(new MetaPiece(text, m.optBoolean("boxed", false), m.optBoolean("chip", false)));
+            }
+        }
+        return new Pause(title, optString(p, "episodeLine"), meta, optString(p, "overview"), optString(p, "logoUrl"),
+                optString(p, "backdropUrl"));
+    }
+
+    /** Null unless every dimension is positive and there is at least one sheet. */
+    @Nullable
+    static Trickplay parseTrickplay(@Nullable JSONObject t) {
+        if (t == null) return null;
+        long interval = nonNegative(t, "intervalMs");
+        int w = t.optInt("tileWidth", 0);
+        int h = t.optInt("tileHeight", 0);
+        int cols = t.optInt("columns", 0);
+        int rows = t.optInt("rows", 0);
+        int count = t.optInt("tileCount", 0);
+        List<String> sheets = new ArrayList<>();
+        JSONArray arr = t.optJSONArray("sheets");
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                String u = arr.optString(i, "");
+                if (!u.isEmpty()) sheets.add(u);
+            }
+        }
+        if (interval <= 0 || w <= 0 || h <= 0 || cols <= 0 || rows <= 0 || count <= 0 || sheets.isEmpty()) return null;
+        return new Trickplay(interval, w, h, cols, rows, count, sheets);
+    }
+
+    static List<Season> parseSeasons(@Nullable JSONArray arr) {
+        List<Season> out = new ArrayList<>();
+        if (arr == null) return out;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject s = arr.optJSONObject(i);
+            if (s == null) continue;
+            List<Episode> eps = new ArrayList<>();
+            JSONArray ea = s.optJSONArray("episodes");
+            if (ea != null) {
+                for (int j = 0; j < ea.length(); j++) {
+                    JSONObject e = ea.optJSONObject(j);
+                    String key = e == null ? null : optString(e, "itemKey");
+                    if (key == null) continue;
+                    Float progress = null;
+                    if (e.has("progress") && !e.isNull("progress")) {
+                        double d = e.optDouble("progress", 0);
+                        if (!Double.isNaN(d)) progress = (float) Math.max(0, Math.min(1, d));
+                    }
+                    eps.add(new Episode(key, e.optInt("episodeNumber", j + 1), e.optString("title", ""), optString(e, "runtime"),
+                            optString(e, "overview"), optString(e, "thumbUrl"), progress, e.optBoolean("played", false)));
+                }
+            }
+            if (eps.isEmpty()) continue;
+            int number = s.optInt("seasonNumber", i + 1);
+            String title = optString(s, "title");
+            out.add(new Season(number, title == null ? String.valueOf(number) : title, eps));
+        }
         return out;
     }
 

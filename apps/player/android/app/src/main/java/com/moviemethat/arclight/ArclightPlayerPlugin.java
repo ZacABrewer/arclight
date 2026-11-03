@@ -149,6 +149,19 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
         call.resolve(o);
     }
 
+    // ---- app ---------------------------------------------------------------------------------
+
+    @PluginMethod
+    public void consumeLaunchInfo(PluginCall call) {
+        boolean reduced = Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled();
+        LaunchInfo info = LaunchInfo.consume(reduced);
+        JSObject o = new JSObject();
+        o.put("coldStart", info.coldStart);
+        o.put("source", info.source);
+        o.put("systemReducedMotion", info.systemReducedMotion);
+        call.resolve(o);
+    }
+
     // ---- video (movies & TV) ----------------------------------------------------------------------
 
     @PluginMethod

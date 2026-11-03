@@ -3,7 +3,6 @@
 <resources>
     <string name="downloads_channel">Downloads</string>
     <string name="downloading">Downloaden om offline te luisteren</string>
-    <string name="video_close">Sluiten</string>
     <string name="video_play">Afspelen</string>
     <string name="video_pause">Pauzeren</string>
     <string name="video_back_10">10 seconden terug</string>
@@ -11,15 +10,17 @@
     <string name="video_audio">Audio</string>
     <string name="video_subtitles">Ondertiteling</string>
     <string name="video_subtitles_off">Uit</string>
-    <string name="video_next">Volgende</string>
-    <string name="video_next_title">Volgende: %1$s</string>
     <string name="video_skip_intro">Intro overslaan</string>
     <string name="video_skip_recap">Terugblik overslaan</string>
     <string name="video_skip_credits">Aftiteling overslaan</string>
     <string name="video_up_next">Hierna</string>
-    <string name="video_playing_in">Begint over %1$d s</string>
     <string name="video_play_now">Nu afspelen</string>
     <string name="video_cancel">Annuleren</string>
-    <string name="video_ends_at">eindigt %1$s</string>
     <string name="video_track_n">Spoor %1$d</string>
+    <string name="video_next_episode">Volgende aflevering</string>
+    <string name="video_episodes">Afleveringen</string>
+    <string name="video_audio_subtitles">Audio en ondertitels</string>
+    <string name="video_now_playing">Speelt nu</string>
+    <string name="video_next_in">Volgende aflevering over {s} s</string>
+    <string name="video_ends_at_time">Eindigt om {time}</string>
 </resources>
