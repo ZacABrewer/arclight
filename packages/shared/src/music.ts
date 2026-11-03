@@ -676,7 +676,7 @@ export const MUSICBRAINZ_DEFAULT_BASE_URL = 'https://musicbrainz.org/ws/2/';
  * (custom `baseUrl`) may go faster.
  */
 export const MusicMetadataSettings = z.object({
-  baseUrl: z.string().url().default(MUSICBRAINZ_DEFAULT_BASE_URL),
+  baseUrl: z.string().url({ protocol: /^https?$/ }).default(MUSICBRAINZ_DEFAULT_BASE_URL),
   /** Contact address in the User-Agent MusicBrainz asks for. Optional; the project URL is always sent. */
   contactEmail: z.string().email().optional(),
   rateLimitPerSecond: z.number().min(0.1).max(50).default(1),
@@ -702,7 +702,7 @@ export type MusicMetadataSettingsResponse = z.infer<typeof MusicMetadataSettings
  * key, null or '' clears it, any other string replaces it. `contactEmail`: null or '' clears it.
  */
 export const MusicMetadataSettingsUpdate = z.object({
-  baseUrl: z.string().url().optional(),
+  baseUrl: z.string().url({ protocol: /^https?$/ }).optional(),
   contactEmail: z.union([z.string().email(), z.literal('')]).nullable().optional(),
   rateLimitPerSecond: z.number().min(0.1).max(50).optional(),
   fanartApiKey: z.string().nullable().optional(),

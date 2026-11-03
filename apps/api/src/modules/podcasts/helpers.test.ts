@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { feedUrlHasCredentials, redactFeedUrl, redactUrlsInText } from '@arclight/shared';
 import { applePodcastsId, podcastIndexHeaders, searchDirectory, searchItunes } from './directory.js';
-import { downloadFile, fetchFeed, follow, PodcastHttpError, splitCredentials, transportFor, type Transport } from './http.js';
+import { downloadFile, fetchFeed, follow, isMediaContentType, lanFeedHost, PodcastHttpError, splitCredentials, transportFor, type Transport } from './http.js';
 import { enclosureExtension, episodePath, podcastFolder, renderFormat, safeSegment } from './naming.js';
 import { buildOpml, OpmlError, parseOpml } from './opml.js';
 import { carryCredentials, parseChapters, sameFeedUrl, transcriptExtension } from './service.js';
@@ -169,7 +169,7 @@ describe('http: indexer proxy (HTTP CONNECT) is used for feeds', () => {
   });
 
   it('tunnels the request through the proxy', async () => {
-    const transport = transportFor({ type: 'http', host: '127.0.0.1', port: (proxy.address() as AddressInfo).port });
+    const transport = transportFor({ type: 'http', host: '127.0.0.1', port: (proxy.address() as AddressInfo).port }, undefined, { trustedHost: '127.0.0.1' });
     const res = await fetchFeed(transport, `http://127.0.0.1:${(origin.address() as AddressInfo).port}/feed.xml`);
     expect(res.status === 'ok' && res.body).toContain('Via proxy');
     expect(res.status === 'ok' && res.etag).toBe('"p1"');
@@ -341,5 +341,65 @@ describe('tagger', () => {
     expect(await new FfmpegTagger({ ffmpegPath: null, exec }).tag(req)).toBe(false);
     expect(await new FfmpegTagger({ ffmpegPath: 'ffmpeg', exec }).tag({ ...req, file: 'ep.wav' })).toBe(false);
     expect(ran).toBe(false);
+  });
+});
+
+describe('http: local network guard (DATA-06)', () => {
+  let inner: Server;
+  let outer: Server;
+  let innerHits = 0;
+  beforeAll(async () => {
+    inner = createServer((_q, s) => {
+      innerHits += 1;
+      s.writeHead(200, { 'content-type': 'audio/mpeg' });
+      s.end('secret');
+    });
+    outer = createServer((_q, s) => {
+      s.writeHead(302, { location: `http://127.0.0.1:${(inner.address() as AddressInfo).port}/latest/meta-data/` });
+      s.end();
+    });
+    await new Promise<void>((r) => inner.listen(0, '127.0.0.1', r));
+    await new Promise<void>((r) => outer.listen(0, '127.0.0.1', r));
+  });
+  afterAll(async () => {
+    await new Promise((r) => inner.close(r));
+    await new Promise((r) => outer.close(r));
+  });
+
+  it('refuses loopback feeds and enclosures on the direct path', async () => {
+    const port = (inner.address() as AddressInfo).port;
+    await expect(fetchFeed(transportFor(undefined), `http://127.0.0.1:${port}/feed.xml`)).rejects.toThrow(/local network/);
+    await expect(fetchFeed(transportFor(undefined), `http://[::ffff:127.0.0.1]:${port}/feed.xml`)).rejects.toThrow(/local network/);
+    expect(innerHits).toBe(0);
+  });
+
+  it('allows the trusted LAN feed host itself but not a redirect elsewhere', async () => {
+    const port = (inner.address() as AddressInfo).port;
+    const trusted = transportFor(undefined, undefined, { trustedHost: 'localhost' });
+    const ok = await follow(trusted, `http://localhost:${port}/ep.mp3`);
+    expect(ok.response.status).toBe(200);
+    await ok.response.body?.cancel();
+    expect(innerHits).toBe(1);
+    // outer (trusted name) redirects to 127.0.0.1, a different private host: refused.
+    await expect(follow(trusted, `http://localhost:${(outer.address() as AddressInfo).port}/r`)).rejects.toThrow(/local network/);
+    expect(innerHits).toBe(1);
+  });
+
+  it('refuses private host names through a proxy without opening a tunnel', async () => {
+    const t = transportFor({ type: 'http', host: '127.0.0.1', port: 1 });
+    await expect(follow(t, 'http://169.254.169.254/latest/meta-data/')).rejects.toThrow(/local network/);
+    await expect(follow(t, 'http://nas.lan/feed.xml')).rejects.toThrow(/local network/);
+  });
+
+  it('trusts only LAN-named feed hosts and only media bodies for episodes', () => {
+    expect(lanFeedHost('http://nas.lan/feed')).toBe('nas.lan');
+    expect(lanFeedHost('http://10.0.0.5/feed')).toBe('10.0.0.5');
+    expect(lanFeedHost('https://feeds.example.com/feed')).toBeUndefined();
+    expect(isMediaContentType('audio/mpeg')).toBe(true);
+    expect(isMediaContentType('application/octet-stream')).toBe(true);
+    expect(isMediaContentType('video/mp4; codecs=avc1')).toBe(true);
+    expect(isMediaContentType('text/plain')).toBe(false);
+    expect(isMediaContentType('application/json')).toBe(false);
+    expect(isMediaContentType('application/rss+xml')).toBe(false);
   });
 });

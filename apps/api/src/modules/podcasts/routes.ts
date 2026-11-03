@@ -81,7 +81,7 @@ export const podcastRoutes = (ctx: AppContext, rt: PodcastsRuntime): FastifyPlug
     app.get('/podcast', { ...library, schema: { response: { 200: PodcastListResponse } } }, async () => svc().list());
 
     app.post('/podcast', { schema: { body: AddPodcastRequest, response: { 201: Podcast, ...errors } } }, async (req, reply) => {
-      const p = await svc().add(req.body);
+      const p = await svc().add(req.body, { trusted: req.auth?.isAdmin === true });
       return reply.code(201).send(p);
     });
 
@@ -97,11 +97,11 @@ export const podcastRoutes = (ctx: AppContext, rt: PodcastsRuntime): FastifyPlug
     );
 
     app.post('/podcast/preview', { schema: { body: PodcastPreviewRequest, response: { 200: PodcastPreview, ...errors } } }, async (req) =>
-      svc().preview(req.body.feedUrl),
+      svc().preview(req.body.feedUrl, { trusted: req.auth?.isAdmin === true }),
     );
 
     app.post('/podcast/opml', { bodyLimit: 5 * 1024 * 1024, schema: { body: PodcastOpmlImportRequest, response: { 200: PodcastOpmlImportResult, ...errors } } }, async (req) =>
-      svc().importOpml(req.body),
+      svc().importOpml(req.body, { trusted: req.auth?.isAdmin === true }),
     );
 
     app.get('/podcast/opml', { schema: { querystring: PodcastOpmlExportQuery } }, async (req, reply) => {

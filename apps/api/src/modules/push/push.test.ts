@@ -11,6 +11,7 @@ import { EventBus } from '../../events.js';
 import { deliveriesFor, registerPushListener } from './listener.js';
 import { pushRoutes } from './routes.js';
 import * as pushTables from './schema.js';
+import { isKnownPushHost, pushEndpointProblem } from './endpoint-policy.js';
 import { PushService } from './service.js';
 import { b64url, encryptPayload, fromB64url, generateVapidKeys, MAX_PAYLOAD_BYTES, sendWebPush, vapidJwt } from './webpush.js';
 
@@ -144,7 +145,7 @@ describe('VAPID', () => {
       seen.push({ url, headers: new Headers(init.headers), body: Buffer.from(init.body as Uint8Array) });
       return new Response(null, { status });
     }) as unknown as typeof fetch;
-    const target = { endpoint: 'https://push.example.com/send/abc', ...keysOf(ua) };
+    const target = { endpoint: 'https://fcm.googleapis.com/fcm/send/send/abc', ...keysOf(ua) };
     const ok = await sendWebPush(target, '{"title":"hi"}', { vapid, subject: 'mailto:x@y.z', fetchImpl, now: () => NOW });
     expect(ok).toEqual({ status: 201, ok: true, gone: false });
     const req = seen[0]!;
@@ -152,7 +153,7 @@ describe('VAPID', () => {
     expect(req.headers.get('ttl')).toBe('86400');
     expect(req.headers.get('authorization')).toMatch(new RegExp(`^vapid t=[\\w-]+\\.[\\w-]+\\.[\\w-]+, k=${vapid.publicKey}$`));
     const claims = JSON.parse(fromB64url(req.headers.get('authorization')!.split('.')[1]!).toString());
-    expect(claims.aud).toBe('https://push.example.com');
+    expect(claims.aud).toBe('https://fcm.googleapis.com');
     expect(decryptAsUserAgent(req.body, ua.private, ua.auth).plaintext.toString()).toBe('{"title":"hi"}');
     status = 410;
     expect(await sendWebPush(target, 'x', { vapid, subject: 'mailto:x@y.z', fetchImpl })).toMatchObject({ ok: false, gone: true });
@@ -198,7 +199,7 @@ async function setup() {
   const service = new PushService({ db, fetchImpl, now: () => NOW });
   const subscribe = (userId: number, name: string) => {
     const ua = newUserAgent();
-    const endpoint = `https://push.example.com/${name}`;
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${name}`;
     browsers.set(endpoint, { private: ua.private, auth: ua.auth });
     return service.subscribe(userId, { endpoint, keys: keysOf(ua) });
   };
@@ -223,7 +224,7 @@ describe('PushService', () => {
     const bob = await addUser(db, 'bob');
     const first = subscribe(alice, 'phone');
     subscribe(alice, 'laptop');
-    expect(service.list(alice).map((s) => s.endpoint)).toEqual(['https://push.example.com/phone', 'https://push.example.com/laptop']);
+    expect(service.list(alice).map((s) => s.endpoint)).toEqual(['https://fcm.googleapis.com/fcm/send/phone', 'https://fcm.googleapis.com/fcm/send/laptop']);
     // Bob signs in on Alice's phone: the browser re-subscribes and the row moves to him.
     const moved = service.subscribe(bob, { endpoint: first.endpoint, keys: { p256dh: b64url(newUserAgent().p256dh), auth: b64url(Buffer.alloc(16, 1)) }, userAgent: 'Firefox' });
     expect(moved.id).toBe(first.id);
@@ -261,7 +262,7 @@ describe('PushService', () => {
     expect(result).toEqual({ sent: 1, failed: 0, removed: 1 });
     expect(sent[0]!.payload).toMatchObject({ title: 'Hello', url: '/' });
     expect(String(sent[0]!.payload['body']).length).toBeLessThanOrEqual(600);
-    expect(service.list(alice).map((s) => s.endpoint)).toEqual(['https://push.example.com/phone']);
+    expect(service.list(alice).map((s) => s.endpoint)).toEqual(['https://fcm.googleapis.com/fcm/send/phone']);
   });
 
   it('notify() respects the per-event preference', async () => {
@@ -303,7 +304,7 @@ describe('bus listener', () => {
     registerPushListener({ db, bus, push: service });
     bus.publish({ type: 'request', action: 'approved', id });
     await flush();
-    expect(sent).toEqual([{ endpoint: 'https://push.example.com/phone', payload: expect.objectContaining({ title: 'Request approved', body: 'Dune (2021) was approved.' }) }]);
+    expect(sent).toEqual([{ endpoint: 'https://fcm.googleapis.com/fcm/send/phone', payload: expect.objectContaining({ title: 'Request approved', body: 'Dune (2021) was approved.' }) }]);
   });
 
   it('turns an import into one availability push, de-duplicating the completed request', async () => {
@@ -368,7 +369,7 @@ describe('push routes', () => {
     const key = await a.inject({ method: 'GET', url: '/api/v1/push/vapid-public-key' });
     expect(key.json()).toEqual({ publicKey: service.publicKey() });
     const ua = newUserAgent();
-    const body = { endpoint: 'https://push.example.com/x', expirationTime: null, keys: keysOf(ua) };
+    const body = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', expirationTime: null, keys: keysOf(ua) };
     expect((await a.inject({ method: 'POST', url: '/api/v1/push/subscription', payload: body })).json()).toMatchObject({ code: 'NO_USER' });
     const created = await a.inject({ method: 'POST', url: '/api/v1/push/subscription', payload: body, headers: { 'x-user': String(alice), 'user-agent': 'Edge 130' } });
     expect(created.statusCode).toBe(201);
@@ -382,6 +383,19 @@ describe('push routes', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('refuses endpoints that are not a public https push service (DATA-05, AUTH-05)', async () => {
+    const { app: a, alice, service } = await app();
+    const keys = keysOf(newUserAgent());
+    const post = (endpoint: string) =>
+      a.inject({ method: 'POST', url: '/api/v1/push/subscription', payload: { endpoint, keys }, headers: { 'x-user': String(alice) } });
+    for (const endpoint of ['http://127.0.0.1/x', 'https://127.0.0.1/x', 'https://[::ffff:127.0.0.1]/x', 'https://nas.lan/x', 'https://evil.example/x', 'http://fcm.googleapis.com/fcm/send/x']) {
+      expect((await post(endpoint)).statusCode, endpoint).toBe(400);
+    }
+    expect(service.list(alice)).toEqual([]);
+    expect((await post('https://updates.push.services.mozilla.com/wpush/v2/abc')).statusCode).toBe(201);
+    expect((await post('https://web.push.apple.com/abc')).statusCode).toBe(201);
+  });
+
   it('reads and writes preferences and sends a test push', async () => {
     const { app: a, alice, subscribe, sent } = await app();
     subscribe(alice, 'phone');
@@ -392,5 +406,40 @@ describe('push routes', () => {
     const test = await a.inject({ method: 'POST', url: '/api/v1/push/test', headers: h });
     expect(test.json()).toEqual({ sent: 1, failed: 0, removed: 0 });
     expect(sent[0]!.payload).toMatchObject({ title: 'Arclight', url: '/profile' });
+  });
+});
+
+describe('push endpoint policy', () => {
+  it('lets admins use any public https push service but never a private one', () => {
+    expect(pushEndpointProblem('https://push.example.com/abc', true)).toBeNull();
+    expect(pushEndpointProblem('https://push.example.com/abc', false)).not.toBeNull();
+    expect(pushEndpointProblem('https://localhost/abc', true)).not.toBeNull();
+    expect(pushEndpointProblem('https://10.0.0.1/abc', true)).not.toBeNull();
+    expect(pushEndpointProblem('https://user:pw@fcm.googleapis.com/abc', false)).not.toBeNull();
+    expect(isKnownPushHost('fcm.googleapis.com')).toBe(true);
+    expect(isKnownPushHost('evilfcm.googleapis.com')).toBe(false);
+    expect(isKnownPushHost('fcm.googleapis.com.evil.example')).toBe(false);
+  });
+
+  it('never sends to a non-https endpoint', async () => {
+    let calls = 0;
+    const res = await sendWebPush({ endpoint: 'http://127.0.0.1:1/x', ...keysOf(newUserAgent()) }, '{}', {
+      vapid: generateVapidKeys(),
+      subject: 'mailto:admin@example.com',
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(null, { status: 201 });
+      },
+    });
+    expect(res.ok).toBe(false);
+    expect(calls).toBe(0);
+  });
+
+  it('refuses a loopback endpoint at send time with the default transport', async () => {
+    const res = await sendWebPush({ endpoint: 'https://127.0.0.1:1/x', ...keysOf(newUserAgent()) }, '{}', {
+      vapid: generateVapidKeys(),
+      subject: 'mailto:admin@example.com',
+    });
+    expect(res).toMatchObject({ ok: false, status: 0 });
   });
 });

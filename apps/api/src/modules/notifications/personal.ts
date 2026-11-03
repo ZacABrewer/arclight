@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
+import { createSafeFetch, isPrivateHostname } from '@arclight/net';
 import { createAgent, NotificationError, parseAgentSettings, redactSecrets, testEvent, type NotificationAgent, type NotificationEvent } from '@arclight/notifications';
 import {
   hasAnyPermission,
@@ -41,6 +42,19 @@ export const PERSONAL_DESTINATION_LIMIT = 20;
 
 const PERSONAL_KINDS: ReadonlySet<string> = new Set(PersonalNotificationImplementation.options);
 
+// Personal destinations are user-controlled URLs. The default agents send through the shared
+// safe fetch: the target is resolved and vetted (loopback, LAN, link-local, metadata and
+// IPv4-in-IPv6 forms refused), the socket is pinned to the vetted address, every redirect
+// hop is vetted again, and bodies are capped. Admin-owned destinations may reach the LAN; the
+// owner's role is read at send time, so a demoted admin's destinations lose that at once.
+const PERSONAL_FETCH_TIMEOUT_MS = 30_000;
+const publicFetch = createSafeFetch({ timeoutMs: PERSONAL_FETCH_TIMEOUT_MS, maxBytes: 1024 * 1024, userAgent: 'Arclight' });
+const adminFetch = createSafeFetch({ allowPrivate: true, timeoutMs: PERSONAL_FETCH_TIMEOUT_MS, maxBytes: 1024 * 1024, userAgent: 'Arclight' });
+
+/** The default factory: agents built on the safe fetch matching the owner's role. */
+export const personalAgentFactory: AgentFactory = (kind, settings, templates, context) =>
+  createAgent(kind, settings, { ...(templates ? { templates } : {}), fetch: context?.allowPrivate ? adminFetch : publicFetch });
+
 export interface PersonalNotificationsOptions {
   db: Db;
   log?: Logger;
@@ -74,7 +88,7 @@ export class PersonalNotifications implements LibraryEventListener {
   constructor(options: PersonalNotificationsOptions) {
     this.db = options.db;
     this.log = options.log;
-    this.factory = options.agentFactory ?? ((kind, settings, templates) => createAgent(kind, settings, templates ? { templates } : {}));
+    this.factory = options.agentFactory ?? personalAgentFactory;
     this.now = options.now ?? (() => new Date());
     this.sleep = options.sleep ?? realSleep;
     this.instanceName = options.instanceName ?? 'Arclight';
@@ -155,7 +169,7 @@ export class PersonalNotifications implements LibraryEventListener {
     const event = testEvent(this.instanceName, this.now);
     let result: SendResult;
     try {
-      const agent = this.factory(values.implementation, values.settings, values.templates);
+      const agent = this.factory(values.implementation, values.settings, values.templates, { allowPrivate: owner.isAdmin });
       result = await sendWithRetry(() => agent.send(event), { maxAttempts: 1, sleep: this.sleep, redact: (t) => redactSecrets(t, values.settings) });
     } catch (err) {
       result = { ok: false, attempts: 1, error: redactSecrets(errorMessage(err), values.settings), ...(err instanceof NotificationError ? { code: err.code } : {}) };
@@ -193,7 +207,7 @@ export class PersonalNotifications implements LibraryEventListener {
         const target = { destinationId: row.id };
         let agent: NotificationAgent;
         try {
-          agent = this.factory(row.implementation, row.settings, row.templates);
+          agent = this.factory(row.implementation, row.settings, row.templates, { allowPrivate: owner.isAdmin });
         } catch (err) {
           const message = redactSecrets(errorMessage(err), row.settings);
           this.deliveryLog.add(target, { event, templates: row.templates, state: 'failed', error: message });
@@ -294,9 +308,11 @@ export class PersonalNotifications implements LibraryEventListener {
               heldSince: first.heldAt,
             };
       this.limiter.note(key, now.getTime());
+      const ownerRow = this.db.select().from(users).where(eq(users.id, row.userId)).get();
+      if (!ownerRow) continue;
       let agent: NotificationAgent;
       try {
-        agent = this.factory(row.implementation, row.settings, row.templates);
+        agent = this.factory(row.implementation, row.settings, row.templates, { allowPrivate: ownerOf(ownerRow).isAdmin });
       } catch {
         continue;
       }
@@ -417,8 +433,8 @@ export function allowedEvents(owner: Pick<Owner, 'permissions'>): PersonalNotifi
 /**
  * The first URL or host in `settings` that points at this machine or the local network, or
  * undefined. Personal destinations of non-admins must not make the server call into the LAN.
- * Literal addresses and local-only names are caught; a public name resolving to a private
- * address is not (admins can switch personal destinations off).
+ * Literal addresses and local-only names are caught here; a public name resolving to a
+ * private address is refused when sending (the safe fetch vets the resolved address).
  */
 export function privateTarget(settings: Record<string, unknown>): string | undefined {
   for (const [key, value] of Object.entries(settings)) {
@@ -441,23 +457,13 @@ export function privateTarget(settings: Record<string, unknown>): string | undef
   return undefined;
 }
 
+/**
+ * Host-name check used when a non-admin saves a destination (literal private addresses in
+ * every spelling, `localhost`, LAN-only suffixes, single-label names). Sending re-checks the
+ * resolved address, so a public name pointing at the LAN is refused at send time too.
+ */
 export function isPrivateHost(rawHost: string): boolean {
-  const host = rawHost.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  if (host === '' || host === 'localhost' || host.endsWith('.localhost')) return true;
-  if (/\.(local|lan|internal|home\.arpa|intranet|corp|home)$/.test(host)) return true;
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-  }
-  if (host.includes(':')) {
-    if (host === '::' || host === '::1') return true;
-    if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return true;
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
-    return mapped ? isPrivateHost(mapped[1]!) : false;
-  }
-  // A single-label name (a container or LAN host name) only resolves locally.
-  return !host.includes('.');
+  return isPrivateHostname(rawHost);
 }
 
 /**

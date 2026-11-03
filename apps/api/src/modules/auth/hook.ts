@@ -173,6 +173,10 @@ export const SECRET_ROUTES: ReadonlySet<string> = new Set([
   `${API_PREFIX}/config/export`,
   `${API_PREFIX}/system/backup/:id/download`,
   '/api/v3/config/host',
+  // The folder browser lists the server's disks: not for read-scope keys (DATA-46).
+  `${API_PREFIX}/filesystem`,
+  `${API_PREFIX}/filesystem/mkdir`,
+  '/api/v3/filesystem',
 ]);
 
 /**

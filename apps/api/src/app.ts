@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault, type RouteOptions } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import { WS_MAX_PAYLOAD } from './ws-limits.js';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -151,7 +152,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     exposedHeaders: ['content-disposition', 'content-length', 'content-range', 'accept-ranges', 'retry-after', 'x-arclight-backend', 'x-arclight-transcode'],
   });
-  await app.register(websocket);
+  await app.register(websocket, { options: { maxPayload: WS_MAX_PAYLOAD } });
 
   // Dependency-safe order: providers before the pipeline modules that consume them.
   const modules: AppModule[] = [

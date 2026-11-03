@@ -1,4 +1,5 @@
 import type { AppModule } from '../../app.js';
+import { admitSocket, sendBounded } from '../../ws-limits.js';
 import { dbEventOwners, eventViewerOf, eventVisibleTo } from './filter.js';
 
 export { eventVisibleTo, eventViewerOf, dbEventOwners, type EventViewer, type EventOwners } from './filter.js';
@@ -13,12 +14,13 @@ export const eventsModule: AppModule = (ctx) => async (app) => {
       socket.close(1008, 'authentication required');
       return;
     }
+    if (!admitSocket(socket, req.auth)) return;
     const viewer = eventViewerOf(req.auth);
     socket.send(JSON.stringify({ type: 'hello', serverTime: new Date().toISOString() }));
     const unsubscribe = ctx.bus.subscribe((event) => {
       if (socket.readyState !== socket.OPEN) return;
       if (!eventVisibleTo(event, viewer, owners)) return;
-      socket.send(JSON.stringify(event));
+      sendBounded(socket, JSON.stringify(event));
     });
     socket.on('close', unsubscribe);
     socket.on('error', unsubscribe);

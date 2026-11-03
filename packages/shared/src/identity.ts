@@ -32,7 +32,7 @@ export const OidcProvider = z.object({
    * The issuer URL (https://auth.example.com/application/o/arclight/) or its discovery document
    * (…/.well-known/openid-configuration). The discovered `issuer` must match exactly.
    */
-  issuer: z.string().trim().url().max(2048),
+  issuer: z.string().trim().url({ protocol: /^https?$/ }).max(2048),
   clientId: z.string().trim().min(1).max(512),
   /** Empty for public clients (PKCE only). SECRET_MASK on read; sending it back keeps the stored one. */
   clientSecret: z.string().max(2048).default(''),
@@ -123,7 +123,7 @@ export const SignInOptions = z.object({
 export type SignInOptions = z.infer<typeof SignInOptions>;
 
 /** POST /settings/identity/test: checks a provider's discovery document. */
-export const OidcTestRequest = z.object({ issuer: z.string().trim().url().max(2048) });
+export const OidcTestRequest = z.object({ issuer: z.string().trim().url({ protocol: /^https?$/ }).max(2048) });
 export const OidcTestResult = z.object({
   ok: z.boolean(),
   issuer: z.string().optional(),

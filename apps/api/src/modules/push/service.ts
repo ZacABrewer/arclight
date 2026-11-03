@@ -14,6 +14,7 @@ import type { Db } from '../../db/index.js';
 import { settings, users } from '../../db/schema.js';
 // Until src/db/schema.ts re-exports it, the module reads its own table directly.
 import { pushSubscriptions } from './schema.js';
+import { pushEndpointProblem } from './endpoint-policy.js';
 import { generateVapidKeys, sendWebPush, type EncryptOptions, type VapidKeys } from './webpush.js';
 
 // Browser notifications: VAPID keys (settings section `push`, generated once), per-user
@@ -122,8 +123,10 @@ export class PushService {
   }
 
   /** Upsert by endpoint: a browser that re-subscribes (or changes user) keeps one row. */
-  subscribe(userId: number, input: PushSubscriptionInput): PushSubscriptionResource {
+  subscribe(userId: number, input: PushSubscriptionInput, opts: { isAdmin?: boolean } = {}): PushSubscriptionResource {
     const { db } = this.opts;
+    const problem = pushEndpointProblem(input.endpoint, opts.isAdmin === true);
+    if (problem) throw new PushError('VALIDATION', problem);
     const values = {
       userId,
       endpoint: input.endpoint,

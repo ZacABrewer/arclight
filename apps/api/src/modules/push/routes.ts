@@ -46,7 +46,7 @@ export function pushRoutes(service: PushService): FastifyPluginAsync<Record<neve
       { config: user, schema: { body: PushSubscriptionInput, response: { 201: PushSubscriptionResource, ...errors } } },
       async (req, reply) => {
         const userAgent = req.body.userAgent ?? (typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 512) : undefined);
-        const saved = service.subscribe(userIdOf(req), { ...req.body, ...(userAgent ? { userAgent } : {}) });
+        const saved = service.subscribe(userIdOf(req), { ...req.body, ...(userAgent ? { userAgent } : {}) }, { isAdmin: req.auth?.isAdmin === true });
         return reply.code(201).send(saved);
       },
     );

@@ -596,7 +596,7 @@ const rate = () => z.number().min(0.1).max(20);
 export const AudiobookMetadataSettings = z.object({
   /** Marketplace for catalogue search, bibliographies and Audnexus lookups. */
   audibleRegion: AudibleRegion.default('us'),
-  audnexusBaseUrl: z.string().url().default(AUDNEXUS_DEFAULT_BASE_URL),
+  audnexusBaseUrl: z.string().url({ protocol: /^https?$/ }).default(AUDNEXUS_DEFAULT_BASE_URL),
   /** Fill gaps (authors or books Audible does not list) from OpenLibrary. */
   openLibraryFallback: z.boolean().default(true),
   /**
@@ -618,7 +618,7 @@ export type AudiobookMetadataSettingsResponse = z.infer<typeof AudiobookMetadata
 /** PUT /api/v1/settings/audiobookmetadata: omitted fields keep their stored value. */
 export const AudiobookMetadataSettingsUpdate = z.object({
   audibleRegion: AudibleRegion.optional(),
-  audnexusBaseUrl: z.string().url().optional(),
+  audnexusBaseUrl: z.string().url({ protocol: /^https?$/ }).optional(),
   openLibraryFallback: z.boolean().optional(),
   languages: z.array(z.string().trim().min(1).toLowerCase()).optional(),
   audnexusRateLimitPerSecond: rate().optional(),

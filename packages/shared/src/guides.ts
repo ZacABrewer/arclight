@@ -37,7 +37,7 @@ export const GuidesSettings = z.object({
    * GitHub-hosted repos are listed through the contents API; any other host must serve a
    * JSON array of file names as `<dir>/index.json`.
    */
-  repoUrl: z.string().url().default(TRASH_GUIDES_REPO_URL),
+  repoUrl: z.string().url({ protocol: /^https?$/ }).default(TRASH_GUIDES_REPO_URL),
   branch: z.string().trim().min(1).default('master'),
   /** Guide sections to read. A format name present in both gets an app suffix on the second. */
   apps: z.array(GuideApp).min(1).default(['radarr']),
