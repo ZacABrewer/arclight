@@ -19,11 +19,14 @@ import { createCarLibrary } from '../player/car-library';
 import { appDeviceId, createAppPlayer, progressSender, type AppPlayer } from '../player/setup';
 import { browseKeys } from '@web/features/player/browse/api';
 import { playbackApi, playerKeys } from '@web/features/player/api';
-import { videoApi } from '@web/features/player/video/api';
+import { videoApi, videoKeys } from '@web/features/player/video/api';
 import { setVideoLauncher } from '@web/features/player/video/video-launcher';
 import { ArclightPlayer, type DeviceInfo } from '../native';
 import { decideTvMode } from '../tv/tv-mode';
 import { NativeVideoLauncher } from '../video/native-video';
+import { documentTheme } from '../video/native-extras';
+import { householdKeys, householdsApi } from '../households/api';
+import { currentVideoQuality } from '../video/quality';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
 // React through AppServicesContext.
@@ -179,6 +182,12 @@ export async function createServices(): Promise<AppServices> {
       onError: (message) => toasts.push({ tone: 'error', title: message }),
       deviceId,
       deviceName,
+      // Redesign extras (spec §5.9): the profile's languages and prefs, the episodes panel, the theme.
+      profileSettings: () => qc.fetchQuery({ queryKey: householdKeys.settings(), queryFn: householdsApi.settings, staleTime: 60_000 }).catch(() => null),
+      fetchSeries: (id) => qc.fetchQuery({ queryKey: videoKeys.show(id), queryFn: () => videoApi.show(id), staleTime: 30_000 }),
+      saveProfileSettings: async (patch) => qc.setQueryData(householdKeys.settings(), await householdsApi.saveSettings(patch)),
+      theme: documentTheme,
+      quality: currentVideoQuality,
     });
     await video.start();
     setVideoLauncher(video.launch);

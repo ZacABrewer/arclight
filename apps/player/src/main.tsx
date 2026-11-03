@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
@@ -17,12 +17,25 @@ import { createServices } from './app/services';
 import { parsePairingLink } from './core/qr';
 import { applyAppLanguage } from './ui/settings';
 import { startTvRuntime } from './tv/tv-runtime';
+import { IntroOverlay, introActive, skipIntro } from './intro/intro-overlay';
+import { launchIntroMode } from './intro/launch';
+import type { LaunchIntroMode } from './intro/policy';
+
+// The launch intro sits above the app, which loads behind it. Cold launch only (§6): it is never
+// shown before a video.
+function Intro({ mode, tv }: { mode: LaunchIntroMode; tv: boolean }) {
+  const [on, setOn] = useState(mode !== 'skip');
+  if (!on || mode === 'skip') return null;
+  return <IntroOverlay mode={mode} tv={tv} onDone={() => setOn(false)} />;
+}
 
 async function boot(): Promise<void> {
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('#root element missing from index.html');
   document.documentElement.classList.add('in-app', 'app-native');
 
+  // Decided before anything renders, so the first frame is already the intro.
+  const intro = await launchIntroMode().catch((): LaunchIntroMode => 'skip');
   const services = await createServices();
   await applyAppLanguage(services.settings.get().language).catch(() => undefined);
   const router = createAppRouter(services);
@@ -43,6 +56,11 @@ async function boot(): Promise<void> {
       .catch(() => undefined);
     // Back button (Android): back in history, or leave the app from a top screen.
     void CapApp.addListener('backButton', ({ canGoBack }) => {
+      // While the intro is up, Back only ends it.
+      if (introActive()) {
+        skipIntro();
+        return;
+      }
       if (tv) {
         if (!tv.back(canGoBack)) void CapApp.minimizeApp();
         return;
@@ -65,6 +83,7 @@ async function boot(): Promise<void> {
             <I18nProvider>
               <ToastProvider store={toasts}>
                 <RouterProvider router={router} />
+                <Intro mode={intro} tv={services.tv} />
               </ToastProvider>
             </I18nProvider>
           </QueryClientProvider>

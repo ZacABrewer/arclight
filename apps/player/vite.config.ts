@@ -80,11 +80,48 @@ function devCsp(): Plugin {
   };
 }
 
+/**
+ * The launch intro (redesign spec §6) uses the MP4s and poster the Jellyfin plugin embeds, from
+ * design/brand/intro/: one source of truth, no copy in git. The build emits them as dist/intro/*
+ * (`cap sync` then puts them in the APK's assets), and `vite dev` serves the same paths.
+ */
+const INTRO_DIR = resolve(here, '../../design/brand/intro');
+const INTRO_FILES: Record<string, string> = {
+  'arclight-intro-720p.mp4': 'video/mp4',
+  'arclight-intro-1080p.mp4': 'video/mp4',
+  'arclight-intro-poster.png': 'image/png',
+};
+
+function introAssets(): Plugin {
+  return {
+    name: 'arclight-intro-assets',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const name = /^\/intro\/([^/?#]+)/.exec(req.url ?? '')?.[1];
+        const type = name ? INTRO_FILES[name] : undefined;
+        if (!name || !type || !existsSync(resolve(INTRO_DIR, name))) return next();
+        res.setHeader('Content-Type', type);
+        res.end(readFileSync(resolve(INTRO_DIR, name)));
+      });
+    },
+    generateBundle() {
+      for (const name of Object.keys(INTRO_FILES)) {
+        const file = resolve(INTRO_DIR, name);
+        if (!existsSync(file)) {
+          this.warn(`launch intro: ${name} is missing from design/brand/intro (the app falls back to no intro)`);
+          continue;
+        }
+        this.emitFile({ type: 'asset', fileName: `intro/${name}`, source: readFileSync(file) });
+      }
+    },
+  };
+}
+
 // Where `vite dev` proxies /api (enter the dev server's own address in "Add server").
 const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:7878';
 
 export default defineConfig({
-  plugins: [webShims(), appMessages(), devCsp(), react()],
+  plugins: [webShims(), appMessages(), devCsp(), introAssets(), react()],
   // Relative asset URLs: the bundle is served from capacitor://localhost (iOS) and https://localhost (Android).
   base: './',
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
