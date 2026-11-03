@@ -57,7 +57,7 @@
 .rd-music .pb-track:hover { background: var(--al-pl-surface); }
 .rd-music .pb-track__num { color: var(--al-pl-text-4); }
 .rd-music .pb-track__title { color: var(--al-pl-text); font-family: var(--al-pl-font); }
-.rd-music .pb-track__title:hover, .rd-music .pb-track--current .pb-track__title { color: var(--al-pl-accent); }
+.rd-music .pb-track__title:hover, .rd-music .pb-track--current .pb-track__title { color: var(--al-cyan-text); }
 .rd-music .pb-track__sub, .rd-music .pb-track__time { color: var(--al-pl-text-3); }
 .rd-root .rd-music .pb-track__sub a:hover, .rd-root .rd-music .pb-series a:hover { color: var(--al-pl-text); text-decoration: underline; }
 .rd-music .pb-track .al-btn { color: var(--al-pl-text-2); border-radius: 50%; }
@@ -94,7 +94,7 @@
 .rd-book-about { font-size: 15px; line-height: 1.55; color: var(--al-pl-text-2); max-width: 760px; white-space: pre-line; text-wrap: pretty; }
 .rd-music .pb-series__item, .rd-music .pb-chapter { border-bottom-color: var(--al-pl-line); }
 .rd-music .pb-series__pos, .rd-music .pb-chapter__num { color: var(--al-pl-text-4); }
-.rd-music .pb-series__here, .rd-music .pb-chapter[aria-current='true'] .pb-chapter__title { color: var(--al-pl-accent); }
+.rd-music .pb-series__here, .rd-music .pb-chapter[aria-current='true'] .pb-chapter__title { color: var(--al-cyan-text); }
 .rd-music .pb-chapter__title { color: var(--al-pl-text-2); }
 .rd-music .pb-chapter__time { color: var(--al-pl-text-3); }
 
