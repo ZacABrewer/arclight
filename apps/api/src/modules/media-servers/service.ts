@@ -165,6 +165,8 @@ export class MediaServersService {
       ...(current.remoteId && current.url === url && current.kind === input.kind ? { remoteId: current.remoteId } : {}),
       // The Plex webhook URL stays valid across edits of the same Plex connection.
       ...(current.webhookToken && current.kind === 'plex' && input.kind === 'plex' ? { webhookToken: current.webhookToken } : {}),
+      // Clients that do not know about tag sync keep the stored settings.
+      ...(input.tagSync === undefined && current.tagSync ? { tagSync: current.tagSync } : {}),
     });
     if (!next.apiKey) throw new MediaServersError('VALIDATION', 'apiKey is required');
     this.save(servers.map((s) => (s.id === id ? next : s)));

@@ -80,3 +80,4 @@ export * from '../modules/collections/schema.js';
 export * from '../modules/playback/schema.js';
 export * from '../modules/households/schema.js';
 export * from '../modules/playback/segments-schema.js';
+export * from '../modules/tag-sync/schema.js';

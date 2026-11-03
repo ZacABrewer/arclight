@@ -137,10 +137,13 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
   });
   app.put('/tag/:id', async (req, reply) => {
     const { label } = parseOr400(TagRequest, req.body);
-    return reply.code(202).send(toV3Tag(lib.updateTag(db, parseOr400(IdParam, req.params).id, label)));
+    const tag = toV3Tag(lib.updateTag(db, parseOr400(IdParam, req.params).id, label));
+    ctx.bus.publish({ type: 'settings', section: 'tags' });
+    return reply.code(202).send(tag);
   });
   app.delete('/tag/:id', async (req) => {
     lib.deleteTag(db, parseOr400(IdParam, req.params).id);
+    ctx.bus.publish({ type: 'settings', section: 'tags' });
     return {};
   });
 
