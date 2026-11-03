@@ -30,11 +30,13 @@ public class ControllerPolicyTest {
         assertEquals(Access.FULL, ControllerPolicy.decide(ControllerPolicy.ANDROID_AUTO, 10_200, OWN, false, true));
         assertEquals(Access.FULL, ControllerPolicy.decide(ControllerPolicy.AUTOMOTIVE_MEDIA, 10_201, OWN, false, true));
         assertEquals(Access.FULL, ControllerPolicy.decide(ControllerPolicy.AUTOMOTIVE_ASSISTANT, 10_202, OWN, false, true));
+        assertEquals(Access.FULL, ControllerPolicy.decide(ControllerPolicy.GOOGLE_ASSISTANT, 10_203, OWN, false, true));
     }
 
     @Test
     public void aCarHostNameAloneIsNotEnough() {
         assertEquals(Access.REJECT, ControllerPolicy.decide(ControllerPolicy.ANDROID_AUTO, 10_300, OWN, false, false));
+        assertEquals(Access.REJECT, ControllerPolicy.decide(ControllerPolicy.GOOGLE_ASSISTANT, 10_301, OWN, false, false));
     }
 
     @Test
@@ -54,6 +56,7 @@ public class ControllerPolicyTest {
     @Test
     public void carHostList() {
         assertTrue(ControllerPolicy.isCarHost(ControllerPolicy.ANDROID_AUTO));
+        assertTrue(ControllerPolicy.isCarHost(ControllerPolicy.GOOGLE_ASSISTANT));
         assertFalse(ControllerPolicy.isCarHost(OWN));
         assertFalse(ControllerPolicy.isCarHost(null));
     }

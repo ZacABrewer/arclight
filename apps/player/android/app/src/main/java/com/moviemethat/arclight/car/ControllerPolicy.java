@@ -10,7 +10,7 @@ import androidx.annotation.Nullable;
  * <ul>
  *   <li>FULL (playback, library browsing and search): this app, controllers Android trusts
  *       (system UI, holders of MEDIA_CONTENT_CONTROL, the system and Bluetooth processes), and the
- *       Android Auto / Android Automotive hosts when the package is a real copy of them (a system
+ *       Android Auto / Android Automotive hosts and Google Assistant when the package is a real copy of them (a system
  *       app, or installed by Google Play).</li>
  *   <li>PLAYBACK (play/pause/skip and what is playing, no library): platform controllers whose
  *       package Android cannot name (Android 8 reports them all as one placeholder package), so the
@@ -28,6 +28,8 @@ public final class ControllerPolicy {
     public static final String AUTOMOTIVE_MEDIA = "com.android.car.media";
     /** Google Assistant on Android Automotive ("play ... on Arclight"). */
     public static final String AUTOMOTIVE_ASSISTANT = "com.google.android.carassistant";
+    /** Google Assistant / Google app on a phone (voice control through Android Auto). */
+    public static final String GOOGLE_ASSISTANT = "com.google.android.googlequicksearchbox";
 
     /** Media3's package name for a platform controller whose package is unknown. */
     public static final String LEGACY_UNKNOWN = "android.media.session.MediaController";
@@ -39,7 +41,8 @@ public final class ControllerPolicy {
     private ControllerPolicy() {}
 
     public static boolean isCarHost(@Nullable String pkg) {
-        return ANDROID_AUTO.equals(pkg) || AUTOMOTIVE_MEDIA.equals(pkg) || AUTOMOTIVE_ASSISTANT.equals(pkg);
+        return ANDROID_AUTO.equals(pkg) || AUTOMOTIVE_MEDIA.equals(pkg) || AUTOMOTIVE_ASSISTANT.equals(pkg)
+            || GOOGLE_ASSISTANT.equals(pkg);
     }
 
     /**
