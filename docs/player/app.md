@@ -26,12 +26,12 @@ How the Arclight app (`apps/player`) lays out its screens. Using the app is cove
 
 - `households/gate.ts`: before the first `/player` page of an app run, accounts with two or more profiles go to `/profiles` ("Who's watching?").
 - `households/use-pick.ts`: picking a profile, with the PIN step, wrong-PIN and lock messages.
-- The owner profile can add profiles from the picker, and edit name, colour, PIN and Kids limits, or delete profiles, under Settings > Profiles > Manage profiles.
+- The owner profile can add profiles from the picker's round Add tile (the full profile page, saved at once) and edit them in the picker's edit mode (the pencil button under the row; Back leaves it), or under Settings > Profiles > Manage profiles. Settings > Profiles > Add profile, and Add profile in the phone's avatar sheet, cover an account with one profile, which has no picker.
 - The app follows the active profile's theme (`ui/profile-theme.ts`); no theme means the built-in Cinema look.
 
 ## Phone
 
-The phone shell (`ui/shell.tsx`) has tabs for Home, TV Shows, Movies, My List and Search. The top bar holds the Mark, the offline badge, Music and Audiobooks (when turned on) and the profile avatar, whose sheet has Switch profile, Settings, Manage profiles and Sign out.
+The phone shell (`ui/shell.tsx`) has tabs for Home, TV Shows, Movies, My List and Search. The top bar holds the Mark, the offline badge, Music and Audiobooks (when turned on) and the profile avatar, whose sheet has Switch profile, Settings, Manage profiles, Add profile (owner profile, below the limit) and Sign out.
 
 ## Launch intro
 

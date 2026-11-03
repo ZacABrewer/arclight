@@ -17,6 +17,7 @@ import { useProfileTheme } from './profile-theme';
 import { signedOutTarget } from '../app/router';
 import { useBrowseDownloads } from './downloads';
 import { TvFrame } from '../tv/tv-shell';
+import { AddProfileRow } from './add-profile-row';
 
 // Chrome of every signed-in screen. TV: the design's top header on the stage (tv-shell). Phone
 // (§4.4): a top bar (back or the Mark, offline badge, Music and Audiobooks, the profile avatar
@@ -161,6 +162,7 @@ function AvatarSheet({ onClose }: { onClose: () => void }) {
             <span>{t('app.tv.settings.manageProfiles')}</span>
           </button>
         ) : null}
+        <AddProfileRow go={go} />
         {active ? (
           <button
             type="button"

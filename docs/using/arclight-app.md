@@ -22,7 +22,7 @@ Open [arclight.moviemethat.com/android](https://arclight.moviemethat.com/android
 
 ## Who's watching?
 
-If your account has two or more profiles, the app asks who is watching the first time you open it. A profile with a PIN asks for its 4 digits (on a TV with the on-screen number pad, on a phone with the number keyboard). Five wrong tries lock that profile for 15 minutes on that device. Each profile keeps its own My List, progress, settings and theme. Switch profiles from Settings > Profiles on a TV, or from your avatar in the top bar on a phone. While your own (owner) profile is active you can add profiles from the picker, and edit, delete, set a PIN or a Kids limit under Settings > Profiles > Manage profiles.
+If your account has two or more profiles, the app asks who is watching the first time you open it. A profile with a PIN asks for its 4 digits (on a TV with the on-screen number pad, on a phone with the number keyboard). Five wrong tries lock that profile for 15 minutes on that device. Each profile keeps its own My List, progress, settings and theme. Switch profiles from Settings > Profiles on a TV, or from your avatar in the top bar on a phone. While your own (owner) profile is active you can add profiles from the picker's round **Add profile** tile, and edit them with the pencil **Manage profiles** button under the row (or under Settings > Profiles > Manage profiles): name, colour, PIN, Kids limit or delete. With only one profile, use **Settings > Profiles > Add profile** (or **Add profile** in the avatar sheet on a phone).
 
 ## Launch intro
 

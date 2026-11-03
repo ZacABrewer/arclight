@@ -125,7 +125,7 @@ const profilesRoute = createRoute({
 const playerProfilesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/player/profiles',
-  validateSearch: (s: Record<string, unknown>): { select?: unknown; manage?: unknown } => ({ select: s.select, manage: s.manage }),
+  validateSearch: (s: Record<string, unknown>): { select?: unknown; manage?: unknown; add?: unknown } => ({ select: s.select, manage: s.manage, add: s.add }),
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
   },
