@@ -13,6 +13,8 @@ import {
   PlayerSeriesPage,
   VideoArtworkType,
   VideoBrowseQuery,
+  VideoFeatured,
+  VideoFeaturedQuery,
   VideoHome,
   VideoSession,
   VideoSessionRequest,
@@ -27,15 +29,19 @@ import {
 import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
 import { episodes, movies, series } from '../library/schema.js';
-import { restrictionsOfSettings } from '../requests/certification.js';
+import { restrictionsFor, restrictionsForProfile } from '../requests/certification.js';
 import { subtitleFiles } from '../subtitles/schema.js';
 import { decide, decisionOf, denialReply, isRemoteRequest, linkUserStillActive, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
 import { folderImage, remote, type Artwork } from './artwork.js';
-import type { BrowseUser } from './browse.js';
+import { browseUserOf, ownerOfBrowse } from './browse.js';
+import type { PlaybackOwner } from './progress.js';
 import { hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from './links.js';
 import type { ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
 import { FfmpegMissing, TranscodeBusy, type AudioTranscoder, type RunningTranscode } from './transcode.js';
+import { videoFeatured, withHomeRows, withMovieExtras, withSeriesExtras, type FeaturedContext, type TrendingSource } from './featured.js';
+import { signedTrickplay } from './trickplay-routes.js';
+import type { TrickplayService } from './trickplay.js';
 import { markWatched, movieDetails, moviePage, seriesDetails, seriesPage, videoHome, type VideoBrowseContext } from './video-browse.js';
 import { buildVideoStreamArgs, decideVideo, defaultVideoKbps, durationOf, externalSubtitleCodec, isTextSubtitle, videoContainerOf, videoMimeOf, type LiveVideoSpec, type VideoPlan } from './video-info.js';
 import { episodeFiles, mediaFileAllowed, playableFilesOf, videoInfoForFile, withinRestrictions, type MediaFileRow } from './video-items.js';
@@ -56,6 +62,10 @@ export interface VideoDeps {
   transcoder: AudioTranscoder;
   encoders: EncoderDetector;
   cache: MediaCache;
+  /** Scrub thumbnails for the session (absent: none). */
+  trickplay?: TrickplayService;
+  /** Trending source of the hero and home (tests); TMDB through the metadata cache by default. */
+  trending?: TrendingSource;
   now?: () => number;
 }
 
@@ -65,7 +75,8 @@ const errors = { 400: ErrorBody, 403: ErrorBody, 404: ErrorBody };
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
 const FileParams = z.object({ mediaFileId: z.coerce.number().int().positive() });
 const SubtitleParams = z.object({ mediaFileId: z.coerce.number().int().positive(), subId: z.string().regex(/^(e[0-9]+|x[1-9][0-9]*)$/) });
-const LinkParams = { u: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() };
+// `p`: the household profile a link plays as (links.ts); absent on owner links.
+const LinkParams = { u: z.string().max(20).optional(), p: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() };
 const StreamQuery = VideoStreamQuery.omit({ u: true, exp: true, sig: true }).extend(LinkParams);
 const ArtworkQuery = z.object({ ...LinkParams, type: VideoArtworkType.optional(), w: z.enum(['342', '780', '1280', 'original']).optional() });
 
@@ -80,8 +91,15 @@ class VideoHttpError extends Error {
 }
 
 const headerText = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-const browseUser = (req: FastifyRequest): BrowseUser => ({ userId: req.auth?.user?.id ?? null, settings: req.auth?.user?.settings ?? null });
-const restrictionsOfRequest = (req: FastifyRequest): ContentRestrictions | null => (req.auth?.user ? restrictionsOfSettings(req.auth.user.settings) : null);
+/** Whose per-profile rows a request writes (400 NO_USER without a user). */
+function ownerOrThrow(req: FastifyRequest): PlaybackOwner {
+  const owner = ownerOfBrowse(browseUserOf(req));
+  if (owner === null) throw new VideoHttpError(400, 'NO_USER', 'this request is not signed in as a user');
+  return owner;
+}
+const restrictionsOfRequest = (req: FastifyRequest): ContentRestrictions | null => restrictionsFor(req.auth);
+/** The profile a signed link names: a non-owner profile's id, else null (the owner, no `p=`). */
+const linkProfileOf = (req: FastifyRequest): number | null => (req.auth?.profile && !req.auth.profile.isOwner ? req.auth.profile.id : null);
 
 // ---- TMDB image sizes ----------------------------------------------------------------------------
 
@@ -131,7 +149,7 @@ export function subtitleLabel(t: VideoSubtitleTrack, index: number): string {
 export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   const { db } = deps;
   const now = deps.now ?? Date.now;
-  const browse: VideoBrowseContext = { db, basePath: deps.basePath, progress: deps.progress, now };
+  const browse: VideoBrowseContext & FeaturedContext = { db, basePath: deps.basePath, progress: deps.progress, now, ...(deps.trending ? { trending: deps.trending } : {}) };
   const guard = requirePlayer(db);
   const guardUser = requirePlayer(db, { needsUser: true });
 
@@ -160,11 +178,18 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     const check = verifyLink(linkKey(deps.apiKey()), mediaFileId, query, now(), 'video');
     if (!check.ok) return new VideoHttpError(403, `LINK_${check.reason}`, check.reason === 'EXPIRED' ? 'this stream link has expired' : 'this stream link is not valid');
     const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
-    if (!row || !linkUserStillActive(db, row.id, now())) return new VideoHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
+    if (!row || !linkUserStillActive(db, row.id, now(), check.profileId)) return new VideoHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
+    // The link's profile caps apply on top of the account's (a Kids link never plays uncapped).
+    let restrictions: ContentRestrictions | null;
+    try {
+      restrictions = restrictionsForProfile(db, row.id, check.profileId);
+    } catch {
+      return new VideoHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
+    }
     return {
       decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remoteReq),
       userId: row.id,
-      restrictions: restrictionsOfSettings(row.settings),
+      restrictions,
     };
   }
 
@@ -202,11 +227,17 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     const check = verifyArtworkLink(linkKey(deps.apiKey()), req.query as Record<string, unknown>, now());
     if (!check.ok) return reply.code(403).send({ error: check.reason === 'EXPIRED' ? 'this artwork link has expired' : 'this artwork link is not valid', code: `LINK_${check.reason}` });
     const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
-    if (!row || !linkUserStillActive(db, row.id, now())) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
+    if (!row || !linkUserStillActive(db, row.id, now(), check.profileId)) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
+    let linkRestrictions: ContentRestrictions | null;
+    try {
+      linkRestrictions = restrictionsForProfile(db, row.id, check.profileId);
+    } catch {
+      return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
+    }
     const decision = decide(playerSettings(db), { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, isRemoteRequest(req));
     if (decision.denial) return denialReply(reply, decision.denial);
     if (!playerSettings(db).video) return reply.code(404).send({ error: 'Movies & TV is turned off (Settings â†’ Player)', code: 'SECTION_OFF' });
-    artworkSubjects.set(req, restrictionsOfSettings(row.settings));
+    artworkSubjects.set(req, linkRestrictions);
   };
 
   async function sendArtwork(reply: FastifyReply, art: Artwork) {
@@ -297,7 +328,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
       const fileId = chosen.file.id;
       const startMs = plan.method === 'direct' ? 0 : (body.startMs ?? 0);
       const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
-      const sig = linkQuery(linkKey(deps.apiKey()), { userId, fileId, exp }, 'video');
+      const sig = linkQuery(linkKey(deps.apiKey()), { userId, profileId: linkProfileOf(req), fileId, exp }, 'video');
       const origin = `${req.protocol}://${req.host}${deps.basePath}/api/v1`;
       const params = new URLSearchParams({ m: plan.method });
       if (plan.method !== 'direct') {
@@ -328,6 +359,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         subtitles,
         burnedSubtitle: plan.burn,
         expiresAt: new Date(exp * 1000).toISOString(),
+        trickplay: deps.trickplay ? await signedTrickplay({ db, apiKey: deps.apiKey, service: deps.trickplay, now }, fileId, { userId, profileId: linkProfileOf(req) }, origin) : null,
       };
     });
 
@@ -496,22 +528,25 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     });
 
     // ---- browse ----------------------------------------------------------------------------------
-    app.get('/playback/video/home', { ...video, schema: { response: { 200: VideoHome, ...errors } } }, async (req) => videoHome(browse, browseUser(req)));
-    app.get('/playback/movies', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerMoviePage, ...errors } } }, async (req) => moviePage(browse, browseUser(req), req.query));
+    app.get('/playback/video/home', { ...video, schema: { response: { 200: VideoHome, ...errors } } }, async (req) => withHomeRows(browse, browseUserOf(req), videoHome(browse, browseUserOf(req))));
+    app.get('/playback/video/featured', { ...video, schema: { querystring: VideoFeaturedQuery, response: { 200: VideoFeatured, ...errors } } }, async (req) =>
+      videoFeatured(browse, browseUserOf(req), req.query.limit),
+    );
+    app.get('/playback/movies', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerMoviePage, ...errors } } }, async (req) => moviePage(browse, browseUserOf(req), req.query));
     app.get('/playback/movies/:id', { ...video, schema: { params: IdParams, response: { 200: PlayerMovieDetails, ...errors } } }, async (req) => {
-      const movie = movieDetails(browse, browseUser(req), req.params.id);
+      const movie = movieDetails(browse, browseUserOf(req), req.params.id);
       if (!movie) throw new VideoHttpError(404, 'NOT_FOUND', `movie ${req.params.id} not found or has no file`);
-      return movie;
+      return withMovieExtras(browse, browseUserOf(req), movie);
     });
-    app.get('/playback/series', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerSeriesPage, ...errors } } }, async (req) => seriesPage(browse, browseUser(req), req.query));
+    app.get('/playback/series', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerSeriesPage, ...errors } } }, async (req) => seriesPage(browse, browseUserOf(req), req.query));
     app.get('/playback/series/:id', { ...video, schema: { params: IdParams, response: { 200: PlayerSeriesDetails, ...errors } } }, async (req) => {
-      const show = seriesDetails(browse, browseUser(req), req.params.id);
+      const show = seriesDetails(browse, browseUserOf(req), req.params.id);
       if (!show) throw new VideoHttpError(404, 'NOT_FOUND', `series ${req.params.id} not found or has no episodes with files`);
-      return show;
+      return withSeriesExtras(browse, browseUserOf(req), show);
     });
 
     app.post('/playback/watched', { ...videoUser, schema: { body: VideoWatchedRequest, response: { 200: VideoWatchedResponse, ...errors } } }, async (req) => ({
-      updated: markWatched(browse, req.auth!.user!.id, req.body),
+      updated: markWatched(browse, ownerOrThrow(req), req.body),
     }));
   };
 }

@@ -8,6 +8,7 @@ import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences
 import { t, applyLocaleSetting } from '../i18n/index.js';
 import { setReduceMotion } from '../arclight/motion-preference.js';
 import { useThemeController } from '../features/themes/use-themes.js';
+import { clearProfilePicked } from '../features/player/redesign/profile-session.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -44,8 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
     } finally {
       qc.removeQueries({ queryKey: authKeys.all });
-      // Everything cached belonged to the signed-in user.
+      // Everything cached belonged to the signed-in user, and so did "Who's watching?".
       qc.clear();
+      clearProfilePicked();
     }
   }, [qc]);
 
@@ -73,6 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The theme follows the signed-in user's pick (signed out: this device's last theme).
   useThemeController(value.user ? readUiPreferences(value.user.settings).theme : null, value.isAdmin);
 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/**
+ * A ready-made auth state for hosts that sign in another way: the Arclight app reuses the player
+ * pages with its own device token and builds this from /auth/me.
+ */
+export function AuthStateProvider({ value, children }: { value: AuthState; children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

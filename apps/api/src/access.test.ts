@@ -7,6 +7,7 @@ import type { AppConfig } from './config.js';
 import type { Db } from './db/index.js';
 import { createTestDb, seedAdmin } from './db/test-utils.js';
 import { authServiceFor, isPublicRoute, SESSION_COOKIE, type RouteAccess } from './modules/auth/index.js';
+import { profileMay } from './modules/auth/hook.js';
 import { COMPAT_PUBLIC_ROUTES } from './modules/compat/index.js';
 import { eventVisibleTo, type EventOwners, type EventViewer } from './modules/events/index.js';
 import { setSection } from './modules/settings/service.js';
@@ -363,11 +364,26 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/playback/artwork/series/:id': 'portal publicWhen',
   'GET /api/v1/playback/artwork/episode/:id': 'portal publicWhen',
   'GET /api/v1/playback/video/home': 'portal',
+  'GET /api/v1/playback/video/featured': 'portal',
+  'GET /api/v1/playback/video/trickplay/:mediaFileId': 'portal',
+  'GET /api/v1/stream/trickplay/:mediaFileId/:sheet.jpg': 'portal publicWhen',
   'GET /api/v1/playback/movies': 'portal',
   'GET /api/v1/playback/movies/:id': 'portal',
   'GET /api/v1/playback/series': 'portal',
   'GET /api/v1/playback/series/:id': 'portal',
   'POST /api/v1/playback/watched': 'portal',
+  // household profiles (households/routes.ts); managing needs the owner profile, checked in the route
+  'GET /api/v1/households/profiles': 'portal',
+  'POST /api/v1/households/profiles': 'portal',
+  'GET /api/v1/households/profiles/active/settings': 'portal',
+  'PUT /api/v1/households/profiles/active/settings': 'portal',
+  'PATCH /api/v1/households/profiles/:id': 'portal',
+  'DELETE /api/v1/households/profiles/:id': 'portal',
+  'POST /api/v1/households/profiles/:id/select': 'portal',
+  // My List (playback/my-list.ts), per household profile
+  'GET /api/v1/playback/my-list': 'portal',
+  'PUT /api/v1/playback/my-list/:key': 'portal',
+  'DELETE /api/v1/playback/my-list/:key': 'portal',
 };
 
 const PERMISSION_NAMES = new Map<number, string>(Object.entries(Permission).map(([name, bit]) => [bit, name]));
@@ -748,5 +764,97 @@ describe('live event feed', () => {
   it('refuses the socket to anonymous callers', async () => {
     const h = await harness();
     await expect(h.app.injectWS('/api/v1/events')).rejects.toThrow(/401/);
+  });
+});
+
+describe('household profile confinement', () => {
+  /** An admin account with a Kids profile selected on a session and on an app device. */
+  async function kidsOnAdmin(h: Harness) {
+    const auth = authServiceFor(h.ctx);
+    const admin = await auth.createUser({ username: `kidsadmin${Math.random().toString(36).slice(2, 6)}`, password: 'password1', role: 'admin', settings: { player: { allowed: true } } });
+    const ownerCookie = `${SESSION_COOKIE}=${auth.createSession(admin.id).token}`;
+    const kidsCookie = `${SESSION_COOKIE}=${auth.createSession(admin.id).token}`;
+    const created = await h.app.inject({ method: 'POST', url: '/api/v1/households/profiles', headers: { cookie: ownerCookie }, payload: { name: 'Kids', contentRestrictions: { maxCertification: { movie: 'G', tv: 'TV-Y' }, hideAdultContent: true } } });
+    expect(created.statusCode, created.body).toBe(201);
+    const kidId = created.json().id as number;
+    expect((await h.app.inject({ method: 'POST', url: `/api/v1/households/profiles/${kidId}/select`, headers: { cookie: kidsCookie }, payload: {} })).statusCode).toBe(200);
+    const signIn = await h.app.inject({ method: 'POST', url: '/api/v1/app/sign-in', payload: { username: admin.username, password: 'password1', deviceName: 'TV', platform: 'android', appVersion: '1.0.0' } });
+    expect(signIn.statusCode, signIn.body).toBe(200);
+    const bearer = `Bearer ${signIn.json().token}`;
+    expect((await h.app.inject({ method: 'POST', url: `/api/v1/households/profiles/${kidId}/select`, headers: { authorization: bearer }, payload: {} })).statusCode).toBe(200);
+    return { ownerCookie, kidId, credentials: [{ cookie: kidsCookie }, { authorization: bearer }] as Array<Record<string, string>> };
+  }
+
+  // Allowed routes answer (whatever the route itself then says); never 403 profile-forbidden.
+  const ALLOWED: Array<[string, string]> = [
+    ['GET', '/api/v1/auth/me'],
+    ['GET', '/api/v1/households/profiles'],
+    ['GET', '/api/v1/households/profiles/active/settings'],
+    ['GET', '/api/v1/playback/me'],
+    ['GET', '/api/v1/playback/video/home'],
+    ['GET', '/api/v1/playback/my-list'],
+    ['GET', '/api/v1/playback/queue'],
+    ['GET', '/api/v1/user/me'],
+    ['GET', '/api/v1/theme'],
+  ];
+  // A sample of admin, portal, request and account routes: all 403 profile-forbidden.
+  const REFUSED: Array<[string, string, object?]> = [
+    ['GET', '/api/v1/settings/player'],
+    ['PUT', '/api/v1/settings/player', { enabled: true }],
+    ['GET', '/api/v1/user'],
+    ['GET', '/api/v1/users/1/profiles'],
+    ['GET', '/api/v1/system/status'],
+    ['GET', '/api/v1/series'],
+    ['GET', '/api/v1/movie'],
+    ['GET', '/api/v1/request'],
+    ['POST', '/api/v1/request', { mediaType: 'movie', tmdbId: 1 }],
+    ['GET', '/api/v1/watchlist'],
+    ['GET', '/api/v1/auth/sessions'],
+    ['GET', '/api/v1/user/me/apikeys'],
+    ['POST', '/api/v1/app/pair-codes'],
+    ['GET', '/api/v1/app/devices'],
+    ['POST', '/api/v1/households/profiles', { name: 'Sneaky' }],
+    ['GET', '/api/v1/settings/security'],
+  ];
+
+  it('the allow-list rule: player prefixes, exact routes and methods; segment editing and player settings excluded', () => {
+    expect(profileMay('GET', '/api/v1/playback/movies')).toBe(true);
+    expect(profileMay('PUT', '/api/v1/playback/my-list/:key')).toBe(true);
+    expect(profileMay('GET', '/api/v1/stream/video/:mediaFileId')).toBe(true);
+    expect(profileMay('PUT', '/api/v1/households/profiles/active/settings')).toBe(true);
+    expect(profileMay('POST', '/api/v1/households/profiles/:id/select')).toBe(true);
+    expect(profileMay('GET', '/api/v1/playback/segments')).toBe(false);
+    expect(profileMay('PUT', '/api/v1/playback/segments/:itemKey')).toBe(false);
+    expect(profileMay('GET', '/api/v1/settings/player')).toBe(false);
+    expect(profileMay('POST', '/api/v1/households/profiles')).toBe(false);
+    expect(profileMay('PATCH', '/api/v1/households/profiles/:id')).toBe(false);
+    expect(profileMay('POST', '/api/v1/auth/me')).toBe(false);
+    expect(profileMay('GET', '/api/v1/playbackx')).toBe(false);
+    expect(profileMay('GET', undefined)).toBe(false);
+  });
+
+  it('a Kids profile on an admin account reaches only the player allow-list, on a session and on an app token', async () => {
+    const h = await harness();
+    setSection(h.db, 'player', { enabled: true, video: true });
+    const kids = await kidsOnAdmin(h);
+    for (const headers of kids.credentials) {
+      for (const [method, url] of ALLOWED) {
+        const res = await h.app.inject({ method: method as 'GET', url, headers });
+        expect([method, url, res.statusCode < 400, res.body]).toEqual([method, url, true, res.body]);
+      }
+      for (const [method, url, payload] of REFUSED) {
+        const res = await h.app.inject({ method: method as 'GET', url, headers, ...(payload ? { payload } : {}) });
+        // A route an app bearer may never call is refused by that rule first; either way it is a 403.
+        const error = res.json().error as string;
+        const refusedBy = error === 'profile-forbidden' || (headers.authorization !== undefined && /Arclight app may not/.test(error));
+        expect([res.statusCode, refusedBy, method, url]).toEqual([403, true, method, url]);
+      }
+      // The masked auth never reports admin rights.
+      const me = (await h.app.inject({ method: 'GET', url: '/api/v1/auth/me', headers })).json();
+      expect(me.activeProfile).toMatchObject({ id: kids.kidId, isOwner: false });
+      expect(me.user.role).not.toBe('admin');
+    }
+    // The owner session on the same account is untouched.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/settings/player', headers: { cookie: kids.ownerCookie } })).statusCode).toBe(200);
   });
 });

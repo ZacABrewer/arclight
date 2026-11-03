@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import androidx.media3.common.util.UnstableApi;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -64,6 +63,7 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
 
     @Override
     public void load() {
+        SafeLog.install();
         hub = PlaybackHub.get(getContext());
         hub.setSink(this);
         VideoController.get().setSink(this);
@@ -84,7 +84,7 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
         try {
             notifyListeners(event, JSObject.fromJSONObject(data), retain);
         } catch (JSONException e) {
-            Log.w(TAG, "Could not send " + event, e);
+            SafeLog.w(TAG, "Could not send " + event, e);
         }
     }
 
@@ -146,6 +146,19 @@ public class ArclightPlayerPlugin extends Plugin implements EventSink {
         o.put("platform", "android");
         o.put("version", VERSION);
         o.put("features", features);
+        call.resolve(o);
+    }
+
+    // ---- app ---------------------------------------------------------------------------------
+
+    @PluginMethod
+    public void consumeLaunchInfo(PluginCall call) {
+        boolean reduced = Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled();
+        LaunchInfo info = LaunchInfo.consume(reduced);
+        JSObject o = new JSObject();
+        o.put("coldStart", info.coldStart);
+        o.put("source", info.source);
+        o.put("systemReducedMotion", info.systemReducedMotion);
         call.resolve(o);
     }
 

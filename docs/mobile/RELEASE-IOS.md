@@ -1,6 +1,6 @@
 # Arclight Admin for iOS: App Store launch checklist
 
-> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own App Store record; its checklist is still to come.
+> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own App Store record; its checklist is [RELEASE-PLAYER-IOS.md](RELEASE-PLAYER-IOS.md).
 
 Everything needed to take the Arclight Admin iPhone (and optionally iPad) app from an Apple Developer Program membership to a public App Store listing. Work top to bottom. Items marked **(permanent)** cannot be changed after the first upload.
 

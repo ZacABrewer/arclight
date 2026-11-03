@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.SystemClock;
-import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationChannelCompat;
@@ -16,6 +15,7 @@ import androidx.work.ForegroundInfo;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import com.moviemethat.arclight.R;
+import com.moviemethat.arclight.SafeLog;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -127,7 +127,7 @@ public final class DownloadWorker extends Worker {
             return retryOrFail(center, id, "The server kept rejecting the resume range", 0);
         } catch (IOException e) {
             if (isStopped()) return stopped(center, id, part);
-            Log.w(LOG_TAG, "Download " + id + " failed", e);
+            SafeLog.w(LOG_TAG, "Download " + id + " failed", e);
             return retryOrFail(center, id, e.getClass().getSimpleName() + ": " + e.getMessage(), 0);
         }
     }
@@ -287,7 +287,7 @@ public final class DownloadWorker extends Worker {
         } catch (Exception e) {
             // Android 12+ may refuse a foreground start from the background; the job still runs
             // (and resumes via Range if the system stops it).
-            if (!foreground) Log.i(LOG_TAG, "Downloading without a foreground notification: " + e.getMessage());
+            if (!foreground) SafeLog.i(LOG_TAG, "Downloading without a foreground notification: " + e.getMessage());
         }
     }
 

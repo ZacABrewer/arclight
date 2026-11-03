@@ -23,7 +23,8 @@ import {
 } from '@arclight/shared';
 // The web client's error classes: the web player's views check `instanceof` against these.
 import { ApiError, ContractError, type QueryParams, type RequestOptions } from '@web/api/client';
-import { REQUEST_TIMEOUT_MS } from '../config';
+import { t } from '@web/i18n/index';
+import { CONNECT_TIMEOUT_MS } from '../config';
 import { absoluteUrl, getSession } from './session';
 
 export { ApiError, ContractError };
@@ -59,8 +60,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   onUnauthorized = handler;
 }
 
+// Picking a profile answers 401 pin-required / pin-wrong for a missing or wrong PIN: a pad error,
+// not a revoked token.
+const PROFILE_SELECT = /^\/households\/profiles\/\d+\/select$/;
+
 function triggersSignOut(path: string): boolean {
-  return !path.startsWith('/auth/') && !path.startsWith('/app/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa');
+  return (
+    !path.startsWith('/auth/') && !path.startsWith('/app/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa') && !PROFILE_SELECT.test(path)
+  );
 }
 
 let fetchImpl: typeof fetch = (...args) => fetch(...args);
@@ -88,7 +95,7 @@ export function buildApiUrl(serverUrl: string, path: string, query?: QueryParams
 export async function request<T extends z.ZodType>(path: string, schema: T, init?: AppRequestOptions): Promise<z.infer<T>>;
 export async function request(path: string, schema: null, init?: AppRequestOptions): Promise<void>;
 export async function request(path: string, schema: z.ZodType | null, init: AppRequestOptions = {}): Promise<unknown> {
-  const { json, query, headers, body: rawBody, target: explicit, timeoutMs = REQUEST_TIMEOUT_MS, signal, ...rest } = init;
+  const { json, query, headers, body: rawBody, target: explicit, timeoutMs = CONNECT_TIMEOUT_MS, signal, ...rest } = init;
   const target = explicit ?? currentTarget();
   const url = buildApiUrl(target.serverUrl, path, query);
   const finalHeaders = new Headers(headers);
@@ -110,7 +117,13 @@ export async function request(path: string, schema: z.ZodType | null, init: AppR
   } catch (err) {
     if (signal?.aborted) throw err;
     const timedOut = ctl.signal.aborted;
-    throw new ApiError(0, timedOut ? 'The server did not answer in time.' : 'Could not reach the server.', path, NETWORK_ERROR);
+    const host = hostOf(target.serverUrl);
+    const message = timedOut
+      ? t('app.error.serverTimeout', { host, seconds: Math.round(timeoutMs / 1000) })
+      : t('app.error.serverUnreachable', { host });
+    const error = new ApiError(0, message, path, NETWORK_ERROR);
+    if (timedOut) timedOutErrors.add(error);
+    throw error;
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', abort);
@@ -133,8 +146,10 @@ export async function request(path: string, schema: z.ZodType | null, init: AppR
 async function toApiError(res: Response, path: string): Promise<ApiError> {
   let message = `${res.status} ${res.statusText}`.trim();
   let code: string | undefined;
+  let body: unknown;
   try {
-    const parsed = ErrorResponse.safeParse(await res.json());
+    body = await res.json();
+    const parsed = ErrorResponse.safeParse(body);
     if (parsed.success) {
       message = parsed.data.error;
       code = parsed.data.code;
@@ -142,7 +157,17 @@ async function toApiError(res: Response, path: string): Promise<ApiError> {
   } catch {
     // Empty or not JSON: keep the status text.
   }
-  return new ApiError(res.status, message, path, code);
+  const err = new ApiError(res.status, message, path, code);
+  // The whole JSON body, for routes that add fields (households: retryAfterSeconds).
+  if (body !== undefined) errorBodies.set(err, body);
+  return err;
+}
+
+const errorBodies = new WeakMap<ApiError, unknown>();
+
+/** The JSON body a failed request answered with (undefined: none, or not an ApiError). */
+export function apiErrorBody(err: unknown): unknown {
+  return err instanceof ApiError ? errorBodies.get(err) : undefined;
 }
 
 export function errorMessage(err: unknown): string {
@@ -150,8 +175,31 @@ export function errorMessage(err: unknown): string {
   return String(err);
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 export function isNetworkError(err: unknown): boolean {
   return err instanceof ApiError && err.code === NETWORK_ERROR;
+}
+
+const timedOutErrors = new WeakSet<object>();
+
+/** A network error because the server did not answer within the connect timeout. */
+export function isTimeoutError(err: unknown): boolean {
+  return err instanceof ApiError && timedOutErrors.has(err);
+}
+
+/**
+ * The app's query retry: one more try, except after a connect timeout (another wait as long
+ * would only delay the "couldn't reach" message).
+ */
+export function retryUnlessUnreachable(failureCount: number, err: unknown): boolean {
+  return failureCount < 1 && !isTimeoutError(err);
 }
 
 // ---------------------------------------------------------------------------------------

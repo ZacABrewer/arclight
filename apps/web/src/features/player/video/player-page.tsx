@@ -1,30 +1,44 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router';
-import type { PlayableItem, VideoSession } from '@arclight/shared';
+import { trickplayTileAt, type MediaChips, type PlayableItem, type TrickplayManifest, type VideoAudioTrack, type VideoSegment, type VideoSession, type VideoSubtitleTrack } from '@arclight/shared';
 import { Button, Icon, isTypingTarget } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { useT } from '../../../i18n/index.js';
+import { formatTime } from '../../../i18n/format.js';
 import { playbackApi, sendProgressBeacon, usePlayableItem, useProgress } from '../api.js';
 import { usePlayerActions } from '../browse/player-hooks.js';
 import { browserName, deviceId, readStored, writeStored } from '../device.js';
-import { PlayerIcon } from '../ui/player-icons.js';
-import { videoApi } from './api.js';
-import { chapterAt, clock, cueTextAt, endsAtLabel, episodeCode, parseVtt, resumePoint, segmentAt, upNextFrom, type Cue } from './format.js';
+import { useAuth } from '../../../auth/auth-context.js';
+import { useProfileSettings, useSaveProfileSettings, useTrickplay } from '../redesign/api.js';
+import { readStoredQuality, writeStoredQuality } from '../redesign/quality.js';
+import { RdIcon } from '../redesign/icons.js';
+import { MetaLine } from '../redesign/meta-line.js';
+import { Art } from '../redesign/tiles.js';
+import { useShow, videoApi } from './api.js';
+import { chapterAt, clock, cueTextAt, episodeCode, languageName, parseVtt, playerEpisodeLine, playerHeading, resumePoint, segmentAt, type Cue } from './format.js';
 import { watchPaths } from './paths.js';
 import { VideoPlayback, type VideoState } from './playback.js';
 import { EpisodesPanel, SettingsPanel, TracksPanel, type PanelId } from './player-panels.js';
 import { browserVideoProfile } from './profile.js';
 import './watch.css';
+import './player-overlay.css';
 
-// /player/watch/play/$itemKey: the web video player. Full screen over the portal, its own
-// <video> (the audio player pauses when it opens), every control a real button, keyboard and
-// TV-remote keys (space, ←/→, F, M, C, N, media keys, Back), the resume prompt, skip intro /
-// credits and an up-next card that counts down into the next episode.
+// /player/watch/play/$itemKey: the web video player (redesign spec §5). Full screen over the
+// portal, its own <video> (the audio player pauses when it opens), every control a real button,
+// keyboard and TV-remote keys (space, ←/→, F, M, C, N, media keys, Back), the resume prompt,
+// the pause screen, scrub thumbnails, skip intro / recap / credits and the up-next card.
 
 const PREFS_KEY = 'arclight.player.video.prefs';
-const HIDE_AFTER_MS = 3000;
-const UP_NEXT_SECONDS = 10;
+/** §5.1: the UI hides after 5 s idle while playing. */
+export const HIDE_AFTER_MS = 5000;
+/** §5.2: the pause screen shows after 6 s paused with no input. */
+export const PAUSE_SCREEN_AFTER_MS = 6000;
+export const UP_NEXT_SECONDS = 10;
+/** §5.5: the up-next card shows 20 s before the end when there is no credits segment. */
+export const UP_NEXT_LEAD_MS = 20_000;
 const SKIP_MS = 10_000;
+/** §5.1 caption sizes (profile setting), in stage px. */
+const CAPTION_PX = { small: 22, medium: 28, large: 36 } as const;
 
 interface VideoPrefs {
   volume: number;
@@ -163,6 +177,14 @@ function streamLabel(t: ReturnType<typeof useT>, item: PlayableItem, session: Vi
   return [t(`player.video.method.${session.method}`), [res, range].filter(Boolean).join(' '), rate].filter(Boolean).join(' · ');
 }
 
+/** A phone or small tablet held in the hand: playback asks for full screen and landscape (§5.9). */
+function isHandheld(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const short = Math.min(window.screen?.width ?? 1024, window.screen?.height ?? 1024) < 600;
+  return coarse && short;
+}
+
 function useFullscreen(target: React.RefObject<HTMLElement | null>, video: React.RefObject<HTMLVideoElement | null>) {
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -170,21 +192,58 @@ function useFullscreen(target: React.RefObject<HTMLElement | null>, video: React
     document.addEventListener('fullscreenchange', sync);
     return () => document.removeEventListener('fullscreenchange', sync);
   }, []);
+  const enter = useCallback(
+    async (landscape: boolean) => {
+      const el = target.current;
+      try {
+        if (!document.fullscreenElement && el?.requestFullscreen) await el.requestFullscreen();
+        else if (!el?.requestFullscreen) (video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
+        if (landscape) await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape');
+      } catch {
+        // Not allowed here (no user gesture, iframe, desktop): carry on in the window.
+      }
+    },
+    [target, video],
+  );
   const toggle = useCallback(() => {
     if (document.fullscreenElement) {
       void document.exitFullscreen?.().catch(() => undefined);
       return;
     }
-    const el = target.current;
-    if (el?.requestFullscreen) void el.requestFullscreen().catch(() => undefined);
-    else (video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
-  }, [target, video]);
-  return { on, toggle };
+    void enter(isHandheld());
+  }, [enter]);
+  return { on, toggle, enter };
+}
+
+/** When the up-next card shows: the credits segment (in the second half), else 20 s before the end. */
+export function upNextStart(segments: readonly VideoSegment[] | undefined, durationMs: number): number {
+  const credits = segments?.find((s) => s.type === 'credits' && s.startMs > durationMs * 0.5);
+  return credits ? credits.startMs : Math.max(0, durationMs - UP_NEXT_LEAD_MS);
+}
+
+/** Two language codes name the same language ("en" / "eng"). */
+function sameLanguage(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  if (a.toLowerCase() === b.toLowerCase()) return true;
+  const na = languageName(a);
+  return !!na && na === languageName(b);
+}
+
+/** The profile's audio and subtitle languages pick the starting tracks (forced subtitles otherwise). */
+function initialTracks(item: PlayableItem, audioLanguage: string | null, subtitleLanguage: string | null): { audioTrack?: number; subtitle: string | null } {
+  const subs = (item.video?.subtitleTracks ?? []).filter((s) => s.text);
+  const audio = item.video?.audioTracks ?? [];
+  const a = audioLanguage ? audio.find((x) => sameLanguage(x.language, audioLanguage)) : undefined;
+  const wanted = subtitleLanguage ? (subs.find((s) => sameLanguage(s.language, subtitleLanguage) && !s.forced) ?? subs.find((s) => sameLanguage(s.language, subtitleLanguage))) : undefined;
+  const fallback = subs.find((s) => s.forced) ?? (subtitleLanguage === null ? undefined : subs.find((s) => s.default));
+  return { ...(a ? { audioTrack: a.index } : {}), subtitle: (wanted ?? fallback)?.id ?? null };
 }
 
 export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: PlayableItem; startMs: number; mediaFileId: number | null; onBack: () => void }) {
   const t = useT();
   const navigate = useNavigate();
+  const settings = useProfileSettings();
+  const saveSettings = useSaveProfileSettings();
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const playRef = useRef<HTMLButtonElement>(null);
@@ -193,26 +252,36 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
   const [panel, setPanel] = useState<PanelId | null>(null);
   const panelOpener = useRef<HTMLElement | null>(null);
   const [chrome, setChrome] = useState(true);
+  const [pauseScreen, setPauseScreen] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
-  const [hover, setHover] = useState<{ x: number; ms: number } | null>(null);
-  const [subOffset, setSubOffset] = useState(0);
+  const [hover, setHover] = useState<number | null>(null);
   const [cues, setCues] = useState<Cue[]>([]);
   const [upNextDismissed, setUpNextDismissed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const fs = useFullscreen(rootRef, videoRef);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSkipped = useRef(false);
+  const settingsRef = useRef(settings);
+  // Streaming quality is kept per browser and profile (Settings > Playback).
+  const profileId = useAuth().session?.activeProfile?.id ?? null;
+  const profileIdRef = useRef(profileId);
+  profileIdRef.current = profileId;
+  settingsRef.current = settings;
 
   const goTo = useCallback(
     (key: string) => void navigate({ to: watchPaths.play(key) as never, search: { restart: 1 } as never, replace: true }),
     [navigate],
   );
   const next = item.next ?? null;
+  const show = useShow(item.kind === 'episode' ? (item.seriesId ?? null) : null);
+  const nextEpisode = next ? show.data?.seasons.flatMap((s) => s.episodes).find((e) => e.itemKey === next) : undefined;
 
   // ---- controller ----------------------------------------------------------------------
   useEffect(() => {
     const prefs = loadVideoPrefs();
-    const subs = item.video?.subtitleTracks ?? [];
-    const initialSub = subs.find((s) => s.text && s.forced) ?? subs.find((s) => s.text && s.default) ?? null;
+    const s = settingsRef.current;
+    const tracks = initialTracks(item, s.audioLanguage, s.subtitleLanguage);
     const c = new VideoPlayback({
       item,
       profile: browserVideoProfile(),
@@ -221,9 +290,9 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
       beacon: sendProgressBeacon,
       deviceId: deviceId(),
       deviceName: browserName(),
-      initial: { volume: prefs.volume, muted: prefs.muted, subtitle: initialSub?.id ?? null, mediaFileId },
+      initial: { volume: prefs.volume, muted: prefs.muted, quality: readStoredQuality(profileIdRef.current), subtitle: tracks.subtitle, mediaFileId, ...(tracks.audioTrack !== undefined ? { audioTrack: tracks.audioTrack } : {}) },
       onEnded: () => {
-        if (next) goTo(next);
+        if (next && settingsRef.current.autoplayNext) goTo(next);
       },
     });
     if (videoRef.current) c.attach(videoRef.current);
@@ -241,6 +310,12 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
       c.dispose();
     };
     // One controller per item (the stage is keyed by item and version).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Phones: full screen and landscape (still inside the tap that opened the player).
+  useEffect(() => {
+    if (isHandheld()) void fs.enter(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -267,43 +342,67 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
     };
   }, [subUrl]);
 
-  // ---- chrome auto-hide ----------------------------------------------------------------
-  const playing = !!state?.playing;
-  const poke = useCallback(() => {
-    setChrome(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setChrome(false), HIDE_AFTER_MS);
-  }, []);
-  useEffect(() => {
-    if (!playing || panel) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      setChrome(true);
-    } else poke();
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, [playing, panel, poke]);
-
   // ---- derived -------------------------------------------------------------------------
+  const playing = !!state?.playing;
+  const status = state?.status ?? 'loading';
+  const busy = status === 'loading' || !!state?.switching || (!!state?.buffering && status !== 'error');
   const durationMs = state?.durationMs || item.durationMs;
   const positionMs = scrub ?? state?.positionMs ?? startMs;
   const chapters = item.chapters;
-  const chapterIdx = chapterAt(chapters, positionMs);
   const segment = segmentAt(item.segments, state?.positionMs ?? 0);
-  const upNextAt = upNextFrom(item.segments, durationMs);
-  const showUpNext = !!next && !upNextDismissed && !!state && state.status !== 'error' && durationMs > 0 && state.positionMs >= upNextAt;
-  const subtitleText = cues.length ? cueTextAt(cues, (state?.positionMs ?? 0) - subOffset) : '';
+  const upNextAt = upNextStart(item.segments, durationMs);
+  const showUpNext = !!next && !upNextDismissed && !!state && status !== 'error' && durationMs > 0 && state.positionMs >= upNextAt;
+  const subtitleText = cues.length ? cueTextAt(cues, state?.positionMs ?? 0) : '';
+  const autoplay = settings.autoplayNext;
+  const canPauseScreen = status === 'ready' && !playing && !busy && !panel && !showUpNext;
 
-  // Up-next countdown: 10 s, then the next episode.
+  // ---- idle: hide the UI after 5 s while playing; the pause screen after 6 s paused ----
+  const idle = useRef({ playing, panel, canPauseScreen });
+  idle.current = { playing, panel, canPauseScreen };
+  const armTimers = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    hideTimer.current = null;
+    pauseTimer.current = null;
+    if (idle.current.playing && !idle.current.panel) hideTimer.current = setTimeout(() => setChrome(false), HIDE_AFTER_MS);
+    if (idle.current.canPauseScreen) pauseTimer.current = setTimeout(() => setPauseScreen(true), PAUSE_SCREEN_AFTER_MS);
+  }, []);
+  const poke = useCallback(() => {
+    setChrome(true);
+    setPauseScreen(false);
+    armTimers();
+  }, [armTimers]);
   useEffect(() => {
-    if (!showUpNext || !playing) {
-      if (!showUpNext) setCountdown(null);
+    if (!playing || panel) setChrome(true);
+    if (!canPauseScreen) setPauseScreen(false);
+    armTimers();
+  }, [playing, panel, canPauseScreen, armTimers]);
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    },
+    [],
+  );
+
+  // ---- skip intro automatically (profile setting; once per play, recap never) ----------
+  useEffect(() => {
+    if (!pb || !segment || segment.type !== 'intro' || !settings.skipIntros || autoSkipped.current) return;
+    autoSkipped.current = true;
+    void pb.seek(segment.endMs);
+  }, [pb, segment, settings.skipIntros]);
+
+  // Up-next countdown: 10 s, then the next episode (only with Autoplay next episode on).
+  useEffect(() => {
+    if (!showUpNext || !autoplay) {
+      setCountdown(null);
       return undefined;
     }
     setCountdown((c) => c ?? UP_NEXT_SECONDS);
+    if (!playing) return undefined;
     const id = setInterval(() => setCountdown((c) => (c === null ? null : Math.max(0, c - 1))), 1000);
     return () => clearInterval(id);
-  }, [showUpNext, playing]);
+  }, [showUpNext, playing, autoplay]);
   useEffect(() => {
     if (countdown === 0 && next) goTo(next);
   }, [countdown, next, goTo]);
@@ -318,6 +417,27 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
     panelOpener.current = null;
     setTimeout(() => back?.focus(), 0);
   }, []);
+
+  // Track picks: the per-item prefs (the controller) and the profile's languages (§5.7).
+  const pickAudio = useCallback(
+    (a: VideoAudioTrack) => {
+      void pb?.setAudioTrack(a.index);
+      const lang = a.language?.toLowerCase() ?? null;
+      if (lang && /^[a-z]{2,3}$/.test(lang) && lang !== 'und' && !sameLanguage(lang, settingsRef.current.audioLanguage)) saveSettings.mutate({ audioLanguage: lang });
+    },
+    [pb, saveSettings],
+  );
+  const pickSubtitle = useCallback(
+    (s: VideoSubtitleTrack | null) => {
+      void pb?.setSubtitle(s ? s.id : null);
+      if (s?.forced) return; // forced tracks follow the audio, not a reading preference
+      const lang = s ? (s.language?.toLowerCase() ?? null) : null;
+      if (s && (!lang || !/^[a-z]{2,3}$/.test(lang) || lang === 'und')) return;
+      const current = settingsRef.current.subtitleLanguage;
+      if (lang === null ? current !== null : !sameLanguage(lang, current)) saveSettings.mutate({ subtitleLanguage: lang });
+    },
+    [pb, saveSettings],
+  );
 
   const cycleSubtitles = useCallback(() => {
     if (!pb || !state) return;
@@ -336,13 +456,28 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
   }, []);
   const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && (document as { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled === true;
 
+  // Skip: intro / recap seek to the end; credits with no next item end the item and close (§5.6).
+  const skipSegment = useCallback(
+    (seg: VideoSegment) => {
+      if (!pb) return;
+      if (seg.type === 'credits' && !next) {
+        void pb.seek(Math.max(0, durationMs - 250)).finally(onBack);
+        return;
+      }
+      void pb.seek(seg.endMs);
+    },
+    [pb, next, durationMs, onBack],
+  );
+  const showSkip = !!segment && !!state && !showUpNext;
+
   // ---- keyboard / remote ---------------------------------------------------------------
-  const keyState = useRef({ chrome, panel, showUpNext });
-  keyState.current = { chrome, panel, showUpNext };
+  const keyState = useRef({ chrome, panel, showUpNext, pauseScreen, segment: showSkip ? segment : null });
+  keyState.current = { chrome, panel, showUpNext, pauseScreen, segment: showSkip ? segment : null };
   useEffect(() => {
     if (!pb) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
       const k = keyState.current;
       const target = e.target instanceof HTMLElement ? e.target : null;
       const onControl = !!target && target !== document.body && target !== rootRef.current && !!target.closest('button, a, [role="slider"], input');
@@ -353,6 +488,11 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
       };
       const wasHidden = !k.chrome;
       poke();
+      // The pause screen: any key brings back the paused UI (media keys still act).
+      if (k.pauseScreen && !e.key.startsWith('Media')) {
+        handled();
+        return;
+      }
       switch (e.key) {
         case ' ':
         case 'k':
@@ -364,7 +504,8 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
         case 'Enter':
           if (wasHidden || !onControl) {
             handled();
-            playRef.current?.focus();
+            if (k.segment) skipSegment(k.segment);
+            else pb.toggle();
           }
           return;
         case 'ArrowLeft':
@@ -430,7 +571,7 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
         case 'Backspace':
         case 'GoBack':
         case 'BrowserBack':
-          if (e.key === 'Escape' && document.fullscreenElement) return; // the browser leaves full screen
+          if (e.key === 'Escape' && document.fullscreenElement && !k.panel) return; // the browser leaves full screen
           handled();
           if (k.panel) closePanel();
           else if (k.showUpNext) setUpNextDismissed(true);
@@ -441,7 +582,7 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [pb, poke, fs, cycleSubtitles, next, goTo, closePanel, onBack]);
+  }, [pb, poke, fs, cycleSubtitles, next, goTo, closePanel, onBack, skipSegment]);
 
   // ---- seek bar ------------------------------------------------------------------------
   const commitScrub = () => {
@@ -449,30 +590,39 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
     setScrub(null);
   };
   const onSeekHover = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch' && e.buttons === 0) return;
     const r = e.currentTarget.getBoundingClientRect();
     if (r.width <= 0) return;
     const x = Math.min(r.width, Math.max(0, e.clientX - r.left));
-    setHover({ x, ms: (x / r.width) * durationMs });
+    setHover((x / r.width) * durationMs);
   };
+  const previewMs = scrub ?? hover;
 
-  const eyebrow = useMemo(() => {
-    if (item.kind === 'episode') return [item.subtitle, episodeCode(item.seasonNumber, item.episodeNumber)].filter(Boolean).join(' · ');
-    return item.year ? String(item.year) : t('player.video.movie');
+  const trickplay = useTrickplay(state?.session?.mediaFileId ?? null, state?.session?.trickplay ?? null);
+  const sheets = trickplay.data?.status === 'ready' && trickplay.data.sheets.length ? trickplay.data : null;
+
+  // §5.1 top line: the series name over "S1 E2 · Title" for episodes; the title over "2025 · PG-13".
+  const heading = playerHeading(item);
+  const sub = useMemo(() => {
+    if (item.kind === 'episode') return playerEpisodeLine(item.seasonNumber, item.episodeNumber, item.pause?.episodeTitle ?? item.title);
+    return [item.year ? String(item.year) : null, item.pause?.certification ?? null].filter(Boolean).join(' · ') || t('player.video.movie');
   }, [item, t]);
 
-  const remaining = Math.max(0, durationMs - positionMs);
-  const status = state?.status ?? 'loading';
-  const busy = status === 'loading' || !!state?.switching || (!!state?.buffering && status !== 'error');
+  const tab = chrome && !pauseScreen ? 0 : -1;
+  const uiShown = chrome && !pauseScreen;
+  const caption = CAPTION_PX[settings.subtitleSize] ?? CAPTION_PX.medium;
+  const pct = durationMs ? Math.min(100, (positionMs / durationMs) * 100) : 0;
 
   return (
     <div
       ref={rootRef}
-      className={cx('vp', !chrome && 'vp--idle')}
+      className={cx('vp', !uiShown && 'vp--idle', pauseScreen && 'vp--pause-screen', settings.reduceMotion && 'vp--still')}
       data-testid="video-player"
       onPointerMove={poke}
       onPointerDown={poke}
       aria-label={item.title}
       role="region"
+      style={{ '--vp-caption': `${caption}px` } as CSSProperties}
     >
       {item.backdropUrl && status === 'loading' ? <img className="vp-backdrop" src={item.backdropUrl} alt="" aria-hidden="true" /> : null}
       <video
@@ -488,8 +638,8 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
         aria-label={item.title}
       />
 
-      {subtitleText ? (
-        <div className={cx('vp-subtitle', chrome && 'vp-subtitle--raised')} aria-live="off">
+      {subtitleText && !pauseScreen ? (
+        <div className={cx('vp-subtitle', uiShown && 'vp-subtitle--raised')} aria-live="off">
           {subtitleText.split('\n').map((line, i) => (
             <span key={i}>{line}</span>
           ))}
@@ -499,6 +649,14 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
       {busy && status !== 'error' ? (
         <div className="vp-center vp-center--passive">
           <span className="vp-spinner" role="status" aria-label={t('player.browse.loading')} />
+        </div>
+      ) : null}
+
+      {/* §5.1: the big pause glyph while paused (until the pause screen) */}
+      {status === 'ready' && !playing && !busy && !pauseScreen && !panel ? (
+        <div className="vp-paused" aria-hidden="true">
+          <span />
+          <span />
         </div>
       ) : null}
 
@@ -518,116 +676,138 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
         </div>
       ) : null}
 
-      {/* top bar */}
-      <div className="vp-top" aria-hidden={!chrome || undefined}>
-        <button type="button" className="vp-btn" aria-label={t('player.video.back')} onClick={onBack} tabIndex={chrome ? 0 : -1}>
-          <Icon name="chevronLeft" size={24} />
-        </button>
+      {pauseScreen ? <PauseScreen item={item} remainingMs={Math.max(0, durationMs - positionMs)} onDismiss={poke} /> : null}
+
+      {/* top: title and sub (§5.1); the stream badge and the close button are kept from 0.22 */}
+      <div className="vp-top" aria-hidden={!uiShown || undefined}>
         <div className="vp-top__title">
-          <p className="vp-eyebrow">{eyebrow}</p>
-          <h1 className="vp-title">{item.kind === 'episode' ? (item.context ?? item.title) : item.title}</h1>
+          <h1 className="vp-title">{heading}</h1>
+          {sub ? <p className="vp-sub">{sub}</p> : null}
         </div>
-        {state?.session ? (
-          <span className="vp-health" data-method={state.session.method} title={state.session.reasons.map((r) => t(`player.video.reason.${r}`)).join('\n') || undefined}>
-            <span className="vp-health__dot" aria-hidden="true" />
-            {streamLabel(t, item, state.session)}
-          </span>
-        ) : null}
-      </div>
-
-      {/* skip intro / credits */}
-      {segment && state && !showUpNext ? (
-        <div className="vp-skip">
-          <Button variant="secondary" size="lg" onClick={() => void pb?.seek(segment.endMs)}>
-            {t(`player.video.skip.${segment.type}`)}
-          </Button>
-        </div>
-      ) : null}
-
-      {/* up next */}
-      {showUpNext && next ? (
-        <div className="vp-upnext" role="region" aria-label={t('player.video.upNext')}>
-          <p className="vp-eyebrow">{t('player.video.upNext')}</p>
-          <p className="vp-upnext__line" aria-live="polite">
-            {countdown !== null ? t('player.video.upNextIn', { seconds: countdown }) : t('player.video.upNextPaused')}
-          </p>
-          <div className="vp-message__actions">
-            <Button variant="primary" icon={<PlayerIcon name="next" size={18} />} onClick={() => goTo(next)}>
-              {t('player.video.playNow')}
-            </Button>
-            <Button variant="ghost" onClick={() => setUpNextDismissed(true)}>
-              {t('player.video.cancel')}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* bottom controls */}
-      <div className="vp-bottom" aria-hidden={!chrome || undefined}>
-        <div className="vp-time">
-          <span className="vp-time__pos">
-            {clock(positionMs)} <span className="vp-muted">/ {clock(durationMs)}</span>
-          </span>
-          {chapterIdx >= 0 && chapters[chapterIdx] ? <span className="vp-time__chapter">{chapters[chapterIdx]!.title}</span> : null}
-          <span className="vp-time__left">
-            −{clock(remaining)} · {endsAtLabel(remaining / (state?.speed || 1))}
-          </span>
-        </div>
-        <div className="vp-seek" onPointerMove={onSeekHover} onPointerLeave={() => setHover(null)}>
-          <div className="vp-seek__track" aria-hidden="true">
-            <span className="vp-seek__fill" style={{ width: `${durationMs ? (positionMs / durationMs) * 100 : 0}%` }} />
-            {chapters.slice(1).map((c) => (
-              <span key={c.startMs} className="vp-seek__tick" style={{ left: `${(c.startMs / durationMs) * 100}%` }} />
-            ))}
-          </div>
-          <input
-            className="vp-seek__input"
-            type="range"
-            min={0}
-            max={Math.max(1, durationMs)}
-            step={1000}
-            value={Math.min(positionMs, durationMs)}
-            aria-label={t('player.video.seek')}
-            aria-valuetext={t('player.video.seekValue', { position: clock(positionMs), duration: clock(durationMs) })}
-            tabIndex={chrome ? 0 : -1}
-            onChange={(e) => setScrub(Number(e.target.value))}
-            onPointerUp={commitScrub}
-            onKeyUp={commitScrub}
-            onBlur={() => scrub !== null && commitScrub()}
-          />
-          {hover ? (
-            <span className="vp-seek__preview" style={{ left: hover.x }} aria-hidden="true">
-              {clock(hover.ms)}
-              {chapterAt(chapters, hover.ms) >= 0 ? <span className="vp-seek__preview-chapter">{chapters[chapterAt(chapters, hover.ms)]!.title}</span> : null}
+        <div className="vp-top__end">
+          {state?.session ? (
+            <span className="vp-health" data-method={state.session.method} title={state.session.reasons.map((r) => t(`player.video.reason.${r}`)).join('\n') || undefined}>
+              <span className="vp-health__dot" aria-hidden="true" />
+              {streamLabel(t, item, state.session)}
             </span>
           ) : null}
+          <button type="button" className="vp-btn vp-btn--ghost" aria-label={t('player.video.back')} onClick={onBack} tabIndex={tab}>
+            <RdIcon name="close" size={24} />
+          </button>
+        </div>
+      </div>
+
+      {/* skip intro / recap / credits (§5.6) */}
+      {showSkip && segment ? (
+        <button type="button" className={cx('vp-skip', uiShown && 'is-raised')} onClick={() => skipSegment(segment)}>
+          {t(`player.video.skip.${segment.type}`)}
+        </button>
+      ) : null}
+
+      {/* up next (§5.5) */}
+      {showUpNext && next ? (
+        <section className={cx('vp-upnext', uiShown && 'is-raised')} aria-label={t('player.video.upNext')}>
+          <Art image={nextEpisode?.thumbUrl} seed={heading} shift={nextEpisode ? nextEpisode.episodeNumber * 14 + nextEpisode.seasonNumber * 30 : 0} className="vp-upnext__thumb" />
+          <div className="vp-upnext__body">
+            <p className="vp-upnext__kicker">{t('player.video.upNext')}</p>
+            <p className="vp-upnext__title">
+              {nextEpisode
+                ? [episodeCode(nextEpisode.seasonNumber, nextEpisode.episodeNumber), nextEpisode.title].filter(Boolean).join(' · ')
+                : t('player.video.nextEpisode')}
+            </p>
+            <div className="vp-upnext__actions">
+              <button type="button" className="vp-upnext__play" onClick={() => goTo(next)}>
+                <RdIcon name="play" size={14} />
+                {t('player.video.playNow')}
+              </button>
+              {autoplay ? (
+                <button type="button" className="vp-upnext__cancel" onClick={() => setUpNextDismissed(true)}>
+                  {t('player.video.cancel')}
+                </button>
+              ) : null}
+            </div>
+            {countdown !== null ? (
+              <p className="vp-upnext__count" aria-live="polite">
+                {t('player.video.upNextIn', { seconds: countdown })}
+              </p>
+            ) : null}
+          </div>
+          {countdown !== null ? (
+            <span className="vp-upnext__bar" aria-hidden="true">
+              <span style={{ width: `${(countdown / UP_NEXT_SECONDS) * 100}%` }} />
+            </span>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* bottom: scrub bar and controls (§5.1, §5.3) */}
+      <div className="vp-bottom" aria-hidden={!uiShown || undefined}>
+        <div className="vp-bar">
+          <div className="vp-seek" onPointerMove={onSeekHover} onPointerLeave={() => setHover(null)}>
+            <div className="vp-seek__track" aria-hidden="true">
+              <span className="vp-seek__fill" style={{ width: `${pct}%` }} />
+              {chapters
+                .filter((c) => c.startMs > 0 && durationMs > 0 && c.startMs < durationMs)
+                .map((c) => (
+                  <span key={c.startMs} className="vp-seek__notch" style={{ left: `${(c.startMs / durationMs) * 100}%` }} />
+                ))}
+              <span className="vp-seek__knob" style={{ left: `${pct}%` }} />
+            </div>
+            <input
+              className="vp-seek__input"
+              type="range"
+              min={0}
+              max={Math.max(1, durationMs)}
+              step={1000}
+              value={Math.min(positionMs, durationMs)}
+              aria-label={t('player.video.seek')}
+              aria-valuetext={t('player.video.seekValue', { position: clock(positionMs), duration: clock(durationMs) })}
+              tabIndex={tab}
+              onChange={(e) => setScrub(Number(e.target.value))}
+              onPointerUp={commitScrub}
+              onKeyUp={commitScrub}
+              onBlur={() => scrub !== null && commitScrub()}
+            />
+            {previewMs !== null && durationMs > 0 ? <ScrubPreview ms={previewMs} durationMs={durationMs} chapters={chapters} manifest={sheets} /> : null}
+          </div>
+          <span className="vp-time">
+            {clock(positionMs)} / {clock(durationMs)}
+          </span>
         </div>
         <div className="vp-controls">
-          <div className="vp-controls__group">
-            <button
-              ref={playRef}
-              type="button"
-              className="vp-btn vp-btn--play"
-              aria-label={playing ? t('player.video.pause') : t('player.video.play')}
-              onClick={() => pb?.toggle()}
-              tabIndex={chrome ? 0 : -1}
-              autoFocus
-            >
-              <PlayerIcon name={playing ? 'pause' : 'play'} size={26} />
+          <button
+            ref={playRef}
+            type="button"
+            className="vp-btn vp-btn--play"
+            aria-label={playing ? t('player.video.pause') : t('player.video.play')}
+            onClick={() => pb?.toggle()}
+            tabIndex={tab}
+            autoFocus
+          >
+            <RdIcon name={playing ? 'pause' : 'play'} size={playing ? 22 : 20} />
+          </button>
+          <button type="button" className="vp-btn vp-btn--round" aria-label={t('player.video.back10')} onClick={() => void pb?.skip(-SKIP_MS)} tabIndex={tab}>
+            −10
+          </button>
+          <button type="button" className="vp-btn vp-btn--round" aria-label={t('player.video.forward10')} onClick={() => void pb?.skip(SKIP_MS)} tabIndex={tab}>
+            +10
+          </button>
+          {next ? (
+            <button type="button" className="vp-pill" onClick={() => goTo(next)} tabIndex={tab}>
+              <RdIcon name="next" size={16} className="vp-pill__icon" />
+              <span className="vp-pill__label">{t('player.video.nextEpisode')}</span>
             </button>
-            <button type="button" className="vp-btn" aria-label={t('player.video.back10')} onClick={() => void pb?.skip(-SKIP_MS)} tabIndex={chrome ? 0 : -1}>
-              <span className="vp-btn__skip">−10</span>
+          ) : null}
+          {item.kind === 'episode' && item.seriesId ? (
+            <button type="button" className="vp-pill" aria-expanded={panel === 'episodes'} onClick={() => openPanel('episodes')} tabIndex={tab}>
+              <RdIcon name="episodes" size={18} className="vp-pill__icon" />
+              <span className="vp-pill__label">{t('player.video.episodes')}</span>
             </button>
-            <button type="button" className="vp-btn" aria-label={t('player.video.forward10')} onClick={() => void pb?.skip(SKIP_MS)} tabIndex={chrome ? 0 : -1}>
-              <span className="vp-btn__skip">+10</span>
-            </button>
-            {next ? (
-              <button type="button" className="vp-btn" aria-label={t('player.video.nextEpisode')} onClick={() => goTo(next)} tabIndex={chrome ? 0 : -1}>
-                <PlayerIcon name="next" />
-              </button>
-            ) : null}
-            <button type="button" className="vp-btn" aria-label={state?.muted ? t('player.video.unmute') : t('player.video.mute')} aria-pressed={!!state?.muted} onClick={() => pb?.toggleMute()} tabIndex={chrome ? 0 : -1}>
-              <PlayerIcon name={state?.muted || state?.volume === 0 ? 'mute' : 'volume'} />
+          ) : null}
+          <span className="vp-controls__spacer" />
+          <span className="vp-volume-wrap">
+            <button type="button" className="vp-btn vp-btn--round" aria-label={state?.muted ? t('player.video.unmute') : t('player.video.mute')} aria-pressed={!!state?.muted} onClick={() => pb?.toggleMute()} tabIndex={tab}>
+              <RdIcon name={state?.muted || state?.volume === 0 ? 'mute' : 'volume'} size={22} />
             </button>
             <input
               className="vp-volume"
@@ -637,47 +817,32 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
               step={5}
               value={Math.round((state?.muted ? 0 : (state?.volume ?? 1)) * 100)}
               aria-label={t('player.video.volume')}
-              tabIndex={chrome ? 0 : -1}
+              tabIndex={tab}
               onChange={(e) => pb?.setVolume(Number(e.target.value) / 100)}
             />
-          </div>
-          <div className="vp-controls__group">
-            <button
-              type="button"
-              className="vp-btn"
-              aria-label={t('player.video.audioAndSubtitles')}
-              aria-expanded={panel === 'tracks'}
-              aria-controls={panel === 'tracks' ? 'vp-tracks' : undefined}
-              data-active={state?.subtitle ? true : undefined}
-              onClick={() => openPanel('tracks')}
-              tabIndex={chrome ? 0 : -1}
-            >
-              <Icon name="subtitles" size={20} />
+          </span>
+          <button type="button" className="vp-btn vp-btn--round" aria-label={t('player.video.settings')} aria-expanded={panel === 'settings'} onClick={() => openPanel('settings')} tabIndex={tab}>
+            <RdIcon name="settings" size={22} />
+          </button>
+          {pipSupported ? (
+            <button type="button" className="vp-btn vp-btn--round" aria-label={t('player.video.pip')} onClick={pip} tabIndex={tab}>
+              <PipIcon />
             </button>
-            {item.kind === 'episode' && item.seriesId ? (
-              <button
-                type="button"
-                className="vp-btn"
-                aria-label={t('player.video.episodes')}
-                aria-expanded={panel === 'episodes'}
-                onClick={() => openPanel('episodes')}
-                tabIndex={chrome ? 0 : -1}
-              >
-                <PlayerIcon name="queue" />
-              </button>
-            ) : null}
-            <button type="button" className="vp-btn" aria-label={t('player.video.settings')} aria-expanded={panel === 'settings'} onClick={() => openPanel('settings')} tabIndex={chrome ? 0 : -1}>
-              <Icon name="settings" size={20} />
-            </button>
-            {pipSupported ? (
-              <button type="button" className="vp-btn" aria-label={t('player.video.pip')} onClick={pip} tabIndex={chrome ? 0 : -1}>
-                <PipIcon />
-              </button>
-            ) : null}
-            <button type="button" className="vp-btn" aria-label={fs.on ? t('player.video.exitFullscreen') : t('player.video.fullscreen')} aria-pressed={fs.on} onClick={fs.toggle} tabIndex={chrome ? 0 : -1}>
-              <FullscreenIcon on={fs.on} />
-            </button>
-          </div>
+          ) : null}
+          <button type="button" className="vp-btn vp-btn--round" aria-label={fs.on ? t('player.video.exitFullscreen') : t('player.video.fullscreen')} aria-pressed={fs.on} onClick={fs.toggle} tabIndex={tab}>
+            <RdIcon name={fs.on ? 'exitFullscreen' : 'fullscreen'} size={22} />
+          </button>
+          <button
+            type="button"
+            className="vp-pill"
+            aria-expanded={panel === 'tracks'}
+            aria-controls={panel === 'tracks' ? 'vp-tracks' : undefined}
+            onClick={() => openPanel('tracks')}
+            tabIndex={tab}
+          >
+            <CaptionsIcon />
+            <span className="vp-pill__label">{t('player.video.audioAndSubtitles')}</span>
+          </button>
         </div>
       </div>
 
@@ -685,19 +850,14 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
         <>
           <div className="vp-scrim" aria-hidden="true" onClick={closePanel} />
           {panel === 'tracks' ? (
-            <TracksPanel
-              item={item}
-              state={state}
-              subtitleOffsetMs={subOffset}
-              onAudio={(i) => void pb.setAudioTrack(i)}
-              onSubtitle={(id) => void pb.setSubtitle(id)}
-              onOffset={setSubOffset}
-              onClose={closePanel}
-            />
+            <TracksPanel item={item} state={state} onAudio={pickAudio} onSubtitle={pickSubtitle} />
           ) : panel === 'settings' ? (
-            <SettingsPanel item={item} state={state} onQuality={(q) => void pb.setQuality(q)} onSpeed={pb.setSpeed} onVersion={(id) => void pb.setVersion(id)} onClose={closePanel} />
+            <SettingsPanel item={item} state={state} onQuality={(q) => {
+              writeStoredQuality(profileIdRef.current, q);
+              void pb.setQuality(q);
+            }} onSpeed={pb.setSpeed} onVersion={(id) => void pb.setVersion(id)} />
           ) : (
-            <EpisodesPanel item={item} onPick={(key) => (key === item.itemKey ? closePanel() : goTo(key))} onClose={closePanel} />
+            <EpisodesPanel item={item} onPick={(key) => (key === item.itemKey ? closePanel() : goTo(key))} />
           )}
         </>
       ) : null}
@@ -705,18 +865,105 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
   );
 }
 
+/** The scrub preview (§5.3): a 240x135 trickplay tile (when ready), the time and the chapter. */
+export function ScrubPreview({ ms, durationMs, chapters, manifest }: { ms: number; durationMs: number; chapters: PlayableItem['chapters']; manifest: TrickplayManifest | null }) {
+  const at = Math.max(0, Math.min(durationMs, ms));
+  const chapter = chapterAt(chapters, at);
+  const tile = manifest ? trickplayTileAt(manifest, at) : null;
+  const sheet = tile && manifest ? manifest.sheets[tile.sheet] : undefined;
+
+  // Preload the sheet in view and its neighbours.
+  useEffect(() => {
+    if (!manifest || !tile) return;
+    for (const n of [tile.sheet - 1, tile.sheet, tile.sheet + 1]) {
+      const url = manifest.sheets[n];
+      if (url && !preloaded.has(url)) {
+        preloaded.add(url);
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
+      }
+    }
+  }, [manifest, tile?.sheet]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  let thumb: CSSProperties | null = null;
+  if (manifest && tile && sheet) {
+    const sx = 240 / manifest.tileWidth;
+    const sy = 135 / manifest.tileHeight;
+    thumb = {
+      backgroundImage: `url("${sheet.replace(/["\\\n]/g, (c) => encodeURIComponent(c))}")`,
+      backgroundSize: `${manifest.columns * manifest.tileWidth * sx}px ${manifest.rows * manifest.tileHeight * sy}px`,
+      backgroundPosition: `${-tile.x * sx}px ${-tile.y * sy}px`,
+    };
+  }
+  return (
+    <span className={cx('vp-preview', thumb && 'vp-preview--thumb')} style={{ left: `clamp(var(--vp-preview-half), ${(at / durationMs) * 100}%, calc(100% - var(--vp-preview-half)))` }} aria-hidden="true" data-testid="scrub-preview">
+      {thumb ? <span className="vp-preview__thumb" style={thumb} data-testid="scrub-thumb" /> : null}
+      <span className="vp-preview__time">{clock(at)}</span>
+      {chapter >= 0 && chapters[chapter] ? <span className="vp-preview__chapter">{chapters[chapter]!.title}</span> : null}
+    </span>
+  );
+}
+
+const preloaded = new Set<string>();
+
+/** The pause info screen (§5.2). */
+export function PauseScreen({ item, remainingMs, onDismiss }: { item: PlayableItem; remainingMs: number; onDismiss: () => void }) {
+  const t = useT();
+  const p = item.pause;
+  const [logoFailed, setLogoFailed] = useState(false);
+  const title = playerHeading(item);
+  const logo = (p?.logoUrl ?? item.logoUrl) || null;
+  const backdrop = (p?.backdropUrl ?? item.backdropUrl) || null;
+  const episodeLine = item.kind === 'episode' ? playerEpisodeLine(p?.seasonNumber ?? item.seasonNumber, p?.episodeNumber ?? item.episodeNumber, p?.episodeTitle ?? item.title) : null;
+  const chips: MediaChips | null = p?.chips
+    ? p.chips.tmdbScore === null && p.tmdbScore !== null
+      ? { ...p.chips, tmdbScore: p.tmdbScore }
+      : p.chips
+    : p?.tmdbScore
+      ? { resolution: null, dynamicRange: null, audio: null, audioLanguages: [], sizeBytes: null, tmdbScore: p.tmdbScore, certification: null }
+      : null;
+  const overview = p?.overview ?? item.overview ?? null;
+  return (
+    <div className="vp-pause" role="region" aria-label={t('player.video.paused')} onPointerDown={onDismiss} data-testid="pause-screen">
+      {backdrop ? <img className="vp-pause__art" src={backdrop} alt="" aria-hidden="true" /> : null}
+      <div className={cx('vp-pause__shade', !backdrop && 'vp-pause__shade--frame')} aria-hidden="true" />
+      <div className="vp-pause__content">
+        {logo && !logoFailed ? (
+          <h2 className="vp-pause__logo">
+            <img src={logo} alt={title} onError={() => setLogoFailed(true)} />
+          </h2>
+        ) : (
+          <h2 className="vp-pause__title">{title}</h2>
+        )}
+        {episodeLine ? <p className="vp-pause__episode">{episodeLine}</p> : null}
+        <MetaLine
+          year={p?.year ?? item.year ?? null}
+          cert={p?.certification ?? null}
+          runtimeMinutes={item.kind === 'movie' && item.durationMs > 0 ? Math.round(item.durationMs / 60_000) : null}
+          genres={p?.genres ?? []}
+          chips={chips}
+          className="vp-pause__meta"
+        />
+        {overview ? <p className="vp-pause__overview">{overview}</p> : null}
+        <p className="vp-pause__ends">{t('player.video.pauseEndsAt', { time: formatTime(new Date(Date.now() + remainingMs)) })}</p>
+      </div>
+    </div>
+  );
+}
+
 function PipIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.5} className="al-icon" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden="true" focusable="false">
       <path d="M3 5h18v14H3zM12 12h7v5h-7z" />
     </svg>
   );
 }
 
-function FullscreenIcon({ on }: { on: boolean }) {
+function CaptionsIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="square" className="al-icon" aria-hidden="true" focusable="false">
-      <path d={on ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'} />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="vp-pill__icon" aria-hidden="true" focusable="false">
+      <path d="M3 5h18v14H3zM10 10.5a2 2 0 1 0 0 3M17 10.5a2 2 0 1 0 0 3" />
     </svg>
   );
 }

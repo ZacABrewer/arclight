@@ -7,6 +7,10 @@ export const watchPaths = {
   movie: (id: number) => `/player/watch/movies/${id}`,
   shows: '/player/watch/shows',
   show: (id: number) => `/player/watch/shows/${id}`,
+  /** My List (titles saved by the active profile). */
+  myList: '/player/watch/my-list',
+  /** Search across Movies & TV, music and audiobooks. */
+  search: '/player/watch/search',
   /** Full-screen player. The key's ":" is kept readable ("movie:12"). */
   play: (itemKey: string) => `/player/watch/play/${itemKey}`,
   /** "Sign in a TV" (device code approval). */

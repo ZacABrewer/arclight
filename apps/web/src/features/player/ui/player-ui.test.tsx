@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { authRoutes, renderAt, stubApi, user } from '../../requests/test-utils.js';
+import { book as bookCard, emptyBookHome } from '../browse/test-utils.js';
 import { book, flush, makeController, progress, renderWithPlayer, track } from '../test-utils.js';
 import { MiniPlayer } from './mini-player.js';
 import { NowPlayingPage } from './now-playing.js';
@@ -26,7 +27,7 @@ describe('/player guard', () => {
     renderAt('/player');
     expect(await screen.findByText("The player isn't turned on for your account")).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to the portal' }).getAttribute('href')).toBe('/portal');
-    expect(screen.queryByRole('navigation', { name: 'Player sections' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Player' })).toBeNull();
   });
 
   it('treats a missing playback api as off', async () => {
@@ -35,20 +36,48 @@ describe('/player guard', () => {
     expect(await screen.findByText("The player isn't turned on for your account")).toBeTruthy();
   });
 
-  it('opens the player home when allowed', async () => {
+  it('opens the redesigned player home when allowed', async () => {
     stubApi({
       ...authRoutes(user()),
       '/api/v1/playback/me': caps(),
-      '/api/v1/playback/continue': { items: [{ item: book(), progress: progress('audiobook:7', 1_800_000, 3_600_000) }] },
+      '/api/v1/playback/audiobooks/home': {
+        ...emptyBookHome,
+        continueListening: [bookCard(7, { title: 'The Test Book', progress: progress('audiobook:7', 1_800_000, 3_600_000) })],
+      },
     });
     renderAt('/player');
-    expect(await screen.findByRole('heading', { name: 'Continue listening' })).toBeTruthy();
-    expect(await screen.findByRole('button', { name: 'Resume The Test Book' })).toBeTruthy();
-    const nav = screen.getByRole('navigation', { name: 'Player sections' });
-    expect(within(nav).getByRole('link', { name: 'Music' })).toBeTruthy();
-    expect(within(nav).getAllByText('Coming soon').length).toBe(2);
+    expect(await screen.findByRole('heading', { name: 'Continue Listening' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /^The Test Book, / })).toBeTruthy();
+    const nav = await screen.findByRole('navigation', { name: 'Player' });
+    expect(within(nav).getByRole('link', { name: 'Home' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Music' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Audiobooks' })).toBeTruthy();
+    // Video is off for this server: no Movies or TV Shows tabs, and no hint text anywhere.
+    expect(within(nav).queryByRole('link', { name: 'Movies' })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Esc to|Press .* to/);
+  });
+  it("asks who's watching when the account has two profiles, then shows the page", async () => {
+    sessionStorage.clear();
+    const prof = (id: number, name: string, isOwner: boolean) => ({ id, name, color: '#3a8fd9', initial: name[0], isOwner, hasPin: false, contentRestrictions: null, settings: {}, sortOrder: id, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
+    stubApi(
+      {
+        ...authRoutes(user()),
+        '/api/v1/playback/me': caps(),
+        '/api/v1/households/profiles': { profiles: [prof(1, 'Alex', true), prof(2, 'Sam', false)], activeProfileId: 1, canManage: true, max: 6 },
+        '/api/v1/playback/audiobooks/home': emptyBookHome,
+      },
+      (url, method) => (method === 'POST' && url.endsWith('/households/profiles/2/select') ? { body: { activeProfile: prof(2, 'Sam', false) } } : undefined),
+    );
+    renderAt('/player');
+    expect(await screen.findByRole('heading', { name: 'Who’s watching?' })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Player' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Sam/ }));
+    expect(await screen.findByRole('navigation', { name: 'Player' })).toBeTruthy();
+    expect(sessionStorage.getItem('arclight.web.profilePicked')).toBe('1');
+    sessionStorage.clear();
   });
 });
+
 
 describe('MiniPlayer', () => {
   it('renders nothing until something is loaded', async () => {

@@ -17,6 +17,9 @@ function stub(servers: MediaServerConfig[], saved: Partial<PlayerSettings> = {})
     'PUT /api/v1/settings/player': (init: RequestInit | undefined) => JSON.parse(String(init?.body)),
     'POST /api/v1/settings/player/engine-test': { ok: true, serverId: 'jf1', serverName: 'Den', version: '10.10.0', sample: { fileId: 1, resolved: true, itemId: 'x' }, message: null },
     '/api/v1/mediaserver': servers,
+    '/api/v1/settings/player/trickplay-cache': { bytes: 3 * 1024 ** 2, files: 12 },
+    'DELETE /api/v1/settings/player/trickplay-cache': () => null,
+    'POST /api/v1/jobs/run': { id: 7, name: 'player-segments', status: 'queued', trigger: 'manual', message: null, queuedAt: '2026-05-01T00:00:00.000Z', startedAt: null, endedAt: null, durationMs: null },
   });
 }
 
@@ -80,5 +83,30 @@ describe('Settings -> Player -> Movies & TV', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ video: false, videoMaxStreams: 4, videoMaxStreamsPerUser: 1 });
+  });
+});
+
+describe('Settings -> Player -> Scrub thumbnails and intros', () => {
+  it('round-trips the scrub-thumbnail mode and detection switch', () => {
+    const s = PlayerSettings.parse({ trickplay: 'library', segmentDetection: false });
+    expect(toPlayerSettingsBody(toPlayerSettingsDraft(s))).toEqual({ ok: true, body: s });
+  });
+
+  it('shows the cache, clears it, scans now and saves the choices', async () => {
+    stub([]);
+    renderAt('/settings/player');
+    expect(await screen.findByText('3.0 MB in 12 files')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear scrub thumbnails' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'DELETE' && c.path === '/api/v1/settings/player/trickplay-cache')).toBe(true));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scan now' }));
+    await waitFor(() => expect(api.calls.some((c) => c.path === '/api/v1/jobs/run')).toBe(true));
+    expect(api.calls.find((c) => c.path === '/api/v1/jobs/run')!.body).toEqual({ name: 'player-segments' });
+
+    fireEvent.change(screen.getByLabelText('Scrub thumbnails'), { target: { value: 'off' } });
+    fireEvent.click(screen.getByLabelText('Detect intros and credits'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ trickplay: 'off', segmentDetection: false });
   });
 });

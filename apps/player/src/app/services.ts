@@ -4,7 +4,7 @@ import type { PlayerCapabilities } from '@arclight/shared';
 import { toasts } from '@web/lib/toast';
 import { createQueryClient } from '@web/query-client';
 import { AccountStore, type Account } from '../core/accounts';
-import { onArtworkLinkRenewed, resetArtworkLink, setUnauthorizedHandler } from '../core/api';
+import { onArtworkLinkRenewed, resetArtworkLink, retryUnlessUnreachable, setUnauthorizedHandler } from '../core/api';
 import { preferencesStore } from '../core/kv';
 import { netState, onNetChange, startNetworkWatch } from '../core/network';
 import { getSession } from '../core/session';
@@ -19,11 +19,14 @@ import { createCarLibrary } from '../player/car-library';
 import { appDeviceId, createAppPlayer, progressSender, type AppPlayer } from '../player/setup';
 import { browseKeys } from '@web/features/player/browse/api';
 import { playbackApi, playerKeys } from '@web/features/player/api';
-import { videoApi } from '@web/features/player/video/api';
+import { videoApi, videoKeys } from '@web/features/player/video/api';
 import { setVideoLauncher } from '@web/features/player/video/video-launcher';
 import { ArclightPlayer, type DeviceInfo } from '../native';
 import { decideTvMode } from '../tv/tv-mode';
 import { NativeVideoLauncher } from '../video/native-video';
+import { documentTheme } from '../video/native-extras';
+import { householdKeys, householdsApi } from '../households/api';
+import { currentVideoQuality, setActiveProfileId } from '../video/quality';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
 // React through AppServicesContext.
@@ -67,6 +70,9 @@ async function nativeDeviceInfo(backend: PlayerBackend): Promise<DeviceInfo | nu
 
 export async function createServices(): Promise<AppServices> {
   const qc = createQueryClient(toasts);
+  // A server that did not answer within the connect timeout is not asked again at once: the
+  // screen says so after one wait instead of two (other failures keep the one retry).
+  qc.setDefaultOptions({ ...qc.getDefaultOptions(), queries: { ...qc.getDefaultOptions().queries, retry: retryUnlessUnreachable } });
   const accounts = new AccountStore();
   const settings = new SettingsStore();
   const index = new DownloadIndex();
@@ -140,6 +146,8 @@ export async function createServices(): Promise<AppServices> {
       if (accountId) await accounts.setActive(accountId);
       resetArtworkLink();
       caps = undefined;
+      // The profile belonged to the old account; the hooks set the new one once it is loaded.
+      setActiveProfileId(null);
       await accounts.activate();
       qc.clear();
       for (const l of [...playerListeners]) l();
@@ -179,6 +187,12 @@ export async function createServices(): Promise<AppServices> {
       onError: (message) => toasts.push({ tone: 'error', title: message }),
       deviceId,
       deviceName,
+      // Redesign extras (spec §5.9): the profile's languages and prefs, the episodes panel, the theme.
+      profileSettings: () => qc.fetchQuery({ queryKey: householdKeys.settings(), queryFn: householdsApi.settings, staleTime: 60_000 }).catch(() => null),
+      fetchSeries: (id) => qc.fetchQuery({ queryKey: videoKeys.show(id), queryFn: () => videoApi.show(id), staleTime: 30_000 }),
+      saveProfileSettings: async (patch) => qc.setQueryData(householdKeys.settings(), await householdsApi.saveSettings(patch)),
+      theme: documentTheme,
+      quality: currentVideoQuality,
     });
     await video.start();
     setVideoLauncher(video.launch);

@@ -1,0 +1,64 @@
+/* Cinema: an Arclight theme pack (dark).
+   The player redesign's look (redesign spec §4.1): warm charcoal #111316, white type, the cyan
+   accent with the brand blue as a tint, 8px corners. It is the player's default theme for every
+   profile; as an account theme it gives the admin portal the same colours.
+   Active when <html data-theme="cinema">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Figtree is self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Figtree Variable"; font-style: normal; font-weight: 300 900; font-display: swap; src: url(fonts/figtree-latin-wght-normal.woff2) format("woff2"); }
+
+[data-theme="cinema"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #111316; --al-deep: #111316;
+  --al-backdrop: none;
+  --al-glass: #16191d; --al-glass-2: #16191d;
+  --al-glass-strong: #1b1e23; --al-glass-strong-2: #1b1e23;
+  --al-field: #1b1e23; --al-tile: #1b1e23;
+  /* lines */
+  --al-line-1: #22262c; --al-line-2: #2a2e35; --al-line-3: #2a2e35; --al-line-4: #3a3f47;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #eef1f4; --al-text-2: #c3c9d1; --al-text-3: #a9b1bb; --al-text-4: #7d848e; --al-text-5: #5d646e;
+  /* accent */
+  --al-cyan: #6ef6ff; --al-cyan-ink: #0b1f22;
+  --al-cyan-a06: rgba(110,246,255,.08); --al-cyan-a12: rgba(110,246,255,.12); --al-accent-text: #6ef6ff;
+  --al-nav-active-bg: rgba(255,255,255,.07); --al-nav-active-text: #ffffff;
+  --al-mark-from: #2f7bff; --al-mark-to: #6ef6ff;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(110,246,255,.12);  --al-tone-accent-ink: #9ff9ff;
+  --al-tone-default: rgba(47,123,255,.16); --al-tone-default-ink: #a9c6ff;
+  --al-tone-warn: rgba(240,170,60,.14);   --al-tone-warn-ink: #f3c57a;
+  --al-tone-people: rgba(220,120,200,.14);  --al-tone-people-ink: #efb0e2;
+  --al-warn: #f0aa3c; --al-warn-text: #f3c57a; --al-ok: #4fc883;
+  /* progress */
+  --al-trail: #6ef6ff; --al-track: rgba(255,255,255,.25);
+  --al-bar-height: 3px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,255,255,.35);
+  /* light / depth */
+  --al-glow: 0 0 12px rgba(110,246,255,.7); --al-sheen: none; --al-chamfer: 0px; --al-chamfer-clip: none;
+  --al-shadow-card: none; --al-shadow-pop: 0 24px 60px rgba(0,0,0,.5);
+  --al-focus: 0 0 0 2px #111316, 0 0 0 4px #ffffff;
+  /* shape */
+  --al-radius-card: 8px; --al-radius-inner: 6px; --al-radius-control: 10px; --al-radius-field: 10px;
+  --al-radius-check: 4px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Figtree Variable", system-ui, sans-serif;
+  --al-font: "Figtree Variable", system-ui, sans-serif;
+  --al-display-weight: 800; --al-display-case: none; --al-display-tracking: -.02em;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 13px;
+
+  /* player tokens (--al-pl-*): the design's exact values */
+  --al-pl-bg: #111316;
+  --al-pl-text: #eef1f4; --al-pl-text-2: #c3c9d1; --al-pl-text-3: #a9b1bb; --al-pl-text-4: #7d848e;
+  --al-pl-cert-border: #5d646e;
+  --al-pl-accent: #6ef6ff; --al-pl-accent-glow: 0 0 12px rgba(110,246,255,.7);
+  --al-pl-primary-bg: #ffffff; --al-pl-primary-text: #111111;
+  --al-pl-fill: rgba(255,255,255,.14); --al-pl-surface: rgba(255,255,255,.045); --al-pl-track: rgba(255,255,255,.25);
+  --al-pl-line: #2a2e35; --al-pl-panel: rgba(17,19,22,.97); --al-pl-tint: rgba(47,123,255,.1);
+  --al-pl-radius: 8px; --al-pl-radius-lg: 10px;
+  --al-pl-font: "Figtree Variable", system-ui, sans-serif;
+  --al-pl-focus-color: #ffffff;
+}

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile, VideoSession, VideoSessionRequest } from '@arclight/shared';
 import type { ArclightPlayerPlugin } from '../native/definitions';
-import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, startPosition } from './native-video';
+import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, itemTitles, startPosition } from './native-video';
+import { ProfileSettings, type PlayerSeriesDetails } from '@arclight/shared';
+import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf, videoStrings } from './native-extras';
 
 const profile = { containers: ['mp4', 'mkv'], videoCodecs: ['h264', 'hevc'] } as unknown as VideoDeviceProfile;
 
@@ -72,7 +74,7 @@ function session(req: VideoSessionRequest, over: Partial<VideoSession> = {}): Vi
 
 type Handler = (e: unknown) => void;
 
-function setup(items: Record<string, PlayableItem>, progress: PlaybackProgress | null = null) {
+function setup(items: Record<string, PlayableItem>, progress: PlaybackProgress | null = null, extra: Record<string, unknown> = {}) {
   const handlers = new Map<string, Handler>();
   const plugin = {
     addListener: vi.fn(async (name: string, fn: Handler) => {
@@ -107,6 +109,7 @@ function setup(items: Record<string, PlayableItem>, progress: PlaybackProgress |
     onError: vi.fn(),
     deviceId: 'device-1',
     now: () => new Date('2026-11-02T10:00:00Z'),
+    ...extra,
   };
   const launcher = new NativeVideoLauncher(deps);
   const emit = async (name: string, e: unknown) => {
@@ -146,16 +149,32 @@ describe('start position and labels', () => {
     expect(line).toBeTruthy();
     expect(line!.replace(/[^a-z0-9]/gi, '').toLowerCase()).toBe('s1e3');
   });
+
+  it('episodes: the series name is the title, "S1 E3 · Episode name" the line under it', () => {
+    // The server's shape: subtitle = the series, context = the code.
+    const e3 = episode(3, { title: 'The Long Meridian', subtitle: 'The Show', context: 'S1:E3', seasonNumber: 1, episodeNumber: 3 });
+    expect(itemTitles(e3)).toEqual({ title: 'The Show', subtitle: 'S1 E3 · The Long Meridian' });
+    // The pause info's names win when present.
+    const paused = { ...e3, pause: { title: 'Show (2024)', episodeTitle: 'Meridian' } as PlayableItem['pause'] };
+    expect(itemTitles(paused)).toEqual({ title: 'Show (2024)', subtitle: 'S1 E3 · Meridian' });
+    // No series name: the episode title stays the title and the line is just the code.
+    expect(itemTitles(episode(4, { title: 'Four', subtitle: null, context: 'S1:E4' }))).toEqual({ title: 'Four', subtitle: 'S1 E4' });
+  });
+
+  it('movies keep their title over the year', () => {
+    const movie = { ...episode(5), kind: 'movie', title: 'A Film', year: 2024, subtitle: null } as PlayableItem;
+    expect(itemTitles(movie)).toEqual({ title: 'A Film', subtitle: '2024' });
+  });
 });
 
 describe('NativeVideoLauncher', () => {
   it('asks for a session with the native profile and hands everything to playVideo', async () => {
     const { launcher, plugin, deps, requests, reports } = setup({ 'episode:1': episode(1, { next: 'episode:2' }), 'episode:2': episode(2) });
     await launcher.start();
-    expect(plugin.addListener).toHaveBeenCalledTimes(4);
+    expect(plugin.addListener).toHaveBeenCalledTimes(6);
     await launcher.launch('episode:1');
     expect(deps.pauseAudio).toHaveBeenCalled();
-    expect(requests[0]).toMatchObject({ itemKey: 'episode:1', profile, audioTrack: 1 });
+    expect(requests[0]).toMatchObject({ itemKey: 'episode:1', profile, audioTrack: 1, quality: 'auto' });
     // Text subtitles are side-loaded, never sent for burning in.
     expect(requests[0]!.subtitle).toBeUndefined();
     const opts = plugin.playVideo.mock.calls[0]![0] as unknown as Record<string, unknown>;
@@ -175,6 +194,8 @@ describe('NativeVideoLauncher', () => {
     });
     expect(opts.backdropUrl).toBeUndefined(); // only http(s) URLs reach the native side
     expect((opts.audioTracks as unknown[]).length).toBe(2);
+    // Enough for native to match the file's own tracks to these in direct play.
+    expect((opts.audioTracks as unknown[])[1]).toMatchObject({ index: 1, language: 'eng', codec: 'eac3', channels: 6, title: null });
     expect((opts.subtitles as Array<{ id: string }>)[0]!.id).toBe('e0');
     expect(reports.map((r) => r.report.event)).toEqual(['start']);
     expect(reports[0]!.report).toMatchObject({ deviceId: 'device-1', playMethod: 'Transcode', clientTime: '2026-11-02T10:00:00.000Z' });
@@ -329,8 +350,135 @@ describe('NativeVideoLauncher', () => {
   it('stop() removes the listeners', async () => {
     const { launcher, handlers } = setup({});
     await launcher.start();
-    expect(handlers.size).toBe(4);
+    expect(handlers.size).toBe(6);
     await launcher.stop();
     expect(handlers.size).toBe(0);
+  });
+
+  it('fills the redesign extras: pause info, trickplay, seasons, prefs, theme and strings', async () => {
+    const show = {
+      seasons: [
+        {
+          seasonNumber: 1,
+          title: 'Season 1',
+          episodeCount: 2,
+          playedCount: 1,
+          episodes: [
+            { itemKey: 'episode:1', id: 1, seasonNumber: 1, episodeNumber: 1, title: 'Pilot', overview: 'o', airDate: null, runtimeMinutes: 45, thumbUrl: 'http://server.example.com/t1.jpg', progress: null, played: true },
+            { itemKey: 'episode:2', id: 2, seasonNumber: 1, episodeNumber: 2, title: null, overview: null, airDate: null, runtimeMinutes: null, thumbUrl: null, progress: { positionMs: 250, durationMs: 1000, played: false }, played: false },
+          ],
+        },
+      ],
+    } as unknown as PlayerSeriesDetails;
+    const settings = ProfileSettings.parse({ subtitleSize: 'large', skipIntros: true, focusStyle: 'cyan-glow' });
+    const theme = { bg: '#000000', text: '#ffffff', text2: '#cccccc', text3: '#aaaaaa', accent: '#00ffff', primaryBg: '#ffffff', primaryText: '#000000', radiusButton: 0, radiusTile: 0 };
+    const item = episode(1, {
+      seriesId: 7,
+      pause: { title: 'The Show', episodeTitle: 'Pilot', seasonNumber: 1, episodeNumber: 1, year: 2024, certification: 'TV-14', tmdbScore: 8, genres: [], overview: 'Ov', logoUrl: null, backdropUrl: 'http://server.example.com/b.jpg', chips: null },
+    } as Partial<PlayableItem>);
+    const fetchSeries = vi.fn(async () => show);
+    const { launcher, plugin, deps } = setup({ 'episode:1': item }, null, {
+      profileSettings: async () => settings,
+      fetchSeries,
+      theme: () => theme,
+    });
+    deps.requestSession.mockImplementation(async (req: VideoSessionRequest) =>
+      session(req, { trickplay: { mediaFileId: 101, status: 'ready', intervalMs: 10_000, tileWidth: 320, tileHeight: 180, columns: 10, rows: 10, tileCount: 50, sheets: ['http://server.example.com/s0.jpg'] } }),
+    );
+    await launcher.start();
+    await launcher.launch('episode:1');
+    expect(fetchSeries).toHaveBeenCalledWith(7);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const opts = plugin.playVideo.mock.calls[0]![0] as unknown as Record<string, any>;
+    expect(opts.pause).toMatchObject({ title: 'The Show', episodeLine: 'S1 E1 · Pilot', overview: 'Ov', backdropUrl: 'http://server.example.com/b.jpg' });
+    expect(opts.pause.meta).toEqual([{ text: '2024' }, { text: 'TV-14', boxed: true }, { text: '17m' }]);
+    expect(opts.trickplay).toMatchObject({ intervalMs: 10_000, sheets: ['http://server.example.com/s0.jpg'] });
+    expect(opts.seasons[0].episodes[0]).toMatchObject({ title: '1. Pilot', runtime: '45m', progress: 1, played: true });
+    expect(opts.seasons[0].episodes[1]).toMatchObject({ progress: 0.25, thumbUrl: null });
+    expect(opts.currentSeason).toBe(1);
+    expect(opts.prefs).toEqual({ subtitleSize: 'large', skipIntros: true, autoplayNext: true, focusStyle: 'cyan-glow', reduceMotion: false });
+    expect(opts.theme).toEqual(theme);
+    expect(Object.keys(opts.strings)).toContain('skipCredits');
+    // Subtitles off on the profile: none at start (the file's default text track is not forced).
+    expect(opts.selectedSubtitle).toBeNull();
+  });
+
+  it('videoPickItem stops this episode where it was and opens the picked one', async () => {
+    const { launcher, plugin, reports, emit, deps } = setup({ 'episode:1': episode(1), 'episode:3': episode(3) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoPickItem', { itemKey: 'episode:3', fromItemKey: 'episode:1', positionMs: 300_000 });
+    await flush();
+    expect(reports.map((r) => [r.key, r.report.event])).toEqual([
+      ['episode:1', 'start'],
+      ['episode:1', 'stop'],
+      ['episode:3', 'start'],
+    ]);
+    expect(reports[1]!.report.positionMs).toBe(300_000);
+    expect(deps.markPlayed).not.toHaveBeenCalled();
+    expect((plugin.playVideo.mock.calls[1]![0] as unknown as { itemKey: string }).itemKey).toBe('episode:3');
+    expect(launcher.playing?.itemKey).toBe('episode:3');
+  });
+
+  it('videoTracksChanged saves the languages to the profile', async () => {
+    const save = vi.fn(async (_p: unknown) => undefined);
+    const { launcher, emit } = setup({ 'episode:1': episode(1) }, null, { saveProfileSettings: save });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 0, subtitle: 'e1' });
+    expect(save).toHaveBeenLastCalledWith({ audioLanguage: 'en', subtitleLanguage: 'de' });
+    await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 1, subtitle: null });
+    expect(save).toHaveBeenLastCalledWith({ audioLanguage: 'en', subtitleLanguage: null });
+    await emit('videoTracksChanged', { itemKey: 'other:1', audioTrack: 1, subtitle: null });
+    expect(save).toHaveBeenCalledTimes(2);
+    // An audio index the item does not have: no audio language is saved from it.
+    await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 7, subtitle: null });
+    expect(save).toHaveBeenLastCalledWith({ subtitleLanguage: null });
+  });
+});
+
+describe('native extras', () => {
+  it('the countdown string keeps its unit, like the native default (strings.xml)', () => {
+    expect(videoStrings().nextIn).toBe('Next episode in {s}s');
+  });
+
+  it('builds the episode line and skips pause info without data', () => {
+    expect(episodeLine({ seasonNumber: 2, episodeNumber: 5, episodeTitle: 'The Long Meridian' })).toBe('S2 E5 · The Long Meridian');
+    expect(episodeLine({ seasonNumber: null, episodeNumber: null, episodeTitle: null })).toBeNull();
+    expect(pauseInfo(episode(1))).toBeUndefined();
+  });
+
+  it('passes trickplay only when ready', () => {
+    expect(trickplayOf(null)).toBeNull();
+    expect(trickplayOf({ mediaFileId: 1, status: 'pending', intervalMs: 1, tileWidth: 1, tileHeight: 1, columns: 1, rows: 1, tileCount: 1, sheets: [] })).toBeNull();
+  });
+
+  it('turns computed colours into hex, translucent ones as #aarrggbb', () => {
+    expect(toHex('rgb(17, 19, 22)')).toBe('#111316');
+    expect(toHex('rgba(255, 255, 255, 0.5)')).toBe('#80ffffff');
+    expect(toHex('#6EF6FF')).toBe('#6ef6ff');
+    expect(toHex('#fff')).toBe('#ffffff');
+    expect(toHex('color(srgb 1 0 0)')).toBe('#ff0000');
+    expect(toHex('oklch(0.5 0.1 20)')).toBeNull();
+    const theme = themeFrom((tok) => (tok === '--al-pl-bg' ? 'rgb(0, 0, 0)' : 'nonsense'), () => Number.NaN);
+    expect(theme.bg).toBe('#000000');
+    expect(theme.accent).toBe('#6ef6ff');
+    expect(theme.radiusButton).toBe(8);
+  });
+
+  it('matches languages across 639-1 and 639-2 and prefers full subtitles in the profile language', () => {
+    expect(normLanguage('ger')).toBe('de');
+    expect(normLanguage('und')).toBeNull();
+    expect(preferredSubtitle(episode(1), ProfileSettings.parse({ subtitleLanguage: 'en' }), 1)).toBe('e0');
+    const base = episode(1);
+    const forcedOnly = episode(1, {
+      video: { ...base.video!, subtitleTracks: [{ id: 'f', source: 'embedded', codec: 'subrip', language: 'eng', title: null, forced: true, hearingImpaired: false, default: false, text: true }] },
+    } as Partial<PlayableItem>);
+    expect(preferredSubtitle(forcedOnly, ProfileSettings.parse({}), 1)).toBe('f');
+  });
+
+  it('names specials and keeps season numbers', () => {
+    const rows = seasonsOf({ seasons: [{ seasonNumber: 0, title: 'Specials', episodeCount: 0, playedCount: 0, episodes: [] }] } as unknown as PlayerSeriesDetails);
+    expect(rows[0]!.seasonNumber).toBe(0);
   });
 });

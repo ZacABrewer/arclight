@@ -44,6 +44,10 @@ export const PlayerSettings = z.object({
   videoMaxStreams: z.number().int().min(1).max(32).default(3),
   /** Live video remuxes/transcodes one user may run at once. */
   videoMaxStreamsPerUser: z.number().int().min(1).max(32).default(1),
+  /** Scrub thumbnails: never, when a file is first played, or also nightly for the whole library. */
+  trickplay: z.enum(['off', 'on-play', 'library']).default('on-play'),
+  /** Detect intros and credits by audio fingerprint when the file has no chapter marks. */
+  segmentDetection: z.boolean().default(true),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
@@ -207,11 +211,93 @@ export const VideoVersion = z.object({
 });
 export type VideoVersion = z.infer<typeof VideoVersion>;
 
+// Redesign spec §1.2. These sections sit here, ahead of the schemas that reference them
+// (VideoSegment, PlayableItem, VideoSession); the rest of §1.2 is at the end of the file.
+
+// ---- Media chips (info line next to year / rating; never drawn over artwork) -------------
+
+/** Resolution bucket. 1440p files count as 1080p; anything under 720 lines is SD. */
+export const ChipResolution = z.enum(['4K', '1080p', '720p', 'SD']);
+export const ChipDynamicRange = z.enum(['DV', 'HDR10+', 'HDR10', 'HLG']);
+/** Best audio of the default version: Atmos (TrueHD/EAC3 Atmos), else channel layout. */
+export const ChipAudio = z.enum(['Atmos', '7.1', '5.1', 'Stereo', 'Mono']);
+export const MediaChips = z.object({
+  resolution: ChipResolution.nullable(),
+  dynamicRange: ChipDynamicRange.nullable(),
+  audio: ChipAudio.nullable(),
+  /** Distinct audio languages of the default version, in track order, lower-case ISO codes. */
+  audioLanguages: z.array(z.string()),
+  /** Size of the default version's file. */
+  sizeBytes: z.number().int().nullable(),
+  /** TMDB vote average, 0-10, one decimal. */
+  tmdbScore: z.number().min(0).max(10).nullable(),
+  /** "PG-13", "TV-MA" ... (drawn as the boxed rating, not as a chip). */
+  certification: z.string().nullable(),
+});
+export type MediaChips = z.infer<typeof MediaChips>;
+
+// ---- Trickplay (scrub thumbnails) ---------------------------------------------------------
+
+/**
+ * Tile n covers [n*intervalMs, (n+1)*intervalMs). Sheet = floor(n / (columns*rows)); inside the
+ * sheet, col = n % columns, row = floor((n % (columns*rows)) / columns). Every sheet is
+ * columns*tileWidth x rows*tileHeight (the last one may have empty cells).
+ */
+export const TrickplayManifest = z.object({
+  mediaFileId: z.number().int(),
+  /** pending: queued or generating (ask again later); unavailable: off, failed, or no video stream. */
+  status: z.enum(['ready', 'pending', 'unavailable']),
+  intervalMs: z.number().int(),
+  tileWidth: z.number().int(),
+  tileHeight: z.number().int(),
+  columns: z.number().int(),
+  rows: z.number().int(),
+  tileCount: z.number().int(),
+  /** Absolute signed JPEG URLs in sheet order (empty unless ready). */
+  sheets: z.array(z.string()),
+});
+export type TrickplayManifest = z.infer<typeof TrickplayManifest>;
+// GET /playback/video/trickplay/:mediaFileId -> TrickplayManifest (enqueues generation when missing)
+// GET /stream/trickplay/:mediaFileId/:sheet.jpg?u&p&exp&sig&v -> image/jpeg (signed, see §2.5)
+
+export function trickplayTileAt(m: Pick<TrickplayManifest, 'intervalMs' | 'tileWidth' | 'tileHeight' | 'columns' | 'rows' | 'tileCount'>, ms: number) {
+  const n = Math.max(0, Math.min(m.tileCount - 1, Math.floor(ms / m.intervalMs)));
+  const per = m.columns * m.rows;
+  const i = n % per;
+  return { sheet: Math.floor(n / per), x: (i % m.columns) * m.tileWidth, y: Math.floor(i / m.columns) * m.tileHeight };
+}
+
+// ---- Segments (intro / credits / recap) -----------------------------------------------------
+
+export const VideoSegmentSource = z.enum(['chapter', 'fingerprint', 'manual']);
+export type VideoSegmentSource = z.infer<typeof VideoSegmentSource>;
+
+// ---- Pause screen ----------------------------------------------------------------------------
+
+export const VideoPauseInfo = z.object({
+  /** Movie title, or the series title for an episode. */
+  title: z.string(),
+  episodeTitle: z.string().nullable(),
+  seasonNumber: z.number().int().nullable(),
+  episodeNumber: z.number().int().nullable(),
+  year: z.number().int().nullable(),
+  certification: z.string().nullable(),
+  tmdbScore: z.number().nullable(),
+  genres: z.array(z.string()),
+  /** Episode overview for episodes (falls back to the series overview), else the movie's. */
+  overview: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  backdropUrl: z.string().nullable(),
+  chips: MediaChips.nullable(),
+});
+export type VideoPauseInfo = z.infer<typeof VideoPauseInfo>;
+
 /** Intro/credits/recap ranges, from chapter names in the file ("Intro", "Opening", "Credits", "Recap" ...). */
 export const VideoSegment = z.object({
   type: z.enum(['intro', 'credits', 'recap']),
   startMs: z.number().int(),
   endMs: z.number().int(),
+  source: VideoSegmentSource.optional(),
 });
 export type VideoSegment = z.infer<typeof VideoSegment>;
 
@@ -256,6 +342,8 @@ export const PlayableItem = z.object({
   /** Every version with a file, best first. */
   versions: z.array(VideoVersion).optional(),
   segments: z.array(VideoSegment).optional(),
+  /** Pause info screen (movies and episodes). */
+  pause: VideoPauseInfo.optional(),
   /** Episodes: the next / previous episode with a file (up next, auto-play). */
   next: ItemKey.optional(),
   previous: ItemKey.optional(),
@@ -752,6 +840,8 @@ export const VideoSession = z.object({
   burnedSubtitle: z.string().nullable(),
   /** When the signed URLs stop working. */
   expiresAt: z.string(),
+  /** Scrub thumbnails, signed like the stream URL; null when the setting is off. */
+  trickplay: TrickplayManifest.nullable().optional(),
 });
 export type VideoSession = z.infer<typeof VideoSession>;
 
@@ -822,6 +912,11 @@ export const VideoHome = z.object({
   recentEpisodes: z.array(VideoCard),
   /** Genres of the movies and shows that have files. */
   genres: z.array(z.string()),
+  trending: z.array(VideoCard).optional(),
+  moviesForTonight: z.array(VideoCard).optional(),
+  myList: z.array(VideoCard).optional(),
+  movieGenres: z.array(z.string()).optional(),
+  seriesGenres: z.array(z.string()).optional(),
 });
 export type VideoHome = z.infer<typeof VideoHome>;
 
@@ -881,6 +976,9 @@ export const PlayerMovieDetails = PlayerMovie.extend({
   studio: z.string().nullable(),
   collection: z.string().nullable(),
   versions: z.array(PlayerVideoVersion),
+  chips: MediaChips.nullable().optional(),
+  inMyList: z.boolean().optional(),
+  similar: z.array(VideoCard).optional(),
 });
 export type PlayerMovieDetails = z.infer<typeof PlayerMovieDetails>;
 
@@ -939,6 +1037,9 @@ export const PlayerSeriesDetails = PlayerSeries.extend({
   seasons: z.array(PlayerSeason),
   /** What "Play" starts: the in-progress or next unplayed episode; null when every episode is played. */
   nextUp: ItemKey.nullable(),
+  /** From the next-up episode's file; TMDB score from the series. */
+  chips: MediaChips.nullable().optional(),
+  inMyList: z.boolean().optional(),
 });
 export type PlayerSeriesDetails = z.infer<typeof PlayerSeriesDetails>;
 
@@ -957,3 +1058,98 @@ export const VideoWatchedRequest = z
 export type VideoWatchedRequest = z.infer<typeof VideoWatchedRequest>;
 export const VideoWatchedResponse = z.object({ updated: z.number().int() });
 export type VideoWatchedResponse = z.infer<typeof VideoWatchedResponse>;
+
+// ---- Redesign spec §1.2 (continued; media chips, trickplay, segment source and pause info
+// are defined above, before VideoSegment) ---------------------------------------------------
+
+// ---- My List (per household profile; separate from the request watchlist) ----------------
+
+export const MyListKey = z.string().regex(/^(movie|series):[1-9][0-9]*$/);
+export type MyListKey = z.infer<typeof MyListKey>;
+export const MY_LIST_MAX = 500;
+/** GET /playback/my-list: newest first. Series as kind 'series' cards, movies as 'movie'. */
+export const MyListResponse = z.object({ items: z.array(VideoCard) });
+export type MyListResponse = z.infer<typeof MyListResponse>;
+// PUT /playback/my-list/:key -> 204 (idempotent; 409 { error: 'limit-reached' } past MY_LIST_MAX)
+// DELETE /playback/my-list/:key -> 204 (idempotent)
+
+// ---- Featured (the rotating hero) ---------------------------------------------------------
+
+/**
+ * Why a title is featured; clients translate it. 'new-episode' with `kickerWeekday` reads
+ * "New episode every <weekday>".
+ */
+export const FeaturedKicker = z.enum(['new-episode', 'just-added', 'continue', 'my-list', 'trending', 'top-rated']);
+export type FeaturedKicker = z.infer<typeof FeaturedKicker>;
+export const VideoFeaturedItem = z.object({
+  kind: z.enum(['movie', 'series']),
+  id: z.number().int(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  certification: z.string().nullable(),
+  /** Movies. */
+  runtimeMinutes: z.number().int().nullable(),
+  /** Series: seasons with at least one file. */
+  seasonCount: z.number().int().nullable(),
+  /** At most 3. */
+  genres: z.array(z.string()),
+  overview: z.string().nullable(),
+  backdropUrl: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  chips: MediaChips.nullable(),
+  kicker: FeaturedKicker,
+  /** 0 = Sunday ... 6 = Saturday, with 'new-episode' when the show airs weekly on that day; else null. */
+  kickerWeekday: z.number().int().min(0).max(6).nullable(),
+  /** What Play starts (series: the next-up episode) and its progress; null when nothing is playable. */
+  play: z
+    .object({
+      itemKey: ItemKey,
+      seasonNumber: z.number().int().nullable(),
+      episodeNumber: z.number().int().nullable(),
+      progress: VideoProgress.nullable(),
+    })
+    .nullable(),
+  inMyList: z.boolean(),
+});
+export type VideoFeaturedItem = z.infer<typeof VideoFeaturedItem>;
+/** GET /playback/video/featured?limit=1..8 (default 5). Stable for a profile for the calendar day. */
+export const VideoFeaturedQuery = z.object({ limit: z.coerce.number().int().min(1).max(8).default(5) });
+export const VideoFeatured = z.object({ items: z.array(VideoFeaturedItem) });
+export type VideoFeatured = z.infer<typeof VideoFeatured>;
+
+// ---- Segments (intro / credits / recap) -----------------------------------------------------
+
+export const VideoSegmentEdit = z
+  .object({ type: z.enum(['intro', 'credits', 'recap']), startMs: z.number().int().min(0), endMs: z.number().int().positive() })
+  .refine((s) => s.endMs > s.startMs, { message: 'endMs must be after startMs' });
+export type VideoSegmentEdit = z.infer<typeof VideoSegmentEdit>;
+/** PUT /playback/segments/file/:mediaFileId (admin): replaces the manual segments; [] = "none, ignore detection". */
+export const SetVideoSegmentsRequest = z.object({ segments: z.array(VideoSegmentEdit).max(6) });
+export type SetVideoSegmentsRequest = z.infer<typeof SetVideoSegmentsRequest>;
+// DELETE /playback/segments/file/:mediaFileId (admin) -> 204: drop the manual override, back to chapters/detection.
+
+export const SegmentScanStatus = z.enum(['never', 'queued', 'running', 'done', 'failed']);
+export const EpisodeSegmentsRow = z.object({
+  episodeId: z.number().int(),
+  mediaFileId: z.number().int(),
+  seasonNumber: z.number().int(),
+  episodeNumber: z.number().int(),
+  title: z.string().nullable(),
+  durationMs: z.number().int(),
+  /** Effective segments (manual > chapter > fingerprint), each with its source. */
+  segments: z.array(VideoSegment),
+  manual: z.boolean(),
+});
+export type EpisodeSegmentsRow = z.infer<typeof EpisodeSegmentsRow>;
+/** GET /playback/segments/series/:seriesId/season/:seasonNumber (admin). */
+export const SeasonSegmentsResponse = z.object({
+  seriesId: z.number().int(),
+  seasonNumber: z.number().int(),
+  scan: z.object({ status: SegmentScanStatus, scannedAt: z.string().nullable(), error: z.string().nullable() }),
+  episodes: z.array(EpisodeSegmentsRow),
+});
+export type SeasonSegmentsResponse = z.infer<typeof SeasonSegmentsResponse>;
+/** POST /playback/segments/scan (admin) -> 202 { queued }. Re-detects even when nothing changed. */
+export const ScanSegmentsRequest = z.object({ seriesId: z.number().int().positive(), seasonNumber: z.number().int().min(0).optional() });
+export type ScanSegmentsRequest = z.infer<typeof ScanSegmentsRequest>;
+export const ScanSegmentsResponse = z.object({ queued: z.number().int() });

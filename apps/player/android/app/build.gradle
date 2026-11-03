@@ -1,4 +1,27 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+def arclightVersionName() {
+    def pkg = new JsonSlurper().parse(rootProject.file('../package.json'))
+    return pkg.version as String
+}
+
+def arclightVersionCode() {
+    def fromEnv = System.getenv("ARCLIGHT_VERSION_CODE")
+    if (fromEnv?.trim()) {
+        def code = fromEnv.trim().toInteger()
+        if (code <= 1) throw new GradleException("ARCLIGHT_VERSION_CODE must be greater than 1, got ${code}")
+        return code
+    }
+    def m = (arclightVersionName() =~ /^(\d+)\.(\d+)\.(\d+)/)
+    if (!m.find()) throw new GradleException("apps/player/package.json version is not semver: ${arclightVersionName()}")
+    def (major, minor, patch) = [m.group(1), m.group(2), m.group(3)].collect { it.toInteger() }
+    if (minor > 99 || patch > 99) throw new GradleException("minor and patch must stay below 100 for the derived versionCode")
+    def code = major * 10000 + minor * 100 + patch
+    if (code <= 1) throw new GradleException("derived versionCode ${code} must be greater than 1")
+    return code
+}
 
 android {
     namespace = "com.moviemethat.arclight"
@@ -7,9 +30,11 @@ android {
         applicationId "com.moviemethat.arclight"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // CI passes a growing number for store uploads; local and default builds are 1.
-        versionCode((System.getenv("ARCLIGHT_VERSION_CODE") ?: "1").toInteger())
-        versionName "1.0.0"
+        // The app's version is the repo's (apps/player/package.json, kept in step by
+        // scripts/bump-version.mjs). versionCode: ARCLIGHT_VERSION_CODE when set, else derived
+        // from it as major*10000 + minor*100 + patch, so every release raises it.
+        versionCode arclightVersionCode()
+        versionName arclightVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

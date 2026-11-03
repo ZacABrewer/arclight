@@ -8,13 +8,13 @@ import android.hardware.display.DisplayManager;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
-import android.util.Log;
 import android.view.Display;
 import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.audio.AudioCapabilities;
+import com.moviemethat.arclight.SafeLog;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -109,7 +109,7 @@ public final class VideoProfile {
                 }
             }
         } catch (RuntimeException e) {
-            Log.w(TAG, "Decoder scan failed", e);
+            SafeLog.w(TAG, "Decoder scan failed", e);
             d.mimes.add("video/avc");
             d.mimes.add("audio/mp4a-latm");
             d.maxHeight = 1080;
@@ -148,7 +148,7 @@ public final class VideoProfile {
         try {
             return AudioCapabilities.getCapabilities(ctx, AudioAttributes.DEFAULT, null);
         } catch (RuntimeException e) {
-            Log.w(TAG, "Audio capabilities unavailable", e);
+            SafeLog.w(TAG, "Audio capabilities unavailable", e);
             return null;
         }
     }

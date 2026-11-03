@@ -45,9 +45,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   onUnauthorized = handler;
 }
 
+// Picking a profile answers 401 pin-required / pin-wrong for a missing or wrong PIN.
+const PROFILE_SELECT = /^\/households\/profiles\/\d+\/select$/;
+
 function triggersSignIn(path: string): boolean {
-  // A wrong current password (or two-factor code) answers 401 too; that is a form error, not a lost session.
-  return !path.startsWith('/auth/') && !path.startsWith('/setup/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa');
+  // A wrong current password, two-factor code or profile PIN answers 401 too; that is a form error, not a lost session.
+  return (
+    !path.startsWith('/auth/') && !path.startsWith('/setup/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa') && !PROFILE_SELECT.test(path)
+  );
 }
 
 let onTwoFactorSetupRequired: (() => void) | null = null;

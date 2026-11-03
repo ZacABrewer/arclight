@@ -118,3 +118,33 @@ body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 
 /* Buttons and links in the app are touch targets. */
 .app-shell .al-btn, .app-onboarding .al-btn { min-height: 44px; }
+
+/* ---------- phone: profile avatar, its sheet, the picker, My List (§4.4) ---------- */
+.app-top__avatar { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: none; color: inherit; border-radius: 50%; cursor: pointer; }
+.app-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.55); display: flex; align-items: flex-end; }
+.app-sheet__panel {
+  width: 100%; display: flex; flex-direction: column; padding: 8px 0 calc(12px + var(--app-safe-bottom, 0px));
+  background: var(--al-surface-solid); border-top: 1px solid var(--al-line-2); border-radius: 16px 16px 0 0; box-shadow: var(--al-shadow-pop);
+}
+.app-sheet__row {
+  display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 20px; border: 0; background: none;
+  color: var(--al-text-1); font: inherit; font-size: 16px; text-align: left; cursor: pointer;
+}
+.app-sheet__row:active { background: var(--al-surface-2, rgba(255, 255, 255, 0.06)); }
+.app-sheet__row--danger { color: var(--al-danger-text, #ff8a80); }
+.app-sheet__value { margin-left: auto; color: var(--al-text-4); font-size: 14px; }
+.app-profiles {
+  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+  padding: calc(24px + var(--app-safe-top, 0px)) 16px calc(24px + var(--app-safe-bottom, 0px)); background: var(--al-bg, #02070a);
+}
+.app-profiles__title { margin: 0; font-size: 26px; font-weight: 700; color: var(--al-text-1); text-align: center; }
+.app-profiles__grid { display: grid; grid-template-columns: repeat(2, 120px); gap: 24px 28px; justify-content: center; }
+.app-profiles__item { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--al-text-2); font: inherit; font-size: 15px; cursor: pointer; }
+.app-profiles__add { width: 96px; height: 96px; border-radius: 50%; border: 2px dashed var(--al-line-3, rgba(255, 255, 255, 0.35)); display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 300; color: var(--al-text-3); }
+.app-profiles__dots { display: flex; gap: 16px; }
+.app-profiles__dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--al-text-3); }
+.app-profiles__dot--on { background: var(--al-text-1); border-color: var(--al-text-1); }
+.app-profiles__pin { max-width: 200px; text-align: center; letter-spacing: 0.4em; }
+.app-profiles__msg { margin: 0; min-height: 20px; font-size: 14px; color: var(--al-text-3); text-align: center; }
+.app-mylist { display: flex; flex-direction: column; gap: 16px; }
+.app-mylist__title { margin: 4px 0 0; font-size: 24px; font-weight: 600; color: var(--al-text-1); }

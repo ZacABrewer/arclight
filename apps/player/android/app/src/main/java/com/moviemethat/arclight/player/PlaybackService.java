@@ -11,6 +11,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaLibraryService;
 import androidx.media3.session.MediaSession;
 import com.moviemethat.arclight.MainActivity;
+import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.car.CarLibrary;
 import com.moviemethat.arclight.car.CarLibraryCallback;
@@ -30,13 +31,17 @@ public final class PlaybackService extends MediaLibraryService {
     @Override
     public void onCreate() {
         super.onCreate();
+        // Started by the system for a media controller (Android Auto) before the app UI.
+        SafeLog.install();
         PlaybackHub hub = PlaybackHub.get(this);
         Player player = hub.sessionPlayer();
 
         Intent open = new Intent(this, MainActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                // Tells a notification / lock-screen tap apart from the launcher (LaunchInfo).
+                .putExtra(com.moviemethat.arclight.LaunchInfo.EXTRA_SOURCE, "notification");
         PendingIntent sessionActivity = PendingIntent.getActivity(this, 0, open,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 

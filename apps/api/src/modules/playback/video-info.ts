@@ -504,7 +504,7 @@ const FRAGMENTED_MP4 = ['-movflags', 'frag_keyframe+empty_moov+default_base_moof
 const FRAGMENTED_MP4_COPY = ['-movflags', 'frag_keyframe+empty_moov+delay_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
 
 /** Software HDR -> SDR (BT.709) through zscale + tonemap (Hable). */
-const TONEMAP_ZSCALE = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv';
+export const TONEMAP_ZSCALE = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv';
 
 function audioArgs(spec: LiveVideoSpec): string[] {
   if (spec.audioTrack === null) return ['-an'];

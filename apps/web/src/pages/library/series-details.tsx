@@ -71,6 +71,7 @@ import { InteractiveSearchModal, ReleaseTable } from './interactive-search.js';
 import { SceneMappingPanel } from './scene-mapping/scene-mapping-panel.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
+import { SeasonSegmentsAction } from './segments-dialog.js';
 import { ItemHealthPanel, useCanSeeHealth } from './item-health.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { WatchedByPanel } from '../../features/watch-history/watch-history.js';
@@ -478,6 +479,7 @@ function SeasonPanel({
           >
             {t('features.additionalLanguages.addLanguage')}
           </button>
+          {have > 0 ? <SeasonSegmentsAction seriesId={series.id} seasonNumber={season.seasonNumber} title={`${series.title} ${label}`} /> : null}
         </div>
       }
     >

@@ -1,21 +1,22 @@
-import type { PlayableChapter, VideoAudioTrack, VideoProgress, VideoSegment, VideoSubtitleTrack } from '@arclight/shared';
+import { PLAYED_THRESHOLD, RESUME_MIN as SHARED_RESUME_MIN, type PlayableChapter, type VideoAudioTrack, type VideoProgress, type VideoSegment, type VideoSubtitleTrack } from '@arclight/shared';
 import { getLocale, t } from '../../../i18n/index.js';
 import { formatTime } from '../../../i18n/format.js';
 
 // Pure helpers for the Movies & TV pages and the video player: resume rules, track labels,
 // where the playhead is among chapters and segments, WebVTT parsing.
 
-/** The resume prompt shows between these shares of the runtime. */
-export const RESUME_MIN = 0.02;
-export const RESUME_MAX = 0.9;
+/** The resume prompt shows from RESUME_MIN up to (not including) RESUME_MAX of the runtime; at
+ * RESUME_MAX (90 %) the server counts the item as watched, so there is nothing left to resume. */
+export const RESUME_MIN = SHARED_RESUME_MIN;
+export const RESUME_MAX = PLAYED_THRESHOLD;
 
-/** A saved place worth offering to resume (2 %–90 % in, not finished). */
+/** A saved place worth offering to resume (2 % up to 90 % in, not finished). */
 export function resumePoint(progress: VideoProgress | null | undefined, durationMs?: number): number | null {
   if (!progress || progress.played) return null;
   const total = progress.durationMs || durationMs || 0;
   if (total <= 0) return null;
   const share = progress.positionMs / total;
-  return share >= RESUME_MIN && share <= RESUME_MAX ? progress.positionMs : null;
+  return share >= RESUME_MIN && share < RESUME_MAX ? progress.positionMs : null;
 }
 
 /** 0..1 watched share for a progress bar (1 when played). */
@@ -50,6 +51,22 @@ export function endsAtLabel(remainingMs: number, now = Date.now()): string {
 /** "S1 · E2" */
 export function episodeCode(season: number | null | undefined, episode: number | null | undefined): string {
   return t('player.video.episodeCode', { season: season ?? 0, episode: episode ?? 0 });
+}
+
+/**
+ * The video player's episode line under the series title: "S1 E3 · Episode name" (the overlay,
+ * the pause screen, the native player). Without numbers it is just the name.
+ */
+export function playerEpisodeLine(season: number | null | undefined, episode: number | null | undefined, title: string | null | undefined): string {
+  const code =
+    season != null && episode != null ? t('player.video.episodeShort', { season, episode }) : episode != null ? `E${episode}` : season != null ? `S${season}` : null;
+  return [code, title || null].filter(Boolean).join(' · ');
+}
+
+/** The player's heading for an item: the series name for episodes (falling back to the episode's own title), else the title. */
+export function playerHeading(item: { kind: string; title: string; subtitle: string | null; pause?: { title: string } | undefined }): string {
+  if (item.kind !== 'episode') return item.title;
+  return item.pause?.title || item.subtitle || item.title;
 }
 
 const languageNames = new Map<string, Intl.DisplayNames | null>();

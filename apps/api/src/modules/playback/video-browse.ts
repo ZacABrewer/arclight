@@ -21,9 +21,8 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series } from '../library/schema.js';
-import { restrictionsOfSettings } from '../requests/certification.js';
-import type { BrowseUser } from './browse.js';
-import type { ProgressStore } from './progress.js';
+import { ownerOfBrowse, type BrowseUser } from './browse.js';
+import type { PlaybackOwner, ProgressStore } from './progress.js';
 import { badgesOf, dynamicRangeOf, resolutionLabel, versionDescription } from './video-info.js';
 import {
   episodeCode,
@@ -54,27 +53,29 @@ export interface VideoBrowseContext {
 
 /** Next up looks at series with an episode played this recently. */
 export const NEXT_UP_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
-const HOME_ROW = 20;
+export const HOME_ROW = 20;
 const CHUNK = 500;
 
+/** The caps a browse user plays under: the account's combined with the active profile's (browseUserOf). */
 export function restrictionsOf(user: BrowseUser): ContentRestrictions | null {
-  return user.userId === null ? null : restrictionsOfSettings(user.settings);
+  return user.userId === null ? null : user.restrictions;
 }
 
 /** Effective progress for many keys (chunked: SQLite caps bound parameters). */
 export function progressFor(ctx: VideoBrowseContext, user: BrowseUser, keys: readonly string[]): Map<string, PlaybackProgress> {
   const out = new Map<string, PlaybackProgress>();
-  if (user.userId === null) return out;
+  const owner = ownerOfBrowse(user);
+  if (owner === null) return out;
   for (let i = 0; i < keys.length; i += CHUNK) {
-    for (const [k, v] of ctx.progress.effective(user.userId, user.settings, keys.slice(i, i + CHUNK))) out.set(k, v);
+    for (const [k, v] of ctx.progress.effective(owner, user.settings, keys.slice(i, i + CHUNK))) out.set(k, v);
   }
   return out;
 }
 
-const toVideoProgress = (p: PlaybackProgress | undefined): VideoProgress | null =>
+export const toVideoProgress = (p: PlaybackProgress | undefined): VideoProgress | null =>
   p && (p.played || p.positionMs > 0) ? { positionMs: p.positionMs, durationMs: p.durationMs, played: p.played } : null;
 
-const inProgress = (p: PlaybackProgress | undefined) => !!p && !p.played && p.durationMs > 0 && p.positionMs >= p.durationMs * RESUME_MIN;
+export const inProgress = (p: PlaybackProgress | undefined) => !!p && !p.played && p.durationMs > 0 && p.positionMs >= p.durationMs * RESUME_MIN;
 
 /** "#" for titles that do not start with a letter. */
 const letterOf = (title: string) => {
@@ -89,14 +90,14 @@ function paginate<T>(list: readonly T[], q: VideoBrowseQuery): { items: T[]; tot
 
 // ---- movies ------------------------------------------------------------------------------------
 
-interface MovieFacts {
+export interface MovieFacts {
   row: MovieRow;
   addedAt: string | null;
   badges: string[];
 }
 
 /** Movies with files within the caps, with their newest file date and the best file's badges. */
-function playableMovies(ctx: VideoBrowseContext, user: BrowseUser): MovieFacts[] {
+export function playableMovies(ctx: VideoBrowseContext, user: BrowseUser): MovieFacts[] {
   const r = restrictionsOf(user);
   const rows = ctx.db.select().from(movies).where(eq(movies.hasFile, true)).all().filter((m) => withinRestrictions(r, 'movie', m.certification));
   const files = ctx.db
@@ -225,7 +226,7 @@ export function movieDetails(ctx: VideoBrowseContext, user: BrowseUser, id: numb
 
 // ---- series ------------------------------------------------------------------------------------
 
-interface SeriesFacts {
+export interface SeriesFacts {
   row: SeriesRow;
   addedAt: string | null;
   episodeKeys: string[];
@@ -241,7 +242,7 @@ interface SeriesFileStats {
 }
 
 /** Series with at least one episode file within the caps, with per-series file facts (one SQL pass). */
-function playableSeries(ctx: VideoBrowseContext, user: BrowseUser): SeriesFacts[] {
+export function playableSeries(ctx: VideoBrowseContext, user: BrowseUser): SeriesFacts[] {
   const r = restrictionsOf(user);
   const rows = ctx.db.select().from(series).all().filter((s) => withinRestrictions(r, 'series', s.certification));
   if (rows.length === 0) return [];
@@ -386,7 +387,7 @@ export function seriesDetails(ctx: VideoBrowseContext, user: BrowseUser, id: num
 
 // ---- home --------------------------------------------------------------------------------------
 
-function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackProgress | undefined): VideoCard {
+export function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackProgress | undefined): VideoCard {
   const { row } = m;
   return {
     itemKey: itemKey('movie', row.id),
@@ -400,6 +401,24 @@ function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackPro
     thumbUrl: null,
     progress: toVideoProgress(progress),
     badges: m.badges,
+  };
+}
+
+/** A series card (itemKey null: opening it shows the series). */
+export function seriesCard(ctx: VideoBrowseContext, s: SeriesFacts): VideoCard {
+  const { row } = s;
+  return {
+    itemKey: null,
+    kind: 'series',
+    id: row.id,
+    title: row.title,
+    subtitle: row.network,
+    year: row.year || null,
+    posterUrl: imageUrl(ctx.basePath, 'series', row.id, row.images, 'poster', '342'),
+    backdropUrl: imageUrl(ctx.basePath, 'series', row.id, row.images, 'fanart', '1280'),
+    thumbUrl: null,
+    progress: null,
+    badges: s.badges,
   };
 }
 
@@ -424,7 +443,7 @@ function episodeCard(ctx: VideoBrowseContext, e: EpisodeRow, show: SeriesRow, pr
 }
 
 /** Episodes with a file by id, with their series, within the caps. */
-function episodesWithSeries(ctx: VideoBrowseContext, r: ContentRestrictions | null, ids: readonly number[]): Map<number, { episode: EpisodeRow; show: SeriesRow }> {
+export function episodesWithSeries(ctx: VideoBrowseContext, r: ContentRestrictions | null, ids: readonly number[]): Map<number, { episode: EpisodeRow; show: SeriesRow }> {
   const out = new Map<number, { episode: EpisodeRow; show: SeriesRow }>();
   for (let i = 0; i < ids.length; i += CHUNK) {
     const rows = ctx.db
@@ -445,9 +464,12 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
   const movieById = new Map(movieList.map((m) => [m.row.id, m]));
   const home: VideoHome = { continueWatching: [], nextUp: [], recentMovies: [], recentEpisodes: [], genres: [] };
 
-  if (user.userId !== null) {
-    // Continue watching: the newest unfinished movies and episodes.
-    const resume = [...ctx.progress.inProgress(user.userId, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(user.userId, HOME_ROW * 2, 'episode')].sort((a, b) =>
+  const owner = ownerOfBrowse(user);
+  if (owner !== null) {
+    // Continue watching: the newest unfinished movies and episodes, one card per series (its
+    // most recently played episode; a show with two episodes started shows once). More
+    // episodes are read than the row holds so the dedupe still fills it.
+    const resume = [...ctx.progress.inProgress(owner, HOME_ROW * 2, 'movie'), ...ctx.progress.inProgress(owner, HOME_ROW * 5, 'episode')].sort((a, b) =>
       (b.lastPlayedAt ?? '').localeCompare(a.lastPlayedAt ?? ''),
     );
     const resumeEpisodes = episodesWithSeries(
@@ -455,6 +477,7 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
       r,
       resume.flatMap((p) => (p.itemKey.startsWith('episode:') ? [Number(p.itemKey.slice(8))] : [])),
     );
+    const resumedSeries = new Set<number>();
     for (const p of resume) {
       if (home.continueWatching.length >= HOME_ROW) break;
       const id = Number(p.itemKey.split(':')[1]);
@@ -463,13 +486,15 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
         if (m) home.continueWatching.push(movieCard(ctx, m, p));
       } else {
         const e = resumeEpisodes.get(id);
-        if (e) home.continueWatching.push(episodeCard(ctx, e.episode, e.show, p));
+        if (!e || resumedSeries.has(e.show.id)) continue;
+        resumedSeries.add(e.show.id);
+        home.continueWatching.push(episodeCard(ctx, e.episode, e.show, p));
       }
     }
 
     // Next up: per series watched lately, the first unplayed episode after the furthest played one.
     const since = new Date(nowMs - NEXT_UP_WINDOW_MS).toISOString();
-    const lately = ctx.progress.recent(user.userId, 500, 'episode').filter((p) => (p.lastPlayedAt ?? '') >= since);
+    const lately = ctx.progress.recent(owner, 500, 'episode').filter((p) => (p.lastPlayedAt ?? '') >= since);
     const touched = episodesWithSeries(
       ctx,
       r,
@@ -576,7 +601,7 @@ export function videoSearch(ctx: VideoBrowseContext, user: BrowseUser, q: string
 }
 
 /** Marks items, a series or a season played/unplayed; returns how many items changed. */
-export function markWatched(ctx: VideoBrowseContext, userId: number, req: VideoWatchedRequest): number {
+export function markWatched(ctx: VideoBrowseContext, owner: PlaybackOwner, req: VideoWatchedRequest): number {
   const nowMs = ctx.now?.() ?? Date.now();
   let keys: string[];
   if (req.itemKeys) keys = [...new Set(req.itemKeys)];
@@ -585,6 +610,6 @@ export function markWatched(ctx: VideoBrowseContext, userId: number, req: VideoW
       .filter((e) => req.seasonNumber === undefined || e.seasonNumber === req.seasonNumber)
       .map((e) => itemKey('episode', e.id));
   }
-  for (const key of keys) ctx.progress.update(userId, key, { played: req.played }, nowMs);
+  for (const key of keys) ctx.progress.update(owner, key, { played: req.played }, nowMs);
   return keys.length;
 }

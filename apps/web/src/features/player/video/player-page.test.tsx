@@ -45,7 +45,7 @@ describe('VideoPlayerPage', () => {
     expect(screen.getByRole('button', { name: 'Back 10 seconds' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Forward 10 seconds' })).toBeTruthy();
     expect(screen.getByRole('slider', { name: 'Seek' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Audio & subtitles' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Audio & Subtitles' })).toBeTruthy();
   });
 
   it('starts at ?t= without asking', async () => {

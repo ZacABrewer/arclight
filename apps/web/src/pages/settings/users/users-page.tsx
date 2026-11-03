@@ -12,6 +12,7 @@ import { PersonalDestinations } from '../../../features/notifications/personal-d
 import { UserDefaultsFields, useUserDefaults } from '../../../features/users/user-defaults.js';
 import { UserSignInAdmin } from '../../../features/identity/user-sign-in-admin.js';
 import { UserPlayerAccessEditor } from '../../../features/player/user-player-access.js';
+import { UserProfilesEditor } from './user-profiles.js';
 import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
 import { SettingsListSearch, SettingsSection } from '../shared.js';
@@ -147,6 +148,7 @@ export function UsersPage() {
               { id: 'destinations', label: t('notify.personal.title'), content: <PersonalDestinations userId={open.id} /> },
               { id: 'signin', label: t('identity.admin.tab'), content: <UserSignInAdmin userId={open.id} name={open.displayName ?? open.username} /> },
               { id: 'player', label: t('player.userAccess.tab'), content: <UserPlayerAccessEditor user={open} /> },
+              { id: 'profiles', label: t('settings.users.profiles.tab'), content: <UserProfilesEditor userId={open.id} /> },
             ]}
           />
         </Modal>

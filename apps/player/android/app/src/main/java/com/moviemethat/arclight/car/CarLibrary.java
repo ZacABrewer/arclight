@@ -4,11 +4,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.util.UnstableApi;
+import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackHub;
 import java.io.File;
 import java.security.MessageDigest;
@@ -228,7 +228,7 @@ public final class CarLibrary {
             try {
                 app.grantUriPermission(grantTo, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (SecurityException e) {
-                Log.w(TAG, "Could not grant artwork access to " + grantTo, e);
+                SafeLog.w(TAG, "Could not grant artwork access to " + grantTo, e);
             }
         }
         return uri;

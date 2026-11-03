@@ -292,6 +292,44 @@
       ]
     },
     {
+      "id": "cinema",
+      "name": "Cinema",
+      "version": "1.0.0",
+      "description": "The player redesign's look. Warm charcoal, white type, a cyan accent and 8px corners. Figtree (SIL OFL).",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#111316",
+        "#6ef6ff",
+        "#2f7bff",
+        "#eef1f4",
+        "#c3c9d1"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 354,
+          "sha256": "6f5f8a71cf91eb31b0ca2d4be897deffd812c0b4caae8ec59d0a8e1a6d1b79ef"
+        },
+        {
+          "path": "theme.css",
+          "size": 3597,
+          "sha256": "516ff95e59632e19004b4c7f8d49a93cd5b77270ee8e1edf32f1bc32813a904b"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 4498,
+          "sha256": "ee23e6c84000126692e112ff067b456470493349f993ceaa8b4d3766dd6fad5d"
+        },
+        {
+          "path": "fonts/figtree-latin-wght-normal.woff2",
+          "size": 20156,
+          "sha256": "4ba7d3d096695818fe0686be4f1e82c6b05134e18a22260336130335027462dd"
+        }
+      ]
+    },
+    {
       "id": "concrete",
       "name": "Brutalist Concrete",
       "version": "1.0.0",

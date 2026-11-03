@@ -5,6 +5,7 @@ import type { Db } from '../../db/index.js';
 import { credentialsOf } from '../auth/hook.js';
 import { sessions, userApiKeys } from '../auth/schema.js';
 import { appDevices } from '../app-auth/schema.js';
+import { householdProfiles } from '../households/schema.js';
 import { allLocal } from '../auth/network.js';
 import { getSection } from '../settings/service.js';
 
@@ -80,7 +81,9 @@ export function decide(settings: PlayerSettings, subject: PlayerSubject, remote:
 
 export function subjectOf(req: FastifyRequest): PlayerSubject {
   const auth = req.auth;
-  return { userId: auth?.user?.id ?? null, isAdmin: auth?.isAdmin ?? false, settings: auth?.user?.settings ?? null };
+  // Player access is the account's: a non-owner household profile is masked to a plain user
+  // (auth/service withProfile) but keeps its account's player permission (accountIsAdmin).
+  return { userId: auth?.user?.id ?? null, isAdmin: auth?.accountIsAdmin ?? auth?.isAdmin ?? false, settings: auth?.user?.settings ?? null };
 }
 
 export function capabilitiesOf(db: Db, decision: PlayerDecision): PlayerCapabilities {
@@ -139,7 +142,16 @@ export function requirePlayer(db: Db, opts: { needsUser?: boolean } = {}) {
  * personal API key or a signed-in Arclight app device. "Sign out everywhere", a password
  * change and deleting the user end it.
  */
-export function linkUserStillActive(db: Db, userId: number, nowMs: number): boolean {
+export function linkUserStillActive(db: Db, userId: number, nowMs: number, profileId: number | null = null): boolean {
+  // A link naming a profile ends when that profile is deleted (or never belonged to the user).
+  if (profileId !== null) {
+    const profile = db
+      .select({ id: householdProfiles.id })
+      .from(householdProfiles)
+      .where(and(eq(householdProfiles.id, profileId), eq(householdProfiles.userId, userId)))
+      .get();
+    if (!profile) return false;
+  }
   const device = db.select({ id: appDevices.id }).from(appDevices).where(eq(appDevices.userId, userId)).get();
   if (device) return true;
   const at = new Date(nowMs).toISOString();

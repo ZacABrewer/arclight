@@ -16,6 +16,8 @@ public final class VideoTimeline {
     public static final long UP_NEXT_COUNTDOWN_MS = 10_000;
     /** Without a credits segment the card shows this long before the end. */
     static final long UP_NEXT_LEAD_MS = 20_000;
+    /** Share (in %) at which an item counts as watched; PLAYED_THRESHOLD (0.9) on the server. */
+    static final long PLAYED_PERCENT = 90;
     /** A skip button hides this close to the segment's end (seeking there would be pointless). */
     static final long SKIP_TAIL_MS = 1_500;
 
@@ -53,11 +55,14 @@ public final class VideoTimeline {
         return durationMs - UP_NEXT_LEAD_MS;
     }
 
-    /** Watched to the end: inside the credits, or within the last 5 %. */
+    /**
+     * Watched: inside the credits, or 90 % in (the server's played threshold, PLAYED_THRESHOLD in
+     * packages/shared, so the app and the server agree).
+     */
     public static boolean completed(long positionMs, long durationMs, List<VideoRequest.Segment> segments) {
         VideoRequest.Segment c = credits(segments, durationMs);
         if (c != null && positionMs >= c.startMs) return true;
-        return durationMs > 0 && positionMs >= durationMs * 95 / 100;
+        return durationMs > 0 && positionMs >= durationMs * PLAYED_PERCENT / 100;
     }
 
     /**
@@ -85,6 +90,63 @@ public final class VideoTimeline {
         long s = total % 60;
         if (h > 0) return String.format(java.util.Locale.ROOT, "%d:%02d:%02d", h, m, s);
         return String.format(java.util.Locale.ROOT, "%d:%02d", m, s);
+    }
+
+    // ---- redesign --------------------------------------------------------------------------
+
+    /** The pause screen shows after this long paused with no input. */
+    public static final long PAUSE_INFO_DELAY_MS = 6_000;
+    /** The controls hide after this long idle while playing. */
+    public static final long CONTROLS_IDLE_MS = 5_000;
+
+    /**
+     * Whether the pause screen is due: paused ({@code pausedSinceMs} >= 0) and neither the pause
+     * nor the last input is less than {@link #PAUSE_INFO_DELAY_MS} old.
+     */
+    public static boolean pauseInfoDue(long pausedSinceMs, long lastInputMs, long nowMs) {
+        if (pausedSinceMs < 0) return false;
+        return nowMs - Math.max(pausedSinceMs, lastInputMs) >= PAUSE_INFO_DELAY_MS;
+    }
+
+    /** Preview step while scrubbing the focused bar with a held key: 10 s, 30 s after 1.5 s, 60 s after 3 s. */
+    public static long scrubStepMs(long heldMs) {
+        if (heldMs < 1_500) return 10_000;
+        if (heldMs < 3_000) return 30_000;
+        return 60_000;
+    }
+
+    /** Skipping the credits with nothing next ends playback (counted as completed). */
+    public static boolean skipEndsPlayback(@Nullable VideoRequest.Segment s, boolean hasNext) {
+        return s != null && s.type.equals("credits") && !hasNext;
+    }
+
+    /**
+     * The intro to auto-skip at {@code positionMs} when the "Skip intros" pref is on: once per play,
+     * intro only (a recap is never skipped automatically), and not in its last {@link #SKIP_TAIL_MS}.
+     */
+    @Nullable
+    public static VideoRequest.Segment autoSkip(List<VideoRequest.Segment> segments, long positionMs, boolean enabled,
+            boolean alreadySkipped) {
+        if (!enabled || alreadySkipped) return null;
+        for (VideoRequest.Segment s : segments) {
+            if (!s.type.equals("intro")) continue;
+            if (positionMs >= s.startMs && positionMs < s.endMs - SKIP_TAIL_MS) return s;
+        }
+        return null;
+    }
+
+    public enum EndAction { NEXT, CLOSE }
+
+    /** What happens when the item ends: the next item only with one, not cancelled, and autoplay on. */
+    public static EndAction endAction(boolean hasNext, boolean cancelled, boolean autoplayNext) {
+        return hasNext && !cancelled && autoplayNext ? EndAction.NEXT : EndAction.CLOSE;
+    }
+
+    /** Caption size in stage px for the subtitle-size pref (small / medium / large). */
+    public static int captionSize(String pref) {
+        if ("small".equals(pref)) return 22;
+        if ("large".equals(pref)) return 36;
+        return 28;
     }
 
     /** Title of the chapter playing at {@code positionMs}, or null. Chapters are sorted by start. */

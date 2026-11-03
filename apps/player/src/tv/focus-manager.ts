@@ -1,4 +1,5 @@
-import { directionOf, pickNext, type Box, type Direction } from './spatial';
+import { directionOf, pickNext, pickStage, stageScore, type Box, type Direction } from './spatial';
+import { ensureVisible, stageScale } from './stage-scroll';
 
 // D-pad focus for the TV layout. The remote's arrows arrive as ArrowUp/Down/Left/Right key
 // events and OK as Enter (the Android side maps DPAD_CENTER); this moves real DOM focus between
@@ -13,6 +14,10 @@ import { directionOf, pickNext, type Box, type Direction } from './spatial';
 //  - the focused element is scrolled into view (rows sideways, the page up and down);
 //  - each page (pathname) remembers its focused element, restored when you come back;
 //  - text inputs keep left/right for the caret until it reaches an end; range inputs keep them.
+//
+// On the redesign's TV stage ([data-tv-stage]) the design's own rules apply instead (spatial.ts
+// `stageScore`, stage-scroll.ts): rows ([data-tv-row]) bound left / right, the fixed header
+// ([data-tv-fixed]) is reached up from the top of a page, and the stage scrollers move.
 
 export const FOCUSABLE = [
   'a[href]',
@@ -42,6 +47,8 @@ export interface FocusManagerOptions {
   enabled?: () => boolean;
   /** Called after an arrow moved focus. */
   onMove?: (el: HTMLElement, dir: Direction) => void;
+  /** Moves focus into view on the stage; default stage-scroll's ensureVisible. */
+  revealStage?: (el: HTMLElement, instant: boolean) => void;
 }
 
 const isTextInput = (el: Element): el is HTMLInputElement | HTMLTextAreaElement => {
@@ -98,6 +105,12 @@ export class FocusManager {
     };
   }
 
+  /** Forget where focus was on every page (a profile switch starts each page fresh). */
+  forget(): void {
+    this.pageMemory.clear();
+    this.groupMemory.clear();
+  }
+
   /** The element focus is confined to: the topmost open scope, else the root. */
   scope(): HTMLElement {
     const open = [...this.root.querySelectorAll<HTMLElement>(SCOPES)].filter((s) => this.visible(s) || s.matches('[data-tv-scope]'));
@@ -123,13 +136,34 @@ export class FocusManager {
     const group = this.groupOf(target);
     if (group) this.groupMemory.set(group.getAttribute(GROUP_ATTR) ?? '', target);
     const page = this.opts.pageKey?.();
-    if (page !== undefined && !target.closest('[data-tv-group="rail"]')) this.pageMemory.set(page, focusKey(target));
+    if (page !== undefined && !target.closest('[data-tv-group="rail"], [data-tv-fixed]')) this.pageMemory.set(page, focusKey(target));
   }
 
-  focus(el: HTMLElement, dir?: Direction): void {
+  /** `instant`: no scroll animation (a new screen, focus restored after Back). */
+  focus(el: HTMLElement, dir?: Direction, instant = false): void {
     el.focus({ preventScroll: true });
-    (this.opts.reveal ?? reveal)(el);
+    if (el.closest('[data-tv-stage]')) (this.opts.revealStage ?? ensureVisible)(el, instant);
+    else (this.opts.reveal ?? reveal)(el);
     if (dir) this.opts.onMove?.(el, dir);
+  }
+
+  /** The design's move on the stage: nearest by its scoring, rows bound left / right. */
+  private moveOnStage(from: HTMLElement, stage: HTMLElement, scope: HTMLElement, dir: Direction): boolean {
+    const within = scope === this.root ? stage : scope;
+    const els = this.focusables(within).filter((el) => el !== from && !from.contains(el));
+    const row = from.closest('[data-tv-row]');
+    const origin = { box: this.rectOf(from), inHeader: Boolean(from.closest('[data-tv-fixed]')) };
+    const headerBottom = this.rectOf(stage).top + 72 * stageScale(stage);
+    const candidates = els.map((el) => ({ box: this.rectOf(el), sameRow: !row || row.contains(el), inHeader: Boolean(el.closest('[data-tv-fixed]')) }));
+    // Down from the header enters the page at its first item (the "All" chip, the hero's
+    // button), not whichever is nearest the tab: the first in page order that down can reach.
+    const i =
+      origin.inHeader && dir === 'down'
+        ? candidates.findIndex((c) => !c.inHeader && stageScore(origin, c, dir, headerBottom) < Infinity)
+        : pickStage(origin, candidates, dir, headerBottom);
+    if (i < 0) return false;
+    this.focus(els[i]!, dir);
+    return true;
   }
 
   /** Move focus one step. Returns whether it moved. */
@@ -137,6 +171,8 @@ export class FocusManager {
     const from = this.current();
     const scope = this.scope();
     if (!from || !scope.contains(from)) return this.focusFirst(scope);
+    const stage = from.closest<HTMLElement>('[data-tv-stage]');
+    if (stage) return this.moveOnStage(from, stage, scope, dir);
     const candidates = this.focusables(scope).filter((el) => el !== from && !from.contains(el));
     const origin = this.rectOf(from);
     const fromGroup = this.groupOf(from);
@@ -192,7 +228,7 @@ export class FocusManager {
       pool[0] ??
       list[0];
     if (!el) return false;
-    this.focus(el);
+    this.focus(el, undefined, true);
     return true;
   }
 
@@ -237,10 +273,12 @@ export class FocusManager {
       const main = this.root.querySelector<HTMLElement>('[data-tv-group="main"]');
       // Something on the page already has focus (and it is the remembered one, or there is none).
       if (c && main?.contains(c) && (!wanted || focusKey(c) === wanted)) return;
+      // The stage's header keeps focus across its own tab switches (the design's tab()).
+      if (c && c.closest('[data-tv-fixed]')) return;
       const pool = this.focusables(main ?? this.root);
       const match = wanted ? pool.find((x) => focusKey(x) === wanted) : undefined;
       const late = Date.now() - started > timeoutMs;
-      if (match) return this.focus(match);
+      if (match) return this.focus(match, undefined, true);
       // Wait a little for the remembered element; then settle for the first one.
       if (pool.length && (!wanted || Date.now() - started > 600)) {
         if (!c || !main?.contains(c)) this.focusFirst();

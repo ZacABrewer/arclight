@@ -7,5 +7,9 @@ export const DEFAULT_PORT = 7878;
 /** How long one address probe may take before it counts as "no answer". */
 export const PROBE_TIMEOUT_MS = 6_000;
 
-/** API requests that take longer than this are treated as "server unreachable" (offline mode). */
-export const REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * How long an API request waits for the server to start answering before it counts as "server
+ * unreachable" (offline mode). A server that is off or on another network otherwise hangs until
+ * the OS gives up on the connection (a minute or more).
+ */
+export const CONNECT_TIMEOUT_MS = 9_000;

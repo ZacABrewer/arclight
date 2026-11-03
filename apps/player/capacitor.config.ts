@@ -12,6 +12,9 @@ const config: CapacitorConfig = {
   appId: 'com.moviemethat.arclight',
   appName: 'Arclight',
   webDir: 'dist',
+  // Capacitor's own native log (plugin calls with their arguments, which carry signed links) only
+  // in debug builds; release builds log nothing through it.
+  loggingBehavior: 'debug',
   server: {
     androidScheme: 'https',
     iosScheme: 'capacitor',

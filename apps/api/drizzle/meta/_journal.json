@@ -225,6 +225,27 @@
       "when": 1793665861242,
       "tag": "0031_mobile_app_id",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793689845522,
+      "tag": "0032_redesign",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1793694992991,
+      "tag": "0033_pin_lockout",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1793695251327,
+      "tag": "0034_fingerprint_window",
+      "breakpoints": true
     }
   ]
 }

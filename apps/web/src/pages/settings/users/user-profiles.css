@@ -1,0 +1,40 @@
+/* Settings → Users → Profiles. Theme tokens only, so every theme (light and dark) reads. */
+.al-profiles { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.al-profiles__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--al-line-1); }
+.al-profiles__row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--al-line-1); flex-wrap: wrap; min-width: 0; }
+.al-profiles__main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; min-width: 0; }
+.al-profiles__name { color: var(--al-text-1); font-weight: 600; overflow-wrap: anywhere; }
+.al-profiles__badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.al-profiles__actions, .al-profiles__confirm { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.al-profiles__confirm-text { color: var(--al-text-3); font-size: 13px; }
+.al-profiles__confirm-error { color: var(--al-danger-text); font-size: 13px; flex-basis: 100%; }
+.al-profiles__footer { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+.al-profile-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  border-radius: 50%; color: #fff; font-weight: 700; line-height: 1;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45); /* white initials stay legible on every swatch */
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+
+.al-profile-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-profile-form__head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.al-profile-form__names { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 12px; flex: 1 1 260px; min-width: 0; }
+.al-profile-form__initial { text-transform: uppercase; }
+.al-profile-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.al-profile-form__actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+.al-profile-colors { display: flex; gap: 10px; flex-wrap: wrap; }
+.al-profile-colors__swatch {
+  width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+.al-profile-colors__swatch[aria-checked='true'] { border-color: var(--al-text-1); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
+.al-profile-colors__swatch:focus-visible { outline: 2px solid var(--al-cyan); outline-offset: 2px; }
+
+@media (max-width: 767px) {
+  .al-profile-form__names, .al-profile-form__grid { grid-template-columns: minmax(0, 1fr); }
+  .al-profile-colors__swatch { width: 44px; height: 44px; }
+  .al-profiles__actions .al-btn, .al-profiles__confirm .al-btn, .al-profile-form__actions .al-btn { min-height: 44px; }
+  .al-profiles__actions, .al-profiles__confirm { margin-left: 0; flex-basis: 100%; }
+}

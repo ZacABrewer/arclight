@@ -6,7 +6,6 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.Log;
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,6 +31,7 @@ import androidx.media3.session.MediaSession;
 import androidx.media3.session.SessionToken;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.moviemethat.arclight.SafeLog;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -189,7 +189,8 @@ public final class PlaybackHub {
             HttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                     .setUserAgent(USER_AGENT)
                     .setAllowCrossProtocolRedirects(true)
-                    .setConnectTimeoutMs(15000)
+                    // An unreachable server reports in seconds, as in the app's API requests.
+                    .setConnectTimeoutMs(9000)
                     .setReadTimeoutMs(30000);
             ResolvingDataSource.Factory withHeaders = new ResolvingDataSource.Factory(http, dataSpec -> {
                 Map<String, String> h = headers.get(dataSpec.uri.toString());
@@ -274,7 +275,7 @@ public final class PlaybackHub {
             SessionToken token = new SessionToken(app, new ComponentName(app, PlaybackService.class));
             serviceConnection = new MediaController.Builder(app, token).buildAsync();
         } catch (RuntimeException e) {
-            Log.w(TAG, "Could not bind the playback service", e);
+            SafeLog.w(TAG, "Could not bind the playback service", e);
             serviceConnection = null;
         }
     }
@@ -782,7 +783,7 @@ public final class PlaybackHub {
             for (int i = 0; i < items.size() && same; i++) same = items.get(i).mediaId.equals(queue.get(i).id);
             if (same) return;
         }
-        Log.w(TAG, "A controller replaced the queue with items native does not know; clearing the queue model");
+        SafeLog.w(TAG, "A controller replaced the queue with items native does not know; clearing the queue model");
         queue.clear();
     }
 
@@ -812,7 +813,7 @@ public final class PlaybackHub {
             if (o.has("rate")) applyRate((float) o.optDouble("rate", 1));
             return new MediaSession.MediaItemsWithStartPosition(items, index, pos);
         } catch (IOException | JSONException | RuntimeException e) {
-            Log.w(TAG, "No usable saved queue", e);
+            SafeLog.w(TAG, "No usable saved queue", e);
             return null;
         }
     }
@@ -839,7 +840,7 @@ public final class PlaybackHub {
                 tmp.renameTo(stateFile);
             }
         } catch (IOException | JSONException e) {
-            Log.w(TAG, "Could not save the queue", e);
+            SafeLog.w(TAG, "Could not save the queue", e);
         }
     }
 
@@ -981,7 +982,7 @@ public final class PlaybackHub {
                 throw new IllegalStateException(ex);
             }
             lastError = e;
-            Log.w(TAG, "Playback error (" + code + ")", error);
+            SafeLog.w(TAG, "Playback error (" + code + ")", error);
             refreshStatus(true);
         }
     };

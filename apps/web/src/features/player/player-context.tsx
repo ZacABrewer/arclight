@@ -184,6 +184,16 @@ export function PlayerProvider({
   return <PlayerContext.Provider value={controller}>{children}</PlayerContext.Provider>;
 }
 
+/** The controller when a `<PlayerProvider>` (or a scope) is above (the profile pickers switch through it), else null. */
+export function usePlayerController(): PlayerController | null {
+  return useContext(PlayerContext);
+}
+
+/** Lends a controller to pages outside `<PlayerProvider>` (the app's profile pickers), nothing more. */
+export function PlayerControllerScope({ controller, children }: { controller: PlayerController; children: ReactNode }) {
+  return <PlayerContext.Provider value={controller}>{children}</PlayerContext.Provider>;
+}
+
 /** The player's state and actions. Must be used inside `<PlayerProvider>`. */
 export function usePlayer(): PlayerApi {
   const c = useContext(PlayerContext);

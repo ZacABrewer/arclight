@@ -1,6 +1,7 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AppPlatform } from '@arclight/shared';
 import { users } from '../auth/schema.js';
+import { householdProfiles } from '../households/schema.js';
 
 // Signed-in installs of the Arclight player app. A row is created by POST /app/sign-in or
 // POST /app/pair and holds the sha256 of the device token (the token itself is returned once).
@@ -25,6 +26,8 @@ export const appDevices = sqliteTable(
     /** Last request with the token (written at most once a minute). */
     lastSeenAt: text('last_seen_at').notNull(),
     lastIp: text('last_ip'),
+    /** The household profile this device is on; null: the owner profile. */
+    profileId: integer('profile_id').references(() => householdProfiles.id, { onDelete: 'set null' }),
   },
   (t) => [uniqueIndex('app_devices_token_idx').on(t.tokenHash), index('app_devices_user_idx').on(t.userId)],
 );
