@@ -104,6 +104,7 @@ first: **database/UI < config file < environment**):
 ARCLIGHT_SETTING__metadata__region=GB
 ARCLIGHT_SETTING__audit__retentionDays=30
 ARCLIGHT_SETTING__metrics__allowAnonymous=true
+ARCLIGHT_SETTING__updates__channel=stable
 ARCLIGHT_SETTING__vpn__provider__type=gluetun      # nested keys: one more __ per level
 ```
 
