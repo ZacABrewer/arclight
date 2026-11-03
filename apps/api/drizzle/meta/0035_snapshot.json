@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6450e534-ad3d-46f9-b8a7-bf44b8338c8e",
+  "id": "f21cb0e4-8f12-4a39-a2ff-e62b2eccc74f",
   "prevId": "c769026a-98db-4722-aa91-0b9fe4017489",
   "tables": {
     "jobs": {
@@ -9561,6 +9561,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
         "role": {
           "name": "role",
           "type": "text",
@@ -17342,6 +17350,13 @@
           "type": "blob",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "chroma": {
+          "name": "chroma",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "created_at": {

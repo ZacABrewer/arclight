@@ -17,4 +17,6 @@ CREATE TABLE `media_server_tag_syncs` (
 	PRIMARY KEY(`server_id`, `remote_item_id`, `label`)
 );
 --> statement-breakpoint
-CREATE INDEX `media_server_tag_syncs_entity_idx` ON `media_server_tag_syncs` (`server_id`,`entity_type`,`entity_id`);
+CREATE INDEX `media_server_tag_syncs_entity_idx` ON `media_server_tag_syncs` (`server_id`,`entity_type`,`entity_id`);--> statement-breakpoint
+ALTER TABLE `users` ADD `email_verified` integer DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE `video_fingerprints` ADD `chroma` blob;

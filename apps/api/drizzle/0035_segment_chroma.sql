@@ -1,1 +1,0 @@
-ALTER TABLE `video_fingerprints` ADD `chroma` blob;
