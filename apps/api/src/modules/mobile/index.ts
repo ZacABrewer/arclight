@@ -9,7 +9,7 @@ export { MobileService, MobileError, normaliseServerUrl, TEST_INTERVAL_MS, type 
 export { RelayClient, parseRetryAfter, RELAY_TIMEOUT_MS, type RelayOutcome } from './relay.js';
 export { mobileDevices } from './schema.js';
 
-// Mobile companion app: paired devices (table mobile_devices), the /mobile routes and delivery
+// Arclight Admin (companion app): paired devices (table mobile_devices), the /mobile routes and delivery
 // through the push relay. Every notification the push module sends to a user (notify(), after
 // the user's PushPreferences) is also sent to that user's devices.
 //

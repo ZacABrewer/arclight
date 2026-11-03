@@ -1,6 +1,6 @@
 import type { MobilePlatform } from '@arclight/shared';
 
-// Bridge to the Arclight companion app (apps/mobile). The app's WebView loads this server's
+// Bridge to Arclight Admin, the companion app (apps/mobile). The app's WebView loads this server's
 // UI; its user agent carries ` ArclightApp/<version> (<ios|android>)` and it exposes the
 // Capacitor plugin `window.Capacitor.Plugins.ArclightShell`. In a plain browser none of this
 // exists: every helper here then answers "not in the app" / null and never throws, so callers
@@ -18,6 +18,8 @@ export interface ShellPushRegistration {
   relaySecret: string;
   platform: MobilePlatform;
   deviceName: string;
+  /** The app's bundle ID (Arclight Admin and later apps); older app builds leave it out. */
+  appId?: string;
 }
 
 /** What registerPush() rejects with. */
@@ -55,7 +57,7 @@ function win(): NativeWindow | undefined {
   return typeof window === 'undefined' ? undefined : (window as NativeWindow);
 }
 
-/** True inside the companion app (user agent or Capacitor native platform). */
+/** True inside the Arclight Admin app (user agent or Capacitor native platform). */
 export function isInApp(w: NativeWindow | undefined = win()): boolean {
   if (!w) return false;
   if (parseAppUserAgent(w.navigator?.userAgent ?? '')) return true;

@@ -81,7 +81,7 @@ code, derived from how the upstream apps behave. The project is a clean-room bui
 - **Arclight for Jellyfin** plugin (1.3.0): request and browse Discover inside Jellyfin, title
   pages, status badges, watchlist, issues, language requests and opt-in themes. Install it from
   `https://arclight.moviemethat.com/jellyfin/manifest.json`.
-- Companion app for iOS and Android with mobile push through a relay (built from `apps/mobile`;
+- Arclight Admin, the companion app for iOS and Android, with mobile push through a relay (built from `apps/mobile`;
   not in the app stores yet).
 - Import wizard for Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and qBittorrent,
   and a Sonarr/Radarr-compatible API for third-party tools.
@@ -99,6 +99,6 @@ code, derived from how the upstream apps behave. The project is a clean-room bui
 - **More of the built-in player**: video direct play, then live video transcoding (Quick Sync and
   other GPUs), podcasts, ebook and comic readers, and progress sync back to Jellyfin, Plex and
   Audiobookshelf. Arclight keeps working alongside Jellyfin, Emby and Plex.
-- **Companion app in the app stores**, after review.
+- **Arclight Admin in the app stores**, after review, and a separate **Arclight** player app.
 - **Pre-rename clean-up**: remove the deprecated `MEDIATRON_*` environment fallback, the one-time
   `media-tron.db` to `arclight.db` file move and acceptance of `media-tron_*.zip` backups.

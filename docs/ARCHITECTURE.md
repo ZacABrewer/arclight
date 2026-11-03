@@ -63,7 +63,7 @@ arclight/
 ├── apps/
 │   ├── api/                 Fastify host: modules, scheduler, SQLite/Drizzle, serves web/dist
 │   ├── web/                 React SPA: admin app, request portal, themes
-│   └── mobile/              Capacitor companion app (iOS and Android)
+│   └── mobile/              Arclight Admin, the Capacitor companion app (iOS and Android)
 ├── packages/                Pure logic and service clients (see below)
 ├── jellyfin-plugin/         Arclight for Jellyfin (C#, separate release line)
 ├── push-relay/              Cloudflare Worker that relays phone push notifications
@@ -124,7 +124,7 @@ boot. Tests build in-memory databases from the table definitions with `createTes
 It holds the admin app (library, wanted, activity, calendar, settings, system), the
 request portal for non-admin users, Discover, the command palette and the theme system
 (see [Themes](THEMES.md)). It has a typed API client per module and a React Query cache
-kept live by the WebSocket feed. Below 768 px tables turn into cards. The companion app
+kept live by the WebSocket feed. Below 768 px tables turn into cards. The Arclight Admin app
 in `apps/mobile` shows this same UI.
 
 ## Runtime shape

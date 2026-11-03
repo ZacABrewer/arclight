@@ -3,13 +3,15 @@ import { MobileDeviceInput, MobileDeviceListQuery, MobileDeviceResource, mobileP
 
 describe('mobile contracts', () => {
   it('builds the pairing URI the app understands', () => {
-    expect(mobilePairingUri('https://arclight.example.com:8443/base')).toBe('arclight://pair?url=https%3A%2F%2Farclight.example.com%3A8443%2Fbase');
+    expect(mobilePairingUri('https://arclight.example.com:8443/base')).toBe('arclight-admin://pair?url=https%3A%2F%2Farclight.example.com%3A8443%2Fbase');
   });
 
   it('validates the registerPush() result', () => {
     const ok = MobileDeviceInput.parse({ relayDeviceId: ' d1 ', relaySecret: 'x'.repeat(16), platform: 'android' });
     expect(ok).toEqual({ relayDeviceId: 'd1', relaySecret: 'x'.repeat(16), platform: 'android', deviceName: '' });
     expect(MobileDeviceInput.safeParse({ relayDeviceId: 'd', relaySecret: 'short', platform: 'ios' }).success).toBe(false);
+    expect(MobileDeviceInput.parse({ relayDeviceId: 'd', relaySecret: 'x'.repeat(16), platform: 'ios', appId: 'com.moviemethat.arclight.admin' }).appId).toBe('com.moviemethat.arclight.admin');
+    expect(MobileDeviceInput.safeParse({ relayDeviceId: 'd', relaySecret: 'x'.repeat(16), platform: 'ios', appId: 'not an id' }).success).toBe(false);
     expect(MobileDeviceInput.safeParse({ relayDeviceId: 'd', relaySecret: 'x'.repeat(16), platform: 'web' }).success).toBe(false);
   });
 

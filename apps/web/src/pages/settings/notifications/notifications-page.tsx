@@ -598,7 +598,7 @@ export function NotificationsPage() {
         )}
       </SettingsSection>
       <AlertSettingsSection />
-      {/* The companion app: pairing code and every user's paired phones (remove, send a test). */}
+      {/* The Arclight Admin app: pairing code and every user's paired phones (remove, send a test). */}
       <SettingsSection label={t('settings.notifications.mobileApp')}>
         <MobileAppSection all />
       </SettingsSection>

@@ -10,7 +10,7 @@ export interface IntroContext {
   alreadyPlayed: boolean;
   /** prefers-reduced-motion: reduce. */
   reducedMotion: boolean;
-  /** Launched by a notification tap, a share or a deep link (arclight://...): never delay it. */
+  /** Launched by a notification tap, a share or a deep link (arclight-admin://...): never delay it. */
   launchedByEvent: boolean;
   /** The app opened on its default route (not a specific screen such as #settings). */
   routeIsAuto: boolean;

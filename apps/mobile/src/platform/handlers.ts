@@ -16,7 +16,7 @@ export interface HandlerHooks {
   currentServer: () => Promise<Server | null>;
   /** Open a server page (switching the selected server when needed). */
   open: (target: RouteTarget) => Promise<void> | void;
-  /** A pairing link (arclight://pair?url=...) was opened. */
+  /** A pairing link (arclight-admin://pair?url=...) was opened. */
   pair: (url: string) => Promise<void> | void;
   /** Show the lock and resolve once unlocked. */
   lock: () => Promise<void>;
@@ -27,7 +27,7 @@ export interface HandlerHooks {
   onLaunchEvent?: () => void;
 }
 
-/** The URL the app was launched with (arclight://pair?...), if any. */
+/** The URL the app was launched with (arclight-admin://pair?...), if any. */
 export async function launchUrl(): Promise<string | null> {
   if (!isNative()) return null;
   try {
@@ -97,7 +97,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
     }).catch(() => undefined);
   }
 
-  // arclight://pair?url=... opened from the camera app or a link.
+  // arclight-admin://pair?url=... opened from the camera app or a link.
   void App.addListener('appUrlOpen', (e) => {
     hooks.onLaunchEvent?.();
     const url = parsePairingCode(e.url);

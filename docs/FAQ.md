@@ -193,7 +193,7 @@ Check the connection's delivery log first: it shows sent, failed, held and rate-
 Arclight for Jellyfin adds Arclight to Jellyfin's own interface: search and request, a Discover page with "Recommended for you" (from Jellyfin and Plex watch history), title pages, status badges, watchlist, issue reports, stats and opt-in themes. It is optional; watch-history sync works without it. Install it from Jellyfin's plugin catalogue with the repository URL shown on Settings > Media Servers. See [Media servers](using/media-servers.md#the-arclight-jellyfin-plugin).
 
 ### Is there a phone app?
-Yes, a companion app for iPhone, iPad and Android that connects to your own server and adds lock-screen notifications. It is not in the app stores yet; you can build it from `apps/mobile`. See [Mobile app](using/mobile-app.md).
+Yes. Arclight Admin is a companion app for iPhone, iPad and Android that connects to your own server and adds lock-screen notifications. It is not in the app stores yet; you can build it from `apps/mobile`. A separate player app, Arclight, is planned. See [Mobile app](using/mobile-app.md).
 
 ## Updates and data
 

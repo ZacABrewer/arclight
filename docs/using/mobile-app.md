@@ -1,6 +1,6 @@
 # Mobile app
 
-The Arclight app for iPhone, iPad and Android is a companion to your own server, like the Home Assistant or Jellyfin apps. It connects to the Arclight server you already run and shows the same interface you see in a browser: admins get the full app, everyone else gets the request portal. What the app adds is the phone side: notifications on your lock screen, and links that open in the phone's browser.
+Arclight Admin, the app for iPhone, iPad and Android, is a companion to your own server, like the Home Assistant or Jellyfin apps. It connects to the Arclight server you already run and shows the same interface you see in a browser: admins get the full app, everyone else gets the request portal. What the app adds is the phone side: notifications on your lock screen, and links that open in the phone's browser.
 
 The app does not include a server and does not store your library. Without a running Arclight server it has nothing to show.
 
@@ -16,7 +16,7 @@ Everyone can do this, including people who only use the request portal.
 2. Open the app on your phone and scan the QR code. If you cannot scan it, type the address shown under the code into the app instead.
 3. Sign in with your usual Arclight account.
 
-The QR code holds only your server's address (`arclight://pair?url=...`), no password or key. The address comes from the **Application URL** under Settings > Requests when an admin has set it, otherwise from the address you opened Arclight with. If phones reach your server at a different address (for example through a reverse proxy or a Cloudflare Tunnel), an admin should set the Application URL to that address first. See [Exposing it outside your home](../getting-started/exposing-outside-home.md) if your phone should work away from home.
+The QR code holds only your server's address (`arclight-admin://pair?url=...`), no password or key. The address comes from the **Application URL** under Settings > Requests when an admin has set it, otherwise from the address you opened Arclight with. If phones reach your server at a different address (for example through a reverse proxy or a Cloudflare Tunnel), an admin should set the Application URL to that address first. See [Exposing it outside your home](../getting-started/exposing-outside-home.md) if your phone should work away from home.
 
 To use a different server later, open the avatar menu (or the portal header) in the app and choose **Switch server**.
 
@@ -59,8 +59,8 @@ If a row shows a warning, the last delivery to that phone failed. "Rate limited"
 | Symptom | What to check |
 |---|---|
 | The app cannot connect after scanning | The address under the QR code must be reachable from the phone. On mobile data a home-network address (`192.168...`) does not work; set the Application URL to an address that does. |
-| No notifications arrive | Send a test from the device list. If it says sent but nothing appears, check the phone's notification settings for Arclight. If it says phone notifications are turned off on this server, the admin set `ARCLIGHT_PUSH_RELAY=off`. |
-| "Notifications are turned off for Arclight in the phone's settings" | Allow notifications for Arclight in the phone's Settings, then turn the switch on again. |
+| No notifications arrive | Send a test from the device list. If it says sent but nothing appears, check the phone's notification settings for Arclight Admin. If it says phone notifications are turned off on this server, the admin set `ARCLIGHT_PUSH_RELAY=off`. |
+| "Notifications are turned off for Arclight Admin in the phone's settings" | Allow notifications for Arclight Admin in the phone's Settings, then turn the switch on again. |
 | A phone disappeared from the list | The relay reported it gone (app removed or token expired). Turn notifications on again in the app. |
 | Notifications stopped after a restore | Backups leave phones out on purpose. Turn notifications off and on in the app. |
 
@@ -69,4 +69,4 @@ If a row shows a warning, the last delivery to that phone failed. "Rate limited"
 - [Notifications](notifications.md) (connections and browser notifications)
 - [Discover and requests](discover-and-requests.md)
 - [Users and security](users-and-security.md)
-- [API: mobile](../API.md#mobile-companion-app)
+- [API: mobile](../API.md#mobile-arclight-admin-app)

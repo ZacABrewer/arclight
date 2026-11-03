@@ -1,6 +1,7 @@
 name: Mobile
 
-# Builds the Arclight companion app (apps/mobile, Capacitor) for Android and iOS.
+# Builds Arclight Admin, the companion app (apps/mobile, Capacitor; com.moviemethat.arclight.admin),
+# for Android and iOS. The player app Arclight (apps/player, com.moviemethat.arclight) is separate.
 # Every run: Android debug APK and an unsigned iOS simulator build (proves both compile).
 # With signing secrets: signed Android App Bundle. Manual run with upload=true: Play internal
 # track and/or TestFlight. Secrets are documented in apps/mobile/README.md.
@@ -84,7 +85,7 @@ jobs:
         working-directory: apps/mobile/android
       - uses: actions/upload-artifact@v4
         with:
-          name: arclight-android-debug-apk
+          name: arclight-admin-android-debug-apk
           path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -107,7 +108,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: env.HAS_KEYSTORE == 'true'
         with:
-          name: arclight-android-release-aab
+          name: arclight-admin-android-release-aab
           path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 30
@@ -116,7 +117,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.moviemethat.arclight
+          packageName: com.moviemethat.arclight.admin
           releaseFiles: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
           track: internal
           status: ${{ inputs.play_status }}
@@ -182,7 +183,7 @@ jobs:
           set -o pipefail
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID")
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/Arclight.xcarchive \
+            -destination 'generic/platform=iOS' -archivePath build/ArclightAdmin.xcarchive \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             "${AUTH[@]}" archive | tail -n 50
           cat > build/ExportOptions.plist <<EOF
@@ -197,7 +198,7 @@ jobs:
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           EOF
-          xcodebuild -exportArchive -archivePath build/Arclight.xcarchive \
+          xcodebuild -exportArchive -archivePath build/ArclightAdmin.xcarchive \
             -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
             "${AUTH[@]}" | tail -n 50
       - name: Remove API key

@@ -1,4 +1,4 @@
-/* Companion app (html.in-app, set by lib/native-app.ts when the page runs inside the Arclight
+/* Arclight Admin app (html.in-app, set by lib/native-app.ts when the page runs inside the Arclight
    app). The WebView draws edge to edge (index.html has viewport-fit=cover), so the fixed chrome
    keeps clear of the notch / Dynamic Island, the home indicator and landscape side insets.
    The mobile tab bar already pads for the bottom inset (layout.css). */

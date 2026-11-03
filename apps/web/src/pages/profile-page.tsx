@@ -164,7 +164,7 @@ export function ProfilePage() {
             <UserPolicyEditor userId={user.id} readOnly />
           </Pane>
         </div>
-        {/* Inside the companion app the phone's own notifications replace web push. */}
+        {/* Inside the Arclight Admin app the phone's own notifications replace web push. */}
         {inApp ? (
           hasShell ? (
             <Pane title={t('profile.deviceNotifications')}>

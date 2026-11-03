@@ -42,7 +42,7 @@ export function useUserMenu(onShortcuts: () => void): UserMenuModel {
   if (isAdmin) items.push({ id: 'security', label: t('layout.userMenu.securitySettings'), onSelect: () => void router.navigate({ to: '/settings/security' }) });
   items.push({ id: 'shortcuts', label: t('common.keyboardShortcuts'), onSelect: onShortcuts });
   if (isAdmin) items.push({ id: 'design', label: t('layout.userMenu.designSystem'), onSelect: () => void router.navigate({ to: '/design' }) });
-  // Companion app only: back to the app's server picker.
+  // Arclight Admin app only: back to the app's server picker.
   if (shell()) items.push({ id: 'switch-server', label: t('layout.userMenu.switchServer'), separatorBefore: true, onSelect: () => void switchServer().catch(() => undefined) });
   if (session.via === 'session') {
     items.push({

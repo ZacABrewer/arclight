@@ -196,7 +196,7 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
       await check(url);
     } catch (err) {
       const msg = (err as Error)?.message ?? '';
-      if (!/cancel/i.test(msg)) setScanError('Could not scan. Allow camera access for Arclight in the system settings, or type the address.');
+      if (!/cancel/i.test(msg)) setScanError('Could not scan. Allow camera access for Arclight Admin in the system settings, or type the address.');
     }
   };
 
@@ -213,7 +213,7 @@ export function AddServerScreen({ rt, go, connectTo, initialUrl, editId }: WithR
         <div className="center" style={{ flex: 'none', paddingTop: 8 }}>
           <Mark />
           <Wordmark height={22} />
-          <p className="muted">Arclight is a remote for your own self-hosted Arclight server. Enter its address, or scan the pairing code from the server's settings.</p>
+          <p className="muted">Arclight Admin is a remote for your own self-hosted Arclight server. Enter its address, or scan the pairing code from the server's settings.</p>
         </div>
       )}
       <form onSubmit={submit} className="actions" noValidate>
@@ -324,7 +324,7 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
           <span>
             {bio?.label ?? 'Biometric'} lock
             <br />
-            <span className="hint">Ask for {bio?.label ?? 'biometrics'} when Arclight opens.</span>
+            <span className="hint">Ask for {bio?.label ?? 'biometrics'} when Arclight Admin opens.</span>
           </span>
           <input type="checkbox" role="switch" checked={settings.biometricLock} onChange={(e) => void toggleLock(e.target.checked)} />
         </label>
@@ -410,7 +410,7 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
       </section>
       <section className="actions">
         <button type="button" className="btn block" onClick={() => go({ name: 'about' })}>
-          About Arclight
+          About Arclight Admin
         </button>
         <button type="button" className="btn block" onClick={() => go({ name: 'licenses' })}>
           Open-source licenses
@@ -445,7 +445,7 @@ export function AboutScreen({ go }: Nav) {
         </p>
       </div>
       <section className="card actions">
-        <p>Arclight is a companion app for your own, self-hosted Arclight server. It stores only the addresses and names of your servers on this device; everything else lives on your server.</p>
+        <p>Arclight Admin is the companion app for your own, self-hosted Arclight server. It stores only the addresses and names of your servers on this device; everything else lives on your server.</p>
         <p className="small muted">
           This product uses the TMDB API but is not endorsed or certified by TMDB. Movie and TV metadata and artwork shown by your server come from <ExternalLink href={LINKS.tmdb}>The Movie Database (TMDB)</ExternalLink>.
         </p>
@@ -530,7 +530,7 @@ export function LockScreen({ onUnlock }: { onUnlock: () => Promise<boolean> }) {
     <main className="screen">
       <div className="center">
         <Mark />
-        <h1>Arclight is locked</h1>
+        <h1>Arclight Admin is locked</h1>
         <button type="button" className="btn accent" onClick={() => void onUnlock()}>
           Unlock
         </button>

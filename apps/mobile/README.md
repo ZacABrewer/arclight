@@ -1,8 +1,10 @@
-# Arclight for iOS and Android
+# Arclight Admin for iOS and Android
 
-The Arclight companion app: a native shell (Capacitor 8) around the web UI of your own Arclight server, like the Home Assistant and Jellyfin apps. The app adds the native parts: server setup and switching, QR pairing, push notifications through the Arclight push relay, an optional Face ID / Touch ID / fingerprint lock, the Android share sheet and its own settings, about and licenses screens. Everything else is the server's own interface, so admins get the admin portal and other people the request portal, and new server features show up without an app update.
+Arclight Admin, the Arclight companion app: a native shell (Capacitor 8) around the web UI of your own Arclight server, like the Home Assistant and Jellyfin apps. The app adds the native parts: server setup and switching, QR pairing, push notifications through the Arclight push relay, an optional Face ID / Touch ID / fingerprint lock, the Android share sheet and its own settings, about and licenses screens. Everything else is the server's own interface, so admins get the admin portal and other people the request portal, and new server features show up without an app update.
 
-Store checklists: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md), [docs/mobile/RELEASE-ANDROID.md](../../docs/mobile/RELEASE-ANDROID.md).
+Arclight Admin is not the player app. **Arclight** (`com.moviemethat.arclight`, in `apps/player`) is a separate app for playing your library, with its own store listings and a checklist to come.
+
+Store checklists for Arclight Admin: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md), [docs/mobile/RELEASE-ANDROID.md](../../docs/mobile/RELEASE-ANDROID.md).
 
 ## How it works
 
@@ -19,7 +21,7 @@ Store checklists: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md)
   - a reverse-proxy path (`example.com/arclight`) is kept;
   - redirects are followed and the final base URL is saved.
   Errors say which case it is: not reachable, timed out, TLS certificate not trusted, or "something answered but it is not Arclight". Plain HTTP to a host that is not on the LAN shows a warning and needs "Connect anyway".
-- **Pairing QR / link**: `arclight://pair?url=<encoded server URL>` (`src/core/qr.ts`). Scanned in the app or opened from the camera app (the `arclight://` scheme is registered on both platforms).
+- **Pairing QR / link**: `arclight-admin://pair?url=<encoded server URL>` (`src/core/qr.ts`). Scanned in the app or opened from the camera app (the `arclight-admin://` scheme is registered on both platforms). The older `arclight://pair?url=...` codes shown by servers before this rename are still read when scanned inside the app; the `arclight://` scheme itself belongs to the player app.
 - **Servers** are stored with Capacitor Preferences (addresses and names only). Sign-in lives in the WebView's cookies, set by the server.
 - **Server pages** load in the app's WebView. Capacitor normally allows only hosts listed at build time; `ArclightNativePlugin` (Swift and Java, in the native projects) allows the saved servers' origins, which the TS layer hands over after every change. Other sites open in the system browser. On Android the plugin also extends Capacitor's bridge to those origins (main frame only); on iOS Capacitor's bridge already runs on every page.
 - **`ArclightShell`** (`src/shell/`) is built into `dist/arclight-shell.js` and injected at document start into server pages. It defines `window.Capacitor.Plugins.ArclightShell` before the server's web UI runs and fires `arclightshellready` on `window`. Contract (`src/shell/contract.ts`):
@@ -27,7 +29,7 @@ Store checklists: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md)
   | Method | Result |
   |---|---|
   | `info()` | `{ platform: 'ios' \| 'android', appVersion, build, pushAvailable }` |
-  | `registerPush()` | `{ relayDeviceId, relaySecret, platform, deviceName }`; rejects with `{ code: 'denied' \| 'unavailable' \| 'relay', message }` |
+  | `registerPush()` | `{ relayDeviceId, relaySecret, platform, deviceName, appId }` (`appId` is this app's bundle ID; the server stores it and the push relay uses it as the APNs topic); rejects with `{ code: 'denied' \| 'unavailable' \| 'relay', message }` |
   | `unregisterPush()` | `void` |
   | `switchServer()` | back to the server list |
   | `openExternal({ url })` | opens http(s)/mailto/tel in the system browser |
@@ -56,7 +58,7 @@ Open the native projects with `npx cap open android` (Android Studio, JDK 21) or
 
 Build-time setting: `VITE_PUSH_RELAY_URL` (default `https://arclight-push.moviemethat.com`) for forks running their own relay.
 
-Identity: app name Arclight, bundle ID / application ID `com.moviemethat.arclight`, version 1.0.0 (build 1; CI uses the run number for store uploads), iOS 16+, Android 8.0+ (minSdk 26, targetSdk 36).
+Identity: app name Arclight Admin, bundle ID / application ID `com.moviemethat.arclight.admin` (also `APP_ID` in `src/config.ts`; keep it equal to `appId` in `capacitor.config.ts`), URL scheme `arclight-admin`, version 1.0.0 (build 1; CI uses the run number for store uploads), iOS 16+, Android 8.0+ (minSdk 26, targetSdk 36).
 
 ## CI (`.github/workflows/mobile.yml`)
 
@@ -79,16 +81,16 @@ Set them with the GitHub CLI from the repository root (`gh secret set NAME < fil
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password | chosen in `keytool` | `gh secret set ANDROID_KEYSTORE_PASSWORD` |
 | `ANDROID_KEY_ALIAS` | Key alias (`upload` above) | chosen in `keytool` | `gh secret set ANDROID_KEY_ALIAS --body upload` |
 | `ANDROID_KEY_PASSWORD` | Key password | chosen in `keytool` | `gh secret set ANDROID_KEY_PASSWORD` |
-| `PLAY_SERVICE_ACCOUNT_JSON` | Service account key JSON allowed to release to the app | Google Cloud console → IAM → Service accounts → create, add a JSON key; Play Console → Users and permissions → invite the service account with "Release to testing tracks" for Arclight. The app must exist in Play Console and the first AAB is uploaded by hand. | `gh secret set PLAY_SERVICE_ACCOUNT_JSON < play-service-account.json` |
-| `GOOGLE_SERVICES_JSON` | Firebase config for FCM (push on Android) | Firebase console → project → add Android app `com.moviemethat.arclight` → download `google-services.json`. Not secret in the strict sense, but kept out of the public repo. | `gh secret set GOOGLE_SERVICES_JSON < google-services.json` |
+| `PLAY_SERVICE_ACCOUNT_JSON` | Service account key JSON allowed to release to the app | Google Cloud console → IAM → Service accounts → create, add a JSON key; Play Console → Users and permissions → invite the service account with "Release to testing tracks" for Arclight Admin. The app must exist in Play Console and the first AAB is uploaded by hand. | `gh secret set PLAY_SERVICE_ACCOUNT_JSON < play-service-account.json` |
+| `GOOGLE_SERVICES_JSON` | Firebase config for FCM (push on Android) | Firebase console → project → add Android app `com.moviemethat.arclight.admin` → download `google-services.json`. Not secret in the strict sense, but kept out of the public repo. | `gh secret set GOOGLE_SERVICES_JSON < google-services.json` |
 | `APPSTORE_API_KEY_ID` | App Store Connect API key ID | App Store Connect → Users and Access → Integrations → App Store Connect API → generate a team key with the **Admin** role (needed for cloud-managed signing) | `gh secret set APPSTORE_API_KEY_ID --body ABC123XYZ` |
 | `APPSTORE_API_ISSUER_ID` | Issuer ID shown above the key list | same page | `gh secret set APPSTORE_API_ISSUER_ID --body <uuid>` |
 | `APPSTORE_API_KEY_P8` | Contents of the downloaded `AuthKey_<ID>.p8` (downloadable once) | same page | `gh secret set APPSTORE_API_KEY_P8 < AuthKey_ABC123XYZ.p8` |
 | `APPLE_TEAM_ID` | 10-character Apple Developer Team ID | developer.apple.com → Account → Membership details | `gh secret set APPLE_TEAM_ID --body ABCDE12345` |
 
-Before the first TestFlight upload: register the App ID `com.moviemethat.arclight` with the Push Notifications capability and create the app record in App Store Connect (see RELEASE-IOS.md). The APNs key and the FCM service account belong to the push relay, not to this repository.
+Before the first TestFlight upload: register the App ID `com.moviemethat.arclight.admin` with the Push Notifications capability and create the app record in App Store Connect (see RELEASE-IOS.md). The APNs key and the FCM service account belong to the push relay, not to this repository.
 
 ## Not done yet
 
-- **iOS share extension** ("Request in Arclight" from Safari / the IMDb app). It needs a Share Extension target and an App Group (`@capgo/capacitor-share-target` reads what the extension stores), which cannot be built or tested without a Mac. Android's share target works. To add it: create the extension in Xcode, give both targets an App Group (for example `group.com.moviemethat.arclight`), set `plugins.CapacitorShareTarget.appGroupId` in `capacitor.config.ts`, and register the App Group with the App ID.
+- **iOS share extension** ("Request in Arclight" from Safari / the IMDb app). It needs a Share Extension target and an App Group (`@capgo/capacitor-share-target` reads what the extension stores), which cannot be built or tested without a Mac. Android's share target works. To add it: create the extension in Xcode, give both targets an App Group (for example `group.com.moviemethat.arclight.admin`), set `plugins.CapacitorShareTarget.appGroupId` in `capacitor.config.ts`, and register the App Group with the App ID.
 - iPad layouts are not tuned (the app runs on iPad; the server's web UI is responsive).

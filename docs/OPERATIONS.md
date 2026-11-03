@@ -4,7 +4,7 @@
 > [System](using/system.md); backups are in [Backup and restore](getting-started/backup-restore.md).
 
 Running Arclight as infrastructure: configuration as code, environment overrides, the Jellyfin
-plugin and the companion app, Prometheus metrics and the audit log. Route details are in [API.md](API.md); contracts in
+plugin and the Arclight Admin app, Prometheus metrics and the audit log. Route details are in [API.md](API.md); contracts in
 `packages/shared/src/operations.ts`.
 
 ## Configuration as code
@@ -286,9 +286,10 @@ run it:
   unless automatic account creation is on. See
   [Media servers](using/media-servers.md#the-arclight-jellyfin-plugin).
 
-## Companion app
+## Arclight Admin app
 
-The iOS and Android app is a shell around your own server; it holds no data. For it to work away
+Arclight Admin, the iOS and Android companion app, is a shell around your own server; it holds
+no data. (The player app, Arclight, is a separate app.) For it to work away
 from home, set **Settings > Requests > Application URL** to the address phones use (reverse proxy
 or tunnel), so the pairing QR code and notification links point there. Sign-in in the app is the
 normal Arclight login. Paired phones are listed per user under
@@ -301,7 +302,8 @@ Phones paired through the [mobile app](using/mobile-app.md) get notifications th
 Arclight push relay, because Apple and Google only deliver to an app from its publisher's
 servers. For every notification a user would get as a browser push (same events, same per-user
 choices), the server also sends `POST <relay>/v1/send` for each of that user's phones, with the
-phone's own relay secret as a bearer token. The body carries the title, the text, the in-app
+phone's own relay secret as a bearer token. The body carries the title, the text, the app ID
+the phone registered with (`appId`, which the relay uses as the APNs topic), the in-app
 path to open (`data.url`) and, when Settings > Requests > Application URL is set, the server
 address (`data.server`). The relay does not store notification content.
 
@@ -319,7 +321,7 @@ the device list until the next successful send.
 
 Relay secrets never leave the server: no API response includes them, the audit log masks
 them, and backup archives leave the `mobile_devices` table empty (overwritten, not just
-unlinked). Routes: [API.md](API.md#mobile-companion-app).
+unlinked). Routes: [API.md](API.md#mobile-arclight-admin-app).
 
 ## Metrics
 

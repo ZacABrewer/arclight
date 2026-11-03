@@ -10,11 +10,19 @@ export const LIMITS = {
   dataBytes: 2048,
   threadId: 64,
   appVersion: 64,
+  appId: 155,
   badgeMax: 99_999,
 } as const;
 
 /** deviceId: 128 random bits, base64url without padding (22 characters). */
 export const DEVICE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+/** App id: reverse-DNS bundle ID / application ID, e.g. com.moviemethat.arclight.admin. */
+export const APP_ID_RE = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+export function validAppId(v: unknown): v is string {
+  return typeof v === "string" && v.length <= LIMITS.appId && APP_ID_RE.test(v);
+}
 
 export function isPlatform(v: unknown): v is Platform {
   return v === "ios" || v === "android";
@@ -46,10 +54,12 @@ function bad(message: string): never {
 
 export interface SendRequest extends Notification {
   deviceId: string;
+  /** App id the server has on record for the device; used when the device registered without one. */
+  appId?: string;
 }
 
 export function parseSend(body: Record<string, unknown>): SendRequest {
-  const { deviceId, title, body: text, data, badge, threadId } = body;
+  const { deviceId, title, body: text, data, badge, threadId, appId } = body;
   if (typeof deviceId !== "string" || deviceId.length === 0 || deviceId.length > 64) bad("deviceId is required");
   if (typeof title !== "string") bad("title must be a string");
   if (typeof text !== "string") bad("body must be a string");
@@ -80,6 +90,10 @@ export function parseSend(body: Record<string, unknown>): SendRequest {
       bad(`threadId must be 1-${LIMITS.threadId} characters of A-Z a-z 0-9 _ . : -`);
     }
     out.threadId = threadId;
+  }
+  if (appId !== undefined && appId !== null) {
+    if (!validAppId(appId)) bad("invalid appId");
+    out.appId = appId;
   }
   return out;
 }

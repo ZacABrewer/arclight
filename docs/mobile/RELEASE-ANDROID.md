@@ -1,6 +1,8 @@
-# Arclight for Android: Google Play launch checklist
+# Arclight Admin for Android: Google Play launch checklist
 
-Everything needed to take the Arclight Android app from a developer account to a public listing on Google Play. Work top to bottom; each section depends on the ones above it. Items marked **(permanent)** cannot be changed after the first upload.
+> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own Play listing; its checklist is still to come.
+
+Everything needed to take the Arclight Admin Android app from a developer account to a public listing on Google Play. Work top to bottom; each section depends on the ones above it. Items marked **(permanent)** cannot be changed after the first upload.
 
 Google changes requirements often. Before each section, check the linked Play Console help page for the current rule.
 
@@ -8,8 +10,8 @@ Google changes requirements often. Before each section, check the linked Play Co
 
 ## 0. Decisions to make first
 
-- [ ] **Application ID (permanent).** Used by the app: `com.moviemethat.arclight` (reverse of the project domain). It is unique across Google Play forever, cannot be reused after deletion, and must match the iOS bundle ID if you want one ID everywhere. Use a domain you control.
-- [ ] **Store name.** "Arclight" (up to 30 characters). Names do not have to be unique on Play, but trademark complaints can remove a listing; search Play for "Arclight" first and keep a fallback ("Arclight Media Manager").
+- [ ] **Application ID (permanent).** Used by the app: `com.moviemethat.arclight.admin` (reverse of the project domain, plus `.admin`; `com.moviemethat.arclight` is the player app's). It is unique across Google Play forever, cannot be reused after deletion, and must match the iOS bundle ID if you want one ID everywhere. Use a domain you control.
+- [ ] **Store name.** "Arclight Admin" (up to 30 characters; "Arclight" alone is the player app). Names do not have to be unique on Play, but trademark complaints can remove a listing; search Play for "Arclight" first and keep a fallback ("Arclight Server Admin").
 - [ ] **Free, no ads, no in-app purchases** (assumed below; paid apps need a payments profile and tax setup).
 - [ ] **Minimum Android version.** Android 8.0 (API 26) or newer is a sensible floor.
 - [ ] **Phone only, or phone and tablet.** Tablets need their own screenshots.
@@ -17,7 +19,7 @@ Google changes requirements often. Before each section, check the linked Play Co
 
 ### How the app is built
 
-The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, secure sign-in, push notifications, biometric lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins therefore see the admin portal and other users the request portal, exactly as on the web, and new server features appear without an app update. Only changes to the native shell need a new release.
+Arclight Admin is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, secure sign-in, push notifications, biometric lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins therefore see the admin portal and other users the request portal, exactly as on the web, and new server features appear without an app update. Only changes to the native shell need a new release.
 
 ## 1. Developer account
 
@@ -85,7 +87,7 @@ Arclight is self-hosted, so each user's server must be able to reach their phone
 
 ## 7. Store listing
 
-- [ ] App name: Arclight
+- [ ] App name: Arclight Admin
 - [ ] Short description (80 characters), for example: "Manage your self-hosted Arclight server: requests, library and downloads."
 - [ ] Full description (4,000 characters). Describe it as a remote control for the user's own server. Do not mention piracy, torrent sites or copyrighted titles; screenshots and text show only legal sample content.
 - [ ] App icon: 512 × 512 PNG, 32-bit, under 1 MB (**waiting on the new logo**).

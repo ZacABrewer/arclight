@@ -202,7 +202,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     updatesModule,
     // Requests do not send their own pushes yet, so the bus listener stays on.
     pushModule,
-    // Mobile companion app devices; adds the push relay as a second channel of the push module's notify().
+    // Arclight Admin (companion app) devices; adds the push relay as a second channel of the push module's notify().
     mobileModule,
     subtitlesModule,
     // Bulk search / rename / subtitle search over many selected items (library and Wanted lists).

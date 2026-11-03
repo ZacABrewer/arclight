@@ -56,12 +56,12 @@ them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
   Year in review, smart collections, and the [Arclight for Jellyfin plugin](#arclight-for-jellyfin-plugin).
 - **Sign-in**: single sign-on (OpenID Connect), two-factor and passkeys, personal API keys,
   forward-auth and sub-path hosting.
-- **Companion app** for iOS and Android with phone notifications (not in the app stores yet).
+- **Arclight Admin**, the companion app for iOS and Android, with phone notifications (not in the app stores yet).
 - **Move in**: an import wizard for Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and
   qBittorrent, plus a Sonarr/Radarr-compatible API for the tools you already use.
 - **Themes**: the Tron look by default and syncable theme packs.
 
-Still planned and not available yet: a built-in media player and the companion app in the app
+Still planned and not available yet: a built-in media player and the Arclight Admin app in the app
 stores. See the [roadmap](docs/ROADMAP.md).
 
 ## Deploy

@@ -1,6 +1,8 @@
-# Arclight for iOS: App Store launch checklist
+# Arclight Admin for iOS: App Store launch checklist
 
-Everything needed to take the Arclight iPhone (and optionally iPad) app from an Apple Developer Program membership to a public App Store listing. Work top to bottom. Items marked **(permanent)** cannot be changed after the first upload.
+> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own App Store record; its checklist is still to come.
+
+Everything needed to take the Arclight Admin iPhone (and optionally iPad) app from an Apple Developer Program membership to a public App Store listing. Work top to bottom. Items marked **(permanent)** cannot be changed after the first upload.
 
 Apple changes requirements every year, usually around WWDC and in the spring. Check App Store Connect Help and the App Review Guidelines before each section.
 
@@ -8,8 +10,8 @@ Apple changes requirements every year, usually around WWDC and in the spring. Ch
 
 ## 0. Decisions to make first
 
-- [ ] **Bundle ID (permanent).** Used by the app: `com.moviemethat.arclight`. Use the same ID as the Android application ID.
-- [ ] **App Store name.** "Arclight" (up to 30 characters). Names are **unique across the App Store**; reserve it early by creating the app record (section 3). Have a fallback ready, for example "Arclight Media Manager" or "Arclight – Server Remote".
+- [ ] **Bundle ID (permanent).** Used by the app: `com.moviemethat.arclight.admin` (`com.moviemethat.arclight` is the player app's). Use the same ID as the Android application ID. Pairing links use the app's own URL scheme, `arclight-admin://pair?url=...`.
+- [ ] **App Store name.** "Arclight Admin" (up to 30 characters; "Arclight" alone is reserved for the player app). Names are **unique across the App Store**; reserve it early by creating the app record (section 3). Have a fallback ready, for example "Arclight Server Admin" or "Arclight – Server Remote".
 - [ ] **Subtitle** (30 characters), for example "Your self-hosted media server".
 - [ ] **Free, no in-app purchases** (assumed below; paid apps need the Paid Apps agreement, tax and banking).
 - [ ] **Minimum iOS version.** iOS 16 or newer is a sensible floor.
@@ -18,7 +20,7 @@ Apple changes requirements every year, usually around WWDC and in the spring. Ch
 
 ### How the app is built
 
-The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, Keychain sign-in, push notifications, Face ID lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins see the admin portal and other users the request portal, as on the web, and new server features appear without an app update. Those native features are also what keeps the app clear of guideline 4.2 (a plain website in a frame is rejected).
+Arclight Admin is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, Keychain sign-in, push notifications, Face ID lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins see the admin portal and other users the request portal, as on the web, and new server features appear without an app update. Those native features are also what keeps the app clear of guideline 4.2 (a plain website in a frame is rejected).
 
 ## 1. Membership and agreements
 
@@ -41,15 +43,15 @@ iOS apps must be built and signed with Xcode on macOS.
 - [ ] **App ID** registered (Certificates, Identifiers & Profiles → Identifiers) with the bundle ID. Capabilities: Push Notifications (if used). Nothing else expected.
 - [ ] **App Store Connect API key** (Users and Access → Integrations) for CI uploads; Issuer ID, Key ID and the .p8 stored as GitHub secrets.
 - [ ] Distribution certificate and App Store provisioning profile (fastlane match or manual); the certificate's .p12 backed up.
-- [ ] **APNs key** (.p8) created if push is used (Keys → Apple Push Notifications service). Record the Key ID and Team ID. Store the key only in the push relay; never commit it.
-- [ ] **App Store Connect app record** created: platform iOS, name, primary language, bundle ID, SKU (any internal string, for example `arclight-ios`), full access. This reserves the name.
+- [ ] **APNs key** (.p8) created if push is used (Keys → Apple Push Notifications service). Record the Key ID and Team ID. Store the key only in the push relay; never commit it. One key covers both apps; the relay picks the topic (bundle ID) per device from its `APNS_TOPICS` allow-list.
+- [ ] **App Store Connect app record** created: platform iOS, name, primary language, bundle ID, SKU (any internal string, for example `arclight-admin-ios`), full access. This reserves the name.
 
 ## 4. Project setup
 
 - [ ] App project in the repository (`apps/mobile`, Capacitor, shared with Android).
 - [ ] Version (`1.0.0`) and build number (`1`, increased on every upload).
 - [ ] **App Transport Security**: Arclight servers are often plain `http://` on a home network. Prefer `NSAllowsLocalNetworking` (allows HTTP to local addresses only) over `NSAllowsArbitraryLoads`; if arbitrary loads are needed for HTTP servers reached by hostname, be ready to justify it to App Review ("connects to the user's own self-hosted server").
-- [ ] **Local network permission**: `NSLocalNetworkUsageDescription` text, for example "Arclight connects to your Arclight server on your home network." Add `NSBonjourServices` only if server discovery on the LAN is implemented.
+- [ ] **Local network permission**: `NSLocalNetworkUsageDescription` text, for example "Arclight Admin connects to your Arclight server on your home network." Add `NSBonjourServices` only if server discovery on the LAN is implemented.
 - [ ] Camera usage text (`NSCameraUsageDescription`) only if QR pairing is implemented.
 - [ ] **Privacy manifest** (`PrivacyInfo.xcprivacy`): declares no tracking, no collected data types (or the push token, see section 7), and the required-reason APIs used by the app and its SDKs (Capacitor and its plugins ship their own manifests; check the build's aggregated report).
 - [ ] **Export compliance**: the app only uses standard HTTPS, so set `ITSAppUsesNonExemptEncryption` to `false` in Info.plist (skips the question on every upload).
@@ -116,7 +118,7 @@ App Review must be able to use the app without your home network.
 ## 10. Submit for review
 
 - [ ] Build selected on the 1.0 version page.
-- [ ] **App Review Information**: sign-in required → demo username and password; notes, for example: "Arclight is a client for a self-hosted media server. On first launch tap Add server and enter https://… then sign in with the account above. The demo server contains public-domain sample media."; contact name, phone and email (not shown publicly).
+- [ ] **App Review Information**: sign-in required → demo username and password; notes, for example: "Arclight Admin is a client for a self-hosted media server. On first launch tap Add server and enter https://… then sign in with the account above. The demo server contains public-domain sample media."; contact name, phone and email (not shown publicly).
 - [ ] Release option: **manual release** for the first version (release after approval when you are ready), or automatic.
 - [ ] Phased release for updates (7-day automatic rollout) considered.
 - [ ] Pricing and availability: Free, countries chosen. EU availability needs the DSA trader declaration (section 1).

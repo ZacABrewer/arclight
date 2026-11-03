@@ -74,7 +74,7 @@ export async function makeEnv(opts: TestEnvOptions = {}): Promise<Env> {
     REGISTER_LIMITER: opts.register ?? fakeLimiter(),
     DEVICE_LIMITER: opts.device ?? fakeLimiter(),
     SEND_IP_LIMITER: opts.sendIp ?? fakeLimiter(),
-    APNS_TOPIC: "com.moviemethat.arclight",
+    APNS_TOPICS: "com.moviemethat.arclight.admin,com.moviemethat.arclight",
   };
   if (opts.apns ?? true) {
     e.APNS_KEY_P8 = k.apnsPem;

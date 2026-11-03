@@ -8,7 +8,7 @@
 @import './layout.css';
 @import './components.css';
 @import './mobile.css';
-/* Inside the companion app: safe areas, browser-only UI hidden (html.in-app). */
+/* Inside the Arclight Admin app: safe areas, browser-only UI hidden (html.in-app). */
 @import './in-app.css';
 /* Theme-pack default layer: only matches <html data-theme>, never Tron. */
 @import './packs.css';
