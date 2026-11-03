@@ -168,6 +168,12 @@
 .rd-root .rd-menu__item:hover { background: var(--al-pl-surface); color: var(--al-pl-text); }
 .rd-menu__item--sep { margin-top: 6px; border-top: 1px solid var(--al-pl-line); border-radius: 0 0 var(--al-pl-radius) var(--al-pl-radius); padding-top: 6px; }
 .rd-menu__trail { margin-left: auto; color: var(--al-pl-text-4); }
+/* the title page's "more" menu (Mark watched, Versions): opens from its button's left edge */
+.rd-menu--start { left: 0; right: auto; }
+.rd-menu__group--top { padding: 6px 0 0; margin: 6px 0 0; border-bottom: 0; border-top: 1px solid var(--al-pl-line); }
+.rd-menu__heading { padding: 6px 10px 2px; font-size: 13px; font-weight: 600; color: var(--al-pl-text-4); }
+.rd-menu__item.is-on { color: var(--al-pl-text); }
+.rd-menu__item:disabled, .rd-sheet__item:disabled { opacity: .5; cursor: default; }
 
 /* ---------- main frame ---------- */
 .rd-main { position: relative; z-index: 1; min-width: 0; }

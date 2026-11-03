@@ -156,6 +156,36 @@ describe('RdMoviePage (/player/watch/movies/$id)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'My List' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.path === api(`/my-list/${encodeURIComponent('movie:6')}`))).toBe(true));
   });
+
+  it('the more menu marks the movie watched and picks the version Play starts', async () => {
+    const v = movieDetails(7).versions[0]!;
+    const calls = stubFetch({
+      [api('/me')]: me,
+      [api('/movies/7')]: movieDetails(7, { versions: [v, { ...v, label: '2160p', mediaFileId: 502 }] }),
+      [`POST ${api('/watched')}`]: { updated: 1 },
+    });
+    renderBrowse('/player/watch/movies/7');
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    const menu = screen.getByRole('menu', { name: 'More actions' });
+    expect(within(menu).getByRole('menuitemradio', { name: '1080p' }).getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: '2160p' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(launched[0]).toMatchObject({ itemKey: 'movie:7', opts: { restart: true, mediaFileId: 502 } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Mark watched' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === api('/watched'))?.body).toEqual({ itemKeys: ['movie:7'], played: true }));
+  });
+
+  it('a single version has no Versions list and Play sends no file', async () => {
+    stubFetch({ [api('/me')]: me, [api('/movies/8')]: movieDetails(8, { played: true }) });
+    renderBrowse('/player/watch/movies/8');
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Mark unwatched' })).toBeTruthy();
+    expect(screen.queryByRole('menuitemradio')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(launched[0]!.opts).not.toHaveProperty('mediaFileId');
+  });
 });
 
 describe('RdShowPage (/player/watch/shows/$id)', () => {
@@ -193,6 +223,14 @@ describe('RdShowPage (/player/watch/shows/$id)', () => {
     renderBrowse('/player/watch/shows/9');
     await userEvent.click(await screen.findByRole('button', { name: 'Resume S1 E1' }));
     expect(launched[0]).toMatchObject({ itemKey: 'episode:50', opts: { startMs: 600_000 } });
+  });
+
+  it('the more menu marks the whole show watched', async () => {
+    const calls = stubFetch({ [api('/me')]: me, [api('/series/9')]: seriesDetails(9), [`POST ${api('/watched')}`]: { updated: 3 } });
+    renderBrowse('/player/watch/shows/9');
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Mark watched' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === api('/watched'))?.body).toEqual({ seriesId: 9, played: true }));
   });
 });
 

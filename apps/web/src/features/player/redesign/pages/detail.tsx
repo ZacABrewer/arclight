@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PlayerEpisode, PlayerMovieDetails, PlayerSeriesDetails } from '@arclight/shared';
+import type { PlayerEpisode, PlayerMovieDetails, PlayerSeriesDetails, PlayerVideoVersion, VideoWatchedRequest } from '@arclight/shared';
 import { cx } from '../../../../arclight/cx.js';
 import { useT } from '../../../../i18n/index.js';
 import { useNumericParam } from '../../browse/kit.js';
-import { useMovie, useShow } from '../../video/api.js';
+import { useMarkWatched, useMovie, useShow } from '../../video/api.js';
 import { resumePoint } from '../../video/format.js';
 import { seasonTitle } from '../../video/show-page.js';
 import { useOpenVideo } from '../../video/video-launcher.js';
@@ -13,6 +13,7 @@ import { MetaLine, useRuntimeLabel } from '../meta-line.js';
 import { MyListButton } from '../my-list-button.js';
 import { artBackground } from '../placeholder.js';
 import { Row } from '../row.js';
+import { BottomSheet } from '../sheet.js';
 import { Art, ProgressBar, WideTile } from '../tiles.js';
 import { RdError, RdLoading, RdPage, minutesLeft, shareOf, useCardActions, useCardSubs } from './common.js';
 
@@ -20,7 +21,8 @@ import { RdError, RdLoading, RdPage, minutesLeft, shareOf, useCardActions, useCa
 // Wide: the backdrop under the header, kicker "Series · genres", title, meta line with chips,
 // blurb, Play / Start over / My List, then Episodes (season chips and 300 px cards) or More
 // like this. Portrait: 16:9 backdrop, full-width Play, three icon actions, a 4-line blurb with
-// More, season chips and 128x72 episode rows.
+// More, season chips and 128x72 episode rows. Both have a small "more" menu with Mark watched /
+// unwatched and, when the title has more than one file, Versions (which file Play starts).
 
 interface PlayTarget {
   itemKey: string;
@@ -112,6 +114,12 @@ interface DetailFrameProps {
   overview: string | null;
   target: PlayTarget | null;
   inMyList: boolean;
+  /** Whether the title counts as watched (series: every episode), for Mark watched / unwatched. */
+  played: boolean;
+  /** What Mark watched / unwatched sends (`played` is filled in). */
+  markTarget: Omit<VideoWatchedRequest, 'played'>;
+  /** Every file version, best first (movies); the menu offers a choice when there are two or more. */
+  versions?: readonly PlayerVideoVersion[] | undefined;
   /** Portrait: the Episodes action scrolls here. */
   episodesRef?: React.RefObject<HTMLElement | null> | undefined;
   children?: React.ReactNode;
@@ -136,9 +144,14 @@ function DetailFrame(p: DetailFrameProps) {
   const playText = usePlayText();
   const runtime = useRuntimeLabel();
   const [more, setMore] = useState(false);
+  const versions = p.versions ?? [];
+  const [versionId, setVersionId] = useState<number | null>(versions[0]?.mediaFileId ?? null);
   useDocTitle(p.title);
-  const play = () => p.target && open(p.target.itemKey, p.target.resumeMs !== null ? { startMs: p.target.resumeMs } : { restart: true });
-  const restart = () => p.target && open(p.target.itemKey, { restart: true });
+  // A version is only passed on when there is a choice; otherwise the server plays its best file.
+  const fileOpt = versions.length > 1 && versionId !== null ? { mediaFileId: versionId } : {};
+  const play = () => p.target && open(p.target.itemKey, p.target.resumeMs !== null ? { startMs: p.target.resumeMs, ...fileOpt } : { restart: true, ...fileOpt });
+  const restart = () => p.target && open(p.target.itemKey, { restart: true, ...fileOpt });
+  const moreMenu = <DetailMore layout={layout === 'portrait' ? 'portrait' : 'wide'} title={p.title} played={p.played} markTarget={p.markTarget} versions={versions} versionId={versionId} onVersion={setVersionId} />;
   const kicker = [p.kind === 'series' ? t('player.redesign.detail.series') : t('player.redesign.detail.movie'), p.genres.join(', ')].filter(Boolean).join(' · ');
   const art = artBackground(p.backdropUrl ?? p.posterUrl, p.title);
   const hasProgress = Boolean(p.target && p.target.resumeMs !== null);
@@ -178,6 +191,7 @@ function DetailFrame(p: DetailFrameProps) {
                 <span>{t('player.redesign.detail.episodes')}</span>
               </button>
             ) : null}
+            {moreMenu}
           </div>
           {p.overview ? (
             <div className="rd-detail__about">
@@ -221,6 +235,7 @@ function DetailFrame(p: DetailFrameProps) {
             </button>
           ) : null}
           <MyListButton kind={p.kind} id={p.id} inList={p.inMyList} />
+          {moreMenu}
         </div>
         {hasProgress && p.target ? (
           <div className="rd-resume">
@@ -231,6 +246,103 @@ function DetailFrame(p: DetailFrameProps) {
       </div>
       {p.children}
     </RdPage>
+  );
+}
+
+interface DetailMoreProps {
+  layout: 'wide' | 'portrait';
+  title: string;
+  played: boolean;
+  markTarget: Omit<VideoWatchedRequest, 'played'>;
+  versions: readonly PlayerVideoVersion[];
+  versionId: number | null;
+  onVersion: (id: number) => void;
+}
+
+/** The "more" menu next to the main actions: Mark watched / unwatched, then Versions (2+ files). */
+function DetailMore({ layout, title, played, markTarget, versions, versionId, onVersion }: DetailMoreProps) {
+  const t = useT();
+  const mark = useMarkWatched();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const label = t('player.redesign.detail.moreActions');
+
+  useEffect(() => {
+    if (!open || layout !== 'wide') return undefined;
+    const onDown = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        wrap.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, layout]);
+
+  const toggleWatched = () => {
+    setOpen(false);
+    mark.mutate({ ...markTarget, played: !played });
+  };
+  const pick = (id: number) => {
+    onVersion(id);
+    setOpen(false);
+  };
+  const wide = layout === 'wide';
+  const item = wide ? 'rd-menu__item' : 'rd-sheet__item';
+  const body = (
+    <div className={wide ? 'rd-menu__list' : 'rd-sheet__list'}>
+      <button type="button" className={item} role={wide ? 'menuitem' : undefined} disabled={mark.isPending} onClick={toggleWatched}>
+        {wide ? <RdIcon name={played ? 'restart' : 'check'} /> : null}
+        <span>{played ? t('player.video.markUnwatched') : t('player.video.markWatched')}</span>
+      </button>
+      {versions.length > 1 ? (
+        <div className={wide ? 'rd-menu__group rd-menu__group--top' : 'rd-sheet__list'} role="group" aria-label={t('player.video.versions')}>
+          <p className="rd-menu__heading">{t('player.video.versions')}</p>
+          {versions.map((v) => {
+            const on = v.mediaFileId === versionId;
+            return (
+              <button key={v.mediaFileId} type="button" className={cx(item, on && 'is-on')} role={wide ? 'menuitemradio' : 'radio'} aria-checked={on} onClick={() => pick(v.mediaFileId)}>
+                <span>{v.label}</span>
+                {on ? <RdIcon name="check" size={18} className="rd-menu__trail" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (!wide) {
+    return (
+      <>
+        <button type="button" className="rd-action" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+          <RdIcon name="more" />
+          <span>{t('player.redesign.detail.more')}</span>
+        </button>
+        <BottomSheet open={open} onClose={() => setOpen(false)} title={title}>
+          {body}
+        </BottomSheet>
+      </>
+    );
+  }
+  return (
+    <div className="rd-avatarmenu" ref={wrap}>
+      <button type="button" className="rd-btn rd-btn--secondary rd-btn--square" aria-haspopup="menu" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen((v) => !v)}>
+        <RdIcon name="more" />
+      </button>
+      {open ? (
+        <div className="rd-menu rd-menu--start" role="menu" aria-label={label}>
+          {body}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -252,6 +364,9 @@ function MovieDetail({ movie }: { movie: PlayerMovieDetails }) {
       overview={movie.overview}
       target={movieTarget(movie)}
       inMyList={movie.inMyList ?? false}
+      played={movie.played}
+      markTarget={{ itemKeys: [movie.itemKey] }}
+      versions={movie.versions}
     >
       {similar.length ? (
         <div className="rd-detail__more">
@@ -284,6 +399,8 @@ function SeriesDetail({ show }: { show: PlayerSeriesDetails }) {
       overview={show.overview}
       target={target}
       inMyList={show.inMyList ?? false}
+      played={show.episodeCount > 0 && show.playedCount >= show.episodeCount}
+      markTarget={{ seriesId: show.id }}
       episodesRef={episodesRef}
     >
       <Episodes show={show} startSeason={target?.season ?? null} sectionRef={episodesRef} />

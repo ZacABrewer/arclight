@@ -23,9 +23,13 @@ export function useVideoActions() {
     (kind: 'movie' | 'series', id: number) => void navigate({ to: kind === 'movie' ? watchPaths.movie(id) : watchPaths.show(id) }),
     [navigate],
   );
-  /** Plays, resuming where it was left. */
-  const play = useCallback((itemKey: string, progress?: VideoProgress | null) => open(itemKey, resuming(progress) && progress ? { startMs: progress.positionMs } : {}), [open]);
-  const restart = useCallback((itemKey: string) => open(itemKey, { startMs: 0, restart: true }), [open]);
+  /** Plays, resuming where it was left; `mediaFileId` picks a version (omitted: the best one). */
+  const play = useCallback(
+    (itemKey: string, progress?: VideoProgress | null, mediaFileId?: number) =>
+      open(itemKey, { ...(resuming(progress) && progress ? { startMs: progress.positionMs } : {}), ...(mediaFileId !== undefined ? { mediaFileId } : {}) }),
+    [open],
+  );
+  const restart = useCallback((itemKey: string, mediaFileId?: number) => open(itemKey, { startMs: 0, restart: true, ...(mediaFileId !== undefined ? { mediaFileId } : {}) }), [open]);
   /** A card: episodes / Continue Watching play; series and movies open their detail. */
   const openCard = useCallback(
     (card: VideoCard, playIt = false) => {

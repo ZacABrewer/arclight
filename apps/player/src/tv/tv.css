@@ -1525,6 +1525,27 @@
   cursor: default;
 }
 
+/* The title page's "more" panel (Mark watched / unwatched, Versions). */
+.tv-more-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 720px;
+}
+
+.tv-more-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tv-more-menu__heading {
+  margin: 14px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tv-t3);
+}
+
 /* ---- Outside the stage (welcome, add server, sign-in) ------------------------------------ */
 
 html.tv-mode :is(a, button, input, select, textarea, summary, [tabindex]):focus:not(.tv-stage *) {

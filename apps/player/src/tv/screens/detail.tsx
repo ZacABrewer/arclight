@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
-import type { MyListKey, PlayerEpisode, PlayerSeriesDetails, VideoProgress } from '@arclight/shared';
+import type { MyListKey, PlayerEpisode, PlayerSeriesDetails, PlayerVideoVersion, VideoProgress, VideoWatchedRequest } from '@arclight/shared';
 import { useT } from '@web/i18n/index';
-import { useMovie, useShow } from '@web/features/player/video/api';
+import { useMarkWatched, useMovie, useShow } from '@web/features/player/video/api';
 import { artBackground } from '@web/features/player/redesign/placeholder';
 import { useToggleMyList } from '@web/features/player/redesign/api';
 import { cardArt, useVideoActions } from '../actions';
 import { fraction, left, leftLabel, metaItems, pct, playLabel, type Translate } from '../format';
+import { TvPanel } from '../profile-parts';
 import { HeroTitle, Kicker, MetaLine, PlayIcon, ProgressLine, WideTile } from '../tiles';
 
 // Title detail (template "detail"): 560 px backdrop, kicker "Series · Drama, Thriller", title (or
 // logo), meta line, blurb, Play / Resume, Start over (with progress), the My List toggle and the
 // progress line. Series: the season chips (focusing one selects it) and the episode cards. Movie:
-// More like this.
+// More like this. A small "⋯" button opens Mark watched / unwatched and, with 2+ files, Versions.
 
 /** The episode Play starts (series nextUp) and where it stands. */
 export function nextUpOf(show: PlayerSeriesDetails): PlayerEpisode | null {
@@ -44,6 +45,93 @@ function MyListButton({ inList, myKey, t }: { inList: boolean; myKey: MyListKey;
   );
 }
 
+/** The "⋯" button and its panel: Mark watched / unwatched, then Versions when there are 2+ files. */
+function MoreButton({
+  title,
+  played,
+  markTarget,
+  versions,
+  versionId,
+  onVersion,
+  t,
+}: {
+  title: string;
+  played: boolean;
+  markTarget: Omit<VideoWatchedRequest, 'played'>;
+  versions: readonly PlayerVideoVersion[];
+  versionId: number | null;
+  onVersion: (id: number) => void;
+  t: Translate;
+}) {
+  const mark = useMarkWatched();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="tv-btn tv-btn--secondary tv-btn--tight" data-tv-key="det-more" aria-label={t('player.redesign.detail.moreActions')} onClick={() => setOpen(true)}>
+        <span className="tv-btn__icon" aria-hidden="true">
+          ⋯
+        </span>
+      </button>
+      {open ? (
+        <TvPanel label={title} onClose={() => setOpen(false)}>
+          <div className="tv-more-menu">
+            <h2 className="tv-profiles__title">{title}</h2>
+            <div className="tv-more-menu__list">
+              <button
+                type="button"
+                className="tv-opt"
+                data-tv-key="more-watched"
+                data-tv-autofocus=""
+                disabled={mark.isPending}
+                onClick={() => {
+                  setOpen(false);
+                  mark.mutate({ ...markTarget, played: !played });
+                }}
+              >
+                <span className="tv-opt__text">
+                  <span className="tv-opt__label">{played ? t('player.video.markUnwatched') : t('player.video.markWatched')}</span>
+                </span>
+              </button>
+              {versions.length > 1 ? (
+                <>
+                  <p className="tv-more-menu__heading">{t('player.video.versions')}</p>
+                  {versions.map((v) => {
+                    const on = v.mediaFileId === versionId;
+                    return (
+                      <button
+                        key={v.mediaFileId}
+                        type="button"
+                        className="tv-opt"
+                        data-tv-key={`more-version-${v.mediaFileId}`}
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => {
+                          onVersion(v.mediaFileId);
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="tv-opt__text">
+                          <span className="tv-opt__label">{v.label}</span>
+                          {v.description ? <span className="tv-opt__desc">{v.description}</span> : null}
+                        </span>
+                        {on ? (
+                          <span className="tv-opt__choice" aria-hidden="true">
+                            ✓
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </TvPanel>
+      ) : null}
+    </>
+  );
+}
+
 function Top({
   title,
   kind,
@@ -58,6 +146,7 @@ function Top({
   progress,
   inList,
   myKey,
+  more,
   t,
 }: {
   title: string;
@@ -73,6 +162,7 @@ function Top({
   progress: VideoProgress | null;
   inList: boolean;
   myKey: MyListKey;
+  more: ReactNode;
   t: Translate;
 }) {
   const f = fraction(progress);
@@ -98,6 +188,7 @@ function Top({
             </button>
           ) : null}
           <MyListButton inList={inList} myKey={myKey} t={t} />
+          {more}
         </div>
         <ProgressLine fraction={resumable ? f : null} label={leftLabel(progress, t)} />
       </div>
@@ -110,8 +201,11 @@ export function TvMovieScreen() {
   const { id } = useParams({ strict: false }) as { id?: string };
   const movie = useMovie(Number(id));
   const { play, restart, openCard } = useVideoActions();
+  const [versionId, setVersionId] = useState<number | null>(null);
   const m = movie.data;
   if (!m) return null;
+  // A version is only passed on when there is a choice; otherwise the server plays its best file.
+  const file = m.versions.length > 1 ? (versionId ?? m.versions[0]?.mediaFileId) : undefined;
   return (
     <div className="tv-scroll-y" data-tv-scroll="y">
       <div className="tv-detail">
@@ -124,11 +218,12 @@ export function TvMovieScreen() {
           meta={metaItems({ ...m, chips: m.chips ?? null }, t)}
           overview={m.overview}
           playText={playLabel('movie', { seasonNumber: null, episodeNumber: null, progress: m.progress }, t)}
-          onPlay={() => play(m.itemKey, m.progress)}
-          onRestart={() => restart(m.itemKey)}
+          onPlay={() => play(m.itemKey, m.progress, file)}
+          onRestart={() => restart(m.itemKey, file)}
           progress={m.progress}
           inList={Boolean(m.inMyList)}
           myKey={`movie:${m.id}`}
+          more={<MoreButton title={m.title} played={m.played} markTarget={{ itemKeys: [m.itemKey] }} versions={m.versions} versionId={file ?? null} onVersion={setVersionId} t={t} />}
           t={t}
         />
         {m.similar?.length ? (
@@ -183,6 +278,7 @@ export function TvShowScreen() {
           progress={target?.progress ?? null}
           inList={Boolean(s.inMyList)}
           myKey={`series:${s.id}`}
+          more={<MoreButton title={s.title} played={s.episodeCount > 0 && s.playedCount >= s.episodeCount} markTarget={{ seriesId: s.id }} versions={[]} versionId={null} onVersion={() => undefined} t={t} />}
           t={t}
         />
         {current ? (

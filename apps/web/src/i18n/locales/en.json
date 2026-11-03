@@ -8512,6 +8512,7 @@
   "player.redesign.detail.seasons": "Seasons",
   "player.redesign.detail.more": "More",
   "player.redesign.detail.moreLikeThis": "More like this",
+  "player.redesign.detail.moreActions": "More actions",
   "player.redesign.detail.badge": "E{n}",
   "player.redesign.detail.episodeN": "Episode {n}",
   "player.redesign.detail.episodeTitle": "{n}. {title}",
