@@ -48,7 +48,10 @@ export interface SessionSettings {
   utp: boolean;
   /** Listen on IPv6 too (`::`) when available and `listenAddress` is null; use IPv6 peers. */
   ipv6: boolean;
-  /** Concurrent HTTP requests to web seeds (BEP 19) per torrent. 0 disables web seeds. */
+  /**
+   * Pieces fetched from web seeds (BEP 19) at once per torrent, lowered so at most 64 MiB of
+   * pieces is held in memory. 0 disables web seeds.
+   */
   webSeedConnectionsPerTorrent: number;
   /** Base back-off after a web seed error, doubled per consecutive failure. */
   webSeedRetryMs: number;

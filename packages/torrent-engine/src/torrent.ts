@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
+import { BanList } from './ban-list.js';
 import { Bitfield } from './bitfield.js';
 import { addressKey, hostFamily, normalizeHost, type PeerAddress } from './compact.js';
 import type { DHT } from './dht/dht.js';
@@ -226,7 +227,11 @@ const MAX_CANDIDATES = 2000;
 /** Failed pieces a peer IP / web seed may take part in before it is banned. */
 const BAN_STRIKES = 3;
 const MAX_STRIKE_ENTRIES = 4096;
-const MAX_BANNED_IPS = 4096;
+
+function formatBan(ms: number): string {
+  const h = ms / 3_600_000;
+  return h >= 1 ? `${Math.round(h)} h` : `${Math.max(1, Math.round(ms / 60_000))} min`;
+}
 
 /** One torrent: metadata, storage, peers, trackers, DHT/PEX discovery and its state machine. */
 export class Torrent extends EventEmitter<TorrentEvents> {
@@ -302,14 +307,17 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   private readonly pieceSources = new Map<number, Set<string>>();
   /** Hash-check failures each source took part in (peer IP or web seed key). */
   private readonly strikes = new Map<string, number>();
-  /** IPs banned for sending bad data (hash failures or bad metadata). */
-  private readonly bannedIps = new Set<string>();
+  /** IPs banned for a while for sending bad data (hash failures or bad metadata). */
+  private readonly bannedIps: BanList;
+  /** Pieces being hashed or written as a whole (peer verify or a web seed piece). */
+  private readonly finishing = new Map<number, Promise<unknown>>();
 
   constructor(
     private readonly ctx: TorrentContext,
     init: TorrentInit,
   ) {
     super();
+    this.bannedIps = new BanList({ now: () => this.ctx.now() });
     this.infoHash = init.infoHash;
     this.infoHashHex = init.infoHash.toString('hex');
     this.metainfo = init.metainfo;
@@ -682,22 +690,26 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     return trusted || this.ctx.settings().allowLocalPeers || !isLocalAddress(host);
   }
 
-  /** True when this IP was banned for sending bad data. */
+  /** True while this IP is banned for sending bad data. */
   isBannedIp(host: string): boolean {
-    return this.bannedIps.has(normalizeHost(host));
+    return this.bannedIps.has(host);
   }
 
-  /** Bans an IP for this torrent: drops its candidates and closes its connections. */
+  /** When the ban on this IP ends (ms epoch), or null when it is not banned. */
+  bannedUntil(host: string): number | null {
+    return this.bannedIps.bannedUntil(host);
+  }
+
+  /**
+   * Bans an IP for this torrent for a while (1 h, doubling per repeat up to 24 h): drops its
+   * candidates and closes its connections. Trackers / DHT / PEX can hand it out again later.
+   */
   private banIp(host: string, reason: string): void {
     const ip = normalizeHost(host);
-    if (this.bannedIps.has(ip)) return;
-    if (this.bannedIps.size >= MAX_BANNED_IPS) {
-      const first = this.bannedIps.values().next().value;
-      if (first !== undefined) this.bannedIps.delete(first);
-    }
-    this.bannedIps.add(ip);
-    this.emit('warning', `banned peer ${ip}: ${reason}`);
-    for (const c of this.candidates.values()) if (c.addr.host === ip) c.banned = true;
+    const ms = this.bannedIps.ban(ip);
+    if (ms === 0) return;
+    this.emit('warning', `banned peer ${ip} for ${formatBan(ms)}: ${reason}`);
+    for (const [key, c] of this.candidates) if (c.addr.host === ip && !c.connected) this.candidates.delete(key);
     for (const p of [...this.peers.values()]) if (normalizeHost(p.conn.address.host) === ip) p.conn.destroy();
   }
 
@@ -823,7 +835,15 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const halfOpenShare = Math.max(4, Math.ceil(settings.maxHalfOpenConnections / 2));
     const now = this.ctx.now();
     const list = [...this.candidates.entries()]
-      .filter(([k, c]) => !c.connected && !c.banned && c.nextAttemptAt <= now && !this.connecting.has(k))
+      .filter(([k, c]) => {
+        if (c.connected || c.banned || c.nextAttemptAt > now || this.connecting.has(k)) return false;
+        // banned since it was added, or the blocklist changed: forget it
+        if (this.bannedIps.has(c.addr.host) || this.ctx.isBlocked(c.addr.host)) {
+          this.candidates.delete(k);
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => a[1].failures - b[1].failures);
     for (const [key, c] of list) {
       // canOpen last: it spends one of the session's per-second connection tokens
@@ -871,7 +891,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.connecting.delete(key);
     if (opened.fellBack) c.plainOnly = true;
     if (opened.transport === 'utp') c.utp = true;
-    if (!this.networking || this.closed) {
+    if (!this.networking || this.closed || this.bannedIps.has(c.addr.host) || this.ctx.isBlocked(c.addr.host)) {
       opened.stream.destroy();
       c.connected = false;
       return;
@@ -883,7 +903,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   /** Takes over a stream from the session listener (handshake bytes still unread). */
   acceptIncoming(socket: Duplex, address: PeerAddress, info: IncomingInfo = { transport: 'tcp', encrypted: false }): boolean {
     if (!this.networking || this.peerCount >= this.ctx.settings().maxConnectionsPerTorrent) return false;
-    if (this.bannedIps.has(normalizeHost(address.host))) return false;
+    if (this.bannedIps.has(address.host) || this.ctx.isBlocked(normalizeHost(address.host))) return false;
     const key = addressKey(address);
     if (this.peers.has(key)) return false;
     const conn = this.makeConnection(socket, true, address, info);
@@ -1124,12 +1144,17 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   /** Stores a block from a peer or web seed (`key`), verifying the piece once complete. */
   private receiveBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
-    const p = this.storeBlock(key, index, begin, data, refill);
-    this.receiving.add(p);
-    const done = (): void => {
-      this.receiving.delete(p);
-    };
-    void p.then(done, done);
+    return this.track(this.storeBlock(key, index, begin, data, refill));
+  }
+
+  /** Adds a write / verify in progress to `receiving` (awaited on close). */
+  private track<T>(p: Promise<T>): Promise<T> {
+    const settled = p.then(
+      () => {},
+      () => {},
+    );
+    this.receiving.add(settled);
+    void settled.then(() => this.receiving.delete(settled));
     return p;
   }
 
@@ -1137,6 +1162,11 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const picker = this.picker;
     const storage = this.storage;
     if (!picker || !storage || storage.have.get(index)) return;
+    if (this.finishing.has(index)) {
+      // a web seed is checking / writing this whole piece: the block is not needed
+      picker.release(index, begin, key);
+      return;
+    }
     const res = picker.markReceived(index, begin, key);
     let sources = this.pieceSources.get(index);
     if (!sources) this.pieceSources.set(index, (sources = new Set()));
@@ -1152,7 +1182,18 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       return;
     }
     if (!res.pieceComplete) return;
-    const ok = await storage.verifyPiece(index);
+    // A web seed piece for this index was being checked meanwhile: if it got written, done.
+    const busy = this.finishing.get(index);
+    if (busy) await busy;
+    if (this.closed || storage.have.get(index)) return;
+    const verify = storage.verifyPiece(index);
+    this.finishing.set(index, verify);
+    let ok: boolean;
+    try {
+      ok = await verify;
+    } finally {
+      if (this.finishing.get(index) === verify) this.finishing.delete(index);
+    }
     if (this.closed) return;
     const from = this.pieceSources.get(index);
     this.pieceSources.delete(index);
@@ -1164,11 +1205,57 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       for (const other of this.peers.values()) this.requestBlocks(other);
       return;
     }
+    await this.pieceDone(index);
+  }
+
+  /** A piece passed its hash check and is on disk: tell the picker and the peers. */
+  private async pieceDone(index: number): Promise<void> {
+    const picker = this.picker;
+    if (!picker) return;
     picker.pieceVerified(index);
     this.emit('verified', index);
     if (picker.piecePriority(index) > 0) this.wantedLeft = Math.max(0, this.wantedLeft - 1);
     for (const other of this.peers.values()) if (!other.haveAll && other.conn.handshaken) other.conn.have(index);
     if (this.wantedLeft === 0) await this.onComplete();
+  }
+
+  /**
+   * Takes a whole piece from a web seed. It is hashed in memory and written only when it
+   * matches; a bad piece is dropped (nothing on disk changes) and counts a strike against the
+   * seed. True when the piece was written or is no longer needed.
+   */
+  private async storeWebPiece(key: string, index: number, data: Buffer): Promise<boolean> {
+    const storage = this.storage;
+    if (!this.picker || !storage || this.closed) return false;
+    if (storage.have.get(index) || this.finishing.has(index)) return true;
+    let release = (): void => {};
+    const gate = new Promise<void>((r) => (release = r));
+    this.finishing.set(index, gate);
+    try {
+      this.downloadedSession += data.length;
+      this.downMeter.add(data.length);
+      const ok = await storage.pieceMatches(index, data);
+      if (this.closed) return false;
+      if (!ok) {
+        this.hashFailures++;
+        this.emit('warning', `piece ${index} from a web seed failed hash check`);
+        this.strikeSources(new Set([key]));
+        return false;
+      }
+      try {
+        await storage.writeVerifiedPiece(index, data);
+      } catch (err) {
+        if (!this.closed) this.fail(err);
+        return false;
+      }
+    } finally {
+      this.finishing.delete(index);
+      release();
+    }
+    if (this.closed) return true;
+    this.pieceSources.delete(index);
+    await this.pieceDone(index);
+    return true;
   }
 
   /**
@@ -1226,12 +1313,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       {
         metainfo: meta,
         layout: storage.layout,
-        pick: (key, count) => {
-          if (!this.picker || this.checking || this.moving || this.isComplete) return [];
-          return this.picker.pick(ALL_PIECES, key, count);
+        claimPiece: (key) => {
+          if (!this.picker || this.checking || this.moving || this.isComplete) return null;
+          return this.picker.claimPiece(key);
         },
         release: (index, begin, key) => this.picker?.release(index, begin, key),
-        deliver: (key, index, begin, data) => void this.receiveBlock(key, index, begin, data, () => {}),
+        deliverPiece: (key, index, data) => this.track(this.storeWebPiece(key, index, data)),
         wantsData: () => this.networking && !this.isComplete && !this.checking && !this.moving,
         consumeDownload: (bytes) => consumeAll([this.downloadBucket, ...this.ctx.downloadBuckets], bytes),
         localAddress: () => this.ctx.localAddress(),

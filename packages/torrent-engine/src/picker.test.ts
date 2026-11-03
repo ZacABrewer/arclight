@@ -144,3 +144,33 @@ describe('PiecePicker', () => {
     expect(picker.availabilityOf(0)).toBe(0);
   });
 });
+
+describe('PiecePicker.claimPiece (web seeds)', () => {
+  it('claims whole pieces nobody started, then idle partial ones, never ones with requests out', () => {
+    const { picker } = setup(4);
+    // piece x: one block received from q, the other was p's and was dropped (idle partial)
+    const [pb] = picker.pick(ALL_PIECES, 'p', 1);
+    const x = (pb as { index: number }).index;
+    const [qb] = picker.pick(ALL_PIECES, 'q', 1);
+    expect(qb?.index).toBe(x);
+    picker.markReceived(x, (qb as { begin: number }).begin, 'q');
+    // piece y: r has a request out
+    const [rb] = picker.pick(ALL_PIECES, 'r', 1);
+    const y = (rb as { index: number }).index;
+    expect(y).not.toBe(x);
+    picker.release(x, (pb as { begin: number }).begin, 'p');
+    const claimed: number[] = [];
+    for (let c = picker.claimPiece('web:a'); c; c = picker.claimPiece('web:a')) {
+      claimed.push(c.index);
+      expect(c.blocks).toHaveLength(c.index === x ? 1 : 2);
+    }
+    expect(claimed).not.toContain(y);
+    expect(claimed).toHaveLength(3);
+    // fresh pieces first, the idle partial one last
+    expect(claimed.at(-1)).toBe(x);
+    // a failed web piece goes back: its blocks are free again
+    const back = claimed[0] as number;
+    for (let o = 0; o < PIECE; o += BLOCK_SIZE) picker.release(back, o, 'web:a');
+    expect(picker.claimPiece('web:b')?.index).toBe(back);
+  });
+});
