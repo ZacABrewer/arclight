@@ -5,7 +5,10 @@ import { Mark } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { Lockup } from '../../../arclight/lockup.js';
 import { useAuth } from '../../../auth/auth-context.js';
-import { appHomeFor } from '../../../auth/access.js';
+import { appHomeFor, canRequest } from '../../../auth/access.js';
+import { readPortalDocument } from '../../discover/portal-location.js';
+import { portalHref } from '../../discover/portal-href.js';
+import { withBase } from '../../../lib/base-path.js';
 import { readUiPreferences } from '../../../lib/ui-preferences.js';
 import { useT } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
@@ -280,7 +283,11 @@ export function AvatarMenu({ layout }: { layout: 'wide' | 'portrait' }) {
   const [open, setOpen] = useState(false);
   const [appSignIn, setAppSignIn] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
-  const appHref = appHomeFor(access);
+  const appHome = appHomeFor(access);
+  const appHref = appHome === null ? null : withBase(appHome);
+  // Request portal: people who may request. Its public address, else the built-in /portal.
+  const portalUrl = usePlaybackCapabilities().data?.portalUrl ?? null;
+  const portalLink = canRequest(access) ? portalHref(portalUrl, location.origin, readPortalDocument()) : null;
 
   useEffect(() => {
     if (!open || layout !== 'wide') return undefined;
@@ -356,8 +363,8 @@ export function AvatarMenu({ layout }: { layout: 'wide' | 'portrait' }) {
           <span>{t('player.account.openApp')}</span>
         </a>
       ) : null}
-      {owner ? (
-        <a className="rd-menu__item" href="/portal">
+      {owner && portalLink ? (
+        <a className="rd-menu__item" href={portalLink}>
           <RdIcon name="chevronRight" />
           <span>{t('player.account.portal')}</span>
         </a>

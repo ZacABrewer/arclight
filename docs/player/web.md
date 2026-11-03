@@ -15,6 +15,21 @@ The player picks one of two layouts from the window size:
 Both use the same pages. Tiles and text scale with the window between 80 % and 120 % of their
 TV size.
 
+## Account menu
+
+Select your avatar to open the account menu: your other profiles, **Settings**, **Manage
+profiles** (owner profile), **Request portal**, **Open Arclight**, **Sign in to the Arclight
+app** and **Sign out**.
+
+- **Request portal** shows when your account may request something. It opens the portal's
+  public address (the first portal hostname or path under Settings > Requests > Public request
+  portal) while the public portal is on, else the built-in `/portal`.
+- **Open Arclight** shows when your account may open part of the app: admins, users with
+  [app access](../using/users-and-security.md#app-access), and users who may manage or view
+  requests or issues. It opens the first page you may use.
+
+Neither shows while a profile other than the owner is active (profiles cannot request).
+
 ## Who's watching?
 
 When your account has two or more profiles, the player asks who is watching the first time you

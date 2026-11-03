@@ -14,6 +14,7 @@ import { ProfileAvatar } from '@web/features/player/redesign/profile-avatar';
 import { RedesignFrame } from '@web/features/player/redesign/shell';
 import { rememberReduceMotion } from '../intro/launch';
 import { useProfileTheme } from './profile-theme';
+import { accountLinks, openInBrowser } from './account-links';
 import { signedOutTarget } from '../app/router';
 import { useBrowseDownloads } from './downloads';
 import { TvFrame } from '../tv/tv-shell';
@@ -137,9 +138,15 @@ function AvatarSheet({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { accounts, active } = useAccounts();
   const { profile, profiles, canManage } = useActiveProfile();
+  const caps = usePlaybackCapabilities(Boolean(active)).data;
+  const links = accountLinks(caps, profile?.isOwner ?? true, active?.serverUrl);
   const go = (to: string) => {
     onClose();
     void navigate({ to });
+  };
+  const out = (url: string) => {
+    onClose();
+    openInBrowser(url);
   };
   return (
     <div className="app-sheet" role="dialog" aria-modal="true" aria-label={profile?.name ?? t('app.tv.switchProfile')} onClick={onClose}>
@@ -159,6 +166,18 @@ function AvatarSheet({ onClose }: { onClose: () => void }) {
           <button type="button" className="app-sheet__row" onClick={() => go('/player/profiles?manage=1')}>
             <Icon name="edit" size={20} />
             <span>{t('app.tv.settings.manageProfiles')}</span>
+          </button>
+        ) : null}
+        {links.portal ? (
+          <button type="button" className="app-sheet__row" onClick={() => out(links.portal!)}>
+            <Icon name="external" size={20} />
+            <span>{t('player.account.portal')}</span>
+          </button>
+        ) : null}
+        {links.app ? (
+          <button type="button" className="app-sheet__row" onClick={() => out(links.app!)}>
+            <Icon name="external" size={20} />
+            <span>{t('player.account.openApp')}</span>
           </button>
         ) : null}
         {active ? (

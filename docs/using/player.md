@@ -195,7 +195,7 @@ To run conversions in Docker with Intel graphics, pass the GPU into the containe
 
 The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
 
-1. In the player, open the account menu (top right) and choose **Sign in to the Arclight app**.
+1. In the player, open the [account menu](../player/web.md#account-menu) (top right) and choose **Sign in to the Arclight app**.
 2. In the app, choose to scan a code and point the camera at the QR code. Or type the **server address** and the **code** shown under it.
 
 The code works once and expires after five minutes. Press **New code** for another one. You can also sign in in the app with your Arclight username and password (and your authenticator code, if you use two-factor sign-in). Accounts that sign in through a media server or only with a passkey use the code.

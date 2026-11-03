@@ -3,6 +3,9 @@ import { Outlet, useRouterState } from '@tanstack/react-router';
 import { EmptyState, ErrorBlock, Pane, buttonClass, cx, isTypingTarget } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { appHomeFor } from '../../../auth/access.js';
+import { readPortalDocument } from '../../discover/portal-location.js';
+import { portalHref } from '../../discover/portal-href.js';
+import { withBase } from '../../../lib/base-path.js';
 import { errorMessage } from '../../../api/client.js';
 import { t } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
@@ -133,7 +136,10 @@ function DockedMiniPlayer() {
 /** Shown when the player is off, or this account may not use it. */
 export function PlayerOff({ error }: { error?: unknown }) {
   const { access } = useAuth();
-  const back = appHomeFor(access) ?? '/portal';
+  // The guard's answer, read from the cache: refetching a failed one here would loop.
+  const caps = usePlaybackCapabilities(false);
+  const home = appHomeFor(access);
+  const back = home === null ? portalHref(caps.data?.portalUrl, location.origin, readPortalDocument()) : withBase(home);
   return (
     <Pane chamfer="both" strong className="pl-card pl-off">
       {error && !isAccessError(error) ? (
@@ -143,7 +149,7 @@ export function PlayerOff({ error }: { error?: unknown }) {
           title={t('player.off.title')}
           action={
             <a href={back} className={buttonClass({ variant: 'primary' })}>
-              {back === '/portal' ? t('player.off.backPortal') : t('player.off.backApp')}
+              {home === null ? t('player.off.backPortal') : t('player.off.backApp')}
             </a>
           }
         >

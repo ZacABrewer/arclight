@@ -55,6 +55,11 @@ import {
   type PlayerCapabilities as Capabilities,
   type PlayerSettings as Settings,
   AddressClashResponse,
+  DEFAULT_PLAYER_PATH,
+  DEFAULT_PORTAL_PATH,
+  Permission,
+  appHomeOf,
+  canRequest,
   addressClash,
   ErrorResponse,
 } from '@arclight/shared';
@@ -62,7 +67,9 @@ import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
 import { audioFiles } from '../library/schema.js';
 import { getSection, setSection } from '../settings/service.js';
-import { playerUrlOf, portalUrlOf } from '../../public-urls.js';
+import { playerUrlOf, portalUrlOf, publicUrlOf } from '../../public-urls.js';
+
+const NO_ADDRESS = { paths: [], hosts: [] } as const;
 import { capabilitiesOf, decide, denialReply, isRemoteRequest, linkUserStillActive as linkUserStillActiveIn, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
 import { findArtwork } from './artwork.js';
 import {
@@ -347,7 +354,24 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       // The active household profile can hide music and audiobooks (its own settings).
       const profile = req.auth?.user && req.auth.profile ? householdsFor(db).settings(req.auth.user.id, req.auth.profile.id) : null;
       if (profile) caps.sections = { ...caps.sections, music: caps.sections.music && profile.showMusic, audiobooks: caps.sections.audiobooks && profile.showAudiobooks };
-      return { ...caps, engine: engineTarget(settings) ? 'jellyfin' : 'arclight', playerUrl: playerUrlOf(db, deps.basePath), portalUrl: portalUrlOf(db, deps.basePath) };
+      // The account menu (phone and TV apps hold no session permissions): the same rules as the
+      // web's appHomeFor / canRequest. A non-owner profile is masked (no admin, no bits), so it
+      // gets neither.
+      const auth = req.auth;
+      const origin = `${req.protocol}://${req.host}${deps.basePath}`;
+      const perms = (auth?.user?.permissions ?? 0) & ~Permission.ADMIN;
+      const admin = auth?.isAdmin === true;
+      return {
+        ...caps,
+        engine: engineTarget(settings) ? 'jellyfin' : 'arclight',
+        // Without an Application URL or a hostname, the address this request came in on.
+        playerUrl: playerUrlOf(db, deps.basePath) ?? `${origin}${DEFAULT_PLAYER_PATH}`,
+        // Signed-in users always have the built-in /portal; the public portal's paths and
+        // hostnames count only while it is on.
+        portalUrl: portalUrlOf(db, deps.basePath) ?? publicUrlOf(getSection(db, 'requests').applicationUrl, NO_ADDRESS, DEFAULT_PORTAL_PATH) ?? `${origin}${DEFAULT_PORTAL_PATH}`,
+        canRequest: auth?.user ? admin || canRequest(perms) : false,
+        appHome: auth?.user ? appHomeOf(admin, auth.appAccess, perms) : null,
+      };
     });
 
     // ---- items and stream links ------------------------------------------------------------
