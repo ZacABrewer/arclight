@@ -8,10 +8,16 @@ export const backupApi = {
   create: () => request('/system/backup', Backup, { method: 'POST' }),
   remove: (id: string) => request(`/system/backup/${encodeURIComponent(id)}`, null, { method: 'DELETE' }),
   downloadUrl: (id: string) => `${API_BASE}/system/backup/${encodeURIComponent(id)}/download`,
-  restore: (id: string) => request(`/system/backup/restore/${encodeURIComponent(id)}`, BackupRestoreResponse, { method: 'POST' }),
-  /** FormData body: fetch sets the multipart boundary. */
-  restoreUpload: (file: File) => {
+  /** `passphrase` opens an encrypted backup; without it the stored backup passphrase is tried. */
+  restore: (id: string, passphrase?: string) =>
+    request(`/system/backup/restore/${encodeURIComponent(id)}`, BackupRestoreResponse, {
+      method: 'POST',
+      ...(passphrase ? { json: { passphrase } } : {}),
+    }),
+  /** FormData body: fetch sets the multipart boundary. The passphrase field must come before the file. */
+  restoreUpload: (file: File, passphrase?: string) => {
     const form = new FormData();
+    if (passphrase) form.set('passphrase', passphrase);
     form.set('file', file, file.name);
     return request('/system/backup/restore/upload', BackupRestoreResponse, { method: 'POST', body: form });
   },

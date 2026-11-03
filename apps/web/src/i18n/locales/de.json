@@ -8587,5 +8587,11 @@
   "player.redesign.profiles.couldNotDelete": "Das Profil konnte nicht gelöscht werden",
   "player.redesign.pin.title": "PIN für {name} eingeben",
   "player.redesign.pin.wrong": "Falsche PIN. Versuche es erneut.",
-  "player.redesign.pin.locked": "Zu viele Versuche. Warte eine Minute und versuche es erneut."
+  "player.redesign.pin.locked": "Zu viele Versuche. Warte eine Minute und versuche es erneut.",
+  "system.backups.encrypted": "Verschlüsselt",
+  "system.backups.encryption": "Verschlüsselung",
+  "system.backups.passphrase": "Backup-Passphrase",
+  "system.backups.passphraseTooShort": "Mindestens {min} Zeichen verwenden oder leer lassen, um nicht zu verschlüsseln",
+  "system.backups.enterThePassphrase": "Dieses Backup ist verschlüsselt. Gib die Passphrase ein.",
+  "system.backups.wrongPassphrase": "Falsche Passphrase für dieses Backup."
 }

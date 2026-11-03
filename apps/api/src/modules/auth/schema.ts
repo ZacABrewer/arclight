@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sealedText } from '../../db/secret-box.js';
 import type { AppArea, UserRole, UserSettings } from '@arclight/shared';
 import { householdProfiles } from '../households/schema.js';
 
@@ -116,7 +117,7 @@ export const userTwoFactor = sqliteTable('user_two_factor', {
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   /** Base32 TOTP secret. */
-  totpSecret: text('totp_secret').notNull(),
+  totpSecret: sealedText('totp_secret').notNull(),
   enabledAt: text('enabled_at'),
   lastStep: integer('last_step').notNull().default(0),
   recoveryCodes: text('recovery_codes', { mode: 'json' }).$type<string[]>().notNull().default([]),

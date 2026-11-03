@@ -101,7 +101,8 @@ class Measure extends Transform {
  */
 export async function writeZip(dest: string, inputs: readonly ZipInput[]): Promise<ZipEntry[]> {
   const partial = `${dest}.partial`;
-  const fh = await open(partial, 'w');
+  // Owner-only: archives carry the database and every stored credential.
+  const fh = await open(partial, 'w', 0o600);
   const entries: ZipEntry[] = [];
   let pos = 0;
   const write = async (buf: Buffer) => {

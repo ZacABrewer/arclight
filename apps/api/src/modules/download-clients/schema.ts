@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sealedJson } from '../../db/secret-box.js';
 import type { DownloadItemPhase } from '@arclight/download-clients';
 import type {
   DownloadClientImplementation,
@@ -28,7 +29,7 @@ export const downloadClients = sqliteTable('download_clients', {
   removeFailedDownloads: integer('remove_failed_downloads', { mode: 'boolean' }).notNull().default(true),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
   /** Implementation settings including secrets, unmasked. */
-  settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  settings: sealedJson('settings').$type<Record<string, unknown>>().notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 

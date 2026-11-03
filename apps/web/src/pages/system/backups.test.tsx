@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router';
-import type { Backup, BackupSettings, SystemStatus } from '@arclight/shared';
+import { SECRET_MASK, type Backup, type BackupSettings, type SystemStatus } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { RestartBanner } from '../../layout/restart-banner.js';
 import { createToastStore, type ToastStore } from '../../lib/toast.js';
@@ -37,7 +37,7 @@ let overrides: Record<string, (call: Call) => Response>;
 beforeEach(() => {
   calls = [];
   list = [...backups];
-  settings = { folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28 };
+  settings = { folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28, encryptionPassphrase: '' };
   statusBody = status();
   overrides = {};
   vi.stubGlobal(
@@ -177,6 +177,49 @@ describe('System → Backups', () => {
     expect(((upload.body as FormData).get('file') as File).name).toBe('old.zip');
   });
 
+  it('marks encrypted backups and asks for the passphrase when the server needs it', async () => {
+    const enc: Backup = { ...backups[0]!, id: 'arclight_manual_2026.10.26_04.00.00.zip.enc', name: 'arclight_manual_2026.10.26_04.00.00.zip.enc', encrypted: true };
+    list = [enc, ...backups];
+    let attempts = 0;
+    overrides[`POST /api/v1/system/backup/restore/${enc.id}`] = (call) => {
+      attempts++;
+      const given = (call.body as { passphrase?: string } | undefined)?.passphrase;
+      if (given === 'correct horse battery') return new Response(JSON.stringify({ restored: true, configFiles: 1, restartRequired: true }), { status: 200 });
+      const code = given ? 'BAD_PASSPHRASE' : 'PASSPHRASE_REQUIRED';
+      return new Response(JSON.stringify({ error: 'encrypted', code }), { status: 400 });
+    };
+    const toasts = renderWith(<SystemBackupsPage />);
+    const row = await rowOf(enc.name);
+    expect(within(row).getByText('Encrypted')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: `Restore ${enc.name}` }));
+    const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
+    expect(within(dialog).queryByLabelText('Backup passphrase')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('Enter its passphrase');
+    const field = within(dialog).getByLabelText('Backup passphrase');
+    fireEvent.change(field, { target: { value: 'nope nope' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
+    await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toContain('Wrong passphrase'));
+    fireEvent.change(field, { target: { value: 'correct horse battery' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
+    await waitFor(() => expect(toasts.list().some((t) => t.title === 'Backup restored')).toBe(true));
+    expect(attempts).toBe(3);
+  });
+
+  it('sends the passphrase before the file for an encrypted upload', async () => {
+    renderWith(<SystemBackupsPage />);
+    await rowOf(backups[0]!.name);
+    const file = new File([new Uint8Array([0x41, 0x52, 0x43, 0x4c])], 'old.zip.enc', { type: 'application/octet-stream' });
+    fireEvent.change(screen.getByTestId('backup-upload'), { target: { files: [file] } });
+    const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
+    fireEvent.change(within(dialog).getByLabelText('Backup passphrase'), { target: { value: 'correct horse battery' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/system/backup/restore/upload')).toBe(true));
+    const form = calls.find((c) => c.url === '/api/v1/system/backup/restore/upload')!.body as FormData;
+    expect([...form.keys()]).toEqual(['passphrase', 'file']);
+    expect(form.get('passphrase')).toBe('correct horse battery');
+  });
+
   it('deletes a backup after confirmation', async () => {
     renderWith(<SystemBackupsPage />);
     const row = await rowOf(backups[1]!.name);
@@ -201,12 +244,15 @@ describe('System → Backups', () => {
     fireEvent.change(within(form).getByLabelText('Keep at most'), { target: { value: '3' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
-    expect(settings).toEqual({ folder: '', intervalDays: 1, hour: 2, retentionCount: 3, retentionDays: 28 });
+    expect(settings).toEqual({ folder: '', intervalDays: 1, hour: 2, retentionCount: 3, retentionDays: 28, encryptionPassphrase: '' });
   });
 
   it('parses settings drafts', () => {
-    const base = { folder: '', intervalDays: '1', hour: '4', retentionCount: '7', retentionDays: '28' };
-    expect(parseBackupDraft(base)).toEqual({ value: { folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28 } });
+    const base = { folder: '', intervalDays: '1', hour: '4', retentionCount: '7', retentionDays: '28', encryptionPassphrase: '' };
+    expect(parseBackupDraft(base)).toEqual({ value: { folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28, encryptionPassphrase: '' } });
+    expect(parseBackupDraft({ ...base, encryptionPassphrase: 'short' })).toMatchObject({ errors: { encryptionPassphrase: expect.any(String) } });
+    expect(parseBackupDraft({ ...base, encryptionPassphrase: SECRET_MASK })).toMatchObject({ value: { encryptionPassphrase: SECRET_MASK } });
+    expect(parseBackupDraft({ ...base, encryptionPassphrase: 'long enough' })).toMatchObject({ value: { encryptionPassphrase: 'long enough' } });
     expect(parseBackupDraft({ ...base, folder: ' /data/backups ' })).toMatchObject({ value: { folder: '/data/backups' } });
     expect(parseBackupDraft({ ...base, folder: 'D:\\backups' })).toMatchObject({ value: { folder: 'D:\\backups' } });
     expect(parseBackupDraft({ ...base, folder: 'relative' })).toMatchObject({ errors: { folder: expect.any(String) } });
