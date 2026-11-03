@@ -110,6 +110,7 @@ import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
 import { basePath } from './lib/base-path.js';
+import { parseProfilesSearch, profileRedirect } from './features/player/redesign/profile-session.js';
 import type { PortalDocument } from '@arclight/shared';
 import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
@@ -160,6 +161,9 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
     const search = location.search as Record<string, unknown>;
     const target = resolveAuthRedirect(status, location.pathname, location.href, search['redirect']);
     if (target && target !== location.href) throw redirect({ href: target, replace: true });
+    // A non-owner household profile keeps the whole browser session inside /player (§4.6).
+    const confined = profileRedirect(status?.session, location.pathname);
+    if (confined) throw redirect({ href: confined, replace: true });
   },
 });
 
@@ -256,7 +260,8 @@ const playerRoute = createRoute({
 const playerHomeRoute = createRoute({
   getParentRoute: () => playerRoute,
   path: '/',
-  component: lazyRouteComponent(() => import('./features/player/ui/player-home.js'), 'PlayerHome'),
+  // The redesign Home (features/player/redesign); ui/player-home.js stays for the app's TV home.
+  component: lazyRouteComponent(() => import('./features/player/redesign/pages/home.js'), 'RdHomePage'),
 });
 const playerNowPlayingRoute = createRoute({
   getParentRoute: () => playerRoute,
@@ -281,11 +286,21 @@ const playerSectionRoutes = [
   playerBrowse('books', () => import('./features/player/browse/books.js'), 'BooksHomePage'),
   playerBrowse('books/$bookId', () => import('./features/player/browse/book-page.js'), 'BookPage'),
   playerBrowse('search', () => import('./features/player/browse/search-page.js'), 'PlayerSearchPage'),
-  playerBrowse('watch', () => import('./features/player/video/watch-home.js'), 'WatchHomePage'),
-  playerBrowse('watch/movies', () => import('./features/player/video/library.js'), 'MoviesPage'),
-  playerBrowse('watch/movies/$id', () => import('./features/player/video/movie-page.js'), 'MovieDetailsPage'),
-  playerBrowse('watch/shows', () => import('./features/player/video/library.js'), 'ShowsPage'),
-  playerBrowse('watch/shows/$id', () => import('./features/player/video/show-page.js'), 'ShowDetailsPage'),
+  // Movies & TV: the redesign pages (features/player/redesign/pages).
+  playerBrowse('watch', () => import('./features/player/redesign/pages/home.js'), 'RdHomePage'),
+  playerBrowse('watch/movies', () => import('./features/player/redesign/pages/browse.js'), 'RdMoviesPage'),
+  playerBrowse('watch/movies/$id', () => import('./features/player/redesign/pages/detail.js'), 'RdMoviePage'),
+  playerBrowse('watch/shows', () => import('./features/player/redesign/pages/browse.js'), 'RdShowsPage'),
+  playerBrowse('watch/shows/$id', () => import('./features/player/redesign/pages/detail.js'), 'RdShowPage'),
+  playerBrowse('watch/my-list', () => import('./features/player/redesign/pages/browse.js'), 'RdMyListPage'),
+  playerBrowse('watch/search', () => import('./features/player/redesign/pages/search.js'), 'RdSearchPage'),
+  playerBrowse('settings', () => import('./features/player/redesign/pages/settings.js'), 'RdSettingsPage'),
+  createRoute({
+    getParentRoute: () => playerRoute,
+    path: 'profiles',
+    validateSearch: parseProfilesSearch,
+    component: lazyRouteComponent(() => import('./features/player/redesign/pages/profiles.js'), 'RdProfilesPage'),
+  }),
   playerBrowse('watch/play/$itemKey', () => import('./features/player/video/player-page.js'), 'VideoPlayerPage'),
   playerBrowse('link', () => import('./features/player/video/link-page.js'), 'SignInTvPage'),
 ];

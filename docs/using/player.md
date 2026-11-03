@@ -6,6 +6,8 @@ The player plays files that Arclight already has on disk. Items without a file d
 
 The player is a preview. It is off until an admin turns it on.
 
+For the layouts, profiles, settings and the video controls in the browser, see [The player in the browser](../player/web.md).
+
 ## Turning the player on (admins)
 
 1. Open **Settings > General > Features** and make sure **Movies**, **TV**, **Music** and **Audiobooks** are on as you need them. The player only shows the sections you have enabled.

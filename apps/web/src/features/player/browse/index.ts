@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 
-// Browse pages of the /player portal (music and audiobooks). Each page is its own lazy chunk;
+// Browse pages of the /player portal (music, audiobooks, and the Movies & TV redesign). Each page is its own lazy chunk;
 // the player core wires `browseRoutes` into router.tsx under its /player layout, wrapping each
 // component in <Suspense>. Paths use TanStack Router's `$param` syntax; pages read the params
 // by these names.
@@ -29,6 +29,16 @@ const ShowsPage = lazy(() => import('../video/library.js').then((m) => ({ defaul
 const ShowDetailsPage = lazy(() => import('../video/show-page.js').then((m) => ({ default: m.ShowDetailsPage })));
 const VideoPlayerPage = lazy(() => import('../video/player-page.js').then((m) => ({ default: m.VideoPlayerPage })));
 const SignInTvPage = lazy(() => import('../video/link-page.js').then((m) => ({ default: m.SignInTvPage })));
+// The redesign (../redesign/pages): what the Movies & TV routes show from 0.23.0.
+const RdHomePage = lazy(() => import('../redesign/pages/home.js').then((m) => ({ default: m.RdHomePage })));
+const RdMoviesPage = lazy(() => import('../redesign/pages/browse.js').then((m) => ({ default: m.RdMoviesPage })));
+const RdShowsPage = lazy(() => import('../redesign/pages/browse.js').then((m) => ({ default: m.RdShowsPage })));
+const RdMyListPage = lazy(() => import('../redesign/pages/browse.js').then((m) => ({ default: m.RdMyListPage })));
+const RdMoviePage = lazy(() => import('../redesign/pages/detail.js').then((m) => ({ default: m.RdMoviePage })));
+const RdShowPage = lazy(() => import('../redesign/pages/detail.js').then((m) => ({ default: m.RdShowPage })));
+const RdSearchPage = lazy(() => import('../redesign/pages/search.js').then((m) => ({ default: m.RdSearchPage })));
+const RdSettingsPage = lazy(() => import('../redesign/pages/settings.js').then((m) => ({ default: m.RdSettingsPage })));
+const RdProfilesPage = lazy(() => import('../redesign/pages/profiles.js').then((m) => ({ default: m.RdProfilesPage })));
 
 export const browseRoutes: readonly BrowseRoute[] = [
   { path: '/player/music', component: MusicHomePage },
@@ -41,14 +51,18 @@ export const browseRoutes: readonly BrowseRoute[] = [
   { path: '/player/books', component: BooksHomePage },
   { path: '/player/books/$bookId', component: BookPage },
   { path: '/player/search', component: PlayerSearchPage },
-  { path: '/player/watch', component: WatchHomePage },
-  { path: '/player/watch/movies', component: MoviesPage },
-  { path: '/player/watch/movies/$id', component: MovieDetailsPage },
-  { path: '/player/watch/shows', component: ShowsPage },
-  { path: '/player/watch/shows/$id', component: ShowDetailsPage },
+  { path: '/player/watch', component: RdHomePage },
+  { path: '/player/watch/movies', component: RdMoviesPage },
+  { path: '/player/watch/movies/$id', component: RdMoviePage },
+  { path: '/player/watch/shows', component: RdShowsPage },
+  { path: '/player/watch/shows/$id', component: RdShowPage },
+  { path: '/player/watch/my-list', component: RdMyListPage },
+  { path: '/player/watch/search', component: RdSearchPage },
   { path: '/player/watch/play/$itemKey', component: VideoPlayerPage },
   { path: '/player/link', component: SignInTvPage },
 ];
+// Settings and Who's watching are exported below, not routed here: each shell mounts them its own
+// way (the app adds its device rows to Settings and has its own picker gate).
 
 export {
   MusicHomePage,
@@ -68,6 +82,15 @@ export {
   ShowDetailsPage,
   VideoPlayerPage,
   SignInTvPage,
+  RdHomePage,
+  RdMoviesPage,
+  RdShowsPage,
+  RdMyListPage,
+  RdMoviePage,
+  RdShowPage,
+  RdSearchPage,
+  RdSettingsPage,
+  RdProfilesPage,
 };
 export { BrowsePlayerContext, usePlayerActions, type BrowsePlayerActions, type PlayItemsOptions } from './player-hooks.js';
 export { playerBrowseApi, browseKeys } from './api.js';
