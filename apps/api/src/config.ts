@@ -1,6 +1,7 @@
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { normalizeBasePath } from './base-path.js';
+import { parseTrustProxy, type TrustProxy } from './trust-proxy.js';
 
 // Runtime configuration comes from the environment only. Everything the user can change
 // in the UI lives in the settings table, not here.
@@ -29,6 +30,11 @@ export interface AppConfig {
    * (tests) may leave it out, which means the root. See base-path.ts.
    */
   basePath?: string;
+  /**
+   * Peers whose X-Forwarded-* headers are believed (ARCLIGHT_TRUST_PROXY, see trust-proxy.ts).
+   * Configs built by hand (tests) may leave it out, which means DEFAULT_TRUST_PROXY.
+   */
+  trustProxy?: TrustProxy;
 }
 
 /**
@@ -68,5 +74,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webDist,
     torrentEngine: readEnv(env, 'TORRENT_ENGINE') !== '0',
     basePath: normalizeBasePath(readEnv(env, 'BASE_PATH')),
+    trustProxy: parseTrustProxy(readEnv(env, 'TRUST_PROXY')),
   };
 }

@@ -34,7 +34,7 @@ The shipped compose files (`docker/docker-compose.yml` and the others in `docker
 | `PROTON_WIREGUARD_KEY` | The private key from a Proton WireGuard configuration created with "NAT-PMP (port forwarding)" ticked |
 | `VPN_COUNTRIES` | Comma-separated Proton server countries (default `Netherlands`) |
 | `LAN_SUBNET` | Your home network, such as `192.168.1.0/24`, so you can still reach the web UI through Gluetun's firewall |
-| `GLUETUN_API_KEY` | Control-server key. Generate it with `scripts/gluetun-auth.sh` (or `scripts/gluetun-auth.ps1` on Windows), which also writes the auth file Gluetun needs and stores the key in `.env`. Restart the whole stack afterwards |
+| `GLUETUN_API_KEY` | Control-server key, required: compose refuses to start without it. Generate it with `scripts/gluetun-auth.sh` (or `scripts/gluetun-auth.ps1` on Windows), which also writes the auth file Gluetun needs and stores the key in `.env`; any long random string of letters and digits also works, because the compose files pass it to Gluetun as its default role. Restart the whole stack afterwards |
 
 The compose file passes `ARCLIGHT_VPN_CONTROL_URL` (default `http://localhost:8000`) and `ARCLIGHT_VPN_API_KEY` to Arclight, so the Settings > VPN fields can stay empty. A value you type on the page wins over the environment variable. Full install steps are in [Install with Docker](../getting-started/install-docker.md).
 

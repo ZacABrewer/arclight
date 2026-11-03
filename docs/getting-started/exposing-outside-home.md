@@ -39,7 +39,8 @@ If Arclight runs inside Gluetun's network, the web port is published on the glue
 
 ## How Arclight sees a proxy
 
-- It always trusts the standard forwarded headers: there is no "trusted proxy" setting to switch on.
+- It trusts the standard forwarded headers only from a proxy at a loopback, private (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`), link-local or CGNAT/Tailscale (`100.64.0.0/10`) address. That covers a proxy on the same machine, in Docker, on your LAN or on your tailnet, with nothing to configure. Headers from any other address are ignored, so someone who reaches Arclight directly cannot fake their address or hostname.
+- If your proxy connects from a public address (a VPS in front of your home, for example), set `ARCLIGHT_TRUST_PROXY` under the Arclight service's `environment:` to its address: a comma list of IPs and CIDRs (`203.0.113.7,loopback,uniquelocal`), a number of hops to trust, `true` to trust every peer (the behaviour before 0.24) or `false` to ignore the headers. An invalid value stops Arclight at start with a message naming the bad entry.
 - The proxy must send `X-Forwarded-For` (the real client address) and `X-Forwarded-Proto: https` so the sign-in cookie is marked Secure. Caddy, Traefik and Nginx Proxy Manager do this by default; a plain Nginx config needs the lines shown below.
 - For the "local address" rule, Arclight checks the connection and every address in `X-Forwarded-For`. If any is public, sign-in is required. A proxy on the same machine therefore does not turn internet visitors into local users.
 - Two paths need WebSocket upgrades or the page looks stuck: `/api/v1/events` (live updates) and `/api/v1/log/stream` (live log).

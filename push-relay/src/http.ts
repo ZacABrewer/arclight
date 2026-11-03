@@ -76,6 +76,47 @@ export function bearer(request: Request): string | undefined {
   return m?.[1];
 }
 
-export function clientIp(request: Request): string {
-  return request.headers.get("cf-connecting-ip") ?? "unknown";
+/** The caller's address from Cloudflare (CF-Connecting-IP); undefined when it is missing. */
+export function clientIp(request: Request): string | undefined {
+  const ip = request.headers.get("cf-connecting-ip")?.trim();
+  return ip ? ip : undefined;
+}
+
+/**
+ * Rate-limit bucket for an address: IPv4 as is, IPv6 by its /64 (what one subscriber is usually
+ * given, so rotating through it does not escape the limit). IPv4-mapped IPv6 counts as IPv4.
+ * Anything unparsable is used verbatim (lowercased).
+ */
+export function ipBucket(ip: string): string {
+  const raw = ip.trim().toLowerCase();
+  if (!raw.includes(":")) return raw;
+  const addr = raw.replace(/%.*$/, "");
+  let groups = expandIpv6(addr);
+  if (!groups) return raw;
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    return [groups[6]! >> 8, groups[6]! & 0xff, groups[7]! >> 8, groups[7]! & 0xff].join(".");
+  }
+  groups = groups.slice(0, 4);
+  return `${groups.map((g) => g.toString(16)).join(":")}::/64`;
+}
+
+/** The eight 16-bit groups of an IPv6 address, or undefined when it is not one. */
+function expandIpv6(addr: string): number[] | undefined {
+  let text = addr;
+  const v4 = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (v4) {
+    const b = v4.slice(2).map(Number);
+    if (b.some((n) => n > 255)) return undefined;
+    text = `${v4[1]}${((b[0]! << 8) | b[1]!).toString(16)}:${((b[2]! << 8) | b[3]!).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return undefined;
+  const parse = (part: string) => (part === "" ? [] : part.split(":"));
+  const head = parse(halves[0]!);
+  const tail = halves.length === 2 ? parse(halves[1]!) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return undefined;
+  const all = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill("0"), ...tail];
+  if (!all.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return undefined;
+  return all.map((g) => parseInt(g, 16));
 }

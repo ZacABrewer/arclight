@@ -8,6 +8,7 @@ import {
 } from 'fastify-type-provider-zod';
 import type { Logger } from 'pino';
 import type { AppConfig } from './config.js';
+import { DEFAULT_TRUST_PROXY } from './trust-proxy.js';
 import type { Db } from './db/index.js';
 import { EventBus } from './events.js';
 import { Scheduler } from './scheduler.js';
@@ -120,7 +121,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   const basePath = config.basePath ?? '';
   const app = Fastify({
     loggerInstance: log,
-    trustProxy: true,
+    trustProxy: config.trustProxy ?? DEFAULT_TRUST_PROXY,
     pluginTimeout: 300_000,
     ...(basePath ? { rewriteUrl: basePathRewriter(basePath) } : {}),
   }).withTypeProvider<ZodTypeProvider>();

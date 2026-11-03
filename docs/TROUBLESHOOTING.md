@@ -262,6 +262,7 @@ More detail: [Cloudflare and other browser challenges](CLOUDFLARE.md).
 **How to confirm:**
 
 - Gluetun: `docker logs gluetun`. A healthy start ends with a public IP line; an auth error means the key is wrong. `docker compose ps` shows its health.
+- `docker compose` stops with "required variable GLUETUN_API_KEY is missing a value": the VPN compose files require a control-server key. Run `scripts/gluetun-auth.sh` (or `.ps1`), or put any long random string of letters and digits in `.env` as `GLUETUN_API_KEY`.
 - A 401 or 403 from the control server means Gluetun needs an API key: generate one with `scripts/gluetun-auth.sh` (or `.ps1`), put it in `.env` as `GLUETUN_API_KEY`, and recreate the containers. In Settings > VPN the same key goes into the API key field.
 - Settings > VPN shows Public IP, Last handshake (WireGuard), Last checked and any error text.
 - Press **Test** on the VPN page; "The test failed" comes with the reason.
@@ -433,6 +434,7 @@ Files already imported by copy stay duplicated until you delete the download cop
 
 | Log shows | Cause |
 |---|---|
+| "Arclight refuses to run as root" | `PUID` or `PGID` is `0` on a new install (an existing install that already ran as root keeps starting, with a warning in the log). Set them to the user and group that own your folders (`id <user>` on the host). To run as root anyway, set `ALLOW_ROOT=1` under the Arclight service's `environment:` (not recommended). |
 | `chown` or "Operation not permitted"/"Read-only file system" right after the start line | The start script sets ownership of `/config` and stops if that fails. This happens on NFS shares with root squash, read-only mounts, or a config path the NAS refuses to chown. Use a normal local folder for the config location. |
 | Errors about the database or "unable to open" | The config folder is not writable or its disk is full. See [docker-puid-pgid-mismatch](#docker-puid-pgid-mismatch) and [config-disk-space-low](#config-disk-space-low). |
 | "address already in use" | Port 7878 (or 8080 for the optional qBittorrent) is taken. Change the published port, or in the VPN stack remember the ports are published on the `gluetun` container. |

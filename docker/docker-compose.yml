@@ -3,12 +3,13 @@
 # through the ProtonVPN WireGuard tunnel and Gluetun's firewall blocks everything else
 # (a kill switch by construction). Ports are therefore published on the gluetun service.
 # Without a VPN, use docker-compose.novpn.yml. For the published image, see README.md.
+# Third-party images are pinned to release tags (CI rejects the floating "latest" tag); Arclight releases bump them.
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     cap_add:
       - NET_ADMIN
@@ -27,9 +28,9 @@ services:
       # Control server polled by Arclight (status, public IP, forwarded port).
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=off
-      # Newer Gluetun releases require auth on the control server. If yours does, create a key
-      # (docker run --rm qmcgaw/gluetun genkey), configure it per the Gluetun wiki
-      # ("Control server" / auth roles) and enter the same key in Settings -> VPN.
+      # Require the API key on every control-server route (Gluetun allows some routes without auth
+      # otherwise). The same key reaches Arclight as ARCLIGHT_VPN_API_KEY below.
+      - 'HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"apikey","apikey":"${GLUETUN_API_KEY:?set GLUETUN_API_KEY in .env (scripts/gluetun-auth.sh generates one)}"}'
       - TZ=${TZ:-UTC}
     # Containers sharing this network namespace (Arclight) share this hosts file.
     extra_hosts:
@@ -37,7 +38,7 @@ services:
     volumes:
       - ${CONFIG_ROOT:-./data}/gluetun:/gluetun
     ports:
-      - "7878:7878" # Arclight
+      - "7878:7878" # Arclight web UI; publish: all-interfaces (LAN access)
       # - "8080:8080" # qBittorrent WebUI (only with --profile qbittorrent)
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
@@ -51,10 +52,10 @@ services:
   # its headless browser egresses through the VPN with the same IP as Arclight; port 8191 is
   # reachable from Arclight as localhost:8191 and is not published.
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     container_name: flaresolverr
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     network_mode: "service:gluetun"
     environment:
@@ -132,10 +133,10 @@ services:
   # extra container; start qBittorrent too only if you want it: docker compose --profile qbittorrent up -d
   qbittorrent:
     profiles: ["qbittorrent"]
-    image: lscr.io/linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent:5.3.0
     container_name: qbittorrent
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     network_mode: "service:gluetun"
     environment:
@@ -164,9 +165,9 @@ services:
   # lowest-priority subtitle provider, used only when no other provider has a result. Models are
   # cached under ${CONFIG_ROOT}/whisper. CPU by default; ASR_MODEL=small/medium is slower but better.
   whisper:
-    image: onerahmet/openai-whisper-asr-webservice:latest
+    image: onerahmet/openai-whisper-asr-webservice:v1.10.0
     # GPU (NVIDIA Container Toolkit): use the -gpu image and uncomment the deploy block.
-    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # image: onerahmet/openai-whisper-asr-webservice:v1.10.0-gpu
     # deploy:
     #   resources:
     #     reservations:
@@ -177,7 +178,7 @@ services:
     container_name: whisper
     profiles: ["whisper"]
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     environment:
       - ASR_MODEL=base
