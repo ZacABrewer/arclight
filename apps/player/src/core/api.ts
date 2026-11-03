@@ -133,8 +133,10 @@ export async function request(path: string, schema: z.ZodType | null, init: AppR
 async function toApiError(res: Response, path: string): Promise<ApiError> {
   let message = `${res.status} ${res.statusText}`.trim();
   let code: string | undefined;
+  let body: unknown;
   try {
-    const parsed = ErrorResponse.safeParse(await res.json());
+    body = await res.json();
+    const parsed = ErrorResponse.safeParse(body);
     if (parsed.success) {
       message = parsed.data.error;
       code = parsed.data.code;
@@ -142,7 +144,17 @@ async function toApiError(res: Response, path: string): Promise<ApiError> {
   } catch {
     // Empty or not JSON: keep the status text.
   }
-  return new ApiError(res.status, message, path, code);
+  const err = new ApiError(res.status, message, path, code);
+  // The whole JSON body, for routes that add fields (households: retryAfterSeconds).
+  if (body !== undefined) errorBodies.set(err, body);
+  return err;
+}
+
+const errorBodies = new WeakMap<ApiError, unknown>();
+
+/** The JSON body a failed request answered with (undefined: none, or not an ApiError). */
+export function apiErrorBody(err: unknown): unknown {
+  return err instanceof ApiError ? errorBodies.get(err) : undefined;
 }
 
 export function errorMessage(err: unknown): string {

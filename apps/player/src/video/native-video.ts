@@ -1,5 +1,16 @@
 import type { PluginListenerHandle } from '@capacitor/core';
-import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile, VideoSession, VideoSessionRequest } from '@arclight/shared';
+import type {
+  PlayableItem,
+  PlaybackProgress,
+  PlayerSeriesDetails,
+  ProfileSettings,
+  ProfileSettingsPatch,
+  ProgressReport,
+  VideoDeviceProfile,
+  VideoSession,
+  VideoSessionRequest,
+  VideoQuality,
+} from '@arclight/shared';
 import type { OpenVideoOptions } from '@web/features/player/video/video-launcher';
 import { audioTrackLabel, episodeCode, resumePoint } from '@web/features/player/video/format';
 import { t } from '@web/i18n/index';
@@ -10,8 +21,12 @@ import type {
   VideoClosedEvent,
   VideoNextEvent,
   VideoProgressEvent,
+  VideoPickItemEvent,
   VideoSeekRequestEvent,
+  VideoTracksChangedEvent,
+  NativeVideoTheme,
 } from '../native/definitions';
+import { normLanguage, pauseInfo, preferredAudio, preferredSubtitle, prefsOf, seasonsOf, trickplayOf, videoStrings } from './native-extras';
 
 // The app's video launcher on Android: every play button of the Movies & TV pages (through the
 // web's `openVideo`) ends here instead of the web player page. It asks the server for a session
@@ -23,6 +38,11 @@ import type {
 //   videoSeekRequest  → a new session from that point (or with that audio track) → replaceVideoStream
 //   videoNext         → stop + "played" for this one, then playVideo for the next (loads in place)
 //   videoClosed       → the final report, "played" when it reached the end, refresh the pages
+//   videoPickItem     → an episode from the native episodes panel: stop this one, open that one
+//   videoTracksChanged → the profile's audio / subtitle language follows the choice
+//
+// With the redesign's extras (spec §5.9): the pause screen, scrub thumbnails, the episodes panel,
+// the active profile's prefs and languages, the theme's colours and the overlay strings.
 //
 // All positions are media time (absolute), as the plugin reports them.
 
@@ -46,6 +66,18 @@ export interface NativeVideoDeps {
   deviceId: string;
   deviceName?: string;
   now?: () => Date;
+  /** The active profile's settings (languages, prefs); null / absent: the file's defaults. */
+  profileSettings?: () => Promise<ProfileSettings | null>;
+  /** GET /playback/series/:id, for the episodes panel. */
+  fetchSeries?: (seriesId: number) => Promise<PlayerSeriesDetails>;
+  /** Save the profile's languages after a track change in the player. */
+  saveProfileSettings?: (patch: ProfileSettingsPatch) => Promise<unknown>;
+  /** The active theme's colours (getComputedStyle on the --al-pl-* tokens). */
+  theme?: () => NativeVideoTheme | undefined;
+  /** Translated overlay strings (default: from the app's locales). */
+  strings?: () => PlayVideoOptions['strings'];
+  /** Streaming quality for this device and profile (Settings > Playback); absent: auto. */
+  quality?: () => VideoQuality;
 }
 
 interface Current {
@@ -129,6 +161,8 @@ export class NativeVideoLauncher {
       p.addListener('videoSeekRequest', (e) => void this.onSeekRequest(e)),
       p.addListener('videoNext', (e) => void this.onNext(e)),
       p.addListener('videoClosed', (e) => void this.onClosed(e)),
+      p.addListener('videoPickItem', (e) => void this.onPickItem(e)),
+      p.addListener('videoTracksChanged', (e) => void this.onTracksChanged(e)),
     ]);
   }
 
@@ -173,28 +207,35 @@ export class NativeVideoLauncher {
       // Text subtitles are side-loaded by the player; only image ones would need burning in.
       ...(sub && !sub.text ? { subtitle: sub.id } : {}),
       ...(startMs > 0 ? { startMs: Math.floor(startMs) } : {}),
+      quality: this.deps.quality?.() ?? 'auto',
     };
   }
 
   /** Fetch the item, ask for a session and open the native player (an open one loads it in place). */
   private async open(itemKey: string, opts: OpenVideoOptions, gen: number): Promise<void> {
     const stale = () => gen !== this.openGen;
-    const [item, progress, profile] = await Promise.all([
+    const [item, progress, profile, settings] = await Promise.all([
       this.deps.fetchItem(itemKey),
       opts.restart || (opts.startMs ?? 0) > 0 ? Promise.resolve(null) : this.deps.fetchProgress(itemKey).catch(() => null),
       this.profile(),
+      this.deps.profileSettings ? this.deps.profileSettings().catch(() => null) : Promise.resolve(null),
     ]);
     if (stale()) return;
     if (!item.video) throw new Error(t('player.video.error.load'));
     const startMs = startPosition(opts, progress, item.durationMs);
+    const audioTrack = preferredAudio(item, settings);
     const base = {
       item,
-      audioTrack: item.video.audioTracks.find((a) => a.default)?.index ?? null,
-      subtitle: defaultSubtitle(item),
+      audioTrack,
+      subtitle: settings ? preferredSubtitle(item, settings, audioTrack) : defaultSubtitle(item),
       mediaFileId: opts.mediaFileId ?? null,
     };
-    const session = await this.deps.requestSession(this.request(base, profile, startMs));
-    const next = item.next ? await this.deps.fetchItem(item.next).catch(() => null) : null;
+    const seriesId = item.kind === 'episode' ? item.seriesId : undefined;
+    const [session, next, show] = await Promise.all([
+      this.deps.requestSession(this.request(base, profile, startMs)),
+      item.next ? this.deps.fetchItem(item.next).catch(() => null) : Promise.resolve(null),
+      seriesId && this.deps.fetchSeries ? this.deps.fetchSeries(seriesId).catch(() => null) : Promise.resolve(null),
+    ]);
     // Closed (or another item opened) while the session was being prepared.
     if (stale()) return;
     const durationMs = session.durationMs || item.durationMs;
@@ -242,6 +283,17 @@ export class NativeVideoLauncher {
       const nextArt = httpUrl(next.artworkUrl) ?? httpUrl(next.backdropUrl);
       options.next = { itemKey: next.itemKey, title: next.title, ...(nextSub ? { subtitle: nextSub } : {}), ...(nextArt ? { artworkUrl: nextArt } : {}) };
     }
+    const pause = pauseInfo(item);
+    if (pause) options.pause = pause;
+    options.trickplay = trickplayOf(session.trickplay);
+    if (show && show.seasons.length) {
+      options.seasons = seasonsOf(show);
+      if (item.seasonNumber != null) options.currentSeason = item.seasonNumber;
+    }
+    if (settings) options.prefs = prefsOf(settings);
+    const theme = this.deps.theme?.();
+    if (theme) options.theme = theme;
+    options.strings = this.deps.strings?.() ?? videoStrings();
     const opened = this.current;
     await this.deps.plugin.playVideo(options);
     if (this.current !== opened) return;
@@ -343,6 +395,48 @@ export class NativeVideoLauncher {
     } finally {
       this.deps.refresh();
     }
+  }
+
+  /** Another episode from the native episodes panel: save where this one stopped, open that one. */
+  private async onPickItem(e: VideoPickItemEvent): Promise<void> {
+    const gen = ++this.openGen;
+    const c = this.current;
+    if (c && c.item.itemKey === e.fromItemKey) {
+      this.current = null;
+      this.seekToken++;
+      if (e.positionMs > 0) c.positionMs = e.positionMs;
+      if (c.started) this.report('stop', c);
+    }
+    try {
+      await this.open(e.itemKey, {}, gen);
+    } catch (err) {
+      this.deps.onError?.(err instanceof Error ? err.message : String(err));
+      if (gen === this.openGen) await this.deps.plugin.closeVideo().catch(() => undefined);
+    } finally {
+      this.deps.refresh();
+    }
+  }
+
+  /** A track picked in the player: remember it, and make its language the profile's choice. */
+  private async onTracksChanged(e: VideoTracksChangedEvent): Promise<void> {
+    const c = this.matches(e.itemKey);
+    if (!c) return;
+    c.audioTrack = e.audioTrack;
+    c.subtitle = e.subtitle;
+    if (!this.deps.saveProfileSettings) return;
+    const v = c.item.video;
+    const audio = e.audioTrack !== null ? v?.audioTracks.find((a) => a.index === e.audioTrack) : undefined;
+    const sub = e.subtitle !== null ? v?.subtitleTracks.find((s) => s.id === e.subtitle) : undefined;
+    const patch: ProfileSettingsPatch = {};
+    const audioLang = normLanguage(audio?.language);
+    if (audioLang) patch.audioLanguage = audioLang;
+    // Off, or a forced track (shown anyway): subtitles off for the profile.
+    if (e.subtitle === null || sub?.forced) patch.subtitleLanguage = null;
+    else {
+      const subLang = normLanguage(sub?.language);
+      if (subLang) patch.subtitleLanguage = subLang;
+    }
+    if (Object.keys(patch).length) await this.deps.saveProfileSettings(patch).catch(() => undefined);
   }
 
   private async onClosed(e: VideoClosedEvent): Promise<void> {

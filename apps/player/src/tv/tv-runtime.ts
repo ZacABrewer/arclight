@@ -2,13 +2,19 @@ import { FocusManager } from './focus-manager';
 
 // Glue between the focus manager, the router and the remote's Back button in TV mode.
 //
-// Back, in order: close an open dialog / menu / panel (as Escape would) → go back in history →
-// from the content of a top screen, move focus to the rail → leave the app.
+// Back follows the design (spec §4.3), in order:
+//  1. an open panel ([data-tv-scope], dialogs, menus) closes, as Escape would;
+//  2. a pushed screen (a title's detail, Listen, …) goes back to where it was opened from;
+//  3. on a top tab other than Home: to Home, focus on the Home tab;
+//  4. on Home: from anywhere to the Home tab; from the Home tab, leave the app;
+//  5. "Who's watching?": nothing.
+// Screens outside the stage (welcome, sign-in) keep the plain history back.
 
 export interface TvRouterLike {
   history: { back(): void; length?: number; canGoBack?: () => boolean };
   state: { location: { pathname: string } };
   subscribe(event: 'onResolved', fn: () => void): () => void;
+  navigate(opts: { to: string }): unknown;
 }
 
 export interface TvRuntime {
@@ -20,8 +26,16 @@ export interface TvRuntime {
 
 let runtime: TvRuntime | null = null;
 
-/** Screens whose Back leaves the app (after a stop on the rail). */
-const TOP_PATHS = ['/player', '/player/', '/welcome', '/'];
+export const HOME_PATH = '/player';
+/** The header's tabs: their Back goes to Home (the design's tab()). */
+export const TAB_PATHS = ['/player/watch/shows', '/player/watch/movies', '/player/watch/my-list', '/player/search', '/player/music', '/player/books', '/player/settings'];
+export const PROFILES_PATH = '/profiles';
+
+const norm = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
+const isHome = (p: string) => norm(p) === HOME_PATH || norm(p) === '/player/watch';
+
+const query = (sel: string) => (typeof document === 'undefined' ? null : document.querySelector<HTMLElement>(sel));
+const tabEl = (id: string) => query(`[data-tv-key="tab-${id}"]`);
 
 export function startTvRuntime(router: TvRouterLike): TvRuntime {
   runtime?.stop();
@@ -37,18 +51,32 @@ export function startTvRuntime(router: TvRouterLike): TvRuntime {
       target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
       return true;
     }
-    const path = router.state.location.pathname;
-    const top = TOP_PATHS.includes(path);
-    if (canGoBack && !top) {
-      router.history.back();
+    const path = norm(router.state.location.pathname);
+    const onStage = Boolean(query('[data-tv-stage]'));
+    if (!onStage) {
+      if (canGoBack) {
+        router.history.back();
+        return true;
+      }
+      return false;
+    }
+    if (path === PROFILES_PATH) return true;
+    if (isHome(path)) {
+      const home = tabEl('home');
+      const active = document.activeElement;
+      if (home && active === home) return false;
+      if (home) focus.focus(home, undefined, true);
       return true;
     }
-    if (!focus.inGroup('rail') && focus.focusGroup('rail')) return true;
-    if (canGoBack) {
-      router.history.back();
+    if (TAB_PATHS.includes(path)) {
+      const home = tabEl('home');
+      if (home) focus.focus(home, undefined, true);
+      void router.navigate({ to: HOME_PATH });
       return true;
     }
-    return false;
+    if (canGoBack) router.history.back();
+    else void router.navigate({ to: HOME_PATH });
+    return true;
   };
 
   // In a browser (?tv=1) Escape / Backspace stand in for the remote's Back.
@@ -56,7 +84,7 @@ export function startTvRuntime(router: TvRouterLike): TvRuntime {
     if (e.defaultPrevented) return;
     const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
     if (e.key === 'GoBack' || e.key === 'BrowserBack' || (!typing && (e.key === 'Escape' || e.key === 'Backspace'))) {
-      if (e.key === 'Escape' && focus.hasOpenScope()) return; // the dialog closes itself
+      if (e.key === 'Escape' && focus.hasOpenScope()) return; // the panel closes itself
       e.preventDefault();
       back(window.history.length > 1);
     }

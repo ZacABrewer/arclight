@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { directionOf, isBeyond, pickNext, score, type Box } from './spatial';
+import { directionOf, isBeyond, pickNext, pickStage, score, stageScore, type Box } from './spatial';
 
 const box = (left: number, top: number, w = 100, h = 60): Box => ({ left, top, right: left + w, bottom: top + h });
 
@@ -47,5 +47,36 @@ describe('spatial navigation geometry', () => {
     expect(directionOf('ArrowLeft')).toBe('left');
     expect(directionOf('Right')).toBe('right');
     expect(directionOf('Enter')).toBeNull();
+  });
+});
+
+describe('stage scoring (the design TV template)', () => {
+  const HEADER = 72;
+  const at = (b: Box, inHeader = false) => ({ box: b, inHeader });
+  const cand = (b: Box, sameRow = true, inHeader = false) => ({ box: b, sameRow, inHeader });
+
+  it('keeps left / right inside the row', () => {
+    const o = at(box(0, 200));
+    expect(stageScore(o, cand(box(120, 200), false), 'right', HEADER)).toBe(Infinity);
+    expect(stageScore(o, cand(box(120, 200)), 'right', HEADER)).toBeLessThan(Infinity);
+  });
+
+  it('prefers the page over the header when moving up', () => {
+    const o = at(box(100, 400));
+    const page = cand(box(100, 200));
+    const header = cand(box(100, 10, 60, 40), true, true);
+    expect(pickStage(o, [header, page], 'up', HEADER)).toBe(1);
+    // With nothing above in the page, the header is still reachable.
+    expect(pickStage(at(box(100, 120)), [header], 'up', HEADER)).toBe(0);
+  });
+
+  it('down from the header skips anything still under it', () => {
+    const o = at(box(100, 10, 60, 40), true);
+    expect(stageScore(o, cand(box(100, 50, 100, 60)), 'down', HEADER)).toBe(Infinity);
+    expect(pickStage(o, [cand(box(100, 50, 100, 60)), cand(box(100, 300))], 'down', HEADER)).toBe(1);
+  });
+
+  it('returns -1 with nothing that way', () => {
+    expect(pickStage(at(box(0, 0)), [cand(box(0, 200))], 'up', HEADER)).toBe(-1);
   });
 });

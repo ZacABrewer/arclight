@@ -20,9 +20,17 @@ Open [arclight.moviemethat.com/android](https://arclight.moviemethat.com/android
 - **TV:** enter your server's address with the remote (for example `http://<nas-ip>:7878` at home, or your HTTPS address). Then choose **Sign in with a code**: the TV shows a code and a QR code. On a phone or computer that is signed in to Arclight, scan the QR code or open `/player/link` on your server and type the code. The TV signs in by itself. You can also sign in with your password instead.
 - **Phone:** enter the server address and sign in, or scan the **Sign in a phone** QR code from the web player.
 
+## Who's watching?
+
+If your account has two or more profiles, the app asks who is watching the first time you open it. A profile with a PIN asks for its 4 digits (on a TV with the on-screen number pad, on a phone with the number keyboard). Five wrong tries lock that profile for 15 minutes on that device. Each profile keeps its own My List, progress, settings and theme. Switch profiles from Settings > Profiles on a TV, or from your avatar in the top bar on a phone. While your own (owner) profile is active you can add profiles from the picker, and edit, delete, set a PIN or a Kids limit under Settings > Profiles > Manage profiles.
+
+## Launch intro
+
+When the app opens from cold, it plays a short Arclight intro while it loads; any key or a tap skips it. It never plays before a movie or episode, or when you come back to the app from the background. With Reduce motion on (in the app's Display settings or on the device) it shows a still frame instead. Turn it off with Settings > Display > Play intro on launch.
+
 ## Using it with a remote
 
-Arrow keys move between items, OK opens or plays, Back goes back. In the video player, OK shows the controls, left and right on the progress bar skip, and Back closes panels and then the player. Subtitles and audio tracks are under the controls.
+On a TV the top bar has Home, TV Shows, Movies, My List and Search, with Music and Audiobooks (when they are turned on in Settings > Library) next to Settings. Arrow keys move between items, OK opens or plays, Back goes back: from a tab it returns to Home, and on Home it first jumps to the Home tab, then leaves the app. In the video player, OK shows the controls, left and right on the progress bar skip, and Back closes panels and then the player. Subtitles and audio tracks are under the controls.
 
 ## Updates
 

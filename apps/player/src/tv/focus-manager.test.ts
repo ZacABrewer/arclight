@@ -192,6 +192,25 @@ describe('FocusManager', () => {
     }
   });
 
+  it('forget drops what it remembered (a new profile starts fresh)', async () => {
+    vi.useFakeTimers();
+    try {
+      document.getElementById('d2')!.focus();
+      page = '/player/movies';
+      render(`<main data-tv-group="main"><a id="m1" href="#/m1" data-box="0,0,10,10">M1</a></main>`);
+      fm.restore();
+      await vi.advanceTimersByTimeAsync(10);
+      fm.forget();
+      page = '/player';
+      render(LAYOUT);
+      fm.restore();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(active()).not.toBe('d2');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('waits for a page that renders late', async () => {
     vi.useFakeTimers();
     try {
