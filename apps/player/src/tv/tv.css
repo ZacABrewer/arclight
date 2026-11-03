@@ -461,6 +461,11 @@
   gap: 30px;
 }
 
+/* Home could not load: the message, at the rows' inset. */
+.tv-rows > .tv-empty {
+  padding: 24px 56px;
+}
+
 .tv-row {
   display: flex;
   flex-direction: column;

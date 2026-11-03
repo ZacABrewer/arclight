@@ -119,6 +119,12 @@ export function TvHomeScreen() {
       <div className="tv-rows-page">
         {items.length ? <Hero items={items} rotate={settings.heroRotate} t={t} /> : <div style={{ height: 108 }} />}
         <div className="tv-rows">
+          {/* The server can't be reached (or failed): say so, with the request's own message. */}
+          {home.isError && !h ? (
+            <div className="tv-empty" role="alert">
+              {home.error instanceof Error && home.error.message ? home.error.message : t('player.video.homeFailed')}
+            </div>
+          ) : null}
           {h?.continueWatching.length ? (
             <Row title={t('app.tv.row.continueWatching')}>
               {h.continueWatching.map((c) => (
