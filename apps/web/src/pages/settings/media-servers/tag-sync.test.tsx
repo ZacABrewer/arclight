@@ -87,10 +87,10 @@ describe('Settings → Media servers: sync tags', () => {
     renderAt('/settings/mediaservers');
     const dialog = await openEditor();
     const section = within(dialog).getByRole('region', { name: 'Sync tags' });
-    expect(await within(section).findByText(/items changed/)).toBeTruthy();
+    expect(await within(section).findByText(/: 7 items changed/)).toBeTruthy();
     fireEvent.click(within(section).getByRole('button', { name: 'Preview' }));
     const modal = await screen.findByRole('dialog', { name: 'Tag changes' });
-    expect(within(modal).getByText('1 items to change, 2 not on the server')).toBeTruthy();
+    expect(within(modal).getByText('1 item to change, 2 not on the server')).toBeTruthy();
     expect(within(modal).getByText('Arrival')).toBeTruthy();
     expect(within(modal).getByText('arclight:kids')).toBeTruthy();
     expect(within(modal).getByText('arclight:old')).toBeTruthy();
