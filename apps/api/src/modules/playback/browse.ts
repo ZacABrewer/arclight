@@ -506,7 +506,7 @@ function ranked<T>(q: string, rows: readonly T[], text: (r: T) => string, keywor
 
 export function playerSearch(ctx: BrowseContext, user: BrowseUser, q: string, sections: { music: boolean; audiobooks: boolean }): PlayerSearchResponse {
   const words = searchWords(q);
-  const out: PlayerSearchResponse = { tracks: [], albums: [], artists: [], audiobooks: [] };
+  const out: PlayerSearchResponse = { tracks: [], albums: [], artists: [], audiobooks: [], movies: [], series: [] };
   if (words.length === 0) return out;
   const like = loosePattern(words);
   const match = (...cols: SQL[]) => sql`(${sql.join(

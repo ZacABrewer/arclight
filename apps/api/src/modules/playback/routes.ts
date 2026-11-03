@@ -49,6 +49,7 @@ import {
   UserPlaylistInput,
   UserPlaylistSummary,
   parseItemKey,
+  type PlayableKind,
   type PlaybackEngine,
   type PlayerCapabilities as Capabilities,
   type PlayerSettings as Settings,
@@ -160,7 +161,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   const audiobooks = { config: user, preHandler: sectionOn('audiobooks') } as const;
 
   /** Whether the section of a file or item kind is on (Settings → Features). */
-  function sectionEnabled(kind: 'music' | 'track' | 'audiobook'): boolean {
+  function sectionEnabled(kind: 'music' | PlayableKind): boolean {
+    if (kind === 'movie' || kind === 'episode') return false;
     const features = getSection(db, 'features');
     return kind === 'audiobook' ? features.audiobooks : features.music;
   }

@@ -116,8 +116,8 @@ export const AppDevice = z.object({
   createdAt: z.string(),
   lastSeenAt: z.string(),
   lastIp: z.string().nullable(),
-  /** `password` or `pairing`. */
-  method: z.enum(['password', 'pairing']),
+  /** `password`, `pairing` (QR code) or `device-code` (TV sign-in). */
+  method: z.enum(['password', 'pairing', 'device-code']),
   /** The request was made with this device's token. */
   current: z.boolean(),
 });
@@ -132,3 +132,54 @@ export const AppDeviceListQuery = z.object({
   /** Admins: one user's devices. */
   userId: z.coerce.number().int().positive().optional(),
 });
+
+// ---------------------------------------------------------------------------------------
+// TV sign-in with a device code (the TV shows a code; a signed-in browser approves it)
+// ---------------------------------------------------------------------------------------
+
+/** A device code is valid this long, and only once. Codes use the pair-code alphabet and length. */
+export const APP_DEVICE_CODE_TTL_MS = 10 * 60_000;
+/** How often the TV polls (seconds). */
+export const APP_DEVICE_CODE_INTERVAL_SEC = 5;
+
+/** The device asking for a code; `android-tv` is stored as an `android` device. */
+export const AppDeviceCodePlatform = z.enum(['android-tv', 'android', 'ios']);
+export type AppDeviceCodePlatform = z.infer<typeof AppDeviceCodePlatform>;
+
+/** POST /api/v1/app/device-codes (public, rate-limited). */
+export const AppDeviceCodeRequest = z.object({
+  deviceName: z.string().trim().min(1).max(100),
+  platform: AppDeviceCodePlatform,
+  appVersion: z.string().trim().min(1).max(40).default('unknown'),
+  /** The address the device reached the server at; `verifyUrl` is built on it (else the Application URL). */
+  serverUrl: z.string().trim().max(500).optional(),
+});
+export type AppDeviceCodeRequest = z.input<typeof AppDeviceCodeRequest>;
+
+export const AppDeviceCode = z.object({
+  /** 8 characters (APP_PAIR_CODE_ALPHABET), shown as ABCD-EFGH (formatPairCode). */
+  userCode: z.string(),
+  /** Secret the device polls with; never shown. */
+  pollToken: z.string(),
+  expiresAt: z.string(),
+  intervalSec: z.number().int(),
+  /** `<serverUrl>/player/link`: where the user types the code (a QR may add `?code=<userCode>`). */
+  verifyUrl: z.string(),
+});
+export type AppDeviceCode = z.infer<typeof AppDeviceCode>;
+
+/** POST /api/v1/app/device-codes/poll (public, rate-limited). */
+export const AppDeviceCodePollRequest = z.object({ pollToken: z.string().min(10).max(200) });
+export type AppDeviceCodePollRequest = z.infer<typeof AppDeviceCodePollRequest>;
+export const AppDeviceCodePollResponse = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('pending') }),
+  z.object({ status: z.literal('expired') }),
+  AppSignInResponse.extend({ status: z.literal('approved') }),
+]);
+export type AppDeviceCodePollResponse = z.infer<typeof AppDeviceCodePollResponse>;
+
+/** POST /api/v1/app/device-codes/approve (signed-in browser session; needs player access). */
+export const AppDeviceCodeApproveRequest = z.object({ userCode: AppPairCodeValue });
+export type AppDeviceCodeApproveRequest = z.input<typeof AppDeviceCodeApproveRequest>;
+export const AppDeviceCodeApproveResponse = z.object({ deviceName: z.string(), platform: AppDeviceCodePlatform });
+export type AppDeviceCodeApproveResponse = z.infer<typeof AppDeviceCodeApproveResponse>;
