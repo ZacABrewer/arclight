@@ -1,11 +1,19 @@
 import { z } from 'zod';
 import {
+  AppSignInResponse,
+  ArtworkLinkResponse,
   ErrorResponse,
   PlayableItem,
-  PlaybackProgress,
+  PLAYBACK_ITEMS_MAX,
   PlayerCapabilities,
+  PROGRESS_BATCH_MAX,
+  ProgressBatchResponse,
   StreamLinksResponse,
   User,
+  type AppDeviceInfo,
+  type AppPairRequest,
+  type AppPlatform,
+  type AppSignInRequest,
   type ProgressBeacon,
   type ProgressReport,
   type StreamFormat,
@@ -17,6 +25,9 @@ import { absoluteUrl, getSession } from './session';
 
 export { ApiError, ContractError };
 export type { QueryParams, RequestOptions };
+// The app-auth and playback contracts come from @arclight/shared; re-exported for the app's modules.
+export { AppSignInResponse, ArtworkLinkResponse, PLAYBACK_ITEMS_MAX, PROGRESS_BATCH_MAX, ProgressBatchResponse };
+export type { AppDeviceInfo, AppPairRequest, AppPlatform, AppSignInRequest };
 
 // The one way the app talks to an Arclight server: `${serverUrl}/api/v1${path}` with the device
 // token as `Authorization: Bearer`. No cookies (the app's pages are on another origin). Every
@@ -148,9 +159,6 @@ export function isNetworkError(err: unknown): boolean {
 // signed query (`u=&exp=&sig=`) that opens every artwork URL of this user until it expires.
 // Responses get absolute artwork URLs with that query; when it is renewed, the app refetches.
 
-export const ArtworkLinkResponse = z.object({ query: z.string(), expiresAt: z.string() });
-export type ArtworkLinkResponse = z.infer<typeof ArtworkLinkResponse>;
-
 const ARTWORK_PATH = '/api/v1/playback/artwork/';
 /** Renew the query this long before it expires. */
 const ARTWORK_RENEW_MS = 30 * 60_000;
@@ -222,46 +230,8 @@ export function rewriteArtwork<T>(data: T, serverUrl: string, query: string | nu
 }
 
 // ---------------------------------------------------------------------------------------
-// App sign-in (packages/shared app-auth, mirrored here until it ships in @arclight/shared)
+// App sign-in and playback calls
 // ---------------------------------------------------------------------------------------
-
-export type AppPlatform = 'ios' | 'android';
-
-export interface AppDeviceInfo {
-  deviceName: string;
-  platform: AppPlatform;
-  appVersion: string;
-}
-
-export interface AppSignInRequest extends AppDeviceInfo {
-  username: string;
-  password: string;
-  /** Six digits, when the account has two-factor on (the first try without it answers 401 TOTP_REQUIRED). */
-  totp?: string;
-  recoveryCode?: string;
-}
-
-export interface AppPairRequest extends AppDeviceInfo {
-  code: string;
-}
-
-export const AppSignInResponse = z.object({
-  token: z.string().min(1),
-  deviceId: z.number().int(),
-  user: User,
-  server: z.object({ name: z.string(), version: z.string() }),
-});
-export type AppSignInResponse = z.infer<typeof AppSignInResponse>;
-
-export const ProgressBatchResponse = z.object({
-  results: z.array(z.object({ itemKey: z.string(), accepted: z.boolean(), progress: PlaybackProgress })),
-});
-export type ProgressBatchResponse = z.infer<typeof ProgressBatchResponse>;
-
-/** Largest batch POST /playback/progress/batch takes. */
-export const PROGRESS_BATCH_MAX = 500;
-/** Largest POST /playback/items. */
-export const PLAYBACK_ITEMS_MAX = 200;
 
 /** Error codes the sign-in screens tell apart. */
 export const SIGN_IN_ERRORS = {

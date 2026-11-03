@@ -1,3 +1,5 @@
+import { APP_PAIR_CODE_ALPHABET, APP_PAIR_CODE_LENGTH, normalisePairCode } from '@arclight/shared';
+
 // Pairing links / QR codes. The web player shows
 //   arclight://pair?server=<encoded server base URL>&code=<pair code>
 // Scanning it with the system camera opens the app (arclight:// URL scheme); scanning it in the
@@ -11,13 +13,11 @@ export interface PairingLink {
   code: string | null;
 }
 
-/** Upper-case, no spaces or dashes ("abcd-efgh" → "ABCDEFGH"); the server's rule. */
-export function normalisePairCode(raw: string): string {
-  return raw.toUpperCase().replace(/[\s-]+/g, '');
-}
+// The server's rule ("abcd-efgh" → "ABCDEFGH"), from the shared contract.
+export { normalisePairCode };
 
 /** Pair codes are 8 characters without look-alikes (no 0/O, 1/I/L). */
-export const PAIR_CODE_PATTERN = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
+export const PAIR_CODE_PATTERN = new RegExp(`^[${APP_PAIR_CODE_ALPHABET}]{${APP_PAIR_CODE_LENGTH}}$`);
 
 function cleanServer(candidate: string | null): string | null {
   if (!candidate) return null;
