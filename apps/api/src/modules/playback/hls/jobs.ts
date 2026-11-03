@@ -6,10 +6,10 @@ import type { Readable } from 'node:stream';
 import type { TranscodeHwaccel, VideoHlsHealth, VideoHlsRungId, VideoInfo } from '@arclight/shared';
 import { TranscodeBusy } from '../transcode.js';
 import { resourceOf, SAFE_SPEED, type CapacityModel } from './capacity.js';
-import { Fmp4Splitter, initSignature, initTracks, shiftFragment, type Fmp4Fragment, type Fmp4Track } from './fmp4.js';
+import { dropLeadingSamples, Fmp4Splitter, initSignature, initTracks, shiftFragment, type Fmp4Fragment, type Fmp4Track } from './fmp4.js';
 import { copySeekTarget, type KeyframeIndex } from './keyframes.js';
 import type { Ladder, LadderRung } from './ladder.js';
-import { AUDIO_PRIMING, buildHlsArgs, isSoftware, pipelineFor, type HlsRunSpec, type PipelineCaps } from './pipeline.js';
+import { buildHlsArgs, isSoftware, pipelineFor, type HlsRunSpec, type PipelineCaps } from './pipeline.js';
 import { ffmpegSeek, segmentAt, sourceTime, type SegmentPlan } from './plan.js';
 
 // Segment-on-demand HLS encoding. One HlsSession per playback session holds at most one ffmpeg
@@ -131,8 +131,12 @@ class Encoder {
   /** Fragments of the segment in progress. */
   private pending: Buffer[] = [];
   private pendingSeg: number;
+  /** Complete segments whose file is still being written. */
+  readonly queued = new Set<number>();
   private tracks: Fmp4Track[] = [];
   private deltas: Map<number, bigint> | null = null;
+  /** Audio before this (audio ticks, source clock) is dropped: the previous segment has it. */
+  private audioCut: bigint | null | undefined;
   private writes: Promise<void> = Promise.resolve();
   readonly startedAt: number;
   /** Speed monitor. */
@@ -191,20 +195,11 @@ class Encoder {
   private onFragment(frag: Fmp4Fragment): void {
     if (this.killed) return;
     const plan = this.session.plan;
-    const startSec = plan.starts[this.start]!;
+    frag = this.trimLeadingAudio(frag);
     if (!this.deltas) {
-      // The first fragment of the run: offsets that put each track at media time.
+      // ffmpeg writes source time (-copyts, frag_discont); media time is source time - base.
       this.deltas = new Map();
-      for (const t of frag.trafs) {
-        const track = this.tracks.find((x) => x.id === t.trackId);
-        if (!track) continue;
-        const target = BigInt(Math.round(startSec * track.timescale));
-        if (track.kind === 'video') this.deltas.set(t.trackId, target - t.decodeTime - BigInt(t.firstCts));
-        else if (track.kind === 'audio') {
-          const priming = this.spec.audio ? AUDIO_PRIMING[this.spec.audio.codec] : 0;
-          this.deltas.set(t.trackId, target - t.decodeTime - BigInt(Math.round((priming * track.timescale) / 48_000)));
-        }
-      }
+      for (const track of this.tracks) this.deltas.set(track.id, -BigInt(Math.round(plan.base * track.timescale)));
     }
     shiftFragment(frag, this.deltas);
     const video = frag.trafs.find((t) => this.tracks.find((x) => x.id === t.trackId)?.kind === 'video');
@@ -228,12 +223,35 @@ class Encoder {
     this.pending.push(frag.bytes);
   }
 
+  /**
+   * A run that starts mid-film reads audio from a little before its first keyframe. Audio that
+   * starts before the first video frame belongs to the previous segment: drop it, so the seam
+   * with the previous run's segment has neither a gap nor the encoder's priming frame.
+   */
+  private trimLeadingAudio(frag: Fmp4Fragment): Fmp4Fragment {
+    if (this.audioCut === undefined) {
+      this.audioCut = null;
+      const video = this.tracks.find((t) => t.kind === 'video');
+      const audio = this.tracks.find((t) => t.kind === 'audio');
+      const first = video && frag.trafs.find((t) => t.trackId === video.id);
+      if (this.start > 0 && this.spec.audio && video && audio && first) {
+        this.audioCut = (first.decodeTime * BigInt(audio.timescale)) / BigInt(video.timescale);
+      }
+    }
+    if (this.audioCut === null) return frag;
+    const audio = this.tracks.find((t) => t.kind === 'audio')!;
+    const { frag: out, reached } = dropLeadingSamples(frag, audio.id, this.audioCut);
+    if (reached) this.audioCut = null;
+    return out;
+  }
+
   private complete(n: number): void {
     if (this.pending.length === 0) return;
     const bytes = Buffer.concat(this.pending);
     this.pending = [];
     this.produced++;
-    this.writes = this.writes.then(() => this.session.saveSegment(this.rung.id, n, bytes));
+    this.queued.add(n);
+    this.writes = this.writes.then(() => this.session.saveSegment(this.rung.id, n, bytes)).finally(() => this.queued.delete(n));
   }
 
   private onStderr(line: string): void {
@@ -322,6 +340,8 @@ export class HlsSession {
   playhead: { rung: VideoHlsRungId; n: number } | null = null;
   readonly cached = new Map<VideoHlsRungId, Map<number, number>>();
   private readonly inits = new Map<VideoHlsRungId, string>();
+  /** Rungs whose init.mp4 is on disk. */
+  private readonly initsReady = new Set<VideoHlsRungId>();
   private readonly waiters = new Map<VideoHlsRungId, Waiter[]>();
   /** Rungs the encoder cannot keep up with (409 for their uncached segments). */
   readonly flagged = new Set<VideoHlsRungId>();
@@ -378,7 +398,13 @@ export class HlsSession {
     if (had !== undefined && had !== sig) this.log?.warn({ session: this.id, rung }, 'HLS init segment changed between encoder runs');
     if (had === sig) return;
     this.inits.set(rung, sig);
-    await this.atomicWrite(this.initPath(rung), init);
+    try {
+      await this.atomicWrite(this.initPath(rung), init);
+    } catch (err) {
+      this.inits.delete(rung);
+      throw err;
+    }
+    this.initsReady.add(rung);
     this.wake(rung, -1);
   }
 
@@ -447,7 +473,9 @@ export class HlsSession {
   async initSegment(rung: VideoHlsRungId): Promise<string> {
     this.touch();
     if (!this.rungs.has(rung)) throw new SegmentFailed('no such rung');
-    if (this.inits.has(rung)) return this.initPath(rung);
+    if (this.initsReady.has(rung)) return this.initPath(rung);
+    // Being written by the running encoder.
+    if (this.inits.has(rung)) return this.wait(rung, -1);
     if (!this.encoder || this.encoder.rung.id !== rung || this.encoder.ended) {
       if (this.flagged.has(rung)) throw new RungUnsustainable('rung unsustainable');
       // Start where the client is (or will be) so the work is not wasted.
@@ -469,6 +497,8 @@ export class HlsSession {
     }
     if (this.flagged.has(rung)) throw new RungUnsustainable('rung unsustainable');
     const enc = this.encoder;
+    // Complete, its file is being written.
+    if (enc && enc.rung.id === rung && enc.queued.has(n)) return this.wait(rung, n);
     const near = enc && !enc.killed && !enc.ended && enc.rung.id === rung && n >= enc.next && n <= enc.next + WAIT_AHEAD_SEGMENTS;
     if (!near) await this.restart(rung, n);
     else enc.resume();

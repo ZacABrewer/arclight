@@ -20,7 +20,7 @@ import { trickplayRoutes } from './trickplay-routes.js';
 import { locateFfprobe } from '../media-analysis/index.js';
 import { CapacityModel } from './hls/capacity.js';
 import { HlsSessions, hlsCacheRoot, type HlsSessionsOptions } from './hls/jobs.js';
-import { KeyframeIndexer } from './hls/keyframes.js';
+import { KeyframeIndexer, type KeyframeIndexerOptions } from './hls/keyframes.js';
 import { hlsRoutes, type HlsDeps } from './hls-routes.js';
 
 export { playbackProgress, playbackPlays, playbackQueue, playbackBookmarks, userPlaylists, userPlaylistTracks } from './schema.js';
@@ -144,14 +144,17 @@ interface HlsParts {
 }
 const hlsParts = new WeakMap<AppContext, HlsParts>();
 
-/** HLS sessions and keyframe indexes (0.24); `opts` apply only on creation (tests pass a fake launcher). */
-export function hlsPartsFor(ctx: AppContext, opts: Partial<HlsSessionsOptions> = {}): HlsParts {
+/**
+ * HLS sessions and keyframe indexes (0.24); `opts` apply only on creation (tests pass a fake
+ * launcher and their own directories).
+ */
+export function hlsPartsFor(ctx: AppContext, opts: { sessions?: Partial<HlsSessionsOptions>; keyframes?: Partial<KeyframeIndexerOptions>; capacityFile?: string | null } = {}): HlsParts {
   let h = hlsParts.get(ctx);
   if (!h) {
     const playerCache = join(ctx.config.configDir, 'cache', 'player');
     const log = ctx.log.child({ component: 'player-hls' });
     h = {
-      keyframes: new KeyframeIndexer({ dir: join(playerCache, 'keyframes'), locateProbe: () => locateFfprobe(), limiter: BackgroundMediaLimiter, log }),
+      keyframes: new KeyframeIndexer({ dir: join(playerCache, 'keyframes'), locateProbe: () => locateFfprobe(), limiter: BackgroundMediaLimiter, log, ...opts.keyframes }),
       sessions: new HlsSessions({
         root: () => hlsCacheRoot(ctx.config.configDir, playerSettings(ctx.db).videoCachePath),
         cacheBytes: () => playerSettings(ctx.db).videoCacheGb * 1e9,
@@ -159,9 +162,9 @@ export function hlsPartsFor(ctx: AppContext, opts: Partial<HlsSessionsOptions> =
         maxPerDevice: () => playerSettings(ctx.db).videoMaxStreamsPerUser,
         legacyActive: () => videoTranscoderFor(ctx).active,
         locate: () => locateFfmpeg(),
-        capacity: new CapacityModel({ file: join(playerCache, 'capacity.json') }),
+        capacity: new CapacityModel({ file: opts.capacityFile === undefined ? join(playerCache, 'capacity.json') : opts.capacityFile }),
         log,
-        ...opts,
+        ...opts.sessions,
       }),
     };
     hlsParts.set(ctx, h);

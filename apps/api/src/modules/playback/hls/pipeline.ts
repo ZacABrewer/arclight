@@ -59,8 +59,6 @@ export interface HlsAudioOut {
   kbps: number;
 }
 
-/** Encoder delay (priming samples at 48 kHz) the MP4 muxer leaves at the start of a track without an edit list. */
-export const AUDIO_PRIMING: Record<HlsAudioOut['codec'], number> = { aac: 1024, ac3: 256, eac3: 256 };
 export const AUDIO_RATE = 48_000;
 
 export interface HlsRunSpec {
@@ -74,7 +72,7 @@ export interface HlsRunSpec {
   out?: { width: number; height: number; kbps: number; codec: 'h264' | 'hevc'; hdrKeep: boolean; tonemap: boolean; h264Level?: string };
   audio: HlsAudioOut | null;
   burn: { ordinal: number } | { path: string } | null;
-  /** ffmpeg's -ss (relative to the container start time) for the audio, and for the video of a transcode. */
+  /** ffmpeg's -ss (relative to the container start time) of the segment start (the audio reads from AUDIO_LEAD_SEC before it). */
   seekSec: number;
   /** Copy: the video seek (a little after the keyframe; demuxers seek by decode time). */
   copySeekSec?: number;
@@ -83,11 +81,21 @@ export interface HlsRunSpec {
   preset: 'veryfast' | 'superfast';
 }
 
-const FMP4_OUT = ['-f', 'mp4', '-movflags', '+frag_keyframe+empty_moov+default_base_moof', '-use_editlist', '0', 'pipe:1'];
+// frag_discont with avoid_negative_ts disabled: every track keeps its source timestamps (-copyts),
+// so runs started anywhere share one timeline. Without it the muxer starts each run at 0, puts
+// the audio priming frame at 0 and stretches it up to the first real audio frame.
+const FMP4_OUT = ['-avoid_negative_ts', 'disabled', '-f', 'mp4', '-movflags', '+frag_keyframe+empty_moov+default_base_moof+frag_discont', '-use_editlist', '0', 'pipe:1'];
 
 const QSV_DECODERS: Record<string, string> = { h264: 'h264_qsv', hevc: 'hevc_qsv', av1: 'av1_qsv', vp9: 'vp9_qsv', mpeg2video: 'mpeg2_qsv', vc1: 'vc1_qsv' };
 
 const sec = (n: number) => Math.max(0, n).toFixed(3);
+
+/**
+ * The audio is read from its own input, seeked this much earlier than the segment start: its
+ * first frames (encoder priming included) land before the cut, and the encoder drops what comes
+ * before the first video frame so a restarted run joins the previous run's audio without a gap.
+ */
+export const AUDIO_LEAD_SEC = 0.25;
 
 /** -force_key_frames list: a hair before each boundary so the frame at it is the keyframe. */
 export function forceKeyframesArg(times: readonly number[]): string | null {
@@ -122,13 +130,13 @@ const X264_PINNED = 'bframes=3:ref=1:cabac=1:8x8dct=1:weightp=1:b-pyramid=normal
 /** The argv (without the binary) of one encoder run. */
 export function buildHlsArgs(spec: HlsRunSpec): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-nostats', '-progress', 'pipe:2', '-stats_period', '1'];
-  const audioMap = spec.audio ? ['-map', `${spec.mode === 'copy' ? 1 : 0}:a:${spec.audio.ordinal}`] : [];
+  const audioMap = spec.audio ? ['-map', `1:a:${spec.audio.ordinal}`] : [];
+  const audioInput = spec.audio ? ['-copyts', '-ss', sec(spec.seekSec - AUDIO_LEAD_SEC), '-i', spec.input] : [];
   const tail = ['-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1', '-max_muxing_queue_size', '4096'];
 
   if (spec.mode === 'copy') {
-    // Two readers of the file: the video from its keyframe, the audio trimmed to the segment start.
-    args.push('-copyts', '-ss', sec(spec.copySeekSec ?? spec.seekSec), '-i', spec.input);
-    if (spec.audio) args.push('-copyts', '-ss', sec(spec.seekSec), '-i', spec.input);
+    // Two readers of the file: the video from its keyframe, the audio from just before it.
+    args.push('-copyts', '-ss', sec(spec.copySeekSec ?? spec.seekSec), '-i', spec.input, ...audioInput);
     args.push('-map', '0:v:0', ...audioMap, ...tail, '-c:v', 'copy');
     if (spec.source.codec === 'hevc') args.push('-tag:v', 'hvc1');
     args.push(...audioArgs(spec.audio), ...FMP4_OUT);
@@ -151,7 +159,7 @@ export function buildHlsArgs(spec: HlsRunSpec): string[] {
   } else if (spec.caps.hwaccel === 'nvenc' || spec.caps.hwaccel === 'videotoolbox') {
     // Encode-only hardware: decode and filters stay on the CPU (frames in system memory).
   }
-  args.push('-copyts', '-ss', sec(spec.seekSec), '-i', spec.input);
+  args.push('-copyts', '-ss', sec(spec.seekSec), '-i', spec.input, ...audioInput);
   if (spec.burn && 'path' in spec.burn) args.push('-copyts', '-ss', sec(spec.seekSec), '-i', spec.burn.path);
 
   const W = out.width;
@@ -179,7 +187,7 @@ export function buildHlsArgs(spec: HlsRunSpec): string[] {
   }
 
   if (spec.burn) {
-    const sub = 'path' in spec.burn ? '[1:s:0]' : `[0:s:${spec.burn.ordinal}]`;
+    const sub = 'path' in spec.burn ? `[${spec.audio ? 2 : 1}:s:0]` : `[0:s:${spec.burn.ordinal}]`;
     if (pipeline === 'qsv' && spec.caps.overlayQsv) {
       args.push('-filter_complex', `[0:v:0]${main.join(',')}[base];${sub}scale=${W}:${H}:flags=fast_bilinear,format=bgra,hwupload=extra_hw_frames=64[sub];[base][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]`, '-map', '[v]');
     } else if (pipeline === 'vaapi' && spec.caps.overlayVaapi) {
