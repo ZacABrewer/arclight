@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { basicAuth, buildBaseUrl, httpStatusError, parseJson, sendHttp, validate } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 import { TrRpcEnvelope } from './schemas.js';
 
@@ -92,8 +93,9 @@ export class TransmissionRpc {
 
   private async readBody(response: Response, method: string): Promise<string> {
     try {
-      return await response.text();
+      return await readBodyText(this.clientName, response);
     } catch (error) {
+      if (error instanceof DownloadClientError && error.code === 'bad-response') throw error;
       throw new DownloadClientError('unreachable', `Connection to ${this.clientName} failed while reading ${method}.`, {
         cause: error,
       });

@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { buildBaseUrl, httpStatusError, parseJson, sendHttp } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 import {
   SlskdApplication,
@@ -92,7 +93,7 @@ export class SlskdClient {
       headers,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    const text = await response.text();
+    const text = await readBodyText(SLSKD, response);
     if (!response.ok) throw httpStatusError(SLSKD, response.status, what, text);
     return text;
   }
