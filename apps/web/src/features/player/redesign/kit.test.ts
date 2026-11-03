@@ -4,7 +4,7 @@ import { chipLabels, formatScore } from './chips.js';
 import { placeholderArt, placeholderHue } from './placeholder.js';
 import { layoutFor, tileScale } from './layout.js';
 import { PLAYER_DEFAULT_THEME, playerThemeId } from './player-theme.js';
-import { markProfilePicked, parseProfilesSearch, profileRedirect, wasProfilePicked } from './profile-session.js';
+import { clearProfilePicked, markProfilePicked, parseProfilesSearch, PROFILE_PICKED_KEY, profileRedirect, wasProfilePicked } from './profile-session.js';
 import { QUALITY_KEY_PREFIX, readStoredQuality, writeStoredQuality } from './quality.js';
 
 const t = (key: string, params?: Record<string, string | number>) => (params ? `${key}:${JSON.stringify(params)}` : key);
@@ -151,7 +151,14 @@ describe('profile picked (per tab)', () => {
     expect(wasProfilePicked()).toBe(false);
     markProfilePicked();
     expect(wasProfilePicked()).toBe(true);
+    clearProfilePicked();
+    expect(wasProfilePicked()).toBe(false);
     sessionStorage.clear();
+  });
+
+  it('does not share its key with the player app (which stores a per-account list)', () => {
+    expect(PROFILE_PICKED_KEY).not.toBe('arclight.app.profilePicked');
+    expect(PROFILE_PICKED_KEY).not.toBe('arclight.profilePicked');
   });
 });
 

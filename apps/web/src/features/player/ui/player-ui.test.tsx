@@ -73,7 +73,7 @@ describe('/player guard', () => {
     expect(screen.queryByRole('navigation', { name: 'Player' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Sam/ }));
     expect(await screen.findByRole('navigation', { name: 'Player' })).toBeTruthy();
-    expect(sessionStorage.getItem('arclight.profilePicked')).toBe('1');
+    expect(sessionStorage.getItem('arclight.web.profilePicked')).toBe('1');
     sessionStorage.clear();
   });
 });
