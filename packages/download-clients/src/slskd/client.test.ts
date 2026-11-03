@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
-import { remoteBaseName, remoteDirName, SlskdClient, transferPhase } from './client.js';
+import { remoteBaseName, remoteDirName, safeRemoteSegment, SlskdClient, transferPhase } from './client.js';
 import { FakeSlskd } from './fake-slskd.js';
 import { SlskdSettings, type SlskdSettingsInput } from './settings.js';
 
@@ -128,5 +128,18 @@ describe('slskd helpers', () => {
     expect(remoteBaseName('a/b/c.flac')).toBe('c.flac');
     expect(remoteDirName('a\\b\\c.flac')).toBe('a\\b');
     expect(remoteDirName('c.flac')).toBe('');
+  });
+
+  it('never lets a peer path name a parent folder (DATA-03)', () => {
+    expect(remoteBaseName('@@x\\..\\01 - Track.flac')).toBe('01 - Track.flac');
+    expect(remoteDirName('@@x\\..\\01 - Track.flac')).toBe('@@x\\_');
+    expect(remoteBaseName(remoteDirName('@@x\\..\\01 - Track.flac'))).toBe('_');
+    expect(remoteBaseName('a\\b\\..')).toBe('_');
+    expect(remoteBaseName('a/.')).toBe('_');
+    expect(remoteBaseName('\\\\')).toBe('_');
+    expect(remoteBaseName('')).toBe('_');
+    expect(remoteBaseName(remoteDirName('C:\\x.flac'))).toBe('_');
+    expect(remoteDirName('..\\../x.flac')).toBe('_\\_');
+    expect(safeRemoteSegment('Disc 1')).toBe('Disc 1');
   });
 });

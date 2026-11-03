@@ -67,6 +67,8 @@ The download shows in the **Soulseek downloads** list in the same settings secti
 
 Imports go through the normal music importer. A grab that does not match well enough lands in [Activity](activity.md) > Manual import, the same as any other music download.
 
+Folder and file names come from the peer, so Arclight never trusts them as paths. A name of `.` or `..`, an empty name or a drive letter becomes `_`. Arclight only imports folders strictly inside the downloads folder. In **Move** mode it only removes a folder that is emptied by the import and also strictly inside the downloads folder; it never removes the downloads folder itself.
+
 ## When something goes wrong
 
 | Symptom | What to check |
