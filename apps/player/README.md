@@ -33,7 +33,7 @@ pnpm sync:android  # build + npx cap sync android
 pnpm sync:ios      # build + npx cap sync ios
 ```
 
-Android builds need **JDK 21** (Capacitor 8) and the Android SDK: `cd android && ./gradlew assembleDebug`. iOS builds need Xcode on macOS: open `ios/App/App.xcodeproj`.
+Android builds need **JDK 21** (Capacitor 8) and the Android SDK: `cd android && ./gradlew assembleDebug`. iOS builds need Xcode on macOS: open `ios/App/App.xcodeproj`. The app's version and build number on both platforms come from this package's `version` (iOS through `ios/App/version.xcconfig`, written by `scripts/ios-version.mjs` after every iOS sync).
 
 To try the TV build, create an Android TV emulator (API 34 or later) in Android Studio and install the debug APK with `adb install -r`.
 
@@ -74,4 +74,4 @@ To try the TV build, create an Android TV emulator (API 34 or later) in Android 
 
 ## CI
 
-`.github/workflows/player-app.yml` runs on changes to this package, to the web player it reuses and to `packages/shared`. It runs typecheck and tests, builds an Android debug APK (uploaded as an artifact) and an unsigned iOS simulator build.
+`.github/workflows/player-app.yml` runs on changes to this package, to the web player it reuses and to `packages/shared`. It runs typecheck and tests, builds an Android debug APK (uploaded as an artifact); `player-app-ios.yml` makes an unsigned iOS simulator build. Store uploads (signed App Bundle to Google Play, App Store Connect build) are `player-app-release.yml`, run by hand; see `docs/mobile/RELEASE-PLAYER-ANDROID.md` and `RELEASE-PLAYER-IOS.md` for its secrets.
