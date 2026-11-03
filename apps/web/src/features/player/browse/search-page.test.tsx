@@ -29,6 +29,17 @@ describe('PlayerSearchPage', () => {
     expect(searches.map((c) => c.search.get('q'))).toEqual(['glass']);
   });
 
+  it('starts with the ?q= from the URL and searches it', async () => {
+    const calls = stubFetch({
+      [api('/search')]: (url: URL) => (url.searchParams.get('q') === 'glass' ? { ...empty, tracks: [track(1, { title: 'Glass Steps' })] } : empty),
+    });
+    renderBrowse('/player/search?q=glass');
+    const box = await screen.findByRole('searchbox', { name: 'Search movies, shows, music and audiobooks' });
+    expect((box as HTMLInputElement).value).toBe('glass');
+    expect(await screen.findByRole('button', { name: 'Play Glass Steps' })).toBeTruthy();
+    expect(calls.filter((c) => c.path === api('/search')).map((c) => c.search.get('q'))).toEqual(['glass']);
+  });
+
   it('groups results and plays a track with the search as the source', async () => {
     stubFetch({
       [api('/search')]: {

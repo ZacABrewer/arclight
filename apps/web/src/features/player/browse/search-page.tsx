@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { Input } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
 import { usePlayerSearch } from './api.js';
 import { AlbumCard, ArtistCard, BookCard } from './cards.js';
-import { Empty, GridSkeleton, LoadError, PageTitle, useDebounced } from './kit.js';
+import { Empty, GridSkeleton, LoadError, PageTitle, useDebounced, useUrlQuery } from './kit.js';
 import { TrackList } from './tracks.js';
 import { MovieCard, SeriesCard } from '../video/cards.js';
 import '../video/watch.css';
@@ -13,7 +12,7 @@ export const SEARCH_DEBOUNCE_MS = 300;
 /** /player/search: one box across movies, shows, tracks, albums, artists and audiobooks. */
 export function PlayerSearchPage() {
   const t = useT();
-  const [text, setText] = useState('');
+  const [text, setText] = useUrlQuery();
   const q = useDebounced(text.trim(), SEARCH_DEBOUNCE_MS);
   const res = usePlayerSearch(q);
 

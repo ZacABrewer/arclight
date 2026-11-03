@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useRouterState } from '@tanstack/react-router';
 import { Button, EmptyState, ErrorBlock, Icon, Mark, Skeleton } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { errorMessage } from '../../../api/client.js';
@@ -58,6 +58,22 @@ export function useDebounced<T>(value: T, ms = 300): T {
     return () => clearTimeout(id);
   }, [value, ms]);
   return settled;
+}
+
+/**
+ * The search box text from the page's `?q=` (a link like /player/search?q=dune): the box starts
+ * with it and follows it when the URL changes. Typing stays local and does not rewrite the URL.
+ */
+export function useUrlQuery(max = 100): [string, (v: string) => void] {
+  const fromUrl = useRouterState({
+    select: (s) => {
+      const v = (s.location.search as Record<string, unknown> | undefined)?.q;
+      return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+    },
+  }).slice(0, max);
+  const [text, setText] = useState(fromUrl);
+  useEffect(() => setText(fromUrl), [fromUrl]);
+  return [text, setText];
 }
 
 /** A per-browser preference in localStorage (view mode); falls back quietly when storage is blocked. */

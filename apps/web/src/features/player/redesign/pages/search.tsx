@@ -1,7 +1,7 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId } from 'react';
 import { useT } from '../../../../i18n/index.js';
 import { usePlayerSearch } from '../../browse/api.js';
-import { useDebounced } from '../../browse/kit.js';
+import { useDebounced, useUrlQuery } from '../../browse/kit.js';
 import { useVideoHome } from '../../video/api.js';
 import { watchPaths } from '../../video/paths.js';
 import { RdIcon } from '../icons.js';
@@ -27,7 +27,7 @@ interface Result {
 export function RdSearchPage() {
   const t = useT();
   const inputId = useId();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useUrlQuery();
   const query = useDebounced(q.trim(), 250);
   const search = usePlayerSearch(query);
   const home = useVideoHome();
