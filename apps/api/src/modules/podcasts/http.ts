@@ -5,8 +5,8 @@ import { createWriteStream } from 'node:fs';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
-import { openHttpConnectTunnel, openSocks5Tunnel, type NetworkProxy } from '@arclight/indexers';
-import { createSafeFetch, isBlockedAddress, isPrivateHostname, normalizeHost, type SafeFetch } from '@arclight/net';
+import { openHttpConnectTunnel, openSocks5Tunnel, proxyDialHost, ProxyError, type NetworkProxy } from '@arclight/indexers';
+import { createSafeFetch, isBlockedAddress, isPrivateHostname, normalizeHost, type ResolveAll, type SafeFetch } from '@arclight/net';
 import { redactFeedUrl, redactUrlsInText } from '@arclight/shared';
 import { VERSION } from '../../version.js';
 
@@ -52,9 +52,15 @@ export class PodcastHttpError extends Error {
  * are refused on every hop. The one exception is `trustedHost`: the host of a feed an admin
  * added under a LAN name or address (`nas.lan`, `10.0.0.5`), which keeps self-hosted feeds and
  * their same-host episode files working. Any other private host stays blocked.
+ *
+ * Through a proxy the name is resolved and vetted here and the proxy is handed the address,
+ * so a public name that resolves to a LAN address is refused too (see `proxyDialHost` for the
+ * `.onion` / proxy-only-DNS fallback). The trusted host still goes to the proxy by name.
  */
 export interface TransportPolicy {
   trustedHost?: string;
+  /** Test seam: resolver for the proxied path. */
+  resolve?: ResolveAll;
 }
 
 /** The host to trust for a stored feed URL: only a LAN name or address, never a public name. */
@@ -98,8 +104,8 @@ function directFetch(policy: TransportPolicy): SafeFetch {
  * tunnel). `fetchImpl` is a test seam that bypasses the address check.
  */
 export function transportFor(proxy: NetworkProxy | undefined, fetchImpl?: typeof fetch, policy: TransportPolicy = {}): Transport {
-  // LAN names are refused before any lookup; the direct path also vets the resolved address
-  // (a proxy resolves names itself, so there the name is all that can be checked).
+  // LAN names are refused before any lookup; both paths then vet the resolved address (the
+  // direct path through the safe fetch, the proxied path before the tunnel is opened).
   const refuse = (url: string): Promise<never> | null => {
     const host = new URL(url).hostname;
     if (!isPrivateHostname(host) || hostAllowed(policy, host)) return null;
@@ -110,22 +116,34 @@ export function transportFor(proxy: NetworkProxy | undefined, fetchImpl?: typeof
     return (url, init) =>
       (fetchImpl ? null : refuse(url)) ?? f(url, { method: init.method ?? 'GET', headers: init.headers, redirect: 'manual', ...(init.signal ? { signal: init.signal } : {}) });
   }
-  return (url, init) => refuse(url) ?? proxiedRequest(proxy, url, init);
+  return (url, init) => refuse(url) ?? proxiedRequest(proxy, url, init, policy);
 }
 
-async function proxiedRequest(proxy: NetworkProxy, raw: string, init: Parameters<Transport>[1]): Promise<Response> {
+async function proxiedRequest(proxy: NetworkProxy, raw: string, init: Parameters<Transport>[1], policy: TransportPolicy): Promise<Response> {
   const url = new URL(raw);
   const secure = url.protocol === 'https:';
   const port = Number(url.port) || (secure ? 443 : 80);
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (init.signal?.aborted) throw init.signal.reason;
+  // Resolve and vet the target here and tunnel to that address (DNS rebinding through the
+  // proxy); the admin's trusted LAN feed host keeps going to the proxy by name.
+  let dial = host;
+  if (!hostAllowed(policy, host)) {
+    try {
+      dial = await proxyDialHost(host, policy.resolve ? { resolve: policy.resolve } : {});
+    } catch (err) {
+      if (err instanceof ProxyError && err.code === 'blocked') throw new PodcastHttpError(`${redactFeedUrl(raw)}: local network addresses are not allowed for podcasts`);
+      throw err;
+    }
+  }
   // Open the tunnel (and TLS on top) first, then hand that socket to node's HTTP client.
   const open = proxy.type === 'socks5' ? openSocks5Tunnel : openHttpConnectTunnel;
-  const tunnel = await open(proxy, host, port, 30_000);
+  const tunnel = await open(proxy, dial, port, 30_000);
   let socket: Socket = tunnel;
   if (secure) {
     socket = await new Promise<Socket>((resolve, reject) => {
-      const t = tls.connect({ socket: tunnel, servername: net.isIP(host) ? undefined : host, ALPNProtocols: ['http/1.1'] });
+      // The certificate is checked against the URL's name (`host`), not the dialled address.
+      const t = tls.connect({ socket: tunnel, host, servername: net.isIP(host) ? undefined : host, ALPNProtocols: ['http/1.1'] });
       t.once('secureConnect', () => resolve(t));
       t.once('error', (err) => {
         tunnel.destroy();

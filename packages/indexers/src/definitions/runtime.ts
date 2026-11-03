@@ -452,7 +452,16 @@ export class DefinitionRuntime {
     this.currentLink = String(this.config['Config.sitelink']);
     this.categoryMap = buildCategoryMap(definition);
     const base = options.fetchImpl ?? globalThis.fetch;
-    this.fetchImpl = options.proxy ? createProxiedFetch(options.proxy, { fetchImpl: base, jar: this.jar }) : base;
+    // Through a network proxy, foreign hosts are resolved and vetted here and the proxy gets
+    // the IP, so a name rebinding to a LAN address is caught; the site's own hosts keep
+    // remote DNS (they may sit on the LAN or resolve only through the proxy).
+    this.fetchImpl = options.proxy
+      ? createProxiedFetch(options.proxy, {
+        fetchImpl: base,
+        jar: this.jar,
+        targetPolicy: (url) => (this.isSiteUrl(url.href) ? undefined : (this.options.foreignTargetPolicy ?? {})),
+      })
+      : base;
     const proxies: readonly ProxyConfig[] = options.proxy === undefined ? [] : Array.isArray(options.proxy) ? options.proxy : [options.proxy as ProxyConfig];
     this.hasFlareSolverr = proxies.some(isFlareSolverr);
     const delay = Math.max(options.rateLimitMs ?? 0, (definition.requestdelay ?? 0) * 1000);
