@@ -161,7 +161,7 @@ Important limits:
 | `all` | Every connection (the behaviour before 0.24; any client can choose its address) |
 | `none` | No connection: the address is always the connection's own |
 
-With the default, a proxy on your network works without any setting, and a visitor from the internet always arrives either through that proxy (which adds their real address) or directly with a public address, which is never trusted. Devices on your own network could still send a made-up `X-Forwarded-For`; set the proxy's address to rule that out.
+With the default, a proxy on your network works without any setting, and a visitor from the internet always arrives either through that proxy (which adds their real address) or directly with a public address, which is never trusted. Devices on your own network could still send a made-up `X-Forwarded-For`; set the proxy's address to rule that out. A proxy that reaches Arclight over Tailscale connects from a `100.64.0.0/10` address, which the default does not include: set `ARCLIGHT_TRUSTED_PROXIES=private, 100.64.0.0/10` (or the proxy's own tailnet address).
 
 When to set it:
 

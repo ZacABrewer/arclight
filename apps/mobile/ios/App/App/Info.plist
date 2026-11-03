@@ -32,9 +32,13 @@
 	  (URLSession) must reach it. NSAllowsLocalNetworking alone does not cover local DNS names
 	  such as nas.lan, and Apple ignores NSAllowsArbitraryLoads when NSAllowsLocalNetworking or
 	  NSAllowsArbitraryLoadsInWebContent is also present, so only NSAllowsArbitraryLoads is set.
-	  HTTPS stays the first choice: the app tries https:// first and warns before saving a
-	  plain-http server outside the local network. App Review justification: "connects to the
-	  user's own self-hosted media server at an address the user enters".
+	  The app enforces its own policy on top (src/core/transport.ts, CLI-06/07): https:// is
+	  tried first, also when http:// was typed for a public host; a plain-http server on a
+	  private network needs a one-time notice; a plain-http server on a public host, or a host
+	  that has worked over https:// before, needs the host name typed to confirm; a server that
+	  has not passed this is not loaded in the WebView and gets no native bridge.
+	  App Review justification: "connects to the user's own self-hosted media server at an
+	  address the user enters".
 	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>

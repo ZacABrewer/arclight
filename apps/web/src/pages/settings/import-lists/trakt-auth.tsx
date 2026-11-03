@@ -4,6 +4,7 @@ import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
 import { Button } from '../../../arclight/index.js';
 import { t } from '../../../i18n/index.js';
+import { externalHref } from '../../../lib/safe-url.js';
 
 // Trakt device-code flow: ask the api for a device code, show the user code and verification
 // URL, then poll at the interval Trakt gave until it is authorized, denied or expired.
@@ -120,7 +121,7 @@ export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }
         <>
           <p className="al-trakt__step">
             {t('common.open')}
-            <a className="al-trakt__url" href={state.device.verificationUrl} target="_blank" rel="noreferrer">
+            <a className="al-trakt__url" href={externalHref(state.device.verificationUrl)} target="_blank" rel="noreferrer">
               {state.device.verificationUrl}
             </a>{' '}
             and enter this code:

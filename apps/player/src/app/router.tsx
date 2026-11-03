@@ -5,10 +5,11 @@ import { browseRoutes } from '@web/features/player/browse/index';
 import { PlayerControllerScope } from '@web/features/player/player-context';
 import { NowPlayingPage } from '@web/features/player/ui/now-playing';
 import { getSession } from '../core/session';
+import { transportPolicy } from '../core/transport';
 import { useActiveProfile } from '../households/api';
 import { shouldShowPicker } from '../households/gate';
 import { AppAuthBridge } from '../households/web-auth';
-import { AddServerPage, SignInPage, WelcomePage } from '../ui/onboarding';
+import { AddServerPage, SecureServerPage, SignInPage, WelcomePage } from '../ui/onboarding';
 import { AppHome } from '../ui/home';
 import { DownloadsPage } from '../ui/downloads';
 import { QueuePage } from '../ui/queue';
@@ -51,6 +52,17 @@ function signedOutTarget(services: AppServices): { to: string; search?: SignInSe
   return { to: '/welcome' };
 }
 
+/**
+ * The active account's server is plain http that the cleartext policy does not allow yet (saved
+ * before it existed): confirm it first. The API client refuses to send its token meanwhile.
+ */
+export function needsServerCheck(): boolean {
+  const s = getSession();
+  return !!s && !transportPolicy.allowsCredentials(s.serverUrl);
+}
+
+const SECURE_SERVER = { to: '/secure-server' } as const;
+
 // AppAuthBridge: the shared web pages read the signed-in user and profile from the web's auth state.
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => (
@@ -69,6 +81,8 @@ const indexRoute = createRoute({
 });
 
 const welcomeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/welcome', component: WelcomePage });
+
+const secureServerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/secure-server', component: SecureServerPage });
 
 const addServerRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -102,6 +116,7 @@ const playerRoute = createRoute({
   beforeLoad: async ({ context }) => {
     const session = getSession();
     if (!session) throw redirect(signedOutTarget(context.services));
+    if (needsServerCheck()) throw redirect(SECURE_SERVER);
     const to = await pickerRedirect(context.services, session.accountId);
     if (to) throw redirect(to);
   },
@@ -113,6 +128,7 @@ const profilesRoute = createRoute({
   path: '/profiles',
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
+    if (needsServerCheck()) throw redirect(SECURE_SERVER);
   },
   component: () => <PickerScope>{isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage gate />}</PickerScope>,
 });
@@ -128,6 +144,7 @@ const playerProfilesRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): { select?: unknown; manage?: unknown; add?: unknown } => ({ select: s.select, manage: s.manage, add: s.add }),
   beforeLoad: ({ context }) => {
     if (!getSession()) throw redirect(signedOutTarget(context.services));
+    if (needsServerCheck()) throw redirect(SECURE_SERVER);
   },
   component: () => <PickerScope>{isTvMode() ? <TvProfilesScreen /> : <PhoneProfilesPage />}</PickerScope>,
 });
@@ -206,7 +223,7 @@ const playerChildren = [
   }),
 ];
 
-const routeTree = rootRoute.addChildren([indexRoute, welcomeRoute, addServerRoute, signInRoute, profilesRoute, playerProfilesRoute, playerRoute.addChildren(playerChildren)]);
+const routeTree = rootRoute.addChildren([indexRoute, welcomeRoute, secureServerRoute, addServerRoute, signInRoute, profilesRoute, playerProfilesRoute, playerRoute.addChildren(playerChildren)]);
 
 export function createAppRouter(services: AppServices, history: RouterHistory = createHashHistory()) {
   return createRouter({

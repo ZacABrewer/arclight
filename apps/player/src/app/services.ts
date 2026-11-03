@@ -9,6 +9,7 @@ import { preferencesStore } from '../core/kv';
 import { netState, onNetChange, startNetworkWatch } from '../core/network';
 import { getSession } from '../core/session';
 import { SettingsStore } from '../core/settings';
+import { transportPolicy } from '../core/transport';
 import { deviceInfo } from '../core/sign-in';
 import { downloadPlugin, playerBackend, type PlayerBackend } from '../native';
 import { DownloadIndex } from '../offline/download-index';
@@ -77,7 +78,7 @@ export async function createServices(): Promise<AppServices> {
   const settings = new SettingsStore();
   const index = new DownloadIndex();
   const progressQueue = new ProgressQueue();
-  await Promise.all([accounts.load(), settings.load(), index.load(), startNetworkWatch()]);
+  await Promise.all([accounts.load(), settings.load(), index.load(), transportPolicy.load(preferencesStore), startNetworkWatch()]);
   await accounts.activate();
 
   const backend = await playerBackend();

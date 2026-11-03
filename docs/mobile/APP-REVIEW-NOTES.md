@@ -17,12 +17,14 @@ Arclight is a client for the user's own self-hosted media server. Users enter th
 | Key | Why |
 | --- | --- |
 | `NSAllowsLocalNetworking` | Self-hosted servers on the LAN, reached by IP address, `.local` name or single-label host name. |
-| `NSAllowsArbitraryLoadsForMedia` | AVPlayer streams music, audiobooks and video from the user's own server, which may be plain HTTP on the LAN or behind a reverse proxy. |
-| `NSAllowsArbitraryLoadsInWebContent` | The bundled UI calls the user's own server. Users connect to their own self-hosted server by IP or local hostname. |
+| `NSAllowsArbitraryLoadsForMedia` | AVPlayer streams music, audiobooks and video from the user's own server, which may be plain HTTP on the LAN, over a VPN or under a DNS name that `NSAllowsLocalNetworking` does not cover. |
+| `NSAllowsArbitraryLoadsInWebContent` | The bundled UI (in the WebView) is how the app talks to the user's own server, including plain-HTTP servers outside the networks `NSAllowsLocalNetworking` covers (a VPN address, a DNS name for a home server). |
+
+ATS cannot tell a server the user chose from any other host, so the app applies its own cleartext policy on top: it tries HTTPS first and keeps it when the server answers there; plain HTTP to a home-network address is used after a one-time notice; plain HTTP to an internet host needs the user to type that host name to confirm; and sign-in details are never sent to an address the policy does not allow. Native downloads (`URLSession`) to a public host stay HTTPS-only. These exceptions were reviewed for 0.24.0 and kept.
 
 Paste into the ATS justification field if App Store Connect asks:
 
-> Arclight is a client for a media server that the user hosts themselves. The user types their server's address; it is never a server we run. Many self-hosted servers are on the home network and have no TLS certificate, so the app must reach them by IP address or local host name over HTTP. Users connect to their own self-hosted server by IP or local hostname. The app does not load third-party web content, and it sends no data to the developer.
+> Arclight is a client for a media server that the user hosts themselves. The user types their server's address; it is never a server we run. Many self-hosted servers are on the home network and have no TLS certificate, so the app must reach them by IP address or local host name over HTTP. The app tries HTTPS first, warns before using plain HTTP, and asks the user to confirm by typing the host name before it signs in to a plain-HTTP server on the internet. The app does not load third-party web content, and it sends no data to the developer.
 
 ### Background modes
 
@@ -80,7 +82,7 @@ Change the last sentence when a build ships with `CARPLAY_ENABLED=YES`.
 
 The manifest and `network_security_config.xml` decide which hosts may use plain HTTP; check them before pasting. Justification if a reviewer asks:
 
-> Users connect to their own self-hosted server by IP or local hostname. Many of these servers run on the home network without a TLS certificate, so the app must be able to reach them over HTTP. The app only connects to the address the user enters.
+> Users connect to their own self-hosted server by IP or local hostname. Many of these servers run on the home network without a TLS certificate, so the app must be able to reach them over HTTP. The app only connects to the address the user enters, tries HTTPS first, warns before using plain HTTP, and asks the user to confirm by typing the host name before it signs in to a plain-HTTP server on the internet. Only system certificate authorities are trusted.
 
 ### Foreground services
 

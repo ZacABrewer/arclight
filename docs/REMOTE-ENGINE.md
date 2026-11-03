@@ -33,10 +33,10 @@ There are two kinds of agent:
    AGENT_TOKEN=... PROTON_WIREGUARD_KEY=... docker compose -f docker/docker-compose.agent.yml up -d
    ```
 
-3. Let the main Arclight reach port 7879, and nothing else. Good options are a private network
-   (WireGuard, Tailscale), a firewall rule that only admits your home IP, or a TLS reverse proxy
-   (then use `https://` in the client URL). The token travels in a header, so never expose plain
-   HTTP to the internet.
+3. Let the main Arclight reach port 7879, and nothing else. The compose file publishes it on
+   `127.0.0.1` only, so out of the box nothing outside the seedbox can connect. Pick one of the
+   options in [Reaching the agent](#reaching-the-agent) and set `AGENT_API_BIND` to match. The
+   token travels in a header, so never expose plain HTTP to the internet.
 4. In the main Arclight, go to **Settings > Download Clients > Add > Remote Engine**:
    - **Agent URL**: `http://seedbox:7879` (standalone agent) or
      `http://other-arclight:7878/api/v1/engine-agent` (another Arclight).
@@ -47,6 +47,23 @@ There are two kinds of agent:
 
 Without Docker, run `pnpm --filter @arclight/engine-agent build`, then start the agent with
 `AGENT_TOKEN=... node packages/engine-agent/dist/agent.mjs`.
+
+<a id="reaching-the-agent"></a>
+### Reaching the agent
+
+`AGENT_API_BIND` in the compose file is the host side of the port mapping, `[address:]port`.
+It defaults to `127.0.0.1:7879` (loopback only).
+
+| Option | `AGENT_API_BIND` | Agent URL in the main Arclight |
+|---|---|---|
+| **WireGuard or Tailscale** between the NAS and the seedbox (recommended) | The seedbox's tunnel address, for example `10.8.0.2:7879` or `100.101.102.103:7879` | `http://10.8.0.2:7879` (the tunnel encrypts the traffic) |
+| **TLS reverse proxy** on the seedbox (Caddy, nginx, Traefik) with a certificate for its name | Keep `127.0.0.1:7879` and proxy `https://seedbox.example.com` to it | `https://seedbox.example.com` |
+| **Firewall rule** that only admits the NAS's public IP | `7879` (all interfaces) plus the rule on the seedbox or at the provider | `http://seedbox:7879`. The token and traffic cross the internet unencrypted, so prefer one of the options above |
+
+`AGENT_ALLOWED_SUBNETS` must also contain the subnet the main Arclight connects from (the tunnel
+subnet, for example `10.8.0.0/24`, or `100.64.0.0/10` for Tailscale), because the agent sits
+behind Gluetun's firewall. Earlier versions of the compose file published 7879 on every
+interface by default; if you relied on that, set `AGENT_API_BIND` explicitly.
 
 ### Agent environment
 

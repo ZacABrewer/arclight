@@ -11,6 +11,7 @@ import { usePodcast, usePodcastEpisodes, useRefreshPodcast, useUpdatePodcast } f
 import { DetailsHero } from '../library/details-kit.js';
 import { DeletePodcastDialog, EpisodeBulkBar, EpisodeList, PodcastArt, PodcastGate, PodcastStatusChip, SubscriptionSettingsFields, plainText } from './podcast-kit.js';
 import { t } from '../../i18n/index.js';
+import { externalHref } from '../../lib/safe-url.js';
 
 // Podcasts → one podcast (/podcasts/$id), after the design's show page: the header (cover, kicker,
 // title, author and episode count, Following = monitored, the auto-download chip that opens Edit,
@@ -150,14 +151,14 @@ function PodcastView({ podcast: p }: { podcast: Podcast }) {
           <ul className="music-links" aria-label={t('music.links')}>
             {p.link ? (
               <li>
-                <a href={p.link} target="_blank" rel="noopener noreferrer">
+                <a href={externalHref(p.link)} target="_blank" rel="noopener noreferrer">
                   {t('podcasts.website')}
                 </a>
               </li>
             ) : null}
             {p.funding.map((f) => (
               <li key={f.url}>
-                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                <a href={externalHref(f.url)} target="_blank" rel="noopener noreferrer">
                   {f.title || t('podcasts.support')}
                 </a>
               </li>

@@ -2,9 +2,14 @@
 <!--
   Arclight connects to the user's own self-hosted server at whatever address they type: often
   plain http:// on a home network (http://192.168.1.20:7878, http://nas:7878) or over a VPN.
-  Those hosts cannot be listed in advance, so cleartext is allowed for all hosts. HTTPS stays the
-  first choice: the app tries https:// first and warns before saving a plain-http server that is
-  not on a private network. Only system CAs are trusted (no user-added CAs).
+  Those hosts cannot be listed in advance, so the platform allows cleartext for all hosts and the
+  app enforces its own policy (src/core/transport.ts, CLI-06/07):
+    - https:// is tried first, also when http:// was typed for a public host;
+    - a plain-http server on a private network needs a one-time notice;
+    - a plain-http server on a public host, or a host that has worked over https:// before,
+      needs the host name typed to confirm;
+    - a server that has not passed this is not loaded in the WebView and gets no native bridge.
+  Only system CAs are trusted (no user-added CAs).
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">

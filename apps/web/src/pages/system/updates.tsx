@@ -11,6 +11,7 @@ import '../settings/updates/updates.css';
 import { MarkdownLite } from './markdown-lite.js';
 import { SystemHeader } from './system-header.js';
 import { t } from '../../i18n/index.js';
+import { externalHref } from '../../lib/safe-url.js';
 
 function VersionPane({ info }: { info: UpdateInfo }) {
   return (
@@ -83,7 +84,7 @@ function ReleasePane({ release, current }: { release: UpdateRelease; current: st
           {release.prerelease ? <Chip tone="warn">{t('system.updates.preRelease')}</Chip> : null}
           {release.publishedAt ? <span className="al-num al-caption">{formatDateTime(release.publishedAt)}</span> : null}
           {release.url ? (
-            <a className="al-link" href={release.url} target="_blank" rel="noreferrer">
+            <a className="al-link" href={externalHref(release.url)} target="_blank" rel="noreferrer">
               {t('system.updates.github')}
             </a>
           ) : null}

@@ -80,7 +80,7 @@ public sealed class SecretStore
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 var tmp = _path + ".tmp";
-                File.WriteAllText(tmp, value, new UTF8Encoding(false));
+                WritePrivate(tmp, value);
                 File.Move(tmp, _path, true);
                 TryRestrictPermissions(_path);
             }
@@ -99,6 +99,32 @@ public sealed class SecretStore
             _cached = string.Empty;
             _loaded = true;
         }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> to a new file that is owner-only (0600) from the moment it exists,
+    /// so there is no window in which another local user could open it. A leftover temp file from an
+    /// interrupted save is removed first, because the create mode only applies to new files.
+    /// </summary>
+    /// <param name="path">Temp file path.</param>
+    /// <param name="value">Content.</param>
+    internal static void WritePrivate(string path, string value)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        using var stream = new FileStream(path, options);
+        var bytes = new UTF8Encoding(false).GetBytes(value);
+        stream.Write(bytes, 0, bytes.Length);
+        stream.Flush(true);
     }
 
     private static void TryRestrictPermissions(string path)

@@ -23,7 +23,7 @@ This page shows how to run Arclight as a Portainer stack: you paste a compose fi
 
 ## The Gluetun control key
 
-Current Gluetun versions protect the control server with an API key. The repository helper script (`scripts/gluetun-auth.sh`) normally creates the key and the auth file under `<CONFIG_ROOT>/gluetun/auth/config.toml`. In Portainer you can run that script once on the host over SSH, or use a non-VPN stack. If you skip it, Arclight still runs, but its VPN status may show errors; see [install-docker.md](install-docker.md#4-set-up-the-gluetun-control-key-vpn-layouts-only) for the details.
+Gluetun's control server can stop the VPN, so the stack below requires an API key for it and will not deploy while `GLUETUN_API_KEY` is empty. Use any long random string of letters and digits, for example the output of `openssl rand -hex 24`; the stack hands it to Gluetun and to Arclight. (The repository helper script `scripts/gluetun-auth.sh` also writes an auth file under `<CONFIG_ROOT>/gluetun/auth/config.toml`; it is optional with this stack. See [install-docker.md](install-docker.md#4-set-up-the-gluetun-control-key-vpn-layouts-only).)
 
 ## Create the stack (VPN + built-in engine)
 
@@ -33,7 +33,7 @@ Current Gluetun versions protect the control server with an API key. The reposit
 ```yaml
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun
     cap_add:
       - NET_ADMIN
@@ -48,6 +48,7 @@ services:
       - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET:-192.168.1.0/24}
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=off
+      - 'HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"apikey","apikey":"${GLUETUN_API_KEY:?set GLUETUN_API_KEY}"}'
       - TZ=${TZ:-Etc/UTC}
     volumes:
       - ${CONFIG_ROOT}/gluetun:/gluetun
@@ -62,7 +63,7 @@ services:
     restart: unless-stopped
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     container_name: flaresolverr
     network_mode: "service:gluetun"
     environment:
@@ -114,7 +115,7 @@ services:
 | `PROTON_WIREGUARD_KEY` | `<your-key>` | Proton WireGuard private key. Treat like a password |
 | `VPN_COUNTRIES` | `Netherlands` | Proton countries that allow P2P |
 | `LAN_SUBNET` | `192.168.1.0/24` | Your home network, so you can reach the UI through the VPN firewall |
-| `GLUETUN_API_KEY` | `<your-key>` | Control-server key from the helper script; may be empty |
+| `GLUETUN_API_KEY` | `<your-key>` | Control-server key: a long random string of letters and digits (`openssl rand -hex 24`). Required |
 
 4. Click Deploy the stack.
 
@@ -147,7 +148,7 @@ services:
       - flaresolverr
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     container_name: flaresolverr
     environment:
       - LOG_LEVEL=info

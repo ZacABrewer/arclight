@@ -11,7 +11,7 @@ describe('hash routes', () => {
     expect(parseRoute('#/nope')).toEqual({ name: 'auto' });
   });
   it('round-trips', () => {
-    const routes: Route[] = [{ name: 'servers' }, { name: 'add', url: 'https://a.example.com/x' }, { name: 'edit', id: 'id 1' }, { name: 'settings' }, { name: 'about' }, { name: 'licenses' }];
+    const routes: Route[] = [{ name: 'servers' }, { name: 'add', url: 'https://a.example.com/x' }, { name: 'edit', id: 'id 1' }, { name: 'open', id: 'id 2', path: '/requests/12?tab=a' }, { name: 'settings' }, { name: 'about' }, { name: 'licenses' }];
     for (const r of routes) expect(parseRoute(routeHash(r))).toEqual(r);
   });
 });

@@ -3,7 +3,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { CapacitorShareTarget } from '@capgo/capacitor-share-target';
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 import { parsePairingCode } from '../core/qr.js';
-import { discoverSearchPath, routeNotification, shareQuery, type RouteTarget } from '../core/routing.js';
+import { discoverSearchPath, isSafePath, routeNotification, shareQuery, type RouteTarget } from '../core/routing.js';
 import type { Server } from '../core/servers.js';
 import { loadSettings, shouldLockOnResume } from '../core/settings.js';
 import { isNative, platform, type Runtime } from './capacitor.js';
@@ -20,6 +20,13 @@ export interface HandlerHooks {
   pair: (url: string) => Promise<void> | void;
   /** Show the lock and resolve once unlocked. */
   lock: () => Promise<void>;
+  /** Server origins whose push registration follows a token rotation seen here. */
+  pushScopes: () => Promise<string[]>;
+  /**
+   * A tapped notification names a server this page does not know (a server page only sees its own
+   * origin): hand it to the app's own screens, which know every saved server.
+   */
+  unrouted?: (server: string, path: string) => Promise<void>;
   /**
    * Called synchronously as soon as a notification tap, share or deep link arrives, before it is
    * routed (the startup intro skips itself so it never delays one).
@@ -75,7 +82,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
   if (!isNative()) return;
 
   // Push token rotated by APNs/FCM: keep the relay in sync (no-op when unchanged).
-  void PushNotifications.addListener('registration', (t) => void rt.push.onTokenRefresh(t.value).catch(() => undefined));
+  void PushNotifications.addListener('registration', async (t) => void (await rt.push.onTokenRefresh(t.value, await hooks.pushScopes()).catch(() => undefined)));
 
   // Notification tapped: data.url (a path) on data.server (a saved server's base URL).
   void PushNotifications.addListener('pushNotificationActionPerformed', async (action) => {
@@ -85,6 +92,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
     const fallback = (await hooks.currentServer()) ?? (await rt.servers.selected());
     const target = routeNotification(data, servers, fallback);
     if (target) await hooks.open(target);
+    else if (typeof data.server === 'string' && data.server && hooks.unrouted) await hooks.unrouted(data.server, isSafePath(data.url) ? data.url : '/');
   });
 
   // Shared text / IMDb / TMDB link: discover search on the current (or selected) server.

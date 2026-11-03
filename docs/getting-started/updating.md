@@ -93,6 +93,8 @@ The container entrypoint adds Arclight's user to the socket's group on start, so
 
 Arclight only updates containers that carry the label `arclight.autoupdate=true`. In the shipped release compose files that label is on Arclight itself, Gluetun, FlareSolverr and (when you enable them) qBittorrent and Whisper. Remove the label from any container you want left alone, or add it to one that is missing.
 
+An update always re-pulls the tag the container already uses; it never moves a container to a different tag. The compose files pin Gluetun, FlareSolverr, qBittorrent and Whisper to release tags (for example `qmcgaw/gluetun:v3.41.3`), so for them "Update available" only appears when the publisher rebuilds that same tag (linuxserver.io rebuilds its version tags, such as qBittorrent's `5.3.0`, with base-image fixes). To move one of them to a newer release, change the tag in your compose file, or take the compose file from a newer Arclight release, which bumps the pins. Arclight's own image follows `latest` unless you [pin a version](#pin-a-version).
+
 On the System > Updates page the containers pane lists each labelled container with these columns: Container, Image, Network, Digest, State. States are "Up to date", "Update available", "Not updatable" and "Check failed". Buttons: "Check now", "Update all" and a per-container "Update now".
 
 A container is not updatable when:

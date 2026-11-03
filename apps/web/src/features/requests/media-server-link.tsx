@@ -13,6 +13,7 @@ import { useSignInServer } from '../../hooks/media-servers.js';
 import { formatDateTime } from '../../lib/ui-preferences.js';
 import { usePlexPinFlow } from './plex-pin.js';
 import { t } from '../../i18n/index.js';
+import { externalHref } from '../../lib/safe-url.js';
 
 // Profile → Media server account: link this Arclight user to their Jellyfin/Emby account
 // (username + password) or their Plex account (PIN: create, open Plex, poll until linked), or
@@ -105,7 +106,7 @@ export function MediaServerLinkPanel({ userId, isAdmin = false }: { userId: numb
         {waiting ? (
           <p className="al-caption" role="status" style={{ margin: 0 }}>
             {t('features.requests.mediaServerLink.approveInPlex')} <span className="al-num">{waiting.code}</span>{' '}
-            <a className="mk-link" href={waiting.authUrl} target="plex-auth" rel="noreferrer">
+            <a className="mk-link" href={externalHref(waiting.authUrl)} target="plex-auth" rel="noreferrer">
               {t('features.requests.mediaServerLink.openPlexAgain')}
             </a>
           </p>

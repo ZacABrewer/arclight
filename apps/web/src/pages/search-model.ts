@@ -2,6 +2,7 @@ import type { IndexerCategory, ManualSearchRequest, ManualSearchType, ReleaseRes
 import { ApiError } from '../api/client.js';
 import { releaseDownloadHref } from '../api/indexers.js';
 import { t } from '../i18n/index.js';
+import { downloadHref } from '../lib/safe-url.js';
 
 // Cross-indexer search page state and the pure helpers it renders with.
 
@@ -98,7 +99,8 @@ export function filterResults(results: readonly ReleaseResource[], f: ResultFilt
  */
 export function downloadLink(r: Pick<ReleaseResource, 'downloadUrl' | 'magnetUrl' | 'indexerId'>): string | null {
   if (r.downloadUrl && !r.downloadUrl.startsWith('magnet:')) return releaseDownloadHref(r.indexerId, r.downloadUrl);
-  return r.downloadUrl || r.magnetUrl || null;
+  // Anything not proxied is used as the href as is: only magnet and http(s) links (never javascript:).
+  return downloadHref(r.downloadUrl || r.magnetUrl) ?? null;
 }
 
 /** POST /search/grab answered 409 NO_MATCH: the result maps to nothing in the library. */

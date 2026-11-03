@@ -7,9 +7,10 @@
 # the same token. Expose 7879 only to the main Arclight: a private network (WireGuard,
 # Tailscale), a firewall rule, or a TLS reverse proxy. Never publish it to the internet in plain
 # HTTP: the token travels in a header.
+# Third-party images are pinned to release tags (CI rejects the floating "latest" tag); Arclight releases bump them.
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun-agent
     cap_add:
       - NET_ADMIN
@@ -32,8 +33,10 @@ services:
       - ${AGENT_ROOT:-./agent}/gluetun:/gluetun
       - gluetun-tmp:/tmp/gluetun
     ports:
-      # Agent API. Bind to a private address (e.g. "10.0.0.5:7879:7879") when the host has one.
-      - "${AGENT_API_BIND:-7879}:7879"
+      # Agent API, loopback only by default. Set AGENT_API_BIND to the host's private address
+      # (WireGuard/Tailscale, e.g. "10.0.0.5:7879") so only the main Arclight reaches it, or keep
+      # loopback and put a TLS reverse proxy in front (docs/REMOTE-ENGINE.md).
+      - "${AGENT_API_BIND:-127.0.0.1:7879}:7879"
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s

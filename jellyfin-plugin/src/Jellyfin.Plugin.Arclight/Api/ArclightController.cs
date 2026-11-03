@@ -444,16 +444,15 @@ public partial class ArclightController : ControllerBase
             return Forbid();
         }
 
-        var url = string.IsNullOrWhiteSpace(body?.Url) ? _settings.ArclightUrl : body!.Url!;
-        var key = string.IsNullOrWhiteSpace(body?.ApiKey) ? _settings.ApiKey : body!.ApiKey!.Trim();
-        if (!ArclightClient.TryBuildBase(url, out _))
+        var (url, key, error) = ResolveTestTarget(body?.Url, body?.ApiKey, _settings.ArclightUrl, _settings.ApiKey);
+        if (error == "api_key_required")
         {
-            return Ok(new { ok = false, status = 0, error = "invalid_url" });
+            return Invalid(error);
         }
 
-        if (key.Length == 0)
+        if (error is not null)
         {
-            return Ok(new { ok = false, status = 0, error = "missing_api_key" });
+            return Ok(new { ok = false, status = 0, error });
         }
 
         var response = await _client.SendAsync(url, key, HttpMethod.Get, "ping", null, null, ct).ConfigureAwait(false);
@@ -470,7 +469,7 @@ public partial class ArclightController : ControllerBase
             }
         }
 
-        string? error = response.IsSuccess ? null : response.StatusCode switch
+        error = response.IsSuccess ? null : response.StatusCode switch
         {
             0 => "unreachable",
             401 or 403 => "bad_api_key",
@@ -481,6 +480,39 @@ public partial class ArclightController : ControllerBase
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /// <summary>
+    /// Picks the URL and key "Test connection" uses. The saved key is only ever sent to the saved URL
+    /// (compared after normalising both); testing any other address needs the key in the request, so
+    /// an admin session cannot make the plugin hand the saved key to a listener of its choosing.
+    /// </summary>
+    /// <param name="bodyUrl">URL from the request, or empty for the saved one.</param>
+    /// <param name="bodyKey">Key from the request, or empty for the saved one.</param>
+    /// <param name="savedUrl">Saved Arclight URL.</param>
+    /// <param name="savedKey">Saved API key.</param>
+    /// <returns>URL, key and an error code: invalid_url, missing_api_key, api_key_required (400), or null.</returns>
+    internal static (string Url, string Key, string? Error) ResolveTestTarget(string? bodyUrl, string? bodyKey, string savedUrl, string savedKey)
+    {
+        var url = string.IsNullOrWhiteSpace(bodyUrl) ? savedUrl : bodyUrl.Trim();
+        if (!ArclightClient.TryBuildBase(url, out var target))
+        {
+            return (url, string.Empty, "invalid_url");
+        }
+
+        if (!string.IsNullOrWhiteSpace(bodyKey))
+        {
+            return (url, bodyKey.Trim(), null);
+        }
+
+        if (savedKey.Length == 0)
+        {
+            return (url, string.Empty, "missing_api_key");
+        }
+
+        return ArclightClient.TryBuildBase(savedUrl, out var saved) && string.Equals(target, saved, StringComparison.Ordinal)
+            ? (url, savedKey, null)
+            : (url, string.Empty, "api_key_required");
+    }
 
     internal static object? PickStatus(string body, string itemId)
     {

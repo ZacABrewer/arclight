@@ -4,7 +4,7 @@
 # Two stages: build (pnpm workspace -> one esbuild bundle, packages/engine-agent/dist/agent.mjs)
 # and a slim runtime holding only the node binary, tini and that bundle (no node_modules: the
 # agent has no runtime dependencies besides Node itself).
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
 ENV CI=true
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
@@ -14,7 +14,7 @@ COPY . .
 RUN pnpm install --offline --frozen-lockfile --filter @arclight/engine-agent...
 RUN pnpm --filter @arclight/engine-agent build
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 1000 agent && useradd -u 1000 -g 1000 -d /data -s /usr/sbin/nologin -M agent \

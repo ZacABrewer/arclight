@@ -29,6 +29,7 @@ import { DiscoverRow, StatusLabelChip, Track } from './discover-kit.js';
 import { RequestModal, seasonName } from './request-modal.js';
 import { LanguageRequestModal } from './language-request-modal.js';
 import { t } from '../../i18n/index.js';
+import { externalHref } from '../../lib/safe-url.js';
 
 // Title page (Details layout without file data): hero with backdrop, poster, facts, status and
 // the request actions; then requests, seasons with per-season status and requesting, the
@@ -199,7 +200,7 @@ function TitleView({ t: row }: { t: TitleDetail }) {
               ) : null}
               {signedIn && can(Permission.CREATE_ISSUES, Permission.MANAGE_ISSUES) ? <Button onClick={() => setReporting(true)}>{t('discover.title.reportIssue')}</Button> : null}
               {videos.slice(0, 1).map((v) => (
-                <LinkButton key={v.key} variant="ghost" href={v.url} target="_blank" rel="noreferrer noopener">
+                <LinkButton key={v.key} variant="ghost" href={externalHref(v.url)} target="_blank" rel="noreferrer noopener">
                   {t('discover.title.watchTrailer')}
                 </LinkButton>
               ))}
@@ -270,7 +271,7 @@ function TitleView({ t: row }: { t: TitleDetail }) {
             <SectionHead label={<h2 className="al-title-m mk-section-title">{t('discover.title.videos')}</h2>} />
             <div className="dk-links">
               {videos.slice(0, 6).map((v) => (
-                <LinkButton key={v.key} variant="ghost" size="sm" href={v.url} target="_blank" rel="noreferrer noopener">
+                <LinkButton key={v.key} variant="ghost" size="sm" href={externalHref(v.url)} target="_blank" rel="noreferrer noopener">
                   {v.name}
                 </LinkButton>
               ))}

@@ -291,8 +291,13 @@ public class ProxyTests
     [Fact]
     public async Task Theme_css_is_fetched_with_the_key_and_served_with_its_etag()
     {
-        _handler.Respond = (_, _) =>
+        _handler.Respond = (req, _) =>
         {
+            if (req.RequestUri!.AbsolutePath.EndsWith("/themes", StringComparison.Ordinal))
+            {
+                return RecordingHandler.Json(HttpStatusCode.OK, "{\"defaultTheme\":null,\"themes\":[{\"id\":\"abyss\"}]}");
+            }
+
             var r = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(":root{--al-void:#000}", System.Text.Encoding.UTF8, "text/css") };
             r.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"v1\"");
             return r;
@@ -301,7 +306,9 @@ public class ProxyTests
         var file = Assert.IsType<FileContentResult>(await c.ThemeCss("abyss", CancellationToken.None));
         Assert.StartsWith("text/css", file.ContentType);
         Assert.Equal("\"v1\"", c.Response.Headers.ETag.ToString());
-        var (request, _) = Assert.Single(_handler.Requests);
+        Assert.Equal(2, _handler.Requests.Count);
+        Assert.Equal("/api/v1/jellyfin/themes", _handler.Requests[0].Request.RequestUri!.AbsolutePath);
+        var request = _handler.Requests[1].Request;
         Assert.Equal("/api/v1/jellyfin/theme/abyss.css", request.RequestUri!.AbsolutePath);
         Assert.Equal("secret-key-1234", request.Headers.GetValues("X-Api-Key").Single());
         Assert.False(request.Headers.Contains("X-Arclight-Jellyfin-User"));

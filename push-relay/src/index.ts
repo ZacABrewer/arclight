@@ -16,6 +16,7 @@ import {
   corsHeaders,
   empty,
   error,
+  ipBucket,
   json,
   readJsonObject,
   withHeaders,
@@ -30,6 +31,11 @@ export const SEND_BUCKET_CAPACITY = 10;
 export const SEND_REFILL_MS = 60_000;
 /** Devices with no use for this long are deleted by the daily cron. */
 export const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+/** Registrations accepted per UTC day across all callers, unless REGISTER_DAILY_CAP says otherwise. */
+export const DEFAULT_REGISTER_DAILY_CAP = 2000;
+/** Days of registration counters kept (only today's is used). */
+const REGISTRATION_DAYS_KEPT = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface DeviceRow {
   device_id: string;
@@ -59,6 +65,41 @@ async function rateLimited(limiter: RateLimit | undefined, key: string): Promise
 const tooMany = (retryAfterS: number) =>
   error(429, "rate limited", { "retry-after": String(Math.max(1, Math.ceil(retryAfterS))) });
 
+/**
+ * Per-IP rate limit. Requests without a client address (Cloudflare always sets one) are refused
+ * rather than sharing one bucket; IPv6 callers are bucketed by /64. Returns the refusal, if any.
+ */
+async function limitByIp(limiter: RateLimit | undefined, scope: string, request: Request): Promise<Response | undefined> {
+  const ip = clientIp(request);
+  if (!ip) return error(400, "missing client address");
+  if (await rateLimited(limiter, `${scope}:${ipBucket(ip)}`)) return tooMany(60);
+  return undefined;
+}
+
+function registerDailyCap(env: Env): number {
+  const n = Number(env.REGISTER_DAILY_CAP);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_REGISTER_DAILY_CAP;
+}
+
+/** UTC day key, YYYY-MM-DD. */
+const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * Counts one registration against today's global cap, atomically. Returns the seconds until the
+ * next UTC day when the cap is reached, or 0 when the registration may proceed.
+ */
+async function takeRegistrationSlot(env: Env, now: number): Promise<number> {
+  const taken = await env.DB.prepare(
+    `INSERT INTO registration_days (day, count) VALUES (?1, 1)
+     ON CONFLICT (day) DO UPDATE SET count = count + 1 WHERE count < ?2
+     RETURNING count`,
+  )
+    .bind(dayOf(now), registerDailyCap(env))
+    .first();
+  if (taken) return 0;
+  return (DAY_MS - (now % DAY_MS)) / 1000;
+}
+
 /** Looks up a device and checks the bearer secret in constant time. Undefined means "404". */
 async function authenticate(env: Env, deviceId: string, secret: string): Promise<DeviceRow | undefined> {
   const row = DEVICE_ID_RE.test(deviceId)
@@ -81,7 +122,8 @@ async function deleteDevice(env: Env, deviceId: string): Promise<void> {
 // POST /v1/devices
 
 async function registerDevice(request: Request, env: Env): Promise<Response> {
-  if (await rateLimited(env.REGISTER_LIMITER, `register:${clientIp(request)}`)) return tooMany(60);
+  const limited = await limitByIp(env.REGISTER_LIMITER, "register", request);
+  if (limited) return limited;
 
   const body = await readJsonObject(request);
   const { token, platform, appVersion, environment, appId } = body;
@@ -106,9 +148,12 @@ async function registerDevice(request: Request, env: Env): Promise<Response> {
   // The APNs environment only matters for iOS; FCM has no sandbox.
   const env_: ApnsEnvironment = platform === "ios" && environment === "sandbox" ? "sandbox" : "production";
 
+  const now = Date.now();
+  const capWait = await takeRegistrationSlot(env, now);
+  if (capWait > 0) return tooMany(capWait);
+
   const deviceId = randomBase64url(16); // 128 bits
   const secret = randomBase64url(32); // 256 bits
-  const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO devices (device_id, platform, token, secret_hash, app_version, environment, app_id, created_at, last_used_at, send_tokens, send_refill_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -122,7 +167,8 @@ async function registerDevice(request: Request, env: Env): Promise<Response> {
 // PUT /v1/devices/:deviceId
 
 async function updateDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
-  if (await rateLimited(env.DEVICE_LIMITER, `device:${clientIp(request)}`)) return tooMany(60);
+  const limited = await limitByIp(env.DEVICE_LIMITER, "device", request);
+  if (limited) return limited;
   const secret = bearer(request);
   if (!secret) return error(401, "unauthorized");
   const body = await readJsonObject(request);
@@ -139,7 +185,8 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
 // DELETE /v1/devices/:deviceId
 
 async function unregisterDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
-  if (await rateLimited(env.DEVICE_LIMITER, `device:${clientIp(request)}`)) return tooMany(60);
+  const limited = await limitByIp(env.DEVICE_LIMITER, "device", request);
+  if (limited) return limited;
   const secret = bearer(request);
   if (!secret) return error(401, "unauthorized");
   const exists = DEVICE_ID_RE.test(deviceId)
@@ -180,7 +227,8 @@ async function consumeSendToken(env: Env, device: DeviceRow, now: number): Promi
 }
 
 async function send(request: Request, env: Env): Promise<Response> {
-  if (await rateLimited(env.SEND_IP_LIMITER, `send:${clientIp(request)}`)) return tooMany(60);
+  const limited = await limitByIp(env.SEND_IP_LIMITER, "send", request);
+  if (limited) return limited;
   const secret = bearer(request);
   if (!secret) return error(401, "unauthorized");
   const req = parseSend(await readJsonObject(request));
@@ -276,9 +324,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   return error(404, "not found");
 }
 
-/** Deletes devices unused for RETENTION_MS. Returns the number deleted. */
+/** Deletes devices unused for RETENTION_MS and old registration counters. Returns the devices deleted. */
 export async function cleanup(env: Env, now = Date.now()): Promise<number> {
   const res = await env.DB.prepare("DELETE FROM devices WHERE last_used_at < ?").bind(now - RETENTION_MS).run();
+  await env.DB.prepare("DELETE FROM registration_days WHERE day < ?").bind(dayOf(now - REGISTRATION_DAYS_KEPT * DAY_MS)).run();
   return res.meta.changes ?? 0;
 }
 

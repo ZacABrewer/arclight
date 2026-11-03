@@ -2,6 +2,7 @@
 # docker-compose.yml routes Arclight and qBittorrent through Gluetun; use this file with
 #   docker compose -f docker-compose.novpn.yml up -d
 # when you do not use a VPN. For the published image, see README.md.
+# Third-party images are pinned to release tags (CI rejects the floating "latest" tag); Arclight releases bump them.
 services:
   arclight:
     # Lets the torrent engine finish its writes and save resume data on stop.
@@ -29,7 +30,7 @@ services:
       # are instant hard links only when both live under the same mount.
       - ${DATA_ROOT:-./data/share}:/data
     ports:
-      - "7878:7878"
+      - "7878:7878" # web UI; publish: all-interfaces (LAN access)
     # Hardware transcoding (Intel Quick Sync / VA-API): pass the GPU through.
     # The entrypoint gives the app user the device's group, so PUID/PGID need not change.
     # Check Settings > Transcode > Hardware acceleration afterwards (docs/using/hardware-transcoding.md).
@@ -51,10 +52,10 @@ services:
   # extra container; start qBittorrent too only if you want it: docker compose --profile qbittorrent up -d
   qbittorrent:
     profiles: ["qbittorrent"]
-    image: lscr.io/linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent:5.3.0
     container_name: qbittorrent
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     environment:
       - PUID=${PUID:-1000}
@@ -65,18 +66,18 @@ services:
       - ${CONFIG_ROOT:-./data}/qbittorrent:/config
       - ${DATA_ROOT:-./data/share}:/data
     ports:
-      - "8080:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
+      - "8080:8080" # qBittorrent WebUI; publish: all-interfaces (LAN access)
+      - "6881:6881" # torrent port; publish: all-interfaces (peers connect in)
+      - "6881:6881/udp" # torrent port; publish: all-interfaces (peers connect in)
     restart: unless-stopped
 
   # Cloudflare challenge solver (docs/CLOUDFLARE.md). Internal only: Arclight reaches it as
   # http://flaresolverr:8191 on the compose network; no port is published.
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     container_name: flaresolverr
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     environment:
       - LOG_LEVEL=info
@@ -95,9 +96,9 @@ services:
   # lowest-priority subtitle provider, used only when no other provider has a result. Models are
   # cached under ${CONFIG_ROOT}/whisper. CPU by default; ASR_MODEL=small/medium is slower but better.
   whisper:
-    image: onerahmet/openai-whisper-asr-webservice:latest
+    image: onerahmet/openai-whisper-asr-webservice:v1.10.0
     # GPU (NVIDIA Container Toolkit): use the -gpu image and uncomment the deploy block.
-    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # image: onerahmet/openai-whisper-asr-webservice:v1.10.0-gpu
     # deploy:
     #   resources:
     #     reservations:
@@ -108,7 +109,7 @@ services:
     container_name: whisper
     profiles: ["whisper"]
     labels:
-      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto"); it re-pulls this same tag only.
       - arclight.autoupdate=true
     environment:
       - ASR_MODEL=base

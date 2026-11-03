@@ -27,15 +27,19 @@ step if either changes.
 - **What is stored, per registration** (`migrations/`): the push token, the random
   `deviceId`, the platform, a SHA-256 hash of the secret (never the secret), the app version and
   app ID (which Arclight app registered) if the app sends them, the APNs environment, created and last-used timestamps, and the per-device
-  rate-limit counter. No names, accounts, IP addresses or server addresses.
+  rate-limit counter. No names, accounts, IP addresses or server addresses. Separately, one
+  counter row per UTC day (`registration_days`: the date and how many registrations were
+  accepted, for the global daily cap), deleted after a week.
 - **Deletion**: when the app unregisters (`DELETE /v1/devices/:id`); when Apple or Google report the
   token invalid (the send returns `410`); and by a daily cron after 90 days without use (no send and
   no token update).
 - **Logs**: Workers invocation logs (which would record request URLs and headers) and traces are
   turned off in `wrangler.jsonc`. The Worker's own log lines contain only status codes and provider
   error codes, never tokens, device IDs, secrets or content.
-- **IP addresses** are used only as keys for Cloudflare's rate-limiting binding. The counters live
-  in Cloudflare's rate-limiting service for about a minute and are never written to the database.
+- **IP addresses** are used only as keys for Cloudflare's rate-limiting binding (IPv6 by its
+  /64). The counters live in Cloudflare's rate-limiting service for about a minute and are never
+  written to the database. A request without a client address (Cloudflare always supplies one)
+  gets `400 missing client address` instead of sharing a bucket.
 
 To delete a record on request (the "Delete your data" page promises this), find it by token or
 device ID:
@@ -66,7 +70,10 @@ All bodies are JSON. Errors are `{ "error": "..." }`. Responses are never cached
 
 Returns `201 { "deviceId": "<22 chars>", "secret": "<43 chars>" }`: 128-bit and 256-bit random
 values, base64url. The secret is shown once; only its hash is kept.
-Limited to 10 registrations a minute per IP (`429` with `Retry-After`).
+Limited to 10 registrations a minute per IP, IPv6 counted per /64 (`429` with `Retry-After`), and
+to `REGISTER_DAILY_CAP` registrations per UTC day from all callers together (`wrangler.jsonc`
+vars, default 2000; `429` with `Retry-After` set to the next UTC midnight). Only valid requests
+count toward the daily cap.
 
 ### `PUT /v1/devices/:deviceId` (app)
 

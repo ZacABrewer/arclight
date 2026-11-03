@@ -1,5 +1,8 @@
 package com.moviemethat.arclight.car;
 
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +21,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.moviemethat.arclight.player.PlaybackHub;
+import java.util.Arrays;
 import java.util.List;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -43,9 +47,15 @@ public final class CarLibraryCallback implements MediaLibrarySession.Callback {
     @NonNull
     @Override
     public MediaSession.ConnectionResult onConnect(@NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller) {
-        if (CarLibrary.isCarPackage(controller.getPackageName())) car.carConnected(true);
+        String pkg = controller.getPackageName();
+        ControllerPolicy.Access access = ControllerPolicy.decide(pkg, controller.getUid(), hub.context().getPackageName(),
+                controller.isTrusted(), ControllerPolicy.isCarHost(pkg) && isGenuinePackage(pkg, controller.getUid()));
+        if (access == ControllerPolicy.Access.REJECT) return MediaSession.ConnectionResult.reject();
+        if (CarLibrary.isCarPackage(pkg)) car.carConnected(true);
         return new MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS)
+                .setAvailableSessionCommands(access == ControllerPolicy.Access.FULL
+                        ? MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                        : MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
                 .setAvailablePlayerCommands(hub.allowedPlayerCommands())
                 .setMediaButtonPreferences(hub.mediaButtons())
                 .build();
@@ -55,6 +65,28 @@ public final class CarLibraryCallback implements MediaLibrarySession.Callback {
     public void onDisconnected(@NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller) {
         if (CarLibrary.isCarPackage(controller.getPackageName())) car.carConnected(false);
     }
+
+    /**
+     * The package really runs as this uid and is the system's copy or Google Play's (an app
+     * sideloaded under a car host's package name is neither).
+     */
+    private boolean isGenuinePackage(String pkg, int uid) {
+        PackageManager pm = hub.context().getPackageManager();
+        try {
+            String[] forUid = pm.getPackagesForUid(uid);
+            if (forUid == null || !Arrays.asList(forUid).contains(pkg)) return false;
+            ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
+            if ((info.flags & (ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0) return true;
+            String installer = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    ? pm.getInstallSourceInfo(pkg).getInstallingPackageName()
+                    : pm.getInstallerPackageName(pkg);
+            return PLAY_STORE.equals(installer);
+        } catch (PackageManager.NameNotFoundException | SecurityException e) {
+            return false;
+        }
+    }
+
+    private static final String PLAY_STORE = "com.android.vending";
 
     // ---- browsing ---------------------------------------------------------------------
 

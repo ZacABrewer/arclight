@@ -27,6 +27,7 @@
 		AC2A00000000000000000019 /* CarPlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A00000000000000000009 /* CarPlay.swift */; };
 		AC2A0000000000000000001A /* CastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A0000000000000000000A /* CastController.swift */; };
 		AC24B8000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AC24B8000000000000000001 /* PrivacyInfo.xcprivacy */; };
+		AC2A00000000000000000031 /* TokenVaultPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A00000000000000000030 /* TokenVaultPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,7 @@
 		AC2A00000000000000000008 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
 		AC2A00000000000000000009 /* CarPlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlay.swift; sourceTree = "<group>"; };
 		AC2A0000000000000000000A /* CastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CastController.swift; sourceTree = "<group>"; };
+		AC2A00000000000000000030 /* TokenVaultPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenVaultPlugin.swift; sourceTree = "<group>"; };
 		AC2A0000000000000000000B /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		AC24B8000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AC24B8000000000000000003 /* release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = release.xcconfig; path = ../release.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -104,6 +106,7 @@
 				AC2A00000000000000000008 /* DownloadManager.swift */,
 				AC2A00000000000000000009 /* CarPlay.swift */,
 				AC2A0000000000000000000A /* CastController.swift */,
+				AC2A00000000000000000030 /* TokenVaultPlugin.swift */,
 				AC2A0000000000000000000B /* App.entitlements */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -210,6 +213,7 @@
 				AC2A00000000000000000018 /* DownloadManager.swift in Sources */,
 				AC2A00000000000000000019 /* CarPlay.swift in Sources */,
 				AC2A0000000000000000001A /* CastController.swift in Sources */,
+				AC2A00000000000000000031 /* TokenVaultPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

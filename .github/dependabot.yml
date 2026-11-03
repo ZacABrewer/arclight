@@ -15,3 +15,8 @@ updates:
     directory: /docker
     schedule:
       interval: weekly
+  # Image tags in the shipped compose files (scripts/check-compose.mjs rejects floating tags).
+  - package-ecosystem: docker-compose
+    directory: /docker
+    schedule:
+      interval: weekly

@@ -273,6 +273,7 @@
                 $('ArclightTest').addEventListener('click', function () {
                     var out = $('ArclightTestResult');
                     text(out, 'Testing…');
+                    var reasons = { invalid_url: 'The URL is not a valid http(s) address.', missing_api_key: 'Enter an API key first.', api_key_required: 'Enter the API key to test a different address (the saved key is only sent to the saved URL).', unreachable: 'Arclight could not be reached from the Jellyfin server.', bad_api_key: 'Arclight rejected the API key.', not_arclight: 'That address did not answer like Arclight.', not_arclight_or_too_old: 'That address is not Arclight, or Arclight is too old for this plugin.' };
                     arclight('POST', 'Admin/TestConnection', { url: $('ArclightUrl').value.trim(), apiKey: $('ArclightApiKey').value.trim() }).then(function (r) {
                         if (r.ok) {
                             var p = r.ping || {};
@@ -280,10 +281,9 @@
                                 '. Linked users: ' + (p.linkedUsers !== undefined ? p.linkedUsers : '?') +
                                 (p.features && p.features.length ? '. Features: ' + p.features.join(', ') : '') + '.');
                         } else {
-                            var reasons = { invalid_url: 'The URL is not a valid http(s) address.', missing_api_key: 'Enter an API key first.', unreachable: 'Arclight could not be reached from the Jellyfin server.', bad_api_key: 'Arclight rejected the API key.', not_arclight: 'That address did not answer like Arclight.', not_arclight_or_too_old: 'That address is not Arclight, or Arclight is too old for this plugin.' };
                             text(out, 'Failed: ' + (reasons[r.error] || r.error || ('HTTP ' + r.status)));
                         }
-                    }, function (e) { text(out, 'Failed: ' + e.message); });
+                    }, function (e) { text(out, 'Failed: ' + (reasons[e.message] || e.message)); });
                 });
 
                 page.querySelector('#ArclightConfigForm').addEventListener('submit', function (e) {

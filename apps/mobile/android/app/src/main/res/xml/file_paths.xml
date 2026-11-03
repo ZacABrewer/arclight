@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The only user of this FileProvider is Capacitor's WebView file chooser: a photo taken for an
+  <input type="file" capture> is written to getExternalFilesDir(Pictures) and handed to the camera
+  app. Nothing else in the app is shared, so the provider covers that folder alone.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <external-files-path name="captures" path="Pictures/" />
 </paths>
