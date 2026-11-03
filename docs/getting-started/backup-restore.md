@@ -77,6 +77,7 @@ Since 0.24, Arclight seals stored secrets in the database with AES-256-GCM. This
 - the OIDC client secret, the Discord bot token and the push keys
 - indexer, download client, notification and VPN credentials
 - the calendar feed token and the backup passphrase
+- each user's media-server access token, the phones' push relay secrets and the Year in review share links
 
 The key is in `secrets.key` in the config folder (mode `0600`). Sealing protects a copy of the database on its own, such as an old snapshot or a database file shared for debugging. It does not protect against someone who can read the whole config folder.
 

@@ -246,6 +246,13 @@
       "when": 1793695251327,
       "tag": "0034_fingerprint_window",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1793730089722,
+      "tag": "0035_share_token_hash",
+      "breakpoints": true
     }
   ]
 }

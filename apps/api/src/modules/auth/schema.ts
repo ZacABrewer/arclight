@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { sealedText } from '../../db/secret-box.js';
+import { sealedJson, sealedText } from '../../db/secret-box.js';
 import type { AppArea, UserRole, UserSettings } from '@arclight/shared';
 import { householdProfiles } from '../households/schema.js';
 
@@ -33,7 +33,8 @@ export const users = sqliteTable(
      */
     localPassword: integer('local_password', { mode: 'boolean' }).notNull().default(true),
     avatar: text('avatar'),
-    settings: text('settings', { mode: 'json' }).$type<UserSettings>().notNull(),
+    /** Secret-looking keys inside (the media-server link's accessToken) are sealed at rest. */
+    settings: sealedJson('settings').$type<UserSettings>().notNull(),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastLoginAt: text('last_login_at'),
