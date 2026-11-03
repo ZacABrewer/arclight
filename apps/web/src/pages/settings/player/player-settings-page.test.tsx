@@ -84,6 +84,27 @@ describe('Settings -> Player -> Movies & TV', () => {
     await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ video: false, videoMaxStreams: 4, videoMaxStreamsPerUser: 1 });
   });
+
+  it('round-trips the delivery, segment cache and remote video limit; an empty folder is the default', () => {
+    const s = PlayerSettings.parse({ videoDelivery: 'progressive', videoCacheGb: 250, videoCachePath: '/cache/hls', remoteVideoMaxBitrateKbps: 4000 });
+    expect(toPlayerSettingsBody(toPlayerSettingsDraft(s))).toEqual({ ok: true, body: s });
+    const defaults = PlayerSettings.parse({});
+    expect(toPlayerSettingsDraft(defaults)).toMatchObject({ videoDelivery: 'hls', videoCacheGb: '100', videoCachePath: '', remoteVideoMaxBitrateKbps: '8000' });
+    expect(toPlayerSettingsBody({ ...toPlayerSettingsDraft(defaults), videoCachePath: '  ' })).toMatchObject({ ok: true, body: { videoCachePath: null } });
+    expect(toPlayerSettingsBody({ ...toPlayerSettingsDraft(defaults), videoCacheGb: '0' })).toMatchObject({ ok: false, field: 'videoCacheGb', error: 'Check Video segment cache' });
+  });
+
+  it('switches to single streams and saves the cache and remote video limit', async () => {
+    stub([], { videoCachePath: '/old' });
+    renderAt('/settings/player');
+    fireEvent.click(await screen.findByRole('button', { name: 'Single stream' }));
+    fireEvent.change(screen.getByLabelText('Video segment cache'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText('Video segment folder'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Remote video bitrate limit'), { target: { value: '3000' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ videoDelivery: 'progressive', videoCacheGb: 40, videoCachePath: null, remoteVideoMaxBitrateKbps: 3000 });
+  });
 });
 
 describe('Settings -> Player -> Scrub thumbnails and intros', () => {
