@@ -78,5 +78,7 @@ export function publicPortal(
     allowAnonymousDiscover: s.publicPortal.enabled && s.publicPortal.allowAnonymousDiscover,
     loginMethods: { local: true, mediaServer: server, plex: server?.kind === 'plex' },
     features: features(),
+    portalUrl: null,
+    playerUrl: null,
   };
 }

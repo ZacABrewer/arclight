@@ -61,6 +61,8 @@ describe('public request portal', () => {
       allowAnonymousDiscover: false,
       loginMethods: { local: true, mediaServer: null, plex: false },
       features: { music: false, audiobooks: false, podcasts: false },
+      portalUrl: null,
+      playerUrl: null,
     });
     expect((await h.get('/discover/movies')).statusCode).toBe(401);
     configureServer(h.db, h.servers, 'plex');
