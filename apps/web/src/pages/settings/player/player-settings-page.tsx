@@ -29,6 +29,8 @@ export interface PlayerSettingsDraft {
   trickplay: PlayerSettings['trickplay'];
   /** Intro and credits detection. */
   segmentDetection: boolean;
+  /** Recap ("Previously on") detection, with intros and credits. */
+  segmentDetectionRecaps: boolean;
 }
 
 /** Enabled Jellyfin and Emby connections: the servers the player can stream through. */
@@ -56,6 +58,7 @@ export function toPlayerSettingsDraft(s: PlayerSettings): PlayerSettingsDraft {
     videoMaxStreamsPerUser: String(s.videoMaxStreamsPerUser),
     trickplay: s.trickplay,
     segmentDetection: s.segmentDetection,
+    segmentDetectionRecaps: s.segmentDetectionRecaps,
   };
 }
 
@@ -75,6 +78,7 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     videoMaxStreamsPerUser: num(d.videoMaxStreamsPerUser),
     trickplay: d.trickplay,
     segmentDetection: d.segmentDetection,
+    segmentDetectionRecaps: d.segmentDetectionRecaps,
   });
   if (parsed.success) return { ok: true, body: parsed.data };
   const field = String(parsed.error.issues[0]?.path[0] ?? '');
@@ -158,6 +162,8 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
           savedSegmentDetection={data.segmentDetection}
           onTrickplay={(v) => set('trickplay', v)}
           onSegmentDetection={(v) => set('segmentDetection', v)}
+          segmentDetectionRecaps={d.segmentDetectionRecaps}
+          onSegmentDetectionRecaps={(v) => set('segmentDetectionRecaps', v)}
         />
         <FormSection label={t('player.settings.engine')}>
           <FormRow label={t('player.settings.engineLabel')} caption={noServers ? t('player.settings.engineNoServer') : t('player.settings.engineCaption')}>

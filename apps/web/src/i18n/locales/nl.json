@@ -5789,6 +5789,8 @@
   "settings.player.trickplay.couldNotClear": "Kon de voorbeeldbeelden niet wissen",
   "settings.player.segments.label": "Intro's en aftiteling herkennen",
   "settings.player.segments.caption": "Vergelijkt de audio van afleveringen in een seizoen om de gedeelde intro en aftiteling te vinden, zodat de speler Overslaan kan aanbieden. Hoofdstukken en handmatige wijzigingen gaan voor.",
+  "settings.player.segments.recaps": "Samenvattingen herkennen",
+  "settings.player.segments.recapsCaption": "Vindt ook de 'Eerder in'-fragmenten aan het begin van een aflevering, zodat de speler Samenvatting overslaan kan aanbieden.",
   "settings.player.segments.scan": "Bibliotheek scannen",
   "settings.player.segments.scanCaption": "Controleert elk seizoen waarvan de bestanden sinds de laatste scan zijn gewijzigd. Draait ook elke nacht.",
   "settings.player.segments.scanOff": "Zet herkenning aan en sla op om te scannen.",

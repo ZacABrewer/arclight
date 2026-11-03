@@ -5789,6 +5789,8 @@
   "settings.player.trickplay.couldNotClear": "Vorschaubilder konnten nicht gelöscht werden",
   "settings.player.segments.label": "Intros und Abspann erkennen",
   "settings.player.segments.caption": "Vergleicht den Ton der Folgen einer Staffel, um gemeinsames Intro und Abspann zu finden, damit der Player Überspringen anbieten kann. Kapitel und manuelle Änderungen haben Vorrang.",
+  "settings.player.segments.recaps": "Rückblicke erkennen",
+  "settings.player.segments.recapsCaption": "Findet auch die „Was bisher geschah“-Ausschnitte am Anfang einer Folge, damit der Player Rückblick überspringen anbieten kann.",
   "settings.player.segments.scan": "Bibliothek durchsuchen",
   "settings.player.segments.scanCaption": "Prüft jede Staffel, deren Dateien sich seit dem letzten Durchlauf geändert haben. Läuft auch jede Nacht.",
   "settings.player.segments.scanOff": "Erkennung einschalten und speichern, um zu durchsuchen.",

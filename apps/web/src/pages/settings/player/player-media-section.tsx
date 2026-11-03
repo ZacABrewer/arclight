@@ -10,7 +10,7 @@ import { useInvalidatingMutation } from '../../../hooks/settings-keys.js';
 import { t } from '../../../i18n/index.js';
 
 // Settings → Player → Scrub thumbnails and intros: when scrub-thumbnail sheets are made, the size
-// of their cache (and clearing it), intro and credits detection, and a scan of the whole library
+// of their cache (and clearing it), intro and credits detection (and recaps with it), and a scan of the whole library
 // now (the nightly `player-segments` job). The settings themselves save with the page.
 
 /** GET /settings/player/trickplay-cache (admin). */
@@ -46,10 +46,13 @@ export interface PlayerMediaSectionProps {
   savedSegmentDetection: boolean;
   onTrickplay: (v: PlayerSettings['trickplay']) => void;
   onSegmentDetection: (v: boolean) => void;
+  /** Recaps are looked for too (only while detection is on). */
+  segmentDetectionRecaps: boolean;
+  onSegmentDetectionRecaps: (v: boolean) => void;
 }
 
-export function PlayerMediaSection({ trickplay, segmentDetection, savedSegmentDetection, onTrickplay, onSegmentDetection }: PlayerMediaSectionProps) {
-  const ids = { trickplay: useId(), detection: useId() };
+export function PlayerMediaSection({ trickplay, segmentDetection, savedSegmentDetection, onTrickplay, onSegmentDetection, segmentDetectionRecaps, onSegmentDetectionRecaps }: PlayerMediaSectionProps) {
+  const ids = { trickplay: useId(), detection: useId(), recaps: useId() };
   const cache = useTrickplayCache();
   const clear = useClearTrickplayCache();
   const scan = useRunJob();
@@ -80,6 +83,15 @@ export function PlayerMediaSection({ trickplay, segmentDetection, savedSegmentDe
       </FormRow>
       <FormRow label={t('settings.player.segments.label')} caption={t('settings.player.segments.caption')} captionInline>
         <Toggle id={ids.detection} aria-label={t('settings.player.segments.label')} checked={segmentDetection} onChange={(e) => onSegmentDetection(e.currentTarget.checked)} />
+      </FormRow>
+      <FormRow label={t('settings.player.segments.recaps')} caption={t('settings.player.segments.recapsCaption')} captionInline>
+        <Toggle
+          id={ids.recaps}
+          aria-label={t('settings.player.segments.recaps')}
+          checked={segmentDetection && segmentDetectionRecaps}
+          disabled={!segmentDetection}
+          onChange={(e) => onSegmentDetectionRecaps(e.currentTarget.checked)}
+        />
       </FormRow>
       <FormRow label={t('settings.player.segments.scan')} caption={savedSegmentDetection ? t('settings.player.segments.scanCaption') : t('settings.player.segments.scanOff')}>
         <div>

@@ -5,7 +5,9 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { EpisodeSegmentsRow, MediaInfo, PlayerSettings, SeasonSegmentsResponse, VideoSegment, VideoSegmentEdit } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles } from '../library/schema.js';
-import { alignSteps, codesFromBlob, codesToBlob, driveSteps, fingerprintAsync, FRAME_MS, pcmFromS16le, runSteps, SAMPLE_RATE, type Steps } from './fingerprint.js';
+import { alignPrintsSteps, analyseAsync, chromaFromBlob, chromaToBlob, codesFromBlob, codesToBlob, driveSteps, fingerprintAsync, FRAME_MS, pcmFromS16le, runSteps, SAMPLE_RATE, type Steps } from './fingerprint.js';
+import { findRecapSteps, type RecapReference } from './recaps.js';
+import { buildBoundaryProbeArgs, ffmpegLog, type LogRunner, parseQuietGaps, probeWindow, snapToGap } from './segment-boundaries.js';
 import { videoFingerprints, videoSegmentOverrides, videoSegments, videoSegmentScans } from './segments-schema.js';
 import { fileStamp, type Limiter } from './video-stream.js';
 
@@ -18,6 +20,19 @@ import { fileStamp, type Limiter } from './video-stream.js';
 // least 15 s near the end is its credits. The median over the accepted pairs is stored when at
 // least half the comparisons agree. All ffmpeg work goes through the shared background limiter
 // and waits while every live video slot is taken.
+//
+// Heads and tails carry two fingerprints (fingerprint.ts): the band codes and the chroma, which
+// still finds an intro when dialogue runs over its music. With recaps turned on, the middle of
+// each episode (body) is fingerprinted too (codes only), and the first minutes before an
+// episode's intro are matched clip by clip against the three episodes before it (recaps.ts).
+// Intro and recap edges are then moved onto a nearby black frame or silence
+// (segment-boundaries.ts).
+
+/**
+ * Bumped when detection changes in a way that should rescan every season (it is part of the
+ * season stamp). 2: chroma fingerprint, recaps, boundary snapping (0.24.0).
+ */
+export const DETECTION_VERSION = 2;
 
 const HEAD_MAX_MS = 600_000;
 const HEAD_SHARE = 0.4;
@@ -29,13 +44,21 @@ const CREDITS_MIN_MS = 15_000;
 /** A credits run ending this close to the window end runs to the end of the file. */
 const CREDITS_TO_END_MS = 5_000;
 const NEIGHBOURS = 3;
+/** How many earlier episodes a recap is looked for in. */
+const RECAP_REFERENCES = 3;
 const MIN_CONFIDENCE = 0.5;
 
-export type Part = 'head' | 'tail';
+export type Part = 'head' | 'tail' | 'body';
 
 /** The audio window of a file part: where it starts and how long it is (ms). */
 export function windowOf(part: Part, durationMs: number): { startMs: number; lengthMs: number } {
   if (part === 'head') return { startMs: 0, lengthMs: Math.round(Math.min(HEAD_MAX_MS, durationMs * HEAD_SHARE)) };
+  if (part === 'body') {
+    // Between the head and the tail (recap clips can come from anywhere in an episode).
+    const head = windowOf('head', durationMs);
+    const tail = windowOf('tail', durationMs);
+    return { startMs: head.lengthMs, lengthMs: Math.max(0, tail.startMs - head.lengthMs) };
+  }
   const lengthMs = Math.round(Math.min(TAIL_MAX_MS, durationMs * TAIL_SHARE));
   return { startMs: Math.max(0, durationMs - lengthMs), lengthMs };
 }
@@ -107,6 +130,8 @@ export interface PartCodes {
   startMs: number;
   lengthMs: number;
   codes: Uint32Array;
+  /** The chroma fingerprint (heads and tails); null for bodies and when unknown. */
+  chroma?: Uint8Array | null;
 }
 
 export interface EpisodeCodes {
@@ -114,11 +139,27 @@ export interface EpisodeCodes {
   durationMs: number;
   head: PartCodes | null;
   tail: PartCodes | null;
+  /** The middle of the episode, only read when recaps are detected. */
+  body?: PartCodes | null;
+}
+
+/** An episode from before the season (the previous season's last ones), for recaps of its first episodes. */
+export interface EarlierEpisode {
+  parts: ReadonlyArray<PartCodes | null | undefined>;
+  /** Its intro and credits (never part of a recap). */
+  blank: ReadonlyArray<{ startMs: number; endMs: number }>;
+}
+
+export interface DetectOptions {
+  /** Look for recaps too (needs bodies for good results). */
+  recaps?: boolean;
+  /** Earlier episodes, oldest first, that come before the season's first episode. */
+  before?: readonly EarlierEpisode[];
 }
 
 export interface DetectedSegment {
   mediaFileId: number;
-  type: 'intro' | 'credits';
+  type: 'intro' | 'credits' | 'recap';
   startMs: number;
   endMs: number;
   confidence: number;
@@ -142,7 +183,7 @@ export function neighbourIndexes(i: number, count: number, n = NEIGHBOURS): numb
 
 /** A run of `part` on the episode's own timeline when it passes the intro / credits rules. */
 function* runOf(type: 'intro' | 'credits', a: PartCodes, b: PartCodes, durationMs: number): Steps<{ startMs: number; endMs: number } | null> {
-  const run = yield* alignSteps(a.codes, b.codes);
+  const run = yield* alignPrintsSteps({ codes: a.codes, chroma: a.chroma ?? null }, { codes: b.codes, chroma: b.chroma ?? null });
   if (!run) return null;
   const startMs = Math.round(a.startMs + run.startA * FRAME_MS);
   let endMs = Math.round(a.startMs + run.endA * FRAME_MS);
@@ -155,18 +196,47 @@ function* runOf(type: 'intro' | 'credits', a: PartCodes, b: PartCodes, durationM
 }
 
 /** Season consensus: per episode and type, the median accepted run when ≥ half the comparisons agree. */
-export function detectSeason(eps: readonly EpisodeCodes[]): DetectedSegment[] {
-  return runSteps(detectSteps(eps));
+export function detectSeason(eps: readonly EpisodeCodes[], opts: DetectOptions = {}): DetectedSegment[] {
+  return runSteps(detectSteps(eps, opts));
 }
 
 /** detectSeason() giving the event loop a turn every few milliseconds (the service uses this). */
-export function detectSeasonAsync(eps: readonly EpisodeCodes[]): Promise<DetectedSegment[]> {
-  return driveSteps(detectSteps(eps));
+export function detectSeasonAsync(eps: readonly EpisodeCodes[], opts: DetectOptions = {}): Promise<DetectedSegment[]> {
+  return driveSteps(detectSteps(eps, opts));
 }
 
-function* detectSteps(eps: readonly EpisodeCodes[]): Steps<DetectedSegment[]> {
+const asRecapPart = (p: PartCodes) => ({ startMs: p.startMs, print: { codes: p.codes, chroma: null } });
+
+function* detectSteps(eps: readonly EpisodeCodes[], opts: DetectOptions): Steps<DetectedSegment[]> {
   const out: DetectedSegment[] = [];
   if (eps.length < 2) return out;
+  yield* introsAndCredits(eps, out);
+  if (!opts.recaps) return out;
+  // Earlier episodes, oldest first: the previous season's, then this season's.
+  const earlier: EarlierEpisode[] = [...(opts.before ?? [])];
+  const seasonStart = earlier.length;
+  for (const e of eps) {
+    const blank = out.filter((s) => s.mediaFileId === e.mediaFileId).map((s) => ({ startMs: s.startMs, endMs: s.endMs }));
+    earlier.push({ parts: [e.head, e.body, e.tail], blank });
+  }
+  for (let i = 0; i < eps.length; i++) {
+    const me = eps[i]!;
+    if (!me.head) continue;
+    const refs: RecapReference[] = [];
+    for (let j = seasonStart + i - 1; j >= 0 && refs.length < RECAP_REFERENCES; j--) {
+      const ref = earlier[j]!;
+      const parts = ref.parts.filter((p): p is PartCodes => !!p && p.codes.length > 0).map(asRecapPart);
+      if (parts.length > 0) refs.push({ parts, blank: ref.blank });
+    }
+    if (refs.length === 0) continue;
+    const intro = out.find((s) => s.mediaFileId === me.mediaFileId && s.type === 'intro');
+    const recap = yield* findRecapSteps(asRecapPart(me.head), intro?.startMs ?? null, refs);
+    if (recap) out.push({ mediaFileId: me.mediaFileId, type: 'recap', ...recap });
+  }
+  return out;
+}
+
+function* introsAndCredits(eps: readonly EpisodeCodes[], out: DetectedSegment[]): Steps<void> {
   for (let i = 0; i < eps.length; i++) {
     const me = eps[i]!;
     for (const type of ['intro', 'credits'] as const) {
@@ -190,7 +260,6 @@ function* detectSteps(eps: readonly EpisodeCodes[]): Steps<DetectedSegment[]> {
       if (endMs > startMs) out.push({ mediaFileId: me.mediaFileId, type, startMs, endMs, confidence });
     }
   }
-  return out;
 }
 
 /**
@@ -260,6 +329,8 @@ export interface SegmentServiceOptions {
   liveBusy: () => boolean;
   limiter: Limiter;
   extract?: PcmExtractor;
+  /** Runs the black-frame / silence probes (default: ffmpeg's stderr). */
+  probe?: LogRunner;
   pollMs?: number;
   now?: () => number;
   log?: { warn: (obj: object, msg: string) => void };
@@ -283,11 +354,13 @@ export class SegmentService {
   private readonly order: string[] = [];
   private pumping: Promise<void> | null = null;
   private readonly extract: PcmExtractor;
+  private readonly probe: LogRunner;
   private readonly now: () => number;
   private stopped = false;
 
   constructor(private readonly opts: SegmentServiceOptions) {
     this.extract = opts.extract ?? ffmpegPcm;
+    this.probe = opts.probe ?? ffmpegLog;
     this.now = opts.now ?? Date.now;
   }
 
@@ -321,9 +394,17 @@ export class SegmentService {
     return out;
   }
 
-  /** Hash of the member files' identities (stamp and known duration): a changed season scans again. */
+  /** Recaps are detected unless turned off (on when the setting is missing). */
+  private recapsOn(): boolean {
+    return this.opts.settings().segmentDetectionRecaps !== false;
+  }
+
+  /**
+   * Hash of the member files' identities (stamp and known duration), the detection version and
+   * whether recaps are on: a changed season, a new detector or the recaps setting scans again.
+   */
   async seasonStamp(files: readonly SeasonFile[]): Promise<string> {
-    const parts: string[] = [];
+    const parts: string[] = [`v${DETECTION_VERSION}`, this.recapsOn() ? 'recaps' : 'no-recaps'];
     for (const f of files) parts.push(`${f.mediaFileId}:${(await fileStamp(f.path)) ?? 'missing'}:${f.durationMs || 'x'}`);
     return createHash('sha1').update(parts.join('|')).digest('hex');
   }
@@ -426,20 +507,99 @@ export class SegmentService {
       .where(and(eq(videoFingerprints.mediaFileId, f.mediaFileId), eq(videoFingerprints.part, part)))
       .get();
     // Reused only for the same window: a head starts at 0 whatever its length, so both must match.
-    if (row && row.fileStamp === stamp && row.startMs === win.startMs && row.lengthMs === win.lengthMs) {
-      return { startMs: row.startMs, lengthMs: win.lengthMs, codes: codesFromBlob(row.hashes) };
+    // Heads and tails from before the chroma fingerprint (chroma null) are read again; bodies
+    // only ever have codes (recaps are matched on codes).
+    const withChroma = part !== 'body';
+    if (row && row.fileStamp === stamp && row.startMs === win.startMs && row.lengthMs === win.lengthMs && (!withChroma || row.chroma !== null)) {
+      return { startMs: row.startMs, lengthMs: win.lengthMs, codes: codesFromBlob(row.hashes), chroma: row.chroma ? chromaFromBlob(row.chroma) : null };
     }
     const args = buildAudioExtractArgs(f.path, defaultAudioOrdinal(f.mediaInfo), win.startMs, win.lengthMs);
-    const pcm = await this.background(() => this.extract(bin, args, 10 * 60_000));
-    const codes = await fingerprintAsync(pcmFromS16le(pcm));
+    const pcm = pcmFromS16le(await this.background(() => this.extract(bin, args, 10 * 60_000)));
+    const print = withChroma ? await analyseAsync(pcm) : { codes: await fingerprintAsync(pcm), chroma: null };
     const createdAt = new Date(this.now()).toISOString();
-    const values = { mediaFileId: f.mediaFileId, part, fileStamp: stamp, frameMs: FRAME_MS, startMs: win.startMs, lengthMs: win.lengthMs, hashes: codesToBlob(codes), createdAt };
+    const values = {
+      mediaFileId: f.mediaFileId,
+      part,
+      fileStamp: stamp,
+      frameMs: FRAME_MS,
+      startMs: win.startMs,
+      lengthMs: win.lengthMs,
+      hashes: codesToBlob(print.codes),
+      chroma: print.chroma ? chromaToBlob(print.chroma) : null,
+      createdAt,
+    };
     this.opts.db
       .insert(videoFingerprints)
       .values(values)
       .onConflictDoUpdate({ target: [videoFingerprints.mediaFileId, videoFingerprints.part], set: values })
       .run();
-    return { startMs: win.startMs, lengthMs: win.lengthMs, codes };
+    return { startMs: win.startMs, lengthMs: win.lengthMs, codes: print.codes, chroma: print.chroma };
+  }
+
+  /**
+   * The last episodes of the previous season, as stored by its own scan, for recaps of this
+   * season's first episodes. Only prints and segments taken from the files as they are now count.
+   */
+  private async earlierEpisodes(seriesId: number, seasonNumber: number): Promise<EarlierEpisode[]> {
+    if (seasonNumber <= 1) return [];
+    const files = this.seasonFiles(seriesId, seasonNumber - 1).slice(-RECAP_REFERENCES);
+    const out: EarlierEpisode[] = [];
+    for (const f of files) {
+      const fs = await fileStamp(f.path);
+      if (!fs) continue;
+      const rows = this.opts.db.select().from(videoFingerprints).where(eq(videoFingerprints.mediaFileId, f.mediaFileId)).all();
+      const parts = rows
+        .filter((r) => r.fileStamp === fs)
+        .map((r) => ({ startMs: r.startMs, lengthMs: r.lengthMs ?? 0, codes: codesFromBlob(r.hashes) }))
+        .sort((a, b) => a.startMs - b.startMs);
+      if (parts.length === 0) continue;
+      const segs = this.opts.db
+        .select({ type: videoSegments.type, startMs: videoSegments.startMs, endMs: videoSegments.endMs, source: videoSegments.source, fileStamp: videoSegments.fileStamp })
+        .from(videoSegments)
+        .where(eq(videoSegments.mediaFileId, f.mediaFileId))
+        .all()
+        .filter((r) => (r.type === 'intro' || r.type === 'credits') && (r.source === 'manual' || r.fileStamp === fs));
+      out.push({ parts, blank: segs.map((r) => ({ startMs: r.startMs, endMs: r.endMs })) });
+    }
+    return out;
+  }
+
+  /**
+   * Intro and recap edges moved onto a black frame or silence within 2 s (segment-boundaries.ts).
+   * A probe that fails leaves its edges where the audio match put them.
+   */
+  private async snapEdges(found: DetectedSegment[], files: ReadonlyMap<number, SeasonFile>, bin: string): Promise<void> {
+    for (const [mediaFileId, f] of files) {
+      const mine = found.filter((s) => s.mediaFileId === mediaFileId && (s.type === 'intro' || s.type === 'recap'));
+      if (mine.length === 0) continue;
+      const edges = new Set<number>();
+      for (const s of mine) {
+        if (s.startMs > 0) edges.add(s.startMs);
+        edges.add(s.endMs);
+      }
+      const moved = new Map<number, number>();
+      const hasVideo = !!(f.mediaInfo?.videoCodec || f.mediaInfo?.width);
+      for (const at of edges) {
+        const win = probeWindow(at, f.durationMs);
+        if (win.lengthMs <= 0) continue;
+        const args = buildBoundaryProbeArgs(f.path, defaultAudioOrdinal(f.mediaInfo), hasVideo, win.startMs, win.lengthMs);
+        try {
+          const log = await this.background(() => this.probe(bin, args, 60_000));
+          moved.set(at, snapToGap(at, parseQuietGaps(log, win.startMs, win.lengthMs)));
+        } catch (err) {
+          if (this.stopped) throw err;
+          this.opts.log?.warn({ err, mediaFileId }, 'could not look for black frames or silence around a segment edge');
+        }
+      }
+      for (const s of mine) {
+        const startMs = s.startMs > 0 ? (moved.get(s.startMs) ?? s.startMs) : 0;
+        const endMs = moved.get(s.endMs) ?? s.endMs;
+        if (endMs > startMs) {
+          s.startMs = startMs;
+          s.endMs = endMs;
+        }
+      }
+    }
   }
 
   /** Detects one season now (the queue calls this). Returns segments stored. */
@@ -457,22 +617,29 @@ export class SegmentService {
     this.setScan(seriesId, seasonNumber, { status: 'running' });
     const bin = await this.opts.locate();
     if (!bin) throw new Error('ffmpeg was not found');
+    const recaps = this.recapsOn();
     const eps: EpisodeCodes[] = [];
     const stamps = new Map<number, string>();
+    const read = new Map<number, SeasonFile>();
     let failures = 0;
     for (const f of files) {
       const fs = await fileStamp(f.path);
       if (!fs) continue;
       stamps.set(f.mediaFileId, fs);
       try {
-        eps.push({ mediaFileId: f.mediaFileId, durationMs: f.durationMs, head: await this.codesOf(f, 'head', fs, bin), tail: await this.codesOf(f, 'tail', fs, bin) });
+        const head = await this.codesOf(f, 'head', fs, bin);
+        const tail = await this.codesOf(f, 'tail', fs, bin);
+        const body = recaps ? await this.codesOf(f, 'body', fs, bin) : null;
+        eps.push({ mediaFileId: f.mediaFileId, durationMs: f.durationMs, head, tail, body });
+        read.set(f.mediaFileId, f);
       } catch (err) {
         failures++;
         this.opts.log?.warn({ err, mediaFileId: f.mediaFileId }, 'could not read the audio of an episode');
       }
     }
     if (eps.length < 2 && failures > 0) throw new Error(`could not read the audio of ${failures} episodes`);
-    const found = await detectSeasonAsync(eps);
+    const found = await detectSeasonAsync(eps, { recaps, before: recaps ? await this.earlierEpisodes(seriesId, seasonNumber) : [] });
+    await this.snapEdges(found, read, bin);
     const nowIso = new Date(this.now()).toISOString();
     // Only files read in this run get their detected rows replaced: one whose audio could not be
     // read (or that went missing) keeps what an earlier scan found.

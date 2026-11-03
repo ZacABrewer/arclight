@@ -210,6 +210,18 @@ describe('NativeVideoLauncher', () => {
     expect(plugin.playVideo.mock.calls[0]![0]).toMatchObject({ startPositionMs: 400_000, streamStartMs: 400_000 });
   });
 
+  it('hands a detected recap to the native player with its Skip recap label', async () => {
+    const segments: PlayableItem['segments'] = [
+      { type: 'recap', startMs: 0, endMs: 42_000 },
+      { type: 'intro', startMs: 42_000, endMs: 92_000 },
+    ];
+    const { launcher, plugin } = setup({ 'episode:1': episode(1, { segments }) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    expect(plugin.playVideo.mock.calls[0]![0]).toMatchObject({ segments });
+    expect(videoStrings().skipRecap).toBe('Skip recap');
+  });
+
   it('answers a seek request with a new session and replaceVideoStream; the latest seek wins', async () => {
     const { launcher, plugin, deps, emit, reports } = setup({ 'episode:1': episode(1) });
     await launcher.start();

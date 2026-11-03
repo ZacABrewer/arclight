@@ -5789,6 +5789,8 @@
   "settings.player.trickplay.couldNotClear": "No se pudieron borrar las miniaturas",
   "settings.player.segments.label": "Detectar intros y créditos",
   "settings.player.segments.caption": "Compara el audio de los episodios de una temporada para encontrar la intro y los créditos comunes, y así ofrecer Saltar. Los capítulos y las ediciones manuales tienen prioridad.",
+  "settings.player.segments.recaps": "Detectar resúmenes",
+  "settings.player.segments.recapsCaption": "También encuentra los fragmentos de «Anteriormente en» al inicio de un episodio, para que el reproductor ofrezca Saltar resumen.",
   "settings.player.segments.scan": "Analizar la biblioteca",
   "settings.player.segments.scanCaption": "Revisa cada temporada cuyos archivos cambiaron desde el último análisis. También se ejecuta cada noche.",
   "settings.player.segments.scanOff": "Activa la detección y guarda para analizar.",

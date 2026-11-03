@@ -109,4 +109,26 @@ describe('Settings -> Player -> Scrub thumbnails and intros', () => {
     await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ trickplay: 'off', segmentDetection: false });
   });
+
+  it('recaps are on by default, turn off on their own, and wait for detection', async () => {
+    const s = PlayerSettings.parse({});
+    expect(s.segmentDetectionRecaps).toBe(true);
+    const off = PlayerSettings.parse({ segmentDetectionRecaps: false });
+    expect(toPlayerSettingsBody(toPlayerSettingsDraft(off))).toEqual({ ok: true, body: off });
+
+    stub([]);
+    renderAt('/settings/player');
+    const recaps = (await screen.findByLabelText('Detect recaps')) as HTMLInputElement;
+    expect(recaps.checked).toBe(true);
+    expect(recaps.disabled).toBe(false);
+    fireEvent.click(recaps);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(api.calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ segmentDetection: true, segmentDetectionRecaps: false });
+
+    // With detection off the recaps switch shows off and cannot be changed.
+    fireEvent.click(screen.getByLabelText('Detect intros and credits'));
+    expect(recaps.checked).toBe(false);
+    expect(recaps.disabled).toBe(true);
+  });
 });

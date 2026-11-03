@@ -4,14 +4,17 @@ import { mediaFiles, series } from '../library/schema.js';
 // Intro and credits detection (segments.ts): audio fingerprints per file, the season scans, the
 // stored segments (fingerprint and manual) and the per-file manual overrides.
 
-/** Fingerprint codes of a file's head (intro window) or tail (credits window). */
+/**
+ * Fingerprints of a file's head (intro window), tail (credits window) or body (between the two:
+ * what a later episode's recap is cut from; only stored while recap detection is on).
+ */
 export const videoFingerprints = sqliteTable(
   'video_fingerprints',
   {
     mediaFileId: integer('media_file_id')
       .notNull()
       .references(() => mediaFiles.id, { onDelete: 'cascade' }),
-    part: text('part', { enum: ['head', 'tail'] }).notNull(),
+    part: text('part', { enum: ['head', 'tail', 'body'] }).notNull(),
     /** fileStamp (size-mtime) of the file the codes were taken from. */
     fileStamp: text('file_stamp').notNull(),
     /** Milliseconds per code. */
@@ -22,6 +25,8 @@ export const videoFingerprints = sqliteTable(
     lengthMs: integer('length_ms'),
     /** uint32 little-endian codes. */
     hashes: blob('hashes', { mode: 'buffer' }).notNull(),
+    /** Chroma vectors, 6 bytes per 4 codes (fingerprint.ts; null on rows from before 0.24.0: taken again). */
+    chroma: blob('chroma', { mode: 'buffer' }),
     createdAt: text('created_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.mediaFileId, t.part] })],

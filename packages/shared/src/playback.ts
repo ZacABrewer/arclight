@@ -48,6 +48,8 @@ export const PlayerSettings = z.object({
   trickplay: z.enum(['off', 'on-play', 'library']).default('on-play'),
   /** Detect intros and credits by audio fingerprint when the file has no chapter marks. */
   segmentDetection: z.boolean().default(true),
+  /** Also detect recaps ("Previously on ...") during intro and credits detection. */
+  segmentDetectionRecaps: z.boolean().default(true),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
