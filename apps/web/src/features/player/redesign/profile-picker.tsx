@@ -134,9 +134,11 @@ export function PinEntry({ profile, size, onCancel, onSubmit }: { profile: Picke
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Focus on open, and again once a refused try re-enables the field (a disabled input cannot take
+  // focus, so focusing in the catch would close the number pad after a wrong PIN).
   useEffect(() => {
-    input.current?.focus();
-  }, []);
+    if (!busy) input.current?.focus();
+  }, [busy]);
 
   const submit = async (value: string) => {
     setBusy(true);
@@ -149,7 +151,6 @@ export function PinEntry({ profile, size, onCancel, onSubmit }: { profile: Picke
       if (code === 'pin-locked' || (err instanceof ApiError && err.status === 429)) setError(t('player.redesign.pin.locked'));
       else if (code === 'pin-wrong') setError(t('player.redesign.pin.wrong'));
       else setError(t('player.redesign.profiles.couldNotSwitch'));
-      input.current?.focus();
     } finally {
       setBusy(false);
     }

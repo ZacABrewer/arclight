@@ -59,8 +59,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   onUnauthorized = handler;
 }
 
+// Picking a profile answers 401 pin-required / pin-wrong for a missing or wrong PIN: a pad error,
+// not a revoked token.
+const PROFILE_SELECT = /^\/households\/profiles\/\d+\/select$/;
+
 function triggersSignOut(path: string): boolean {
-  return !path.startsWith('/auth/') && !path.startsWith('/app/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa');
+  return (
+    !path.startsWith('/auth/') && !path.startsWith('/app/') && path !== '/user/me/password' && !path.startsWith('/user/me/2fa') && !PROFILE_SELECT.test(path)
+  );
 }
 
 let fetchImpl: typeof fetch = (...args) => fetch(...args);

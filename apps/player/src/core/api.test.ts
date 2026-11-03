@@ -54,6 +54,15 @@ describe('request', () => {
     await request('/x', null, { target: { serverUrl: SERVER, token: 'other' } }).catch(() => undefined);
     expect(handler).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the device signed in when a profile PIN is wrong', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    setFetch(fakeFetch({ 'POST /households/profiles/3/select': { status: 401, json: { error: 'Wrong PIN', code: 'pin-wrong' } } }).impl);
+    const err = await request('/households/profiles/3/select', null, { method: 'POST', json: { pin: '0000' } }).catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('pin-wrong');
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 describe('artwork', () => {

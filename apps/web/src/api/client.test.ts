@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ApiError, buildUrl, ContractError, request } from './client.js';
+import { ApiError, buildUrl, ContractError, request, setUnauthorizedHandler } from './client.js';
 import { backoffDelay } from './events.js';
 
 function mockFetch(status: number, body: unknown) {
@@ -14,7 +14,10 @@ function mockFetch(status: number, body: unknown) {
   return fn;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setUnauthorizedHandler(null);
+});
 
 describe('request', () => {
   const Thing = z.object({ id: z.number(), name: z.string() });
@@ -54,6 +57,25 @@ describe('request', () => {
     expect(buildUrl('/series', { page: 2, monitored: true, tag: undefined, q: null })).toBe(
       '/api/v1/series?page=2&monitored=true',
     );
+  });
+});
+
+describe('401 handling', () => {
+  it('sends a lost session to sign-in', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    mockFetch(401, { error: 'no', code: 'UNAUTHORIZED' });
+    await request('/thing', null).catch(() => undefined);
+    expect(handler).toHaveBeenCalledWith('/thing');
+  });
+
+  it('treats a wrong profile PIN as a form error, not a lost session', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    mockFetch(401, { error: 'Wrong PIN', code: 'pin-wrong' });
+    const err = await request('/households/profiles/3/select', null, { method: 'POST', json: { pin: '0000' } }).catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('pin-wrong');
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 
