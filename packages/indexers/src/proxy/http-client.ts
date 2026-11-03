@@ -10,6 +10,12 @@ import type { NetworkProxy } from './types.js';
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 10;
 const MAX_HEAD_BYTES = 256 * 1024;
+/**
+ * Largest response body accepted through a proxy tunnel, both on the wire and after
+ * Content-Encoding is undone (NZBs and torrents fit easily; a bomb does not).
+ */
+export const MAX_PROXY_BODY_BYTES = 64 * 1024 * 1024;
+const tooLarge = (): ProxyError => new ProxyError('protocol', `Response body is larger than ${MAX_PROXY_BODY_BYTES / 1024 / 1024} MB`);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 /** Request headers we always write ourselves (user values ignored). */
@@ -151,22 +157,24 @@ function zlibOp(fn: (buf: Buffer, opts: zlib.ZlibOptions, cb: (err: Error | null
   return new Promise((resolve, reject) => fn(buf, opts, (err, out) => (err ? reject(err) : resolve(out))));
 }
 
-async function decodeBody(body: Buffer, encoding: string | null): Promise<Buffer> {
+async function decodeBody(body: Buffer, encoding: string | null, maxBytes = MAX_PROXY_BODY_BYTES): Promise<Buffer> {
   if (!encoding || body.length === 0) return body;
+  // Every decoder is capped, so a few-KB compression bomb fails instead of filling memory.
+  const limit = { maxOutputLength: maxBytes };
   const codings = encoding.toLowerCase().split(',').map((c) => c.trim()).filter((c) => c && c !== 'identity').reverse();
   let out = body;
   try {
     for (const coding of codings) {
       if (coding === 'gzip' || coding === 'x-gzip') {
-        out = await zlibOp(zlib.gunzip, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+        out = await zlibOp(zlib.gunzip, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH, ...limit });
       } else if (coding === 'deflate') {
         try {
-          out = await zlibOp(zlib.inflate, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+          out = await zlibOp(zlib.inflate, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH, ...limit });
         } catch {
-          out = await zlibOp(zlib.inflateRaw, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+          out = await zlibOp(zlib.inflateRaw, out, { finishFlush: zlib.constants.Z_SYNC_FLUSH, ...limit });
         }
       } else if (coding === 'br') {
-        out = await new Promise<Buffer>((resolve, reject) => zlib.brotliDecompress(out, (err, r) => (err ? reject(err) : resolve(r))));
+        out = await new Promise<Buffer>((resolve, reject) => zlib.brotliDecompress(out, limit, (err, r) => (err ? reject(err) : resolve(r))));
       } else {
         throw new ProxyError('protocol', `Unsupported Content-Encoding: ${coding}`);
       }
@@ -217,6 +225,7 @@ function exchange(socket: net.Socket, head: string, body: Uint8Array | undefined
     let framing: 'none' | 'length' | 'chunked' | 'close' = 'close';
     let expected = 0;
     let received = 0;
+    let wire = 0;
     const parts: Buffer[] = [];
     let chunked: ChunkedDecoder | undefined;
     let settled = false;
@@ -243,6 +252,8 @@ function exchange(socket: net.Socket, head: string, body: Uint8Array | undefined
     };
     const onAbort = (): void => fail(signal.reason);
     const onBody = (chunk: Buffer): void => {
+      wire += chunk.length;
+      if (wire > MAX_PROXY_BODY_BYTES + 64 * 1024) throw tooLarge(); // slack for chunk framing
       if (framing === 'chunked' && chunked) {
         chunked.feed(chunk);
         if (chunked.done) done();
@@ -286,6 +297,7 @@ function exchange(socket: net.Socket, head: string, body: Uint8Array | undefined
             if (!/^\d+$/.test(first)) throw new ProxyError('protocol', `Invalid Content-Length: ${cl}`);
             framing = 'length';
             expected = Number(first);
+            if (expected > MAX_PROXY_BODY_BYTES) throw tooLarge();
           } else framing = 'close';
           if (framing === 'none' || (framing === 'length' && expected === 0)) {
             done();
@@ -390,7 +402,10 @@ export async function fetchWithProxy(input: string | URL, init?: RequestInit, pr
           body = undefined;
           headers.delete('content-type');
         }
-        if (next.origin !== url.origin) headers.delete('authorization');
+        if (next.origin !== url.origin) {
+          headers.delete('authorization');
+          headers.delete('cookie');
+        }
         url = next;
         continue;
       }
