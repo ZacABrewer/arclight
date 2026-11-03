@@ -4,6 +4,7 @@ import zlib from 'node:zlib';
 import { Buffer } from 'node:buffer';
 import { ProxyError } from './errors.js';
 import { openTunnel, stripBrackets } from './tunnel.js';
+import { proxyDialHost, type ProxyTargetPolicy } from './target.js';
 import type { NetworkProxy } from './types.js';
 
 /** Overall deadline for one fetchWithProxy call (all redirect hops). */
@@ -188,7 +189,9 @@ async function decodeBody(body: Buffer, encoding: string | null, maxBytes = MAX_
 
 function startTls(socket: net.Socket, host: string, signal: AbortSignal): Promise<tls.TLSSocket> {
   return new Promise<tls.TLSSocket>((resolve, reject) => {
-    const options: tls.ConnectionOptions = { socket, ALPNProtocols: ['http/1.1'] };
+    // `host` is what the certificate is checked against (the URL's name, even when the
+    // tunnel was opened to a vetted IP); SNI carries it too unless it is an IP literal.
+    const options: tls.ConnectionOptions = { socket, host, ALPNProtocols: ['http/1.1'] };
     if (net.isIP(host) === 0) options.servername = host;
     const secure = tls.connect(options);
     const cleanup = (): void => {
@@ -333,12 +336,14 @@ function exchange(socket: net.Socket, head: string, body: Uint8Array | undefined
   });
 }
 
-async function requestOnce(url: URL, method: string, headers: Headers, body: Uint8Array | undefined, proxy: NetworkProxy, signal: AbortSignal): Promise<RawResponse> {
+async function requestOnce(url: URL, method: string, headers: Headers, body: Uint8Array | undefined, proxy: NetworkProxy, signal: AbortSignal, targetPolicy: ProxyTargetPolicy | undefined): Promise<RawResponse> {
   const isHttps = url.protocol === 'https:';
   if (!isHttps && url.protocol !== 'http:') throw new TypeError(`fetchWithProxy: unsupported protocol ${url.protocol}`);
   const host = stripBrackets(url.hostname);
   const port = url.port ? Number(url.port) : isHttps ? 443 : 80;
-  const tunnel = await openTunnel(proxy, host, port, { timeoutMs: DEFAULT_FETCH_TIMEOUT_MS, signal });
+  // Public-only targets are resolved and vetted here; the proxy gets the vetted IP.
+  const dial = await proxyDialHost(host, targetPolicy?.(url));
+  const tunnel = await openTunnel(proxy, dial, port, { timeoutMs: DEFAULT_FETCH_TIMEOUT_MS, signal });
   let socket: net.Socket = tunnel;
   if (isHttps) {
     try {
@@ -365,12 +370,22 @@ async function toResponse(raw: RawResponse, url: URL, redirected: boolean): Prom
   return response;
 }
 
+export interface FetchWithProxyOptions {
+  /**
+   * Per-hop address policy. When it returns a policy for a URL, the target must be public:
+   * the name is resolved and vetted here and the tunnel is opened to the vetted IP (see
+   * `proxyDialHost`). Undefined keeps remote DNS (the name goes to the proxy).
+   */
+  targetPolicy?: ProxyTargetPolicy;
+}
+
 /**
  * fetch-compatible call that tunnels through `proxy` (HTTP CONNECT or SOCKS5 CONNECT with remote
- * DNS); without a proxy, delegates to `fetchImpl ?? globalThis.fetch`. Bodies are buffered in
- * memory; supported request bodies are string, URLSearchParams, ArrayBuffer(View) and Blob.
+ * DNS, or to a locally vetted IP for public-only targets); without a proxy, delegates to
+ * `fetchImpl ?? globalThis.fetch`. Bodies are buffered in memory; supported request bodies are
+ * string, URLSearchParams, ArrayBuffer(View) and Blob.
  */
-export async function fetchWithProxy(input: string | URL, init?: RequestInit, proxy?: NetworkProxy, fetchImpl?: typeof fetch): Promise<Response> {
+export async function fetchWithProxy(input: string | URL, init?: RequestInit, proxy?: NetworkProxy, fetchImpl?: typeof fetch, options: FetchWithProxyOptions = {}): Promise<Response> {
   if (!proxy) {
     const f = fetchImpl ?? globalThis.fetch;
     return init === undefined ? f(input) : f(input, init);
@@ -390,7 +405,7 @@ export async function fetchWithProxy(input: string | URL, init?: RequestInit, pr
     let body = await encodeBody(init?.body, headers);
     const mode = init?.redirect ?? 'follow';
     for (let hop = 0; ; hop++) {
-      const raw = await requestOnce(url, method, headers, body, proxy, controller.signal);
+      const raw = await requestOnce(url, method, headers, body, proxy, controller.signal, options.targetPolicy);
       const location = raw.headers.get('location');
       if (mode !== 'manual' && REDIRECT_STATUSES.has(raw.status) && location !== null) {
         if (mode === 'error') throw new TypeError(`Redirect to ${location} blocked (redirect: 'error')`);

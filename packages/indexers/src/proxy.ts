@@ -8,6 +8,9 @@ export { ProxyError } from './proxy/errors.js';
 export type { ProxyErrorCode } from './proxy/errors.js';
 export { openSocks5Tunnel, openHttpConnectTunnel, DEFAULT_TUNNEL_TIMEOUT_MS } from './proxy/tunnel.js';
 export { fetchWithProxy, DEFAULT_FETCH_TIMEOUT_MS } from './proxy/http-client.js';
+export type { FetchWithProxyOptions } from './proxy/http-client.js';
+export { proxyDialHost } from './proxy/target.js';
+export type { ProxyTargetPolicy } from './proxy/target.js';
 export {
   FlareSolverrClient,
   isChallengeResponse,

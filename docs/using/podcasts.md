@@ -116,6 +116,8 @@ Feeds, episode files, artwork, chapters and transcripts are fetched from the pub
 
 The exception is a feed an **admin** adds by a local name or address, for example a self-hosted feed at `http://nas.lan:8080/feed.xml`: Arclight may then reach that one host (any port) for the feed and its files. Other local hosts stay blocked for that feed. Use the local name or address in the feed URL; a public name that only resolves to a local address on your network is treated as public and refused.
 
+Through an indexer proxy the same rule holds: Arclight looks up the feed's host itself, refuses local answers, and asks the proxy to connect to the checked address (see [Proxies and local addresses](indexers.md#proxies-and-local-addresses) for the `.onion` and proxy-only-DNS exceptions). The trusted local feed host is still passed to the proxy by name.
+
 Episode files must arrive as audio or video (or a generic binary type such as `application/octet-stream`); a text, JSON or XML answer is not kept as an episode.
 
 ## Suggestions from the request portal

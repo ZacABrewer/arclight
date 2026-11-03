@@ -391,6 +391,41 @@ describe('http: local network guard (DATA-06)', () => {
     await expect(follow(t, 'http://nas.lan/feed.xml')).rejects.toThrow(/local network/);
   });
 
+  it('resolves names itself and hands the proxy the vetted address (DNS rebinding)', async () => {
+    const targets: string[] = [];
+    const hosts: string[] = [];
+    const fake = createServer();
+    fake.on('connect', (req, client) => {
+      targets.push(req.url ?? '');
+      client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      let buf = '';
+      client.on('data', (c: Buffer) => {
+        buf += c.toString('latin1');
+        if (!buf.includes('\r\n\r\n')) return;
+        hosts.push(/\r\nhost: ([^\r\n]*)/i.exec(buf)?.[1] ?? '');
+        const body = '<rss version="2.0"><channel><title>Vetted</title></channel></rss>';
+        client.end(`HTTP/1.1 200 OK\r\ncontent-type: application/rss+xml\r\ncontent-length: ${body.length}\r\nconnection: close\r\n\r\n${body}`);
+      });
+    });
+    await new Promise<void>((r) => fake.listen(0, '127.0.0.1', r));
+    try {
+      const resolve = async (host: string) => {
+        if (host === 'feeds.example.com') return [{ address: '93.184.216.34', family: 4 }];
+        if (host === 'rebind.example.com') return [{ address: '127.0.0.1', family: 4 }];
+        throw Object.assign(new Error('not found'), { code: 'ENOTFOUND' });
+      };
+      const t = transportFor({ type: 'http', host: '127.0.0.1', port: (fake.address() as AddressInfo).port }, undefined, { resolve });
+      const res = await fetchFeed(t, 'http://feeds.example.com/feed.xml');
+      expect(res.status === 'ok' && res.body).toContain('Vetted');
+      expect(targets).toEqual(['93.184.216.34:80']);
+      expect(hosts).toEqual(['feeds.example.com']);
+      await expect(fetchFeed(t, 'http://rebind.example.com/feed.xml')).rejects.toThrow(/local network/);
+      expect(targets).toHaveLength(1);
+    } finally {
+      await new Promise((r) => fake.close(r));
+    }
+  });
+
   it('trusts only LAN-named feed hosts and only media bodies for episodes', () => {
     expect(lanFeedHost('http://nas.lan/feed')).toBe('nas.lan');
     expect(lanFeedHost('http://10.0.0.5/feed')).toBe('10.0.0.5');
