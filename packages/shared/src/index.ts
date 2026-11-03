@@ -77,4 +77,5 @@ export * from './watch-stats.js';
 export * from './smart-collections.js';
 export * from './music-playlists.js';
 export * from './playback.js';
+export * from './video-hls.js';
 export * from './households.js';
