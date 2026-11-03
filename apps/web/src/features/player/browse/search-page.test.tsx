@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const empty = { tracks: [], albums: [], artists: [], audiobooks: [] };
+const empty = { tracks: [], albums: [], artists: [], audiobooks: [], movies: [], series: [] };
 
 describe('PlayerSearchPage', () => {
   it('starts with a prompt and no request', async () => {
@@ -36,6 +36,8 @@ describe('PlayerSearchPage', () => {
         albums: [album(3, { title: 'Glass House' })],
         artists: [artist(4, { name: 'The Glaziers' })],
         audiobooks: [book(5, { title: 'Glass Ages' })],
+        movies: [],
+        series: [],
       },
     });
     const player = mockPlayer();

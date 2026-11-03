@@ -29,13 +29,17 @@ interface Section {
 }
 
 const SECTIONS: readonly Section[] = [
+  { id: 'video', to: '/player/watch', label: () => t('player.nav.video') },
   { id: 'music', to: '/player/music', label: () => t('player.nav.music') },
   { id: 'books', to: '/player/books', label: () => t('player.nav.books') },
-  { id: 'video', to: '', label: () => t('player.nav.video'), soon: true },
   { id: 'podcasts', to: '', label: () => t('player.nav.podcasts'), soon: true },
 ];
 
+/** The full-screen video player has its own keys and no mini-player under it. */
+const isVideoPlayer = (pathname: string) => pathname.startsWith('/player/watch/play');
+
 function sectionOf(pathname: string): string | null {
+  if (pathname.startsWith('/player/watch')) return 'video';
   if (pathname.startsWith('/player/music')) return 'music';
   if (pathname.startsWith('/player/books')) return 'books';
   return null;
@@ -82,8 +86,10 @@ export function PlayerLayout() {
 function PlayerShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const section = sectionOf(pathname);
+  const caps = usePlaybackCapabilities(!bare);
+  const videoOn = caps.data?.sections.video ?? false;
   return (
-    <div className="al-app pl-app">
+    <div className="al-app pl-app" data-video-player={isVideoPlayer(pathname) || undefined}>
       <Backdrop vx={0.5} horizon={0.7} />
       <header className="pl-head">
         <Link to="/player" className="pl-brand" aria-label={t('player.nav.home')}>
@@ -92,7 +98,7 @@ function PlayerShell({ children, bare }: { children: ReactNode; bare?: boolean }
         {!bare ? (
           <nav className="pl-tabs" aria-label={t('player.nav.label')}>
             {SECTIONS.map((s) =>
-              s.soon ? (
+              s.soon || (s.id === 'video' && !videoOn) ? (
                 <span key={s.id} className="pl-tabs__link is-soon" aria-disabled="true" title={t('player.nav.comingSoon')}>
                   {s.label()}
                   <span className="pl-tabs__soon">{t('player.nav.comingSoon')}</span>
@@ -126,7 +132,7 @@ function PlayerShell({ children, bare }: { children: ReactNode; bare?: boolean }
 /** The mini-player, except on Now playing (which is the full version of it). */
 function DockedMiniPlayer() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (pathname.startsWith('/player/now-playing')) return null;
+  if (pathname.startsWith('/player/now-playing') || isVideoPlayer(pathname)) return null;
   return <MiniPlayer />;
 }
 
@@ -193,7 +199,9 @@ function isAccessError(err: unknown): boolean {
  */
 export function PlayerShortcuts() {
   const player = usePlayer();
+  const onVideo = useRouterState({ select: (s) => isVideoPlayer(s.location.pathname) });
   useEffect(() => {
+    if (onVideo) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || isTypingTarget(e.target)) return;
       const el = e.target instanceof HTMLElement ? e.target : null;
@@ -232,6 +240,6 @@ export function PlayerShortcuts() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [player]);
+  }, [player, onVideo]);
   return null;
 }

@@ -1,16 +1,50 @@
 import { Link } from '@tanstack/react-router';
-import type { ContinueResponse } from '@arclight/shared';
+import { isVideoKind, type ContinueResponse } from '@arclight/shared';
 import { EmptyState, ErrorBlock, Pane, Skeleton, buttonClass, cx } from '../../../arclight/index.js';
 import { errorMessage } from '../../../api/client.js';
 import { t } from '../../../i18n/index.js';
-import { useContinueListening } from '../api.js';
+import { useContinueListening, usePlaybackCapabilities } from '../api.js';
+import { WatchHomePage } from '../video/watch-home.js';
+import { useOpenVideo } from '../video/video-launcher.js';
 import { formatDuration } from '../format.js';
 import { usePlayer } from '../player-context.js';
 import { Artwork } from './parts.js';
 import { PlayerIcon } from './player-icons.js';
 
-/** /player: "Continue listening", then the way into each section. */
+/** /player: Movies & TV when video is on (with Continue listening under it), else "Continue listening" and the sections. */
 export function PlayerHome() {
+  const caps = usePlaybackCapabilities();
+  if (caps.data?.sections.video) {
+    return (
+      <>
+        <WatchHomePage />
+        <ListeningShelf />
+      </>
+    );
+  }
+  return <ListeningHome />;
+}
+
+/** Continue listening under the Movies & TV home, only when there is something to continue. */
+function ListeningShelf() {
+  const cont = useContinueListening();
+  const items = cont.data?.items.filter((e) => !isVideoKind(e.item.kind)) ?? [];
+  if (!items.length) return null;
+  return (
+    <section className="pl-home" aria-labelledby="pl-continue-title">
+      <h2 id="pl-continue-title" className="al-title-m pl-home__title">
+        {t('player.home.continue')}
+      </h2>
+      <ul className="pl-continue">
+        {items.map((entry) => (
+          <ContinueCard key={entry.item.itemKey} entry={entry} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ListeningHome() {
   const cont = useContinueListening();
   return (
     <div className="pl-home">
@@ -50,6 +84,7 @@ export function PlayerHome() {
 
 function ContinueCard({ entry }: { entry: ContinueResponse['items'][number] }) {
   const { state, playItem, toggle } = usePlayer();
+  const openVideo = useOpenVideo();
   const { item, progress } = entry;
   const current = state.current?.itemKey === item.itemKey;
   const duration = progress.durationMs > 0 ? progress.durationMs : item.durationMs;
@@ -69,7 +104,7 @@ function ContinueCard({ entry }: { entry: ContinueResponse['items'][number] }) {
       <button
         type="button"
         className="pl-btn pl-btn--primary"
-        onClick={() => (current ? toggle() : void playItem(item.itemKey, { source: item.itemKey }))}
+        onClick={() => (isVideoKind(item.kind) ? openVideo(item.itemKey) : current ? toggle() : void playItem(item.itemKey, { source: item.itemKey }))}
         aria-label={playing ? t('player.controls.pauseTitle', { title: item.title }) : t('player.home.resume', { title: item.title })}
       >
         <PlayerIcon name={playing ? 'pause' : 'play'} />
