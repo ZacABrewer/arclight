@@ -163,7 +163,8 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate {
         let group = DispatchGroup()
         var live: [URLSessionDownloadTask] = []
         let lock = NSLock()
-        for session in [anySession, wifiSession] {
+        let sessions: [URLSession] = [anySession, wifiSession]
+        for session in sessions {
             group.enter()
             session.getAllTasks { all in
                 lock.lock()
