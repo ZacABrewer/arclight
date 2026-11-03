@@ -348,6 +348,14 @@ export function defaultVideoKbps(height: number): number {
   return 1_800;
 }
 
+const CAP_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+
+/** The tallest standard height (≤ `maxHeight`) that a video bitrate carries well. */
+export function capHeight(maxHeight: number, videoKbps: number): number {
+  const candidates = [maxHeight, ...CAP_HEIGHTS.filter((h) => h < maxHeight - 8)];
+  return candidates.find((h) => defaultVideoKbps(h) * 0.75 <= videoKbps) ?? candidates[candidates.length - 1]!;
+}
+
 export interface VideoDecisionInput {
   info: VideoInfo;
   /** Base layer range of a DV file (baseRangeOf); null: none. */
@@ -447,9 +455,11 @@ export function decideVideo(input: VideoDecisionInput): VideoPlan {
     return { method: 'remux', reasons: order(reasons), height: null, videoKbps: null, videoCodec: null, copyAudio, audioChannels, tonemap: false, burn: null };
   }
   if (pictureOk) reasons.add('video-codec');
-  const outHeight = Math.min(height > 0 ? height : allowed, allowed);
-  const useHevc = vcodecs.includes('hevc') && outHeight > 1080;
+  let outHeight = Math.min(height > 0 ? height : allowed, allowed);
   const audioKbps = audioChannels === 6 ? 384 : 192;
+  // Under a cap the height follows the bitrate (300 kbps at 1080p is a blur).
+  if (cap > 0) outHeight = capHeight(outHeight, cap - audioKbps);
+  const useHevc = vcodecs.includes('hevc') && outHeight > 1080;
   let kbps = defaultVideoKbps(outHeight);
   if (useHevc) kbps = Math.round(kbps * 0.7);
   // Never aim above the source (a low-bitrate file re-encoded for its codec stays small).

@@ -392,7 +392,7 @@ describe('the playback session', () => {
 
   it('the remote bitrate cap forces a transcode, also on a link that asked for direct play', async () => {
     const h = await harness();
-    setSection(h.db, 'player', { enabled: true, allowRemote: true, remoteMaxBitrateKbps: 2000 });
+    setSection(h.db, 'player', { enabled: true, allowRemote: true, remoteVideoMaxBitrateKbps: 2000 });
     const user = await signIn(h);
     const { movie } = addMovie(h.db, { title: 'Far', tmdbId: 6, files: [{ name: 'a.mp4', info: H264_AAC }] });
     const res = await h.app.inject({ method: 'POST', url: '/api/v1/playback/video/session', payload: { itemKey: `movie:${movie.id}`, profile: BROWSER }, headers: { cookie: user.cookie }, remoteAddress: '203.0.113.9' });

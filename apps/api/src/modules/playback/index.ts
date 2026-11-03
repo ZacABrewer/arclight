@@ -11,11 +11,17 @@ import { AudioTranscoder, type AudioTranscoderOptions } from './transcode.js';
 import { ChapterReader } from './video-items.js';
 import { videoRoutes } from './video-routes.js';
 import { myListRoutes } from './my-list.js';
+import { SOFTWARE_CAPS } from './hls/pipeline.js';
 import { EncoderDetector, MediaCache, BackgroundMediaLimiter, type EncoderDetectorOptions, type MediaCacheOptions } from './video-stream.js';
 import { SegmentService, type SegmentServiceOptions } from './segments.js';
 import { segmentRoutes } from './segments-routes.js';
 import { TrickplayService, type TrickplayOptions } from './trickplay.js';
 import { trickplayRoutes } from './trickplay-routes.js';
+import { locateFfprobe } from '../media-analysis/index.js';
+import { CapacityModel } from './hls/capacity.js';
+import { HlsSessions, hlsCacheRoot, type HlsSessionsOptions } from './hls/jobs.js';
+import { KeyframeIndexer } from './hls/keyframes.js';
+import { hlsRoutes, type HlsDeps } from './hls-routes.js';
 
 export { playbackProgress, playbackPlays, playbackQueue, playbackBookmarks, userPlaylists, userPlaylistTracks } from './schema.js';
 export { decide, capabilitiesOf, type PlayerDecision } from './access.js';
@@ -52,7 +58,8 @@ export function videoTranscoderFor(ctx: AppContext, opts: AudioTranscoderOptions
   if (!t) {
     t = new AudioTranscoder({
       label: 'video',
-      stallMs: 60_000,
+      // A paused progressive stream sits idle for as long as the player is paused (0.24: 30 min).
+      stallMs: 30 * 60_000,
       max: () => playerSettings(ctx.db).videoMaxStreams,
       maxPerUser: () => playerSettings(ctx.db).videoMaxStreamsPerUser,
       ...opts,
@@ -131,6 +138,37 @@ export function backgroundServicesFor(ctx: AppContext, opts: { trickplay?: Parti
   return b;
 }
 
+interface HlsParts {
+  sessions: HlsSessions;
+  keyframes: KeyframeIndexer;
+}
+const hlsParts = new WeakMap<AppContext, HlsParts>();
+
+/** HLS sessions and keyframe indexes (0.24); `opts` apply only on creation (tests pass a fake launcher). */
+export function hlsPartsFor(ctx: AppContext, opts: Partial<HlsSessionsOptions> = {}): HlsParts {
+  let h = hlsParts.get(ctx);
+  if (!h) {
+    const playerCache = join(ctx.config.configDir, 'cache', 'player');
+    const log = ctx.log.child({ component: 'player-hls' });
+    h = {
+      keyframes: new KeyframeIndexer({ dir: join(playerCache, 'keyframes'), locateProbe: () => locateFfprobe(), limiter: BackgroundMediaLimiter, log }),
+      sessions: new HlsSessions({
+        root: () => hlsCacheRoot(ctx.config.configDir, playerSettings(ctx.db).videoCachePath),
+        cacheBytes: () => playerSettings(ctx.db).videoCacheGb * 1e9,
+        maxStreams: () => playerSettings(ctx.db).videoMaxStreams,
+        maxPerDevice: () => playerSettings(ctx.db).videoMaxStreamsPerUser,
+        legacyActive: () => videoTranscoderFor(ctx).active,
+        locate: () => locateFfmpeg(),
+        capacity: new CapacityModel({ file: join(playerCache, 'capacity.json') }),
+        log,
+        ...opts,
+      }),
+    };
+    hlsParts.set(ctx, h);
+  }
+  return h;
+}
+
 export const playbackModule: AppModule = (ctx) => async (app) => {
   const auth = authServiceFor(ctx);
   const servers = mediaServersServiceFor(ctx);
@@ -143,6 +181,18 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
   const parts = videoPartsFor(ctx);
   const basePath = ctx.config.basePath ?? '';
   const background = backgroundServicesFor(ctx);
+  const hlsParts = hlsPartsFor(ctx);
+  const hls: HlsDeps = {
+    db: ctx.db,
+    apiKey: () => auth.apiKey(),
+    sessions: hlsParts.sessions,
+    keyframes: hlsParts.keyframes,
+    caps: async () => {
+      const bin = await locateFfmpeg();
+      return bin ? parts.encoders.caps(bin) : SOFTWARE_CAPS;
+    },
+  };
+  await hlsParts.sessions.start();
   // Registered first: its static /playback/artwork/{movie,series,episode}/:id routes and the
   // video error handler live in their own encapsulated plugin.
   await app.register(
@@ -155,8 +205,10 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
       encoders: parts.encoders,
       cache: parts.cache,
       trickplay: background.trickplay,
+      hls,
     }),
   );
+  await app.register(hlsRoutes(hls));
   // My List (per household profile).
   await app.register(myListRoutes({ db: ctx.db, basePath, progress }));
   await app.register(trickplayRoutes({ db: ctx.db, basePath, apiKey: () => auth.apiKey(), service: background.trickplay }));
@@ -191,6 +243,7 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
     pendingScans.clear();
     background.segments.stop();
     background.trickplay.stop();
+    await hlsParts.sessions.close();
   });
   await app.register(
     playbackRoutes({
