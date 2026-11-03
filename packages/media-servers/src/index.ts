@@ -5,20 +5,21 @@
  *   const users = await client.users();
  *   const states = await client.listPlayStates(users[0].id, 'movie');
  *
- * Read-only apart from `refreshLibrary`. No database or HTTP-server code; the api's
+ * Read-only apart from `refreshLibrary`, Jellyfin/Emby collections and item tags (Jellyfin/Emby
+ * `setItemTags`, Plex `PlexServerClient.setItemLabels`). No database or HTTP-server code; the api's
  * media-servers module stores the connections (settings section `mediaServers`).
  */
 
 import { AudiobookshelfServerClient } from './audiobookshelf.js';
 import { MediaBrowserServerClient } from './media-browser.js';
-import { PlexServerReadClient } from './plex.js';
+import { PlexServerClient } from './plex.js';
 import { MEDIA_SERVER_KINDS, MediaServerError, type MediaServerClient, type MediaServerClientOptions, type MediaServerKind } from './types.js';
 
 export * from './types.js';
 export { MediaBrowserServerClient, mediaBrowserAudioStream, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions, type MediaBrowserWatchItem, type MediaBrowserItemInfo, type MediaBrowserCollection, type MediaBrowserAudioPath, type MediaBrowserAudioStreamSpec, type WatchItemsOptions } from './media-browser.js';
-export { PlexServerReadClient, plexProviderIds, plexLibraryKind, pathIsInside, normalisePath, parsePlexWebhook, PLEX_OWNER_ACCOUNT_ID, PLEX_TV_URL, type PlexServerOptions, type PlexAccount, type PlexAccountList, type PlexLiveItem, type PlexSession, type PlexWebhookEvent } from './plex.js';
+export { PlexServerReadClient, PlexServerClient, plexProviderIds, plexLibraryKind, pathIsInside, normalisePath, parsePlexWebhook, PLEX_OWNER_ACCOUNT_ID, PLEX_TV_URL, type PlexServerOptions, type PlexAccount, type PlexAccountList, type PlexLiveItem, type PlexSession, type PlexWebhookEvent } from './plex.js';
 export { AudiobookshelfServerClient, audiobookshelfLibraryKind, audiobookshelfProviderIds, type AudiobookshelfServerOptions } from './audiobookshelf.js';
-export { normaliseBaseUrl, idsMatchQuery } from './http.js';
+export { normaliseBaseUrl, idsMatchQuery, mergeTags } from './http.js';
 
 export function isMediaServerKind(value: unknown): value is MediaServerKind {
   return typeof value === 'string' && (MEDIA_SERVER_KINDS as readonly string[]).includes(value);
@@ -35,7 +36,7 @@ export function createMediaServerClient(opts: MediaServerClientOptions): MediaSe
     case 'emby':
       return new MediaBrowserServerClient({ kind: opts.kind, url: opts.url, apiKey: opts.apiKey, ...extra });
     case 'plex':
-      return new PlexServerReadClient({ url: opts.url, token: opts.apiKey, ...extra });
+      return new PlexServerClient({ url: opts.url, token: opts.apiKey, ...extra });
     case 'audiobookshelf':
       return new AudiobookshelfServerClient({ url: opts.url, token: opts.apiKey, ...extra });
   }

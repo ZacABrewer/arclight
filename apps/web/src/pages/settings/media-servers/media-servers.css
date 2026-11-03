@@ -17,3 +17,6 @@
 .al-ms-plugin-servers { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .al-ms-plugin-servers li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .al-wh-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+.al-ms-tagsync { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--al-line-1); margin-top: 8px; padding-top: 12px; min-width: 0; }
+.al-ms-tagsync__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--al-text-1); }
+.al-ms-tagsync .al-caption { margin: 0; overflow-wrap: anywhere; }

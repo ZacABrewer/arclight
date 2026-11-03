@@ -58,6 +58,7 @@ import { watchHistoryModule } from './modules/watch-history/index.js';
 import { jellyfinPluginModule } from './modules/jellyfin-plugin/index.js';
 import { watchStatsModule } from './modules/watch-stats/index.js';
 import { collectionsModule } from './modules/collections/index.js';
+import { tagSyncModule } from './modules/tag-sync/index.js';
 import { mediaAnalysisModule } from './modules/media-analysis/index.js';
 import { libraryHygieneModule } from './modules/library-hygiene/index.js';
 import { healthScanModule } from './modules/health-scan/index.js';
@@ -222,6 +223,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     jellyfinPluginModule,
     watchStatsModule,
     collectionsModule,
+    tagSyncModule,
     // Slash commands and request channel posts over the requests service.
     discordBotModule,
     calendarModule,

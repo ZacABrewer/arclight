@@ -38,5 +38,5 @@ export function setMediaServersService(ctx: AppContext, service: MediaServersSer
 export const mediaServersModule: AppModule = (ctx) => async (app) => {
   // The list is the source of truth: move a stored single-server `mediaServer` value into it once.
   if (migrateLegacyMediaServer(ctx.db)) ctx.log.info('moved the legacy media server setting into the media servers list');
-  await app.register(mediaServersRoutes(mediaServersServiceFor(ctx)));
+  await app.register(mediaServersRoutes(mediaServersServiceFor(ctx), ctx.bus));
 };

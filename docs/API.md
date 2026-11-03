@@ -1552,6 +1552,21 @@ rescans the `podcast` libraries containing a podcast folder after podcast downlo
 | POST | `/mediaserver/:id/test` | `MediaServerProbeResult`: `{ok, serverName, version, libraries[]}` or `{ok: false, message, code}` (`System/Info` + `Library/VirtualFolders`, Plex `/` + `library/sections`, Audiobookshelf `/status` + `/api/libraries`) |
 | GET | `/mediaserver/:id/users` | `MediaServerAccountResource[]` `{id, name, isAdmin, isDisabled, lastActivityAt}` (Jellyfin/Emby `Users`, Plex server `accounts`); 502 when the server fails |
 
+**Tag sync** (module `apps/api/src/modules/tag-sync`, admin only). Per Jellyfin/Emby/Plex server, `tagSync`
+on `MediaServerInput` (`MediaServerTagSync` `{enabled, mode: all|selected, tagIds, prefix, lockTags}`) writes Arclight's
+movie and series tags to the matching items (Jellyfin/Emby item `Tags`, Plex labels, best-effort) as `prefix + label`.
+Ownership is kept in `media_server_tag_syncs`; only labels Arclight wrote are ever removed, and labels the item already
+had are recorded as `preexisting` and never removed. Runs after tag changes (30 s debounce, at most 5 min), nightly
+(`MediaServerTagSync`, `50 3 * * *`) and on demand; 4 requests a second per server, reads in batches of 50.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/mediaserver/:id/tag-sync` | `TagSyncStatus` `{running, lastRunAt, lastChanged, lastUnmatched, lastError}`; 404 unknown server, 400 Audiobookshelf |
+| POST | `/mediaserver/:id/tag-sync/preview` | Full dry run of the saved settings → `TagSyncPreview` `{changes[] (max 500: entityType, entityId, title, remoteItemId, add[], remove[]), totalChanges, unmatched, truncated}`; 400 disabled server, 502 when the server fails |
+| POST | `/mediaserver/:id/tag-sync/run` | 202; starts a full sync (single-flight per server) |
+| POST | `/mediaserver/:id/tag-sync/forget` | 204; sync turned off, Keep: deletes the ownership rows, the labels stay |
+| POST | `/mediaserver/:id/tag-sync/remove-all` | 202; sync turned off, Remove: removes the owned labels, then deletes the rows |
+
 **Clients** (`@arclight/media-servers`, native fetch, no db): `createMediaServerClient({kind,
 url, apiKey, fetch?, timeoutMs?})` → `info()`, `libraries()`, `users()`, `listItems(mediaType)`,
 `findItems({mediaType, tmdbId?, tvdbId?, imdbId?})`, `playState(item, userId)`,

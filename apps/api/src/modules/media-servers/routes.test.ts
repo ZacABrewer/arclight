@@ -4,12 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { MediaServerError, type MediaServerClientOptions } from '@arclight/media-servers';
 import { SECRET_MASK } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
+import { EventBus } from '../../events.js';
 import { getSection } from '../settings/service.js';
 import { FakeMediaServer } from '../retention/test-support.js';
 import { mediaServersRoutes } from './routes.js';
 import { MediaServersService } from './service.js';
 
-async function build() {
+async function build(bus?: EventBus) {
   const db = await createTestDb();
   const built: MediaServerClientOptions[] = [];
   const fake = new FakeMediaServer('jellyfin', 'Basement');
@@ -26,13 +27,27 @@ async function build() {
   const app = Fastify().withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
-  await app.register(mediaServersRoutes(service), { prefix: '/api/v1' });
+  await app.register(mediaServersRoutes(service, bus), { prefix: '/api/v1' });
   return { app, db, service, fake, built };
 }
 
 const JELLY = { kind: 'jellyfin', name: 'Basement', url: 'jellyfin.lan:8096/', apiKey: 'top-secret', usedForRetention: true };
 
 describe('media-servers routes', () => {
+  it('announces saves and deletes as a mediaServers settings event, not failed saves', async () => {
+    const bus = new EventBus();
+    const events: unknown[] = [];
+    bus.subscribe((e) => events.push(e));
+    const { app } = await build(bus);
+    const changed = { type: 'settings', section: 'mediaServers' };
+    expect((await app.inject({ method: 'POST', url: '/api/v1/mediaserver', payload: JELLY })).statusCode).toBe(201);
+    expect(events).toEqual([changed]);
+    expect((await app.inject({ method: 'POST', url: '/api/v1/mediaserver', payload: JELLY })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'PUT', url: '/api/v1/mediaserver/srv1', payload: { ...JELLY, apiKey: SECRET_MASK } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'DELETE', url: '/api/v1/mediaserver/srv1' })).statusCode).toBe(204);
+    expect(events).toEqual([changed, changed, changed]);
+  });
+
   it('creates a server, masks the key and normalises the URL', async () => {
     const { app, db } = await build();
     const res = await app.inject({ method: 'POST', url: '/api/v1/mediaserver', payload: JELLY });

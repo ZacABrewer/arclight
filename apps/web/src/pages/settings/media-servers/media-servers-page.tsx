@@ -24,6 +24,8 @@ import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { JellyfinPluginSection, WatchHistorySection } from './watch-sync.js';
+import { supportsTagSync, TagSyncSection, type TagSyncOffAction } from './tag-sync.js';
+import { tagSyncApi } from '../../../api/tag-sync.js';
 import './media-servers.css';
 import { t } from '../../../i18n/index.js';
 
@@ -158,6 +160,8 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
   const [errors, setErrors] = useState<ServerErrors>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [libraries, setLibraries] = useState<MediaServerProbeResult['libraries'] | null>(null);
+  const [tagSyncOff, setTagSyncOff] = useState<TagSyncOffAction | null>(null);
+  const toast = useToast();
   const save = useSaveMediaServer();
   const remove = useDeleteMediaServer();
   const ids = { kind: useId(), name: useId(), url: useId(), key: useId() };
@@ -171,7 +175,22 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
     if (!check()) return;
     // Audiobookshelf is never a sign-in provider (the api rejects it).
     const body = isLoginCapableKind(value.kind) ? value : { ...value, loginEnabled: false, createUsersOnLogin: false };
-    save.mutate({ id: server?.id, body }, { onSuccess: onClose });
+    save.mutate(
+      { id: server?.id, body },
+      {
+        onSuccess: async () => {
+          // Sync turned off: Remove takes Arclight's tags off the server, Keep only forgets them.
+          if (server && tagSyncOff) {
+            try {
+              await (tagSyncOff === 'remove' ? tagSyncApi.removeAll(server.id) : tagSyncApi.forget(server.id));
+            } catch (err) {
+              toast.push({ tone: 'error', title: t('settings.mediaServers.tagSync.failed'), message: errorMessage(err) });
+            }
+          }
+          onClose();
+        },
+      },
+    );
   };
   const keyLabel =
     value.kind === 'plex' ? t('settings.mediaServers.xPlexToken') : value.kind === 'audiobookshelf' ? t('settings.mediaServers.apiToken') : t('common.apiKey');
@@ -247,6 +266,15 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
               </FormRow>
             ))}
           </div>
+          {supportsTagSync(value.kind) ? (
+            <TagSyncSection
+              server={server && server.kind === value.kind ? server : null}
+              kind={value.kind}
+              value={value.tagSync}
+              onChange={(tagSync) => set('tagSync', tagSync)}
+              onOffAction={setTagSyncOff}
+            />
+          ) : null}
           <SaveError error={save.error} />
         </div>
       </Modal>

@@ -9,6 +9,7 @@ import {
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import type { EventBus } from '../../events.js';
 import { MediaServersError, type MediaServersErrorCode, type MediaServersService } from './service.js';
 
 const IdParams = z.object({ id: z.string().min(1) });
@@ -21,7 +22,12 @@ const statusFor: Record<MediaServersErrorCode, number> = {
   SERVER_ERROR: 502,
 };
 
-export function mediaServersRoutes(service: MediaServersService): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
+/** `bus`: saves and deletes publish a `mediaServers` settings event (tag sync, live UI). */
+export function mediaServersRoutes(
+  service: MediaServersService,
+  bus?: Pick<EventBus, 'publish'>,
+): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
+  const changed = () => bus?.publish({ type: 'settings', section: 'mediaServers' });
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof MediaServersError) return reply.code(statusFor[err.code]).send({ error: err.message, code: err.code });
@@ -44,18 +50,25 @@ export function mediaServersRoutes(service: MediaServersService): FastifyPluginA
       service.get(req.params.id),
     );
 
-    app.post('/mediaserver', { schema: { body: MediaServerInput, response: { 201: MediaServerResource, ...errors } } }, async (req, reply) =>
-      reply.code(201).send(service.create(req.body)),
-    );
+    app.post('/mediaserver', { schema: { body: MediaServerInput, response: { 201: MediaServerResource, ...errors } } }, async (req, reply) => {
+      const created = service.create(req.body);
+      changed();
+      return reply.code(201).send(created);
+    });
 
     app.put(
       '/mediaserver/:id',
       { schema: { params: IdParams, body: MediaServerInput, response: { 200: MediaServerResource, ...errors } } },
-      async (req) => service.update(req.params.id, req.body),
+      async (req) => {
+        const updated = service.update(req.params.id, req.body);
+        changed();
+        return updated;
+      },
     );
 
     app.delete('/mediaserver/:id', { schema: { params: IdParams, response: { 204: z.null(), ...errors } } }, async (req, reply) => {
       service.delete(req.params.id);
+      changed();
       return reply.code(204).send(null);
     });
 

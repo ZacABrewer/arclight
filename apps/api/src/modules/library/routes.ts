@@ -161,10 +161,15 @@ export const libraryRoutes = (
     app.put(
       '/tag/:id',
       { schema: { params: IdParams, body: TagRequest, response: { 200: Tag, 404: ErrorResponse, 409: ErrorResponse } } },
-      async (req) => svc.updateTag(db, req.params.id, req.body.label),
+      async (req) => {
+        const tag = svc.updateTag(db, req.params.id, req.body.label);
+        ctx.bus.publish({ type: 'settings', section: 'tags' });
+        return tag;
+      },
     );
     app.delete('/tag/:id', { schema: { params: IdParams, response: { 204: Empty, 404: ErrorResponse } } }, async (req, reply) => {
       svc.deleteTag(db, req.params.id);
+      ctx.bus.publish({ type: 'settings', section: 'tags' });
       return reply.code(204).send(null);
     });
 

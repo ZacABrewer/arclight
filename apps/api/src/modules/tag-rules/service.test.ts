@@ -2,9 +2,11 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { QUALITIES, TagRuleInput, type TagRuleInputRaw } from '@arclight/shared';
 import * as s from '../../db/schema.js';
+import { EventBus } from '../../events.js';
 import { deleteTag } from '../library/service.js';
+import { TagRulesService } from './service.js';
 import { STARTER_RULES } from './starters.js';
-import { addArtist, addAuthor, addEpisodeFile, addMovie, addMovieFile, addRequest, addSeries, addTag, addUser, labelsOf, setup } from './test-support.js';
+import { addArtist, addAuthor, addEpisodeFile, addMovie, addMovieFile, addRequest, addSeries, addTag, addUser, labelsOf, NOW, setup } from './test-support.js';
 
 const input = (raw: TagRuleInputRaw) => TagRuleInput.parse(raw);
 const GENRES = input({ name: 'Genres', appliesTo: ['movie', 'series'], addTags: ['genre:{genre}'] });
@@ -192,6 +194,26 @@ describe('TagRulesService: running', () => {
     fx.service.deleteRule(a.id, { removeTags: true });
     expect(labelsOf(fx, 'movie', m)).toEqual(['scary']);
     expect(fx.service.applied('movie', m).map((x) => x.ruleName)).toEqual(['B']);
+  });
+
+  it('deleting a rule with its tags publishes library and tag events (media-server tag sync)', async () => {
+    const fx = await setup();
+    const bus = new EventBus();
+    const events: unknown[] = [];
+    bus.subscribe((e) => events.push(e));
+    const service = new TagRulesService({ db: fx.db, now: () => NOW, bus });
+    const m = addMovie(fx, { genres: ['Horror'] });
+    const keep = service.createRule(input({ name: 'Keep', appliesTo: ['movie'], addTags: ['keep'] }));
+    const gone = service.createRule(input({ name: 'Gone', appliesTo: ['movie'], addTags: ['gone'] }));
+    service.run();
+    events.length = 0;
+    service.deleteRule(keep.id, { removeTags: false });
+    expect(events).toEqual([]);
+    service.deleteRule(gone.id, { removeTags: true });
+    expect(events).toEqual([
+      { type: 'library', action: 'updated', mediaType: 'movie', id: m },
+      { type: 'settings', section: 'tags' },
+    ]);
   });
 
   it('prunes ownership of deleted items', async () => {

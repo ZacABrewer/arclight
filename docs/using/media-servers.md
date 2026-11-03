@@ -228,6 +228,58 @@ Everything the plugin shows or does for a Jellyfin user is decided by the **link
 
 Only linked users are changed, and "hide adult content" is left as it is. Jellyfin's "block unrated items" has no direct equivalent: titles without a US rating are always above an Arclight limit. While the setting is on, limits edited in Arclight are replaced on the next user sync (hourly, or **Sync users**).
 
+## Sync tags
+
+Arclight can copy its own tags, the ones you set by hand and the ones [tag rules](tags.md#tag-rules) add, onto the matching movies and series on a Jellyfin, Emby or Plex server. In Jellyfin and Emby they become item **Tags**; in Plex they become **labels**. Music artists and audiobooks are not synced.
+
+Open the server in **Settings > Media servers** and find **Sync tags**:
+
+| Setting | What it does |
+|---|---|
+| **Sync tags** | Off by default. On, Arclight keeps the server's tags in line with its own |
+| **Tags** | **All tags**, or **Selected tags** with a list of the tags to send |
+| **Prefix** | Optional text put in front of every tag, up to 24 characters. With `arclight:`, the tag `kids` is written as `arclight:kids`. Commas and semicolons are not allowed |
+| **Lock tags in the media server** | On by default. Locks the tags field so a metadata refresh in the server does not wipe them |
+
+Save the server, then use **Preview** to see what a sync would change (a table of titles with the tags to add and to remove, how many items would change and how many titles are not on the server) without writing anything. **Sync now** runs a full sync straight away. The status line shows the last sync, how many items it changed, and the error if it failed.
+
+### What Arclight changes, and what it leaves alone
+
+- Arclight only ever removes tags it added itself. It keeps a record of every tag it writes to every item.
+- Tags you or other people set in the media server are never touched.
+- If an item already had the tag before Arclight wanted to add it (you typed the same tag in Jellyfin), Arclight notes that and never removes it.
+- Removing a tag from a title, removing a tag from **Selected tags**, or deleting the tag in Arclight removes it from the server on the next sync. Renaming a tag replaces the old name with the new one.
+- Titles are matched by their TMDB, TVDB or IMDb id. Titles the server does not have are counted as "not on the server" and skipped.
+
+### When it runs
+
+- A few seconds after a change: when you edit a title's tags (one at a time or in bulk), a tag rule runs or is deleted with its tags, or a tag is renamed or deleted, the change is sent after 30 seconds without further changes (at most 5 minutes later while changes keep coming).
+- About 30 seconds after you save a server with sync on: a full pass applies the new settings to every title.
+- Every night at 03:50, as the task **MediaServerTagSync** in **System > Tasks**, a full pass catches anything missed.
+- When you press **Sync now**.
+
+Only items whose tags differ are read and written, at most 4 requests a second per server. If the server answers "too many requests" or "unavailable", Arclight waits 30 seconds and tries once more. After 5 failures in a row the run stops and the status line shows the error.
+
+### Turning it off
+
+When you turn **Sync tags** off on a server that had it on, Arclight asks **Remove the tags Arclight added?**
+
+- **Remove** takes every tag Arclight added off the server when you save. Your own tags stay.
+- **Keep** leaves the tags on the server. Arclight forgets that it added them, so it will not remove them later.
+
+### Plex
+
+Plex labels are best-effort. Plex has no documented way to edit labels, so Arclight uses the same request the Plex web app makes. If a Plex update changes that, label syncing may stop working while everything else keeps going; the status line then shows the error.
+
+### Parental controls with synced tags
+
+Synced tags work with Jellyfin's parental controls. In the Jellyfin dashboard, open **Users**, pick a user and go to **Parental control**. There are two lists:
+
+- **Block items with tags**: the user does not see anything carrying one of these tags. For example, add a tag rule in Arclight that tags adult titles `adult`, sync tags with the prefix `arclight:`, and block `arclight:adult` for the children's accounts.
+- **Allow items with tags**: the user only sees items carrying one of these tags. For example, use the starter rule **Kids** (it adds `kids` for G, PG, TV-Y, TV-Y7, TV-G and U certifications), sync it, and allow only `arclight:kids` for a young child's account.
+
+Keep **Lock tags in the media server** on, so a metadata refresh does not remove the tags and suddenly show or hide titles. A prefix makes the synced tags easy to tell apart from the ones you add in Jellyfin.
+
 ## Common problems
 
 | Symptom | Likely cause |
