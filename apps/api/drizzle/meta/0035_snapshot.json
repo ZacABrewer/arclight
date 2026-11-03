@@ -17623,6 +17623,45 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "media_server_tag_locks": {
+      "name": "media_server_tag_locks",
+      "columns": {
+        "server_id": {
+          "name": "server_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "remote_item_id": {
+          "name": "remote_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "media_server_tag_locks_server_id_remote_item_id_pk": {
+          "columns": [
+            "server_id",
+            "remote_item_id"
+          ],
+          "name": "media_server_tag_locks_server_id_remote_item_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "media_server_tag_sync_state": {
       "name": "media_server_tag_sync_state",
       "columns": {

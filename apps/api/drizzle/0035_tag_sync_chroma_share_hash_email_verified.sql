@@ -21,4 +21,10 @@ CREATE INDEX `media_server_tag_syncs_entity_idx` ON `media_server_tag_syncs` (`s
 ALTER TABLE `users` ADD `email_verified` integer DEFAULT true NOT NULL;--> statement-breakpoint
 ALTER TABLE `wrapped_shares` ADD `token_hash` text;--> statement-breakpoint
 CREATE UNIQUE INDEX `wrapped_shares_token_hash_idx` ON `wrapped_shares` (`token_hash`);--> statement-breakpoint
-ALTER TABLE `video_fingerprints` ADD `chroma` blob;
+ALTER TABLE `video_fingerprints` ADD `chroma` blob;--> statement-breakpoint
+CREATE TABLE `media_server_tag_locks` (
+	`server_id` text NOT NULL,
+	`remote_item_id` text NOT NULL,
+	`added_at` integer NOT NULL,
+	PRIMARY KEY(`server_id`, `remote_item_id`)
+);
