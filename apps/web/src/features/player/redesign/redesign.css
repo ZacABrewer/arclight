@@ -75,7 +75,8 @@
 .rd-progress > span { display: block; height: 100%; border-radius: 2px; background: var(--al-pl-accent); }
 .rd-resume { display: flex; align-items: center; gap: 10px; width: 300px; max-width: 100%; font-size: 13px; color: var(--al-pl-text-3); }
 .rd-resume__bar { flex: 1; background: color-mix(in srgb, var(--al-pl-text) 20%, transparent); }
-.rd-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; font-weight: 800; line-height: 1; color: var(--al-pl-bg); user-select: none; }
+/* The initial is the page colour on dark themes; light themes' page colour is too pale for the profile colours, so it takes the text colour there. */
+.rd-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; font-weight: 800; line-height: 1; color: var(--al-pl-bg); color: light-dark(var(--al-pl-text), var(--al-pl-bg)); user-select: none; }
 
 /* ---------- art and tiles ---------- */
 .rd-art { position: relative; display: block; overflow: hidden; border-radius: var(--al-pl-radius); background-size: cover; background-position: center; }
