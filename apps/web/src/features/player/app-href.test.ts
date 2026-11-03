@@ -20,4 +20,12 @@ describe('appHref', () => {
     expect(appHref('/', { mode: 'host', playerOnly: false }, 'https://watch.example.com', 'https://watch.example.com', '')).toBeNull();
     expect(appHref('/', host, 'not a url', 'https://watch.example.com', '')).toBeNull();
   });
+
+  it('follows another origin from the server on a page without the player mapping', () => {
+    // The "player is off" page on a player hostname: its root would only redirect back.
+    expect(appHref('/', null, 'https://media.example.com', 'https://watch.example.com', '')).toBe('https://media.example.com/');
+    expect(appHref('/requests', null, 'https://media.example.com/arclight/', 'https://watch.example.com', '/arclight')).toBe('https://media.example.com/arclight/requests');
+    expect(appHref('/', null, 'https://nas.example.com/arclight', 'https://nas.example.com', '/arclight')).toBe('/arclight/');
+    expect(appHref('/', null, 'not a url', 'https://watch.example.com', '')).toBe('/');
+  });
 });
