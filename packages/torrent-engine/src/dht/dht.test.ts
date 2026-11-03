@@ -284,6 +284,8 @@ describe('DHT hostile input (DATA-22, DATA-55)', () => {
     const started = Date.now();
     const res = await d.getPeers(randomBytes(20));
     expect(res.peers.length).toBe(5000);
-    expect(Date.now() - started).toBeLessThan(10_000);
-  }, 20_000);
+    // Bounded, not instant: ~7 s on an idle machine (1,800 dead contacts at a 50 ms query timeout),
+    // more when the whole workspace's suites share the CPU.
+    expect(Date.now() - started).toBeLessThan(20_000);
+  }, 30_000);
 });

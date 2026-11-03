@@ -347,7 +347,8 @@ describe('fetchWithProxy over SOCKS5', () => {
     });
     const { proxy } = await startSocks5();
     await expect(fetchWithProxy(`http://origin.test:${origin}/`, {}, proxy)).rejects.toMatchObject({ name: 'ProxyError', code: 'protocol' });
-  });
+    // Building the bomb is CPU-bound (256 MiB through brotli): slow when the whole workspace runs at once.
+  }, 30_000);
 
   it('stops an endless raw body at the cap (DATA-08)', async () => {
     const origin = await startOrigin((_req, res) => {
