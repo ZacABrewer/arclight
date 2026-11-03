@@ -1,3 +1,5 @@
+// First: console output is redacted (signed links) before any other module runs.
+import './core/redact-install';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
