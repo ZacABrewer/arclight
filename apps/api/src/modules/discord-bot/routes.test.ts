@@ -43,7 +43,7 @@ describe('discord bot routes', () => {
     expect((await h.server.inject({ method: 'GET', url: '/api/v1/settings/discordbot', headers: h.userH })).statusCode).toBe(403);
     expect((await h.server.inject({ method: 'GET', url: '/api/v1/settings/discordbot' })).statusCode).toBe(401);
     const empty = await h.server.inject({ method: 'GET', url: '/api/v1/settings/discordbot', headers: h.adminH });
-    expect(empty.json()).toEqual({ enabled: false, botToken: '', guildId: null, requestChannelId: null, adminRoleId: null });
+    expect(empty.json()).toEqual({ enabled: false, botToken: '', guildId: null, requestChannelId: null, adminRoleId: null, allowUnlinkedSearch: false });
 
     const noToken = await h.server.inject({ method: 'PUT', url: '/api/v1/settings/discordbot', headers: h.adminH, payload: { enabled: true } });
     expect(noToken.statusCode).toBe(400);

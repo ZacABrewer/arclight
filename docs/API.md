@@ -2898,7 +2898,7 @@ table (`DiscordBotSettings`); saving restarts the bot.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId}`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
+| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId, allowUnlinkedSearch}`; `allowUnlinkedSearch` (default `false`, API only) lets users who have not run `/link` use `/search`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
 | GET | `/discordbot/status` | Admin. `DiscordBotStatus`: `state` (`disabled`/`connecting`/`connected`/`reconnecting`/`error`), bot user, `connectedAt`, `lastError`, `reconnectAttempts`, `commandsRegistered`, `linkedUsers` |
 | POST | `/discordbot/test` | Admin. Optional `DiscordBotSettings` body (mask = stored token). `GET /users/@me` with the token, then posts a test embed to `requestChannelId` when set → `DiscordBotTestResult` |
 | POST | `/user/me/discord/link-code` | Signed-in user (not API key). One-time 8-character code valid 10 minutes (a newer code replaces older ones) → `DiscordLinkCode` `{code, expiresAt, linkedDiscordUserId}` |
@@ -2915,8 +2915,11 @@ original response is edited):
 | `/link <code>` | Links the caller to the Arclight user who created the code |
 | `/request <title> [year] [4k]` | TMDB multi-search; up to 5 matches as buttons. A click creates the request as the linked user (`requests.create`, series request all seasons), so permissions, quotas, approval policies and content caps apply. Unlinked users are told to create a code under Profile > Discord |
 | `/status [title]` | The linked user's requests (up to 10), filtered by title |
-| `/search <title>` | TMDB matches with library / request status (normal and 4K) |
+| `/search <title>` | TMDB matches with library / request status (normal and 4K). Needs a linked account unless `allowUnlinkedSearch` is on |
 | `/pending` | Up to 5 pending requests with Approve/Decline buttons. Allowed for linked users with `MANAGE_REQUESTS` (who act as themselves) and for members holding `adminRoleId` (who act as the system; `modifiedBy` stays empty). Checked again on each click |
+
+Title lookups (`/search` and the search step of `/request`, both TMDB calls) are limited to 5
+per Discord user per minute; further calls get a "searching too often" reply.
 
 Request events (`created`, `approved`, `completed`) are posted as embeds to `requestChannelId`
 through `POST /channels/{id}/messages` with the bot token. Health check

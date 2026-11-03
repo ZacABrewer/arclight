@@ -17,8 +17,27 @@ export interface LaunchOptions {
   startUrl?: string;
   extraArgs?: readonly string[];
   timeoutMs?: number;
+  /**
+   * Start the browser even when this process runs as root (which needs `--no-sandbox`, so a
+   * compromised page renderer is not contained). Default: `ARCLIGHT_SOLVER_ALLOW_ROOT=1`.
+   */
+  allowRoot?: boolean;
+  /** Test seam: whether the process runs as root (default: `process.getuid() === 0`). */
+  isRoot?: () => boolean;
   /** Test seam. */
   spawnImpl?: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
+}
+
+/** Environment switch that lets the solver browser run as root (sandbox off). */
+export const ALLOW_ROOT_ENV = 'ARCLIGHT_SOLVER_ALLOW_ROOT';
+
+export function runningAsRoot(): boolean {
+  return typeof process.getuid === 'function' && process.getuid() === 0;
+}
+
+function allowRootFromEnv(): boolean {
+  const v = process.env[ALLOW_ROOT_ENV]?.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
 }
 
 export interface LaunchedBrowser {
@@ -45,7 +64,7 @@ export function parseDevToolsActivePort(text: string, host = '127.0.0.1'): strin
   return `ws://${host}:${port}${target}`;
 }
 
-export function browserArgs(opts: Pick<LaunchOptions, 'userDataDir' | 'headless' | 'startUrl' | 'extraArgs'>): string[] {
+export function browserArgs(opts: Pick<LaunchOptions, 'userDataDir' | 'headless' | 'startUrl' | 'extraArgs' | 'isRoot'>): string[] {
   const args = [
     `--user-data-dir=${opts.userDataDir}`,
     '--remote-debugging-port=0',
@@ -60,7 +79,7 @@ export function browserArgs(opts: Pick<LaunchOptions, 'userDataDir' | 'headless'
     '--window-size=1366,768',
   ];
   if (opts.headless !== false) args.push('--headless=new');
-  if (typeof process.getuid === 'function' && process.getuid() === 0) args.push('--no-sandbox');
+  if ((opts.isRoot ?? runningAsRoot)()) args.push('--no-sandbox');
   args.push(...(opts.extraArgs ?? []));
   args.push(opts.startUrl ?? 'about:blank');
   return args;
@@ -72,6 +91,14 @@ export function browserArgs(opts: Pick<LaunchOptions, 'userDataDir' | 'headless'
  * or the `DevToolsActivePort` file the browser writes into the profile directory.
  */
 export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowser> {
+  // Chromium refuses to run as root with its sandbox on, and without the sandbox a page that
+  // exploits the renderer runs with root rights. Refuse unless the operator opted in.
+  if ((opts.isRoot ?? runningAsRoot)() && !(opts.allowRoot ?? allowRootFromEnv())) {
+    throw new SolverError(
+      'launch',
+      `Refusing to start the solver browser as root (it would run without its sandbox). Run Arclight as a regular user, or set ${ALLOW_ROOT_ENV}=1 to allow it.`,
+    );
+  }
   mkdirSync(opts.userDataDir, { recursive: true });
   const portFile = path.join(opts.userDataDir, PORT_FILE);
   rmSync(portFile, { force: true });

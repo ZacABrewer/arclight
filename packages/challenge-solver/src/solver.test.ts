@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { handleFlareSolverrCommand } from './flaresolverr-api.js';
 import type { LaunchedBrowser } from './launch.js';
-import { ChallengeSolver, normalizeUserAgent, type ChallengeSolverOptions } from './solver.js';
+import { ChallengeSolver, MAX_REQUEST_TIMEOUT_MS, normalizeUserAgent, type ChallengeSolverOptions } from './solver.js';
 import { FakeCdpServer } from './testing/fake-cdp-server.js';
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8');
@@ -230,5 +230,45 @@ describe('FlareSolverr /v1 contract', () => {
     expect((await handleFlareSolverrCommand(solver, { cmd: 'sessions.destroy', session: 'abc' })).body.status).toBe('ok');
     expect((await handleFlareSolverrCommand(solver, { cmd: 'sessions.destroy', session: 'abc' })).httpStatus).toBe(500);
     expect(launches).toBe(0);
+  });
+});
+
+describe('hardening', () => {
+  it('clamps maxTimeout to 120 s', async () => {
+    server.sites.set('https://hard.example/', { states: [{ title: 'Just a moment...', html: CHALLENGE }] });
+    let t = 0;
+    const solver = makeSolver({ now: () => t, sleep: async (ms) => void (t += Math.max(ms, 1000)) });
+    const res = await handleFlareSolverrCommand(solver, { cmd: 'request.get', url: 'https://hard.example/', maxTimeout: 1e9 });
+    expect(res.body.message).toContain('Timeout after 120 seconds');
+    expect(t).toBeLessThan(MAX_REQUEST_TIMEOUT_MS + 5000);
+  });
+
+  it('refuses the session beyond the cap and drops idle sessions', async () => {
+    let t = 0;
+    const solver = makeSolver({ maxSessions: 3, sessionIdleMs: 60_000, now: () => t });
+    for (const n of ['a', 'b', 'c']) expect((await handleFlareSolverrCommand(solver, { cmd: 'sessions.create', session: n })).httpStatus).toBe(200);
+    const fourth = await handleFlareSolverrCommand(solver, { cmd: 'sessions.create', session: 'd' });
+    expect(fourth).toMatchObject({ httpStatus: 500, body: { message: expect.stringContaining('Too many sessions') } });
+    // re-creating an existing one is fine
+    expect((await handleFlareSolverrCommand(solver, { cmd: 'sessions.create', session: 'a' })).httpStatus).toBe(200);
+    expect(() => solver.createSession('x'.repeat(201))).toThrow(/limited to 200/);
+    t = 61_000;
+    expect(solver.listSessions()).toEqual([]);
+    expect(solver.createSession('d')).toBe('d');
+  });
+
+  it('vets the target and the final URL with checkTarget', async () => {
+    server.sites.set('https://example.com/', { states: [{ title: 'ok', html: NORMAL }] });
+    const seen: string[] = [];
+    const solver = makeSolver({
+      checkTarget: (u) => {
+        seen.push(u.href);
+        if (u.hostname === '127.0.0.1') throw new Error('127.0.0.1 is a local or reserved network address');
+      },
+    });
+    await expect(solver.solve({ method: 'GET', url: 'http://127.0.0.1:8080/' })).rejects.toMatchObject({ code: 'bad-request', message: expect.stringContaining('reserved') });
+    expect(server.methods()).not.toContain('Page.navigate');
+    await solver.solve({ method: 'GET', url: 'https://example.com/' });
+    expect(seen).toEqual(['http://127.0.0.1:8080/', 'https://example.com/']);
   });
 });

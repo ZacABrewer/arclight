@@ -10,6 +10,8 @@ import { runContainerUpdateJob } from './index.js';
 import { parseChallenge, parseImageRef, remoteDigest } from './registry.js';
 import { UpdatesService } from './service.js';
 
+const NEW_DIGEST = `sha256:${'a1'.repeat(32)}`;
+
 // ---- a fake Docker Engine API ----------------------------------------------------------------
 
 interface FakeContainer {
@@ -95,11 +97,23 @@ class FakeDocker {
       return img ? json(img) : [404, JSON.stringify({ message: 'No such image' })];
     }
     if (url.pathname === '/images/create' && method === 'POST') {
-      const ref = `${url.searchParams.get('fromImage')}:${url.searchParams.get('tag')}`;
+      const from = url.searchParams.get('fromImage')!;
+      const tag = url.searchParams.get('tag')!;
+      const byDigest = tag.startsWith('sha256:');
+      const ref = byDigest ? `${from}@${tag}` : `${from}:${tag}`;
       this.calls.push(`pull ${ref}`);
-      const old = this.images.get(ref);
-      this.addImage(ref, 'sha256:newdigest', old?.Config ?? {});
+      const old = this.images.get(ref) ?? [...this.images.entries()].find(([k]) => k.startsWith(`${from}:`))?.[1];
+      this.addImage(ref, byDigest ? tag : NEW_DIGEST, old?.Config ?? {});
       return [200, '{"status":"Pulling"}\n{"status":"Downloaded newer image"}\n'];
+    }
+    if (parts[0] === 'images' && parts.at(-1) === 'tag' && method === 'POST') {
+      const source = decodeURIComponent(parts.slice(1, -1).join('/'));
+      const img = this.images.get(source);
+      if (!img) return [404, JSON.stringify({ message: 'No such image' })];
+      const to = `${url.searchParams.get('repo')}:${url.searchParams.get('tag')}`;
+      this.calls.push(`tag ${source} -> ${to}`);
+      this.images.set(to, img);
+      return [201, ''];
     }
     if (url.pathname === '/containers/create' && method === 'POST') {
       const name = url.searchParams.get('name')!;
@@ -171,7 +185,7 @@ function fakeRegistry(digests: Record<string, string>, seen: string[] = []): typ
 }
 
 const REMOTE = {
-  'registry-1.docker.io/qmcgaw/gluetun:latest': 'sha256:newdigest',
+  'registry-1.docker.io/qmcgaw/gluetun:latest': NEW_DIGEST,
   'lscr.io/linuxserver/qbittorrent:latest': 'sha256:qbit1',
   'ghcr.io/arclight/arclight:latest': 'sha256:arc1',
 };
@@ -292,7 +306,7 @@ describe('ContainerUpdater against a fake Docker API', () => {
       ['gluetun', true, false, null],
       ['qbittorrent', false, false, 'gluetun'],
     ]);
-    expect(items.find((i) => i.name === 'gluetun')).toMatchObject({ currentDigest: 'sha256:olddigest', latestDigest: 'sha256:newdigest' });
+    expect(items.find((i) => i.name === 'gluetun')).toMatchObject({ currentDigest: 'sha256:olddigest', latestDigest: NEW_DIGEST });
     // Labels come from Docker inspect (the opt-in label included).
     expect(items.find((i) => i.name === 'gluetun')!.labels).toMatchObject({ 'arclight.autoupdate': 'true' });
     expect((await updater.info('notify')).containers).toHaveLength(3);
@@ -304,7 +318,9 @@ describe('ContainerUpdater against a fake Docker API', () => {
     const run = await updater.update(['gluetun']);
     expect(run).toMatchObject({ ok: true, handedOff: false, updated: ['gluetun', 'qbittorrent', 'arclight'] });
     expect(d.calls).toEqual([
-      'pull qmcgaw/gluetun:latest',
+      // the digest the check compared, then the tag moved onto it
+      `pull qmcgaw/gluetun@${NEW_DIGEST}`,
+      `tag qmcgaw/gluetun@${NEW_DIGEST} -> qmcgaw/gluetun:latest`,
       'create gluetun-arclight-new',
       'create qbittorrent-arclight-new',
       'create arclight-arclight-new',
@@ -327,6 +343,8 @@ describe('ContainerUpdater against a fake Docker API', () => {
     ]);
     const newGluetun = d.find('gluetun')!;
     expect(newGluetun.Id).not.toBe(gluetun.Id);
+    // The recreated container runs the image that was compared, not whatever the tag points at now.
+    expect(newGluetun.Image).toBe(d.images.get(`qmcgaw/gluetun@${NEW_DIGEST}`)!.Id);
     const gBody = d.created.find((x) => x.name === 'gluetun-arclight-new')!.body;
     // The image's own env and cmd are not frozen into the new container; run-time env is kept.
     expect(gBody['Env']).toEqual(['VPN_TYPE=wireguard']);

@@ -81,6 +81,8 @@ export class DiscordBotService {
       applicationId: () => this.applicationId,
       requests: opts.requests,
       adminRoleId: () => this.stored().adminRoleId,
+      allowUnlinkedSearch: () => this.stored().allowUnlinkedSearch,
+      now: () => this.now().getTime(),
       linkedUser: (id) => this.linkedUser(id),
       redeemLinkCode: (code, discordUserId) => this.redeem(code, discordUserId),
       ...(opts.log ? { log: opts.log } : {}),

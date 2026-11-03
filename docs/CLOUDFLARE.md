@@ -71,7 +71,15 @@ there is a browser. The built-in solver (`packages/challenge-solver`) drives it:
   The headless `HeadlessChrome` token is removed from the User-Agent the page and the result
   see. POSTs run as `fetch()` inside the cleared page, so they carry its cookies.
 - **Resources**: one request at a time (others queue). The browser starts on first use and
-  closes after `solver.idleCloseSeconds` without work.
+  closes after `solver.idleCloseSeconds` without work. A request's `maxTimeout` is capped at
+  120 seconds. At most 20 named sessions exist at once (`sessions.create` beyond that answers
+  an error), and a session unused for 30 minutes is destroyed.
+- **Targets**: only public hosts. Loopback, LAN, link-local and other reserved addresses are
+  refused before the page is loaded, and a page whose final URL (after redirects) is such an
+  address is not returned. Set `solver.allowPrivateTargets` to `true` to allow them.
+- **Root**: the browser will not start when Arclight runs as root, because Chromium then needs
+  `--no-sandbox`. Run Arclight as a regular user; to accept the risk anyway, set the
+  environment variable `ARCLIGHT_SOLVER_ALLOW_ROOT=1` (a warning is logged on every start).
 
 It is served by the api itself at `POST /api/v1/solver/v1` (same JSON as FlareSolverr's
 `/v1`, behind the API key). When `solver.enabled` is on and a browser is found,
@@ -88,6 +96,7 @@ and removed when the solver is disabled or the browser disappears.
 | `browserPath` | auto | Browser executable; empty = auto-detect |
 | `timeoutSeconds` | `60` | Give up on a challenge after this long |
 | `idleCloseSeconds` | `300` | Close the browser after this long idle (0 = keep it open) |
+| `allowPrivateTargets` | `false` | Let the solver load loopback and LAN addresses |
 
 `GET /api/v1/solver/status` reports the browser found, whether it is running, the queue length
 and the proxy id. `POST /api/v1/solver/autodetect` runs ProxyAutoDetect immediately.
