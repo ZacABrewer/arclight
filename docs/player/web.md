@@ -141,3 +141,8 @@ The video page has the title and episode at the top left, then play and pause, b
 10 seconds, the next episode, and **Audio & subtitles**. **Skip intro** shows during an intro
 when the file has one marked. Move the mouse or tap to show the controls; they hide after a few
 seconds of playback.
+
+Video that is repacked or converted comes as HLS, so seeking and quality changes happen in
+place. **Playback settings** then lists the stream's own quality steps, and **Auto** moves
+between them to match your connection and the server. See
+[How video reaches you](../using/player.md#how-video-reaches-you).

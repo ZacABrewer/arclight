@@ -169,6 +169,14 @@ describe('security headers (CLI-03)', () => {
     await app.close();
   });
 
+  it('lets the web player’s hls.js run: MSE blob media, its blob worker, same-origin segments', () => {
+    const directive = (name: string) => PAGE_CSP.split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? '';
+    expect(directive('media-src').split(' ')).toContain('blob:');
+    expect(directive('worker-src').split(' ')).toEqual(['worker-src', "'self'", 'blob:']);
+    expect(directive('connect-src').split(' ')).toContain("'self'");
+    expect(directive('script-src')).toBe("script-src 'self'");
+  });
+
   it('sends HSTS only over https on the https Application URL’s host', async () => {
     const h = await harness();
     setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com' });

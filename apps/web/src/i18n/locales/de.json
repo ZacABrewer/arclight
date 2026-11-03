@@ -8474,6 +8474,7 @@
   "player.video.densityShort.m": "M",
   "player.video.densityShort.l": "L",
   "player.video.method.direct": "Direkte Wiedergabe",
+  "player.video.method.hls": "HLS",
   "player.video.method.remux": "Remux",
   "player.video.method.transcode": "Transkodierung",
   "settings.users.profiles.tab": "Profile",

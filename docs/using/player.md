@@ -111,7 +111,7 @@ The video player fills the screen. Move the mouse, tap or press a key to show th
 - Play and pause, back and forward 10 seconds, and a seek bar with marks for chapters.
 - Volume and mute, picture in picture and full screen.
 - **Audio & subtitles**: pick the audio track and the subtitles. If subtitles are early or late, nudge them in steps of a quarter second.
-- **Playback settings**: the version, the quality (Auto, Original, 1080p, 720p or 480p) and the speed. It also shows how the video reaches you (see below).
+- **Playback settings**: the version, the quality and the speed. It also shows how the video reaches you (see below). When the video comes as HLS, the quality list is the stream's own steps (for example Original, 1080p, 720p, 480p, 360p) and picking one switches in place.
 - **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts, when Arclight found the intro and credits by comparing a season's audio, or when an admin entered the times. Dragging the progress bar shows scrub thumbnails. See [Scrub thumbnails and intro detection](../player/scrub-thumbnails-and-intros.md).
 - Near the end of an episode, an **Up next** card counts down 10 seconds and then plays the next episode. Press **Cancel** to stay, or **Play now** to go straight away.
 
@@ -131,7 +131,9 @@ TV remotes and game pads work too: the arrows move between buttons, and **OK** p
 
 Arclight sends the original file when your browser can play it (**direct play**) and the connection is fast enough for it. When it cannot, for example because of the file type, the video or audio format, HDR, your bitrate limit or a slow connection, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power.
 
-Converted video goes out as an adaptive stream (HLS) of 6-second pieces. **Auto** starts at a quality the connection and the server can keep up with and moves up or down as they change, so playback does not stop to buffer. The server only offers a quality it can convert at least 1.3 times faster than real time, and 4K only after it has measured that speed. A jump inside what is already converted is instant; a jump further ahead starts a new conversion from there, which takes a second or two. Converted pieces stay in the segment cache, so watching again costs nothing. Picking a fixed quality (1080p, 720p, 480p) keeps that quality.
+Repacked and converted video goes out as an adaptive stream (**HLS**) of 6-second pieces the browser fetches as it plays. Seeking, going back and changing quality happen in place, without starting a new stream. **Auto** starts at a quality the connection and the server can keep up with and moves up or down as they change, so playback does not stop to buffer. The server only offers a quality it can convert at least 1.3 times faster than real time, and 4K only after it has measured that speed. A jump inside what is already converted is instant; a jump further ahead starts a new conversion from there, which takes a second or two. Converted pieces stay in the segment cache, so watching again costs nothing. Picking a fixed quality (1080p, 720p, 480p) keeps that quality.
+
+The video badge shows the stream, for example `HLS · 1080p · QSV`: the last part is the encoder the server uses, a graphics encoder such as QSV or VAAPI, or `CPU` when it converts in software. If direct play keeps stalling on Auto, the player switches to HLS by itself. Safari plays HLS itself, so there Auto is the only quality that switches in place.
 
 Subtitles that are text (SRT, ASS, WebVTT) are drawn by the player. Picture subtitles (PGS, VobSub) are burned into the video, which means converting it.
 
@@ -193,7 +195,7 @@ How a video reaches you depends on what your device can play:
 - **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
 - **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
 
-The player says which one it uses and why. Remuxed and converted video is sent as an adaptive stream (see [How video reaches you](#how-video-reaches-you)); older apps get a single stream, which starts again from the new point on each seek. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+The player says which one it uses and why. In a browser, remuxed and converted video comes as an adaptive stream (HLS), so seeking stays in place (see [How video reaches you](#how-video-reaches-you)). Older apps get one stream instead, and there seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
 
 Subtitles that are forced (signs and foreign-language lines only) and are pictures are burned in when subtitles are off, so those lines still show.
 

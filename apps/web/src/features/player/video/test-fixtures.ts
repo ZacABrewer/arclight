@@ -171,6 +171,8 @@ export function session(over: Partial<VideoSession> = {}): VideoSession {
     subtitles: [],
     burnedSubtitle: null,
     expiresAt: '2026-11-02T12:00:00.000Z',
+    delivery: 'progressive',
+    sessionId: null,
     ...over,
   } as VideoSession;
 }
