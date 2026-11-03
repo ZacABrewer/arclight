@@ -1,0 +1,118 @@
+/* Arclight app chrome. Everything else comes from the web design system (arclight) and the
+   web player (player.css). The WebView draws edge to edge (viewport-fit=cover): fixed chrome
+   pads for the notch / Dynamic Island, the home indicator and landscape side insets. Touch
+   targets are at least 44px. */
+
+:root {
+  --app-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --app-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --app-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --app-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --app-top: 52px;
+  --app-tabs: 58px;
+  --app-mini: 64px;
+}
+
+html, body { background: var(--al-bg, #02070a); overscroll-behavior: none; }
+body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+#root { min-height: 100vh; min-height: 100dvh; }
+
+.app-touch { min-width: 44px; min-height: 44px; }
+
+/* ---------- top bar ---------- */
+.app-top {
+  position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 8px;
+  height: calc(var(--app-top) + var(--app-safe-top));
+  padding: var(--app-safe-top) max(8px, var(--app-safe-right)) 0 max(8px, var(--app-safe-left));
+  background: color-mix(in srgb, var(--al-surface-solid) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--al-line-1, var(--al-line-2));
+}
+.app-top__brand { display: inline-flex; align-items: center; justify-content: center; }
+.app-top__mid { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
+.app-badge {
+  font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 10px;
+  border: 1px solid var(--al-warn, #e8a33d); color: var(--al-warn-text, #f2c37a); border-radius: 999px;
+}
+
+/* ---------- page ---------- */
+.app-shell .app-main {
+  padding: 16px max(16px, var(--app-safe-right)) calc(var(--app-tabs) + var(--app-mini) + 24px + var(--app-safe-bottom)) max(16px, var(--app-safe-left));
+}
+.app-page { display: flex; flex-direction: column; gap: 16px; }
+.app-page__title { margin: 4px 0 0; font-size: 24px; font-weight: 600; color: var(--al-text-1); }
+.app-section { display: flex; flex-direction: column; gap: 8px; }
+.app-section__title { margin: 8px 0 0; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--al-text-4); font-weight: 500; }
+.app-hint { margin: 0; font-size: 13px; color: var(--al-text-4); }
+.app-row { display: flex; align-items: center; gap: 8px; }
+.app-row--wrap { flex-wrap: wrap; }
+.app-stack { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- dock: mini-player + tabs ---------- */
+.app-dock {
+  position: fixed; z-index: 35; left: 0; right: 0; bottom: 0;
+  background: var(--al-surface-solid); border-top: 1px solid var(--al-line-2); box-shadow: var(--al-shadow-pop);
+}
+.app-dock .pl-mini { position: relative; box-shadow: none; border-top: 0; padding-bottom: 8px; border-bottom: 1px solid var(--al-line-1, var(--al-line-2)); }
+.app-tabs {
+  display: flex; padding: 0 var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);
+}
+.app-tabs__link {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: var(--app-tabs); font-size: 11px; color: var(--al-text-4); text-decoration: none;
+}
+.app-tabs__link:hover { text-decoration: none; color: var(--al-text-2); }
+.app-tabs__link[aria-current='page'] { color: var(--al-cyan); }
+
+/* ---------- onboarding ---------- */
+.app-onboarding { position: relative; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.app-onboarding__head { position: relative; z-index: 2; height: calc(52px + var(--app-safe-top)); padding: var(--app-safe-top) max(8px, var(--app-safe-right)) 0 max(8px, var(--app-safe-left)); display: flex; align-items: center; }
+.app-onboarding__main {
+  position: relative; z-index: 1; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+  width: 100%; max-width: 480px; margin: 0 auto;
+  padding: 16px max(20px, var(--app-safe-right)) calc(24px + var(--app-safe-bottom)) max(20px, var(--app-safe-left));
+}
+.app-welcome { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+.app-welcome .app-stack { width: 100%; }
+.app-welcome__title { margin: 8px 0 0; font-size: 26px; line-height: 1.2; color: var(--al-text-1); }
+.app-welcome__body { margin: 0; color: var(--al-text-3); }
+.app-card { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.app-card__title { margin: 0; font-size: 22px; color: var(--al-text-1); }
+.app-card__sub { margin: -8px 0 0; color: var(--al-text-4); font-size: 14px; word-break: break-all; }
+
+/* ---------- lists (downloads) ---------- */
+.app-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.app-list__row { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--al-line-1, var(--al-line-2)); }
+.app-list__row:last-child { border-bottom: 0; }
+.app-list__row.is-current .app-list__title { color: var(--al-cyan); }
+.app-list__main {
+  flex: 1 1 auto; min-width: 0; min-height: 64px; display: flex; align-items: center; gap: 12px;
+  padding: 8px 4px; background: none; border: 0; color: inherit; text-align: left; font: inherit; cursor: pointer;
+}
+.app-list__main:disabled { cursor: default; }
+.app-list__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.app-list__title, .app-list__sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-list__title { color: var(--al-text-1); font-size: 15px; }
+.app-list__sub { color: var(--al-text-3); font-size: 13px; }
+.app-list__meta { color: var(--al-text-4); font-size: 12px; font-family: var(--al-font-mono, monospace); }
+.app-list__actions { display: flex; flex: none; }
+
+/* ---------- settings ---------- */
+.app-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--al-line-1, var(--al-line-2)); }
+.app-setting:last-child { border-bottom: 0; }
+.app-setting__text { min-width: 0; flex: 1 1 auto; }
+.app-setting__label { color: var(--al-text-1); font-size: 15px; }
+.app-setting__hint { margin: 2px 0 0; font-size: 13px; color: var(--al-text-4); }
+.app-setting__control { flex: none; max-width: 55%; }
+.app-setting__control .al-select { min-height: 44px; }
+.app-accounts { list-style: none; margin: 0; padding: 0; }
+.app-account { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--al-line-1, var(--al-line-2)); }
+.app-account__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-account__name { display: flex; align-items: center; gap: 8px; color: var(--al-text-1); font-size: 15px; }
+.app-account__server { color: var(--al-text-4); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--al-cyan); color: var(--al-cyan); }
+.app-chip--warn { border-color: var(--al-warn, #e8a33d); color: var(--al-warn-text, #f2c37a); }
+.app-about p { margin: 0 0 6px; color: var(--al-text-3); }
+
+/* Buttons and links in the app are touch targets. */
+.app-shell .al-btn, .app-onboarding .al-btn { min-height: 44px; }

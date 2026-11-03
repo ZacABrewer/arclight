@@ -16,17 +16,15 @@ const norm = (p: string) => p.replace(/\\/g, '/').replace(/\?.*$/, '');
  * (apps/web/src/arclight) as they are. A few web modules assume a same-origin page with a
  * session cookie; they are swapped for app versions at build time, without editing apps/web:
  *
- *   api/client.ts                     → src/web-shims/api-client.ts (server base URL + Bearer token)
- *   features/player/browse/kit.tsx    → src/web-shims/browse-kit.tsx (Artwork loads images with the token)
- *   features/player/ui/parts.tsx      → src/web-shims/ui-parts.tsx   (same, for the mini-player / now playing)
+ *   api/client.ts → src/web-shims/api-client.ts (server base URL + Bearer token; artwork URLs
+ *                   come back absolute and signed, so the web's <img> code works unchanged)
  *
- * A shim imports the real module (the swap is skipped for imports made by the shim itself).
- * TypeScript still checks the web code against the real modules; the shims keep their exports.
+ * Only relative imports from web modules are swapped; the app's own `@web/api/client` import
+ * (for the shared ApiError class) gets the real module. TypeScript still checks the web code
+ * against the real modules; the shim keeps their exports.
  */
 const SHIMS: Record<string, string> = {
   [norm(resolve(webSrc, 'api/client.ts'))]: resolve(here, 'src/web-shims/api-client.ts'),
-  [norm(resolve(webSrc, 'features/player/browse/kit.tsx'))]: resolve(here, 'src/web-shims/browse-kit.tsx'),
-  [norm(resolve(webSrc, 'features/player/ui/parts.tsx'))]: resolve(here, 'src/web-shims/ui-parts.tsx'),
 };
 const SHIM_FILES = new Set(Object.values(SHIMS).map(norm));
 
