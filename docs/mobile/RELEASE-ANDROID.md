@@ -1,6 +1,6 @@
 # Arclight Admin for Android: Google Play launch checklist
 
-> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own Play listing; its checklist is still to come.
+> **Two apps.** This checklist is for **Arclight Admin** (`com.moviemethat.arclight.admin`, `apps/mobile`), the companion app for running your server. The player app **Arclight** (`com.moviemethat.arclight`, `apps/player`) is a separate app with its own Play listing; its checklist is [RELEASE-PLAYER-ANDROID.md](RELEASE-PLAYER-ANDROID.md).
 
 Everything needed to take the Arclight Admin Android app from a developer account to a public listing on Google Play. Work top to bottom; each section depends on the ones above it. Items marked **(permanent)** cannot be changed after the first upload.
 

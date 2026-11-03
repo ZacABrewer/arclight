@@ -2,7 +2,7 @@
 
 Arclight Admin, the Arclight companion app: a native shell (Capacitor 8) around the web UI of your own Arclight server, like the Home Assistant and Jellyfin apps. The app adds the native parts: server setup and switching, QR pairing, push notifications through the Arclight push relay, an optional Face ID / Touch ID / fingerprint lock, the Android share sheet and its own settings, about and licenses screens. Everything else is the server's own interface, so admins get the admin portal and other people the request portal, and new server features show up without an app update.
 
-Arclight Admin is not the player app. **Arclight** (`com.moviemethat.arclight`, in `apps/player`) is a separate app for playing your library, with its own store listings and a checklist to come.
+Arclight Admin is not the player app. **Arclight** (`com.moviemethat.arclight`, in `apps/player`) is a separate app for playing your library, with its own store listings and its own checklists: [Android and Google TV](../../docs/mobile/RELEASE-PLAYER-ANDROID.md), [iOS](../../docs/mobile/RELEASE-PLAYER-IOS.md).
 
 Store checklists for Arclight Admin: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md), [docs/mobile/RELEASE-ANDROID.md](../../docs/mobile/RELEASE-ANDROID.md).
 
