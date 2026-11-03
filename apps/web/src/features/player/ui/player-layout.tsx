@@ -89,7 +89,7 @@ function PlayerShell({ children, bare }: { children: ReactNode; bare?: boolean }
   const caps = usePlaybackCapabilities(!bare);
   const videoOn = caps.data?.sections.video ?? false;
   return (
-    <div className="al-app pl-app">
+    <div className="al-app pl-app" data-video-player={isVideoPlayer(pathname) || undefined}>
       <Backdrop vx={0.5} horizon={0.7} />
       <header className="pl-head">
         <Link to="/player" className="pl-brand" aria-label={t('player.nav.home')}>

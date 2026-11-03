@@ -16,7 +16,7 @@
 .vw-art__progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--al-poster-track, var(--al-track)); }
 .vw-art__progress span { display: block; height: 100%; background: var(--al-cyan); }
 
-.vw-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 24px 16px; grid-template-columns: repeat(auto-fill, minmax(min(var(--vw-col, 150px), 42vw), 1fr)); }
+.vw-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 24px 16px; grid-template-columns: repeat(auto-fill, minmax(min(var(--vw-col, 150px), calc(50% - 8px)), 1fr)); }
 .vw-grid[data-density='s'] { --vw-col: 112px; }
 .vw-grid[data-density='m'] { --vw-col: 150px; }
 .vw-grid[data-density='l'] { --vw-col: 210px; }
@@ -212,3 +212,11 @@
 .vp-episode__code { font-family: var(--al-mono); font-size: 11px; color: var(--vp-ink-2); }
 .vp-episode__title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vp-panel .vw-art { border-color: var(--vp-line); }
+
+/* On the player page the portal's header and stacking context step aside (the player is fixed over everything). */
+.pl-app[data-video-player] .pl-head {
+  display: none;
+}
+.pl-app[data-video-player] .pl-main {
+  z-index: auto;
+}
