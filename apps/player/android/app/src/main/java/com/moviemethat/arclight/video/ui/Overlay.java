@@ -164,6 +164,12 @@ public final class Overlay extends FrameLayout {
     private void drawRing(Canvas canvas) {
         Ui u = ui;
         View v = target;
+        if (v == null || !v.isFocused()) {
+            // Focus given before this listened (the play button when the player opens) never
+            // reached onFocusMoved: ring whatever holds it now.
+            View f = findFocus();
+            if (f != null && f != this) v = target = f;
+        }
         if (u == null || v == null || ringHidden || isInTouchMode() || !v.isShown() || !v.isFocused() || !isDescendant(v)) {
             hasDrawn = false;
             return;
@@ -173,7 +179,9 @@ public final class Overlay extends FrameLayout {
             hasDrawn = false;
             return;
         }
-        tmp.set(0, 0, v.getWidth(), v.getHeight());
+        // The drawing rect, not 0,0-w,h: a single-line TextView (the pill buttons) scrolls its own
+        // content, and the offset below subtracts that scroll, which put their ring off screen.
+        v.getDrawingRect(tmp);
         offsetDescendantRectToMyCoords(v, tmp);
         float o = u.pxf(OUTSET);
         Object tag = v.getTag(R.id.video_focus_radius);
