@@ -15,7 +15,7 @@ import { useAddProfileView } from '../add-profile.js';
 import { useCreateProfile, useDeleteProfile, useSelectProfile, useUpdateProfile } from '../api.js';
 import { useLayout } from '../layout.js';
 import { ProfileAvatar } from '../profile-avatar.js';
-import { PinEntry, ProfilePicker, type PickerProfile } from '../profile-picker.js';
+import { PasswordEntry, PinEntry, ProfilePicker, type PickerProfile } from '../profile-picker.js';
 import { redesignPaths } from '../paths.js';
 import { canAddProfile, firstFreeColor, markProfilePicked, parseProfilesSearch } from '../profile-session.js';
 import { ChoiceRow, ToggleRow } from '../settings-rows.js';
@@ -29,7 +29,7 @@ import { RdLoading } from './common.js';
 // (the account menu's "Add profile"). Edit mode is a history entry of its own, so Back (the
 // browser's, the phone's) or Escape returns to pick mode before it leaves the picker.
 
-const toPicker = (p: HouseholdProfile): PickerProfile => ({ id: p.id, name: p.name, color: p.color, initial: p.initial, hasPin: p.hasPin });
+const toPicker = (p: HouseholdProfile): PickerProfile => ({ id: p.id, name: p.name, color: p.color, initial: p.initial, hasPin: p.hasPin, isOwner: p.isOwner });
 
 /**
  * The picker page. `gate`: shown by the layout before the page that was asked for (no close
@@ -98,8 +98,8 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
     if (onPicked) onPicked();
     else void navigate({ to: '/player' });
   };
-  const onSelect = async (p: PickerProfile, pin?: string) => {
-    const run = () => select.mutateAsync({ id: p.id, pin });
+  const onSelect = async (p: PickerProfile, pin?: string, password?: string) => {
+    const run = () => select.mutateAsync({ id: p.id, pin, password });
     // The queue is per profile: a switch hands the player over (the same profile just goes on).
     await (player && p.id !== activeId ? player.switchProfile(run) : run());
     done();
@@ -109,6 +109,14 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
 
   const pinProfile = pinTarget !== null ? profiles.find((p) => p.id === pinTarget) : undefined;
   if (pinProfile) {
+    // `?select=` for the owner profile without a PIN: the avatar menu's switch asked for the password.
+    if (pinProfile.isOwner && !pinProfile.hasPin) {
+      return (
+        <div className={cx('rd-picker', `rd-picker--${layout}`)}>
+          <PasswordEntry profile={toPicker(pinProfile)} size={layout === 'portrait' ? 96 : 132} onCancel={() => setPinTarget(null)} onSubmit={(password) => onSelect(toPicker(pinProfile), undefined, password)} />
+        </div>
+      );
+    }
     return (
       <div className={cx('rd-picker', `rd-picker--${layout}`)}>
         <PinEntry profile={toPicker(pinProfile)} size={layout === 'portrait' ? 96 : 132} onCancel={() => setPinTarget(null)} onSubmit={(pin) => onSelect(toPicker(pinProfile), pin)} />

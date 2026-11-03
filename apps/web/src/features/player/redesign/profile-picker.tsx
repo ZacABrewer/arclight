@@ -10,7 +10,9 @@ import { RdIcon } from './icons.js';
 // The owner profile also gets an Add tile and the pencil Manage button, which turns the tiles
 // into edit mode (features spec §1).
 // A profile with a PIN asks for it in a 4-dot field typed on the system number pad (§9 Q5: four
-// digits; five wrong tries lock it for 15 minutes, enforced by the server).
+// digits; five wrong tries lock it for 15 minutes, enforced by the server). Going back to the owner
+// profile when it has no PIN asks for the account password instead (the server answers
+// password-required once the sign-in is older than ten minutes).
 
 export interface PickerProfile {
   id: number;
@@ -18,13 +20,14 @@ export interface PickerProfile {
   color: string;
   initial: string;
   hasPin: boolean;
+  isOwner?: boolean | undefined;
 }
 
 export interface ProfilePickerProps {
   profiles: readonly PickerProfile[];
   activeId?: number | null | undefined;
-  /** Switch; rejects with the api error (pin-required, pin-wrong, pin-locked). */
-  onSelect: (profile: PickerProfile, pin?: string) => Promise<void>;
+  /** Switch; rejects with the api error (pin-required, pin-wrong, pin-locked, password-required, ...). */
+  onSelect: (profile: PickerProfile, pin?: string, password?: string) => Promise<void>;
   /** The owner profile is active: show the Add profile tile (while below `max`). */
   canAdd?: boolean | undefined;
   /** The account's profile limit (the server's); no limit when absent. */
@@ -65,6 +68,7 @@ function useShortScreen(): boolean {
 export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd, managing, onEdit, onManage, focusId, layout, footer, onClose }: ProfilePickerProps) {
   const t = useT();
   const [pinFor, setPinFor] = useState<PickerProfile | null>(null);
+  const [passwordFor, setPasswordFor] = useState<PickerProfile | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const grid = useRef<HTMLUListElement>(null);
@@ -76,7 +80,7 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd
   const manageRef = useRef(onManage);
   manageRef.current = onManage;
   useEffect(() => {
-    if (!managing || pinFor) return undefined;
+    if (!managing || pinFor || passwordFor) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       e.preventDefault();
@@ -84,7 +88,7 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [managing, pinFor]);
+  }, [managing, pinFor, passwordFor]);
 
   useEffect(() => {
     if (focusId == null) return;
@@ -105,7 +109,10 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd
     try {
       await onSelect(p);
     } catch (err) {
-      if (err instanceof ApiError && err.message === 'pin-required') setPinFor(p);
+      const code = err instanceof ApiError ? err.message : '';
+      if (code === 'pin-required') setPinFor(p);
+      else if (code === 'password-required') setPasswordFor(p);
+      else if (code === 'reauth-required') setError(t('player.redesign.password.reauth', { name: p.name }));
       else setError(t('player.redesign.profiles.couldNotSwitch'));
     } finally {
       setBusy(null);
@@ -116,6 +123,13 @@ export function ProfilePicker({ profiles, activeId, onSelect, canAdd, max, onAdd
     return (
       <div className={cx('rd-picker', `rd-picker--${layout}`)}>
         <PinEntry profile={pinFor} size={size} onCancel={() => setPinFor(null)} onSubmit={(pin) => onSelect(pinFor, pin)} />
+      </div>
+    );
+  }
+  if (passwordFor) {
+    return (
+      <div className={cx('rd-picker', `rd-picker--${layout}`)}>
+        <PasswordEntry profile={passwordFor} size={size} onCancel={() => setPasswordFor(null)} onSubmit={(password) => onSelect(passwordFor, undefined, password)} />
       </div>
     );
   }
@@ -267,5 +281,88 @@ export function PinEntry({ profile, size, onCancel, onSubmit }: { profile: Picke
         {t('player.redesign.cancel')}
       </button>
     </div>
+  );
+}
+
+/** The account password, for going back to an owner profile that has no PIN. */
+export function PasswordEntry({ profile, size, onCancel, onSubmit }: { profile: PickerProfile; size: number; onCancel: () => void; onSubmit: (password: string) => Promise<void> }) {
+  const t = useT();
+  const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!busy) input.current?.focus();
+  }, [busy]);
+
+  const submit = async () => {
+    if (!password || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit(password);
+    } catch (err) {
+      setPassword('');
+      const code = err instanceof ApiError ? err.message : '';
+      if (code === 'pin-locked' || (err instanceof ApiError && err.status === 429)) setError(t('player.redesign.pin.locked'));
+      else if (code === 'password-wrong') setError(t('player.redesign.password.wrong'));
+      else if (code === 'reauth-required') setError(t('player.redesign.password.reauth', { name: profile.name }));
+      else setError(t('player.redesign.profiles.couldNotSwitch'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="rd-pin"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <ProfileAvatar color={profile.color} initial={profile.initial} size={Math.round(size * 0.72)} />
+      <h1 className="rd-picker__title" id={`${id}-t`}>
+        {t('player.redesign.password.title', { name: profile.name })}
+      </h1>
+      <input
+        ref={input}
+        id={id}
+        className="rd-editor__input rd-pin__password"
+        type="password"
+        autoComplete="current-password"
+        maxLength={256}
+        value={password}
+        disabled={busy}
+        aria-labelledby={`${id}-t`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-e` : undefined}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          if (error) setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      {error ? (
+        <p className="rd-picker__error" id={`${id}-e`} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="rd-pin__actions">
+        <button type="submit" className="rd-btn rd-btn--primary" disabled={busy || !password}>
+          {t('player.redesign.password.continue')}
+        </button>
+        <button type="button" className="rd-btn rd-btn--secondary" onClick={onCancel}>
+          {t('player.redesign.cancel')}
+        </button>
+      </div>
+    </form>
   );
 }

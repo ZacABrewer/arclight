@@ -139,12 +139,15 @@ describe('login page: media-server sign-in and Plex linking', () => {
     const pin = await h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/pin', headers: { cookie } });
     expect(pin.statusCode).toBe(200);
     const { id } = pin.json() as { id: number };
-    const poll = () => h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/poll', headers: { cookie }, payload: { id } });
+    // The browser-binding cookie of the pin travels with the session (plex-pins.test.ts covers refusals).
+    const bound = `${cookie}; ${String([pin.headers['set-cookie']].flat()[0]).split(';')[0]}`;
+    const poll = () => h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/poll', headers: { cookie: bound }, payload: { id } });
     expect((await poll()).statusCode).toBe(202);
     h.servers.plex.approve(id, 'linked-token', { id: 42, username: 'heidi' });
     const done = await poll();
     expect(done.statusCode).toBe(200);
-    expect(done.headers['set-cookie']).toBeUndefined();
+    // No new session: the only cookie is the spent pin binding being cleared.
+    expect([done.headers['set-cookie']].flat().map(String)).toEqual([expect.stringMatching(/^al_plex=; .*Max-Age=0/)]);
     expect(done.json()).toMatchObject({ plexToken: '********', mediaServerLink: { kind: 'plex', externalId: '42', username: 'heidi' } });
     const row = h.db.select().from(users).where(eq(users.id, user.id)).get()!;
     expect(row.settings).toMatchObject({ plexToken: 'linked-token' });
@@ -152,9 +155,11 @@ describe('login page: media-server sign-in and Plex linking', () => {
     // The same Plex account cannot be linked to a second user.
     const other = addUser(h.db, { permissions: P.REQUEST });
     const otherCookie = h.cookieFor(other.id);
-    const pin2 = (await h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/pin', headers: { cookie: otherCookie } })).json() as { id: number };
+    const pin2res = await h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/pin', headers: { cookie: otherCookie } });
+    const pin2 = pin2res.json() as { id: number };
     h.servers.plex.approve(pin2.id, 'other-token', { id: 42, username: 'heidi' });
-    const conflict = await h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/poll', headers: { cookie: otherCookie }, payload: { id: pin2.id } });
+    const otherBound = `${otherCookie}; ${String([pin2res.headers['set-cookie']].flat()[0]).split(';')[0]}`;
+    const conflict = await h.server.inject({ method: 'POST', url: '/api/v1/user/me/mediaserver/plex/poll', headers: { cookie: otherBound }, payload: { id: pin2.id } });
     expect(conflict.statusCode).toBe(409);
   });
 });

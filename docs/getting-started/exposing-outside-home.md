@@ -39,7 +39,7 @@ If Arclight runs inside Gluetun's network, the web port is published on the glue
 
 ## How Arclight sees a proxy
 
-- It always trusts the standard forwarded headers: there is no "trusted proxy" setting to switch on.
+- It reads the standard forwarded headers from proxies on the same machine, your LAN or a Docker network, without any setting. If your proxy reaches Arclight from a public address (for example a proxy on a rented server), set `ARCLIGHT_TRUSTED_PROXIES` to that proxy's address; to rule out made-up headers from devices on your own network, set it to your proxy's LAN address. Details: [trusted proxies](../using/users-and-security.md#trusted-proxies).
 - The proxy must send `X-Forwarded-For` (the real client address) and `X-Forwarded-Proto: https` so the sign-in cookie is marked Secure. Caddy, Traefik and Nginx Proxy Manager do this by default; a plain Nginx config needs the lines shown below.
 - For the "local address" rule, Arclight checks the connection and every address in `X-Forwarded-For`. If any is public, sign-in is required. A proxy on the same machine therefore does not turn internet visitors into local users.
 - Two paths need WebSocket upgrades or the page looks stuck: `/api/v1/events` (live updates) and `/api/v1/log/stream` (live log).
@@ -172,7 +172,7 @@ To let family request titles without ever seeing the admin pages, give the [requ
 
 1. Add a second site to your proxy, or a second public hostname to your tunnel, pointing at the same Arclight address (`http://192.168.1.50:7878` in the examples above). In Caddy that is a second block with `requests.example.com` and the same `reverse_proxy` line.
 2. In Arclight, Settings > Requests > Public request portal: turn the portal on and add `requests.example.com` under **Portal hostnames**. Leave **Portal only** on.
-3. Open `https://requests.example.com`: you get the portal at the root, and admin pages such as `/settings` send you back to it.
+3. Open `https://requests.example.com`: you get the portal at the root, and admin pages such as `/settings` send you back to it. Even a signed-in admin cannot use admin settings through that hostname (they answer `403`), so a password guessed there cannot change the server.
 
 A Cloudflare Access policy can then stay strict on `arclight.example.com` and be looser (or off) on `requests.example.com`. Sign-ins are per hostname: signing in on one does not sign you in on the other.
 
@@ -190,7 +190,9 @@ address. See [Player address](../player/address.md).
 | Page loads but never updates | WebSockets not allowed for `/api/v1/events` |
 | Redirect loop after sign-in | The proxy does not send `X-Forwarded-Proto: https` |
 | Blank page under `/arclight/` | `ARCLIGHT_BASE_PATH` is not set, or the proxy strips the prefix. See [sub-path-hosting.md](sub-path-hosting.md) |
-| Everyone sees "Too many failed attempts" | The proxy hides client addresses, so all users share one counter. Send `X-Forwarded-For` |
+| Everyone sees "Too many failed attempts" | The proxy hides client addresses, so all users share one counter. Send `X-Forwarded-For`, and if the proxy connects from a public address, add it to `ARCLIGHT_TRUSTED_PROXIES` |
+| Sessions show the proxy's address after upgrading to 0.24 | The proxy is on a public address, which is no longer trusted by default. Set `ARCLIGHT_TRUSTED_PROXIES` to its address |
+| Admin settings answer 403 on the requests hostname | Intended: a portal-only hostname serves only the portal. Use the main address |
 | You locked yourself out | See [locked out](../TROUBLESHOOTING.md#locked-out) |
 | The requests hostname shows the full app | It is not under Portal hostnames, the portal is off, or the proxy changes the `Host` header |
 | The player hostname shows the full app | It is not under Player address > Hostnames, or the proxy changes the `Host` header |

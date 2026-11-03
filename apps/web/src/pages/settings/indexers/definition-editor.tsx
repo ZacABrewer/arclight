@@ -87,7 +87,7 @@ function DefinitionForm({
             onSave={submit}
             saving={create.isPending || update.isPending}
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
-            extra={<TestButton beforeTest={form.validate} onTest={async () => indexerTestOutcome(await indexersApi.test(body()))} />}
+            extra={<TestButton beforeTest={form.validate} onTest={async () => indexerTestOutcome(await indexersApi.test({ ...body(), ...(existing ? { id: existing.id } : {}) }))} />}
           />
         }
       >

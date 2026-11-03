@@ -72,6 +72,7 @@
   "app.tv.pin.entered": "{n} van 4 cijfers ingevoerd",
   "app.tv.pin.failed": "Dat lukte niet. Probeer het opnieuw.",
   "app.tv.pin.locked": "Te veel foute pogingen. Probeer het over {count, plural, one {# minuut} other {# minuten}} opnieuw.",
+  "app.tv.pin.passwordRequired": "{name} heeft geen pincode, dus overschakelen vraagt het accountwachtwoord. Meld je opnieuw aan op dit apparaat of geef {name} een pincode.",
   "app.tv.pin.wrong": "Verkeerde pincode. Probeer het opnieuw.",
   "app.tv.play": "Afspelen",
   "app.tv.playEpisode": "S{s} A{e} afspelen",

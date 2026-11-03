@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import pino from 'pino';
+import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { QUALITIES, type MediaInfo, type QualityModel } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
@@ -658,6 +659,23 @@ describe('browse, watched and search', () => {
     const kid = await signIn(h, { restrictions: { maxCertification: { movie: 'PG', tv: null } } });
     expect((await get(h, '/api/v1/playback/movies', kid.cookie)).json().items.map((m: { title: string }) => m.title)).toEqual(['Kids']);
     expect((await get(h, '/api/v1/playback/search?q=adults', kid.cookie)).json().movies).toEqual([]);
+  });
+
+  it('mark watched only touches items the caller can browse', async () => {
+    const h = await harness();
+    const { movie: kids } = addMovie(h.db, { title: 'Kids', tmdbId: 14, certification: 'G', files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const { movie: adults } = addMovie(h.db, { title: 'Adults', tmdbId: 15, certification: 'R', files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const { show, episodes } = addSeries(h.db, { certification: 'TV-MA' });
+    const kid = await signIn(h, { restrictions: { maxCertification: { movie: 'PG', tv: 'TV-PG' } } });
+    const marked = await post(h, '/api/v1/playback/watched', { itemKeys: [`movie:${kids.id}`, `movie:${adults.id}`, `episode:${episodes[0]!.id}`, 'movie:99999', 'track:1'], played: true }, kid.cookie);
+    expect(marked.json()).toEqual({ updated: 1 });
+    expect((await post(h, '/api/v1/playback/watched', { seriesId: show.id, played: true }, kid.cookie)).json()).toEqual({ updated: 0 });
+    const rows = h.db.select({ itemKey: schema.playbackProgress.itemKey }).from(schema.playbackProgress).where(eq(schema.playbackProgress.userId, kid.id)).all();
+    expect(rows.map((r) => r.itemKey)).toEqual([`movie:${kids.id}`]);
+    // Without limits the same calls reach everything that exists.
+    const adult = await signIn(h);
+    expect((await post(h, '/api/v1/playback/watched', { itemKeys: [`movie:${adults.id}`, `episode:${episodes[0]!.id}`, 'movie:99999'], played: true }, adult.cookie)).json()).toEqual({ updated: 2 });
+    expect((await post(h, '/api/v1/playback/watched', { seriesId: show.id, played: true }, adult.cookie)).json()).toEqual({ updated: 2 });
   });
 
   it('non-player users are turned away', async () => {

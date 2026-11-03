@@ -307,6 +307,15 @@ describe('secret helpers', () => {
     for (const k of ['username', 'host', 'sortKey', 'tokenExpiresAt', 'publicKey', 'keywords']) expect(isSecretKey(k), k).toBe(false);
   });
 
+  it('recognises 2FA, PIN and tracker secrets without catching harmless *Code / *seed names', () => {
+    for (const k of ['recoveryCode', 'recoveryCodes', 'totp', 'otp', '2fa', 'twoFactor', 'pin', 'profilePin', 'user_pin', 'pass', 'torrentPass', 'seed', 'authkey', 'authKey', 'secretkey', 'totpCode']) {
+      expect(isSecretKey(k), k).toBe(true);
+    }
+    for (const k of ['code', 'languageCode', 'countryCode', 'statusCode', 'episodeCode', 'hasPin', 'bypass', 'spin', 'crossSeed', 'cross-seed', 'seedRatio', 'seedTime', 'compass', 'passes']) {
+      expect(isSecretKey(k), k).toBe(false);
+    }
+  });
+
   it('masks nested secrets and resolves them back', () => {
     const stored = { a: { password: 'p', list: [{ token: 't' }] }, b: 1 };
     const masked = maskSecrets(stored);

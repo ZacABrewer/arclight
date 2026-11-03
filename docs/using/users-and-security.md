@@ -22,7 +22,7 @@ Local bypass applies only when both of these hold: the setup wizard is finished,
 
 - A local Arclight account (username and password).
 - Your Jellyfin or Emby account, when a media server is connected ("Sign in with ..."). See [media-servers.md](media-servers.md).
-- Plex ("Sign in with Plex"), through Plex's sign-in pin.
+- Plex ("Sign in with Plex"), through Plex's sign-in pin. The pin only finishes in the browser that asked for it (a short-lived cookie), and only once.
 
 Admins always sign in with their Arclight username and password. A media-server sign-in never leads to an admin: see [Media-server accounts and admins](#media-server-accounts-and-admins).
 
@@ -82,7 +82,7 @@ To change your own password open your Profile page and use "Change password". Th
 
 The API key lets apps and scripts (Jellyfin plugins, scripts, a Sonarr-compatible tool) talk to Arclight. It grants admin access, so keep it private.
 
-- Where: Settings > Security > "API keys" > "Admin API key". Use Show, Hide and Copy.
+- Where: Settings > Security > "API keys" > "Admin API key". The box shows only the last four characters; Show and Copy fetch the full key, and each time is recorded in the audit log (`apikey.reveal`). Hide masks it again.
 - Apps send it as the `X-Api-Key` header, or as `?apikey=` in the URL.
 - To change it, click Regenerate and confirm "Regenerate API key?". Every app using the old key stops working until you give it the new one.
 - Regenerate it if it was ever posted in a screenshot, log or support request.
@@ -96,7 +96,7 @@ Details:
 - Signing in with "remember me" lasts for the session length and is extended while you keep using Arclight.
 - Without "remember me" the browser cookie ends when you close the browser, and the server forgets it after one day.
 - The cookie is named `al_session`. Only a hash of the token is stored in the database.
-- The cookie is marked Secure when you use https (or when the proxy sends `X-Forwarded-Proto: https`).
+- The cookie is marked Secure when you use https: when the proxy sends `X-Forwarded-Proto: https`, or when the address in the browser is the host of an https **Application URL** (Settings > Requests), even if the proxy does not say so.
 
 ## Forgot the admin password
 
@@ -114,7 +114,17 @@ Beyond the password login you can let people sign in through an identity provide
 
 ## Rate limiting and lockout
 
-After 10 failed sign-ins from one address within 15 minutes, Arclight answers with "Too many failed attempts. Wait a few minutes and try again." The counter covers the login page, media-server sign-in and HTTP Basic together. It is kept in memory, so it resets when Arclight restarts.
+Every way of signing in shares the same counters: the login page, media-server sign-in, HTTP Basic, the second step (authenticator code, recovery code, passkey), app sign-in, pairing and TV codes, re-entering your password, and changing it. Three limits apply, each over 15 minutes since the last failure:
+
+| Limit | What happens |
+|---|---|
+| 10 failures for one account from one address | That address must wait before trying that account again. Signing in to a different account does not reset it. |
+| 50 failures from one address, whatever the account | That address must wait. Signing in successfully does not reset it; it runs out on its own. |
+| 10 failures for one account, from any address | Each further try for that account waits 30 seconds, then 1, 2 and 4 minutes, never more than 5 minutes. A correct password after the wait signs in normally. |
+
+The answer is "Too many failed attempts. Wait a few minutes and try again." with a `Retry-After` header. The per-account limit is a delay, not a lock: someone guessing your password from many addresses slows your own sign-in by at most 5 minutes, and a passkey sign-in is not affected. The counters are kept in memory, so restarting Arclight clears them.
+
+The address is the one your reverse proxy reports, but only when the proxy is trusted: see [trusted proxies](#trusted-proxies).
 
 ## Audit log
 
@@ -122,7 +132,7 @@ System > Audit records every change made through the API (creating, editing and 
 
 ## Reverse proxy notes
 
-Arclight is built to sit behind a reverse proxy (Nginx Proxy Manager, Caddy, Traefik, Nginx). It trusts the proxy's forwarded headers.
+Arclight is built to sit behind a reverse proxy (Nginx Proxy Manager, Caddy, Traefik, Nginx). It reads the forwarded headers only from proxies it trusts ([trusted proxies](#trusted-proxies)).
 
 What your proxy must do:
 
@@ -138,6 +148,33 @@ Important limits:
 - Arclight is served at the root of its address (`/`) by default. A sub-domain (`arclight.example.com`) is the simplest; for a sub-path such as `https://example.com/arclight/`, set `ARCLIGHT_BASE_PATH=/arclight` and keep the prefix at the proxy ([sub-path-hosting.md](../getting-started/sub-path-hosting.md)).
 - Port 7878 is the default. Point the proxy at `http://<your-host>:7878`.
 - A proxy on the same machine looks like a local connection, but Arclight also checks the forwarded addresses, so a visitor from the internet is still treated as public.
+
+### Trusted proxies
+
+`X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` are read only when the connection comes from a trusted proxy. Otherwise anyone could put a made-up address in `X-Forwarded-For` and get a fresh sign-in counter with every guess. The environment variable `ARCLIGHT_TRUSTED_PROXIES` sets which connections count:
+
+| Value | Trusted |
+|---|---|
+| not set (the default) | Loopback, private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local and IPv6 unique-local addresses. That covers a proxy on the same machine, on your LAN or on a Docker network. |
+| addresses or CIDRs, for example `172.18.0.5` or `10.0.0.2, 203.0.113.0/24` | Only those. `private` in the list stands for the default ranges. This is the strictest setting: name your proxy's own address. |
+| a number, for example `1` | That many proxies in front of Arclight, whatever their address |
+| `all` | Every connection (the behaviour before 0.24; any client can choose its address) |
+| `none` | No connection: the address is always the connection's own |
+
+With the default, a proxy on your network works without any setting, and a visitor from the internet always arrives either through that proxy (which adds their real address) or directly with a public address, which is never trusted. Devices on your own network could still send a made-up `X-Forwarded-For`; set the proxy's address to rule that out.
+
+When to set it:
+
+- Your proxy reaches Arclight from a public address (a proxy on a rented server, a tunnel that keeps public source addresses): set its address, for example `ARCLIGHT_TRUSTED_PROXIES=203.0.113.7`. Without it, everyone appears to come from the proxy and shares one sign-in counter.
+- Entries that are not an address or CIDR are ignored and logged as a warning at start-up.
+
+### Browsers and other sites
+
+- Only pages from Arclight's own address may use your sign-in from a browser: the address the page was loaded from, the **Application URL** and the portal hostnames (Settings > Requests), and any origins listed in `ARCLIGHT_CORS_ORIGINS` (comma-separated, for example `https://dash.example.com`). Another site, or another app on a different port of the same machine, gets no answer it can read, and cannot open the live-update connection.
+- The Arclight apps (`capacitor://localhost`, `https://localhost`, `http://localhost`) and cast receivers playing signed media links get answers without cookies.
+- Pages cannot be shown inside another site's frame. HTML pages only run Arclight's own scripts.
+- On the host of an https **Application URL**, browsers are told to use https only (HSTS, six months, without subdomains). Other addresses, such as a LAN address, never get it.
+- On a portal-only hostname (Settings > Requests > Public request portal), signing in as an admin reaches only what the portal uses: admin settings answer `403`. Use the main address for administration. API keys work on every hostname.
 
 ## Exposing Arclight safely
 

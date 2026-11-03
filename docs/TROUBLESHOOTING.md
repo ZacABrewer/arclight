@@ -389,7 +389,7 @@ Files already imported by copy stay duplicated until you delete the download cop
 
 **Cause:**
 
-- **Too many failures.** After 10 failed logins from one address within 15 minutes, further attempts are refused for the rest of that window. The counter is kept in memory, so restarting Arclight also clears it.
+- **Too many failures.** After 10 failed logins for one account from one address (or 50 from one address for any account) within 15 minutes, further attempts from that address are refused for the rest of that window. After 10 failures for one account from anywhere, each further try for it waits 30 seconds, doubling up to 5 minutes; the answer's `Retry-After` says how long. The counters are kept in memory, so restarting Arclight also clears them. If everyone is refused at once, your proxy may not be trusted: see [trusted proxies](using/users-and-security.md#trusted-proxies).
 - **Wrong or forgotten password.** There is no command-line password reset.
 - **Login loop behind a reverse proxy.** The session cookie is `al_session` (it is marked Secure when the request arrived over https). The proxy must forward `X-Forwarded-Proto` and must not strip cookies.
 - **Authentication method.** Settings > Security chooses the method (Forms, Basic or None) and whether local addresses may skip sign-in.

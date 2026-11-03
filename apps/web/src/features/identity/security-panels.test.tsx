@@ -114,3 +114,54 @@ describe('profile: API keys', () => {
     expect(await screen.findByText('alu_ab12cd…')).toBeTruthy();
   });
 });
+
+describe('profile: confirming the password for an older session', () => {
+  const created = { id: 8, name: 'Script', scope: 'read', prefix: 'alu_cd34ef', createdAt: '2026-11-02T10:00:00.000Z', key: 'alu_cd34ef_example-secret-value' };
+
+  it('asks for the current password on REAUTH_REQUIRED and repeats the call with it', async () => {
+    const calls = stubApi(profileRoutes({ '/api/v1/user/me/2fa': off }), (url, method, body) => {
+      if (url !== '/api/v1/user/me/apikeys' || method !== 'POST') return undefined;
+      const pw = (body as { currentPassword?: string }).currentPassword;
+      if (pw === undefined) return { status: 401, body: { error: 'confirm your current password to continue', code: 'REAUTH_REQUIRED' } };
+      if (pw !== 'right-one') return { status: 401, body: { error: 'current password is incorrect', code: 'INVALID_CREDENTIALS' } };
+      return { status: 201, body: created };
+    });
+    renderAt('/profile');
+    fireEvent.click(await screen.findByRole('button', { name: 'Create API key' }));
+    const form = await screen.findByRole('dialog', { name: 'Create API key' });
+    fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'Script' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Create key' }));
+
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm your password' });
+    const field = within(confirm).getByLabelText('Current password') as HTMLInputElement;
+    expect(field.type).toBe('password');
+    fireEvent.change(field, { target: { value: 'wrong' } });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    expect(await within(confirm).findByText('That password is not right.')).toBeTruthy();
+
+    fireEvent.change(field, { target: { value: 'right-one' } });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    expect((await screen.findByTestId('new-api-key')).textContent).toContain('alu_cd34ef_example-secret-value');
+    expect(screen.queryByRole('dialog', { name: 'Confirm your password' })).toBeNull();
+    const posts = calls.filter((c) => c.url === '/api/v1/user/me/apikeys' && c.method === 'POST').map((c) => c.body);
+    expect(posts).toEqual([
+      { name: 'Script', scope: 'read' },
+      { name: 'Script', scope: 'read', currentPassword: 'wrong' },
+      { name: 'Script', scope: 'read', currentPassword: 'right-one' },
+    ]);
+    // Still signed in: the 401s were form errors, not a lost session.
+    expect(screen.queryByRole('heading', { name: 'Sign in' })).toBeNull();
+  });
+
+  it('tells an account without a password to sign in again', async () => {
+    stubApi({ ...profileRoutes({ '/api/v1/user/me/2fa': off }), ...authRoutes(user({ localPassword: false })) }, (url, method) =>
+      url === '/api/v1/user/me/2fa/totp/setup' && method === 'POST'
+        ? { status: 401, body: { error: 'this account has no password: sign out and sign in again, then try again within 10 minutes', code: 'REAUTH_REQUIRED' } }
+        : undefined,
+    );
+    renderAt('/profile');
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up authenticator app' }));
+    expect(await screen.findByText('To add this, sign out and sign in again, then try again within 10 minutes.')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Confirm your password' })).toBeNull();
+  });
+});

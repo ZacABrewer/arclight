@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createECDH, createHmac, createPublicKey, verify } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { describe, expect, it } from 'vitest';
@@ -224,11 +225,27 @@ describe('PushService', () => {
     const first = subscribe(alice, 'phone');
     subscribe(alice, 'laptop');
     expect(service.list(alice).map((s) => s.endpoint)).toEqual(['https://push.example.com/phone', 'https://push.example.com/laptop']);
-    // Bob signs in on Alice's phone: the browser re-subscribes and the row moves to him.
-    const moved = service.subscribe(bob, { endpoint: first.endpoint, keys: { p256dh: b64url(newUserAgent().p256dh), auth: b64url(Buffer.alloc(16, 1)) }, userAgent: 'Firefox' });
+    // Bob signs in on Alice's phone: the browser re-sends its subscription (same keys) and the row moves to him.
+    const row = db.select().from(pushTables.pushSubscriptions).where(eq(pushTables.pushSubscriptions.id, first.id)).get()!;
+    const moved = service.subscribe(bob, { endpoint: first.endpoint, keys: { p256dh: row.p256dh, auth: row.auth }, userAgent: 'Firefox' });
     expect(moved.id).toBe(first.id);
     expect(service.list(alice)).toHaveLength(1);
     expect(service.list(bob)).toEqual([expect.objectContaining({ endpoint: first.endpoint, userAgent: 'Firefox' })]);
+  });
+
+  it('refuses to move another user’s subscription to someone who knows only its endpoint (admins may)', async () => {
+    const { db, service, subscribe } = await setup();
+    const alice = await addUser(db, 'alice');
+    const mallory = await addUser(db, 'mallory');
+    const first = subscribe(alice, 'phone');
+    const otherKeys = { p256dh: b64url(newUserAgent().p256dh), auth: b64url(Buffer.alloc(16, 1)) };
+    expect(() => service.subscribe(mallory, { endpoint: first.endpoint, keys: otherKeys })).toThrow(expect.objectContaining({ code: 'CONFLICT' }));
+    expect(service.list(alice)).toHaveLength(1);
+    expect(service.list(mallory)).toEqual([]);
+    // The owner re-subscribing with new keys is fine.
+    expect(service.subscribe(alice, { endpoint: first.endpoint, keys: otherKeys }).id).toBe(first.id);
+    expect(service.subscribe(mallory, { endpoint: first.endpoint, keys: keysOf(newUserAgent()) }, { isAdmin: true }).id).toBe(first.id);
+    expect(service.list(mallory)).toHaveLength(1);
   });
 
   it('only deletes the caller’s own subscription', async () => {
@@ -392,5 +409,20 @@ describe('push routes', () => {
     const test = await a.inject({ method: 'POST', url: '/api/v1/push/test', headers: h });
     expect(test.json()).toEqual({ sent: 1, failed: 0, removed: 0 });
     expect(sent[0]!.payload).toMatchObject({ title: 'Arclight', url: '/profile' });
+  });
+
+  it('a non-admin test push says only how many browsers took it; taken endpoints answer 409', async () => {
+    const { app: a, db, alice, service, subscribe, gone } = await app();
+    const bob = await addUser(db, 'bob');
+    subscribe(alice, 'phone');
+    const dead = subscribe(alice, 'old-laptop');
+    gone.add(dead.endpoint);
+    const h = { 'x-user': String(alice) };
+    expect((await a.inject({ method: 'POST', url: '/api/v1/push/test', headers: h })).json()).toEqual({ sent: 1, failed: 0, removed: 0 });
+    expect(service.list(alice)).toHaveLength(1);
+    const stolen = { endpoint: 'https://push.example.com/phone', expirationTime: null, keys: keysOf(newUserAgent()) };
+    const res = await a.inject({ method: 'POST', url: '/api/v1/push/subscription', payload: stolen, headers: { 'x-user': String(bob) } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'CONFLICT' });
   });
 });

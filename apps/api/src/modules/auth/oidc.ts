@@ -18,7 +18,7 @@ export interface OidcDiscovery {
 }
 
 /** Why a sign-in failed; maps to the ssoError code the login page shows. */
-export type OidcFailure = 'state' | 'provider' | 'token' | 'no_account' | 'forbidden' | 'disabled' | 'link_conflict';
+export type OidcFailure = 'state' | 'provider' | 'token' | 'no_account' | 'forbidden' | 'disabled' | 'link_conflict' | 'rate_limited';
 
 export class OidcError extends Error {
   constructor(

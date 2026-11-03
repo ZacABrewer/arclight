@@ -56,10 +56,24 @@ export function isAdminOnlyPath(pathname: string, access: Access = PORTAL_ACCESS
  */
 export const TWO_FACTOR_SETUP_PATH = '/profile';
 
-/** A redirect target taken from the query string: same-origin app paths only. */
+/**
+ * A redirect target taken from the query string: same-origin app paths only. Browsers read `\`
+ * as `/` and drop tabs and newlines, so `/\host`, `/%5chost` and `/<tab>/host` would all leave
+ * the site; those are refused outright, and whatever is left must resolve to this origin.
+ */
 export function safeRedirect(target: unknown): string {
   if (typeof target !== 'string' || !target.startsWith('/') || target.startsWith('//')) return '/';
-  if ((target.split('?')[0] ?? '') === '/login') return '/';
+  // eslint-disable-next-line no-control-regex
+  if (/[\\\u0000-\u001f\u007f]|%5c/i.test(target)) return '/';
+  const origin = globalThis.location?.origin ?? 'http://localhost';
+  let url: URL;
+  try {
+    url = new URL(target, origin);
+  } catch {
+    return '/';
+  }
+  if (url.origin !== origin) return '/';
+  if (url.pathname === '/login') return '/';
   return target;
 }
 

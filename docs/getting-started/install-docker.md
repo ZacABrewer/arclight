@@ -98,6 +98,8 @@ Advanced variables you normally leave alone:
 | `ARCLIGHT_IMAGE` | the project's published image, `latest` | Release files only. Pin a version, for example `ghcr.io/zacabrewer/arclight:v0.21.0`, to stop the image moving. |
 | `ARCLIGHT_SUBNET` | `172.30.53.0/24` | VPN layouts: fixed Docker subnet so Gluetun's firewall can allow it and the optional Whisper container can have a fixed address. Change only if it collides with another Docker network. |
 | `ARCLIGHT_SUBNET_DYNAMIC` | `172.30.53.0/25` | Lower half of that subnet, used for automatically assigned addresses. |
+| `ARCLIGHT_TRUSTED_PROXIES` | loopback and private networks | Set under the Arclight service's `environment:`. Which connections may set `X-Forwarded-For` and friends. Leave it unset for a proxy on the same machine, the LAN or a Docker network; set your proxy's address when it connects from a public address. See [trusted proxies](../using/users-and-security.md#trusted-proxies). |
+| `ARCLIGHT_CORS_ORIGINS` | empty | Set under `environment:`. Extra browser origins, comma-separated, whose pages may use your sign-in (for example a dashboard on another hostname). Arclight's own address, the Application URL and portal hostnames are always allowed. |
 | `ARCLIGHT_BASE_PATH` | empty | Set under the Arclight service's `environment:` (not `.env`) to serve it below a path such as `/arclight` behind a reverse proxy. See [sub-path-hosting.md](sub-path-hosting.md). |
 | `WHISPER_IP` | `172.30.53.200` | VPN layouts: fixed address of the optional Whisper container. |
 

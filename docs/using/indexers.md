@@ -56,7 +56,7 @@ Every row shows the protocol, privacy, language, categories and where the entry 
 | Additional parameters (Torznab/Newznab) | empty | Extra query string added to every request, such as `&attrs=poster` |
 | Site link (definitions) | first mirror | Which mirror of the site to use |
 
-Definition indexers also show the definition's own fields: username and password, API key, passkey, cookie, and so on, depending on the site. An "Untested definition" badge means nobody has verified that definition against the live site yet; it may need small fixes.
+Definition indexers also show the definition's own fields: username and password, API key, passkey, cookie, and so on, depending on the site. Saved secrets (the API key, passwords, cookies and passkeys) are hidden after saving: leave the field alone to keep the stored value, or type a new one to replace it. An "Untested definition" badge means nobody has verified that definition against the live site yet; it may need small fixes.
 
 ### Health, failures and backoff
 

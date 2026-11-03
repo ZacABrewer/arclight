@@ -13,6 +13,7 @@ import {
   PasskeyRecord,
   PasskeyRegister,
   PasskeyRename,
+  ReauthRequest,
   RecoveryCodes,
   Session,
   TotpCode,
@@ -114,7 +115,7 @@ export function registerIdentityRoutes(
   };
 
   // ----------------------------------------------------------------------------- second step of sign-in
-  app.post('/auth/login/2fa', { schema: { body: TwoFactorLogin, response: { 200: Session, ...errors } } }, async (req, reply) => {
+  app.post('/auth/login/2fa', { config: { audit: false }, schema: { body: TwoFactorLogin, response: { 200: Session, ...errors } } }, async (req, reply) => {
     const result = auth.completeTwoFactor(req.body.challenge, { code: req.body.code, recoveryCode: req.body.recoveryCode }, req.ip);
     reply.header('set-cookie', sessionCookie(result.token, { maxAgeSeconds: result.maxAgeSeconds, secure: isHttps(req) }));
     return sessionBody(result);
@@ -139,7 +140,7 @@ export function registerIdentityRoutes(
   app.get('/auth/oidc/:id/start', { schema: { params: ProviderParams, querystring: OidcStartQuery } }, async (req, reply) => {
     const returnTo = safeReturnTo(req.query.returnTo);
     try {
-      const out = await identity.start(req.params.id, { appBase: appBase(req), returnTo, rememberMe: req.query.rememberMe !== 'false' });
+      const out = await identity.start(req.params.id, { appBase: appBase(req), returnTo, rememberMe: req.query.rememberMe !== 'false', peer: req.ip });
       appendCookie(reply, bindingCookie(out.binding, 600, isHttps(req)));
       return reply.redirect(out.url, 302);
     } catch (err) {
@@ -176,11 +177,11 @@ export function registerIdentityRoutes(
     const userId = selfId(req);
     if (req.auth?.via !== 'session') throw new AuthError('FORBIDDEN', 'link sign-ins from a signed-in browser session');
     try {
-      const out = await identity.start(req.params.id, { appBase: appBase(req), returnTo: req.body?.returnTo ?? '/profile', linkUserId: userId });
+      const out = await identity.start(req.params.id, { appBase: appBase(req), returnTo: req.body?.returnTo ?? '/profile', linkUserId: userId, peer: req.ip });
       appendCookie(reply, bindingCookie(out.binding, 600, isHttps(req)));
       return { url: out.url };
     } catch (err) {
-      if (err instanceof OidcError) throw new AuthError(err.failure === 'disabled' ? 'NOT_FOUND' : 'VALIDATION', err.message);
+      if (err instanceof OidcError) throw new AuthError(err.failure === 'disabled' ? 'NOT_FOUND' : err.failure === 'rate_limited' ? 'RATE_LIMITED' : 'VALIDATION', err.message);
       throw err;
     }
   });
@@ -190,36 +191,44 @@ export function registerIdentityRoutes(
     auth.twoFactor.status(selfId(req), auth.twoFactorSetupRequired(req.auth)),
   );
 
-  app.post('/user/me/2fa/totp/setup', { config: portal, schema: { response: { 200: TotpSetup, ...errors } } }, async (req) => {
+  // Adding a way in (authenticator app, passkey, API key) needs a recent sign-in or the password
+  // (requireRecentAuth). Finishing a TOTP setup or a passkey registration is bound to the secret
+  // or ceremony these gated calls hand out, so the follow-up calls need no second check.
+  app.post('/user/me/2fa/totp/setup', { config: portal, schema: { body: ReauthRequest.nullish(), response: { 200: TotpSetup, ...errors } } }, async (req) => {
     const user = auth.getUser(selfId(req));
+    await auth.requireRecentAuth(req.auth, req.body?.currentPassword, req.ip);
     return wrap(() => auth.twoFactor.beginTotp(user.id, user.username));
   });
 
-  app.post('/user/me/2fa/totp/enable', { config: portal, schema: { body: TotpCode, response: { 200: RecoveryCodes, ...errors } } }, async (req) => {
+  // Bodies carry TOTP and recovery codes: these keep out of the request audit and record their own entries.
+  app.post('/user/me/2fa/totp/enable', { config: { ...portal, audit: false }, schema: { body: TotpCode, response: { 200: RecoveryCodes, ...errors } } }, async (req) => {
     const userId = selfId(req);
     const codes = await wrap(() => auth.twoFactor.enableTotp(userId, req.body.code));
     audit(auth.db).record({ action: 'user.2fa.enable', userId, ip: req.ip });
     return { codes };
   });
 
-  app.delete('/user/me/2fa/totp', { config: portal, schema: { body: TwoFactorProof, response: { 204: Empty, ...errors } } }, async (req, reply) => {
+  app.delete('/user/me/2fa/totp', { config: { ...portal, audit: false }, schema: { body: TwoFactorProof, response: { 204: Empty, ...errors } } }, async (req, reply) => {
     const userId = selfId(req);
     await wrap(() => auth.twoFactor.disableTotp(userId, req.body));
     audit(auth.db).record({ action: 'user.2fa.disable', userId, ip: req.ip });
     return reply.code(204).send(null);
   });
 
-  app.post('/user/me/2fa/recovery', { config: portal, schema: { body: TwoFactorProof, response: { 200: RecoveryCodes, ...errors } } }, async (req) => {
+  app.post('/user/me/2fa/recovery', { config: { ...portal, audit: false }, schema: { body: TwoFactorProof, response: { 200: RecoveryCodes, ...errors } } }, async (req) => {
     const userId = selfId(req);
-    return { codes: await wrap(() => auth.twoFactor.regenerateRecoveryCodes(userId, req.body)) };
+    const codes = await wrap(() => auth.twoFactor.regenerateRecoveryCodes(userId, req.body));
+    audit(auth.db).record({ action: 'user.2fa.recovery', userId, ip: req.ip });
+    return { codes };
   });
 
   app.get('/user/me/passkeys', { config: portal, schema: { response: { 200: z.array(PasskeyRecord), ...errors } } }, async (req) =>
     auth.twoFactor.listPasskeys(selfId(req)),
   );
 
-  app.post('/user/me/passkeys/options', { config: portal, schema: { response: { 200: PasskeyOptions, ...errors } } }, async (req) => {
+  app.post('/user/me/passkeys/options', { config: portal, schema: { body: ReauthRequest.nullish(), response: { 200: PasskeyOptions, ...errors } } }, async (req) => {
     const user = auth.getUser(selfId(req));
+    await auth.requireRecentAuth(req.auth, req.body?.currentPassword, req.ip);
     return wrap(() => auth.twoFactor.registrationOptions({ id: user.id, username: user.username, displayName: user.displayName ?? undefined }, relyingParty(req)));
   });
 
@@ -261,8 +270,10 @@ export function registerIdentityRoutes(
 
   app.post('/user/me/apikeys', { config: portal, schema: { body: UserApiKeyCreate, response: { 201: UserApiKeyCreated, ...errors } } }, async (req, reply) => {
     const userId = selfId(req);
-    if (req.body.scope === 'admin' && auth.getUser(userId).role !== 'admin') throw new AuthError('FORBIDDEN', 'only admins can create admin keys');
-    const created = auth.apiKeys.create(userId, req.body);
+    const { currentPassword, ...input } = req.body;
+    if (input.scope === 'admin' && auth.getUser(userId).role !== 'admin') throw new AuthError('FORBIDDEN', 'only admins can create admin keys');
+    await auth.requireRecentAuth(req.auth, currentPassword, req.ip);
+    const created = auth.apiKeys.create(userId, input);
     audit(auth.db).record({ action: 'user.apikey.create', userId, ip: req.ip, details: { name: created.name, scope: created.scope } });
     return reply.code(201).send(created);
   });

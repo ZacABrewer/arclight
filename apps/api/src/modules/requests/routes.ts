@@ -435,7 +435,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     );
 
     // ------------------------------------------------------------------------- settings
-    app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async () => requests.settings());
+    app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async (req) => requests.settingsFor(actorOf(req)));
     app.put('/settings/requests', { schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors, 400: AddressClashResponse.or(ErrorResponse) } } }, async (req, reply) => {
       // A portal path or hostname may not be one the player address already uses.
       const clashes = s.playerAddress ? addressClash(req.body.publicPortal, s.playerAddress()) : [];

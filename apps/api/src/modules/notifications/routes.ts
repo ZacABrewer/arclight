@@ -16,8 +16,8 @@ import {
   PersonalDestinationOptions,
   PersonalDestinationTestRequest,
 } from '@arclight/shared';
-import type { FastifyRequest } from 'fastify';
-import { requireSelfOrAdmin } from '../auth/hook.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { APP_REAUTH_MESSAGE, mayRunCommands, requireSelfOrAdmin } from '../auth/hook.js';
 import type { PersonalNotifications } from './personal.js';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -38,6 +38,20 @@ const errors = {
   404: NotificationsErrorResponse,
   409: NotificationsErrorResponse,
 };
+/**
+ * A custom-script connection runs a program on the host: creating, changing or testing one needs a
+ * browser session or an admin-scope key, never an app token or a narrower key (DATA-13).
+ */
+async function guardCustomScript(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = req.body as { implementation?: unknown } | undefined;
+  if (body?.implementation === 'custom-script' && !mayRunCommands(req.auth)) {
+    if (req.auth?.via === 'app') {
+      await reply.code(403).send({ error: APP_REAUTH_MESSAGE, code: 'REAUTH_REQUIRED' });
+      return;
+    }
+    await reply.code(403).send({ error: 'custom scripts can only be set up from a signed-in browser or an admin-scope key', code: 'FORBIDDEN' });
+  }
+}
 const statusFor: Record<NotificationsErrorCode, number> = { NOT_FOUND: 404, VALIDATION: 400, CONFLICT: 409 };
 
 export function notificationsRoutes(
@@ -92,13 +106,13 @@ export function notificationsRoutes(
 
     app.post(
       '/notification',
-      { schema: { body: NotificationInput, response: { 201: NotificationConnection, ...errors } } },
+      { preHandler: guardCustomScript, schema: { body: NotificationInput, response: { 201: NotificationConnection, ...errors } } },
       async (req, reply) => reply.code(201).send(service.create(req.body)),
     );
 
     app.put(
       '/notification/:id',
-      { schema: { params: IdParams, body: NotificationInput, response: { 200: NotificationConnection, ...errors } } },
+      { preHandler: guardCustomScript, schema: { params: IdParams, body: NotificationInput, response: { 200: NotificationConnection, ...errors } } },
       async (req) => service.update(req.params.id, req.body),
     );
 
@@ -113,7 +127,7 @@ export function notificationsRoutes(
 
     app.post(
       '/notification/test',
-      { schema: { body: NotificationTestRequest, response: { 200: NotificationTestResult, ...errors } } },
+      { preHandler: guardCustomScript, schema: { body: NotificationTestRequest, response: { 200: NotificationTestResult, ...errors } } },
       async (req) => service.test(req.body),
     );
 

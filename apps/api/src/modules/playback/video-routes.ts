@@ -546,7 +546,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     });
 
     app.post('/playback/watched', { ...videoUser, schema: { body: VideoWatchedRequest, response: { 200: VideoWatchedResponse, ...errors } } }, async (req) => ({
-      updated: markWatched(browse, ownerOrThrow(req), req.body),
+      updated: markWatched(browse, ownerOrThrow(req), req.body, restrictionsOfRequest(req)),
     }));
   };
 }

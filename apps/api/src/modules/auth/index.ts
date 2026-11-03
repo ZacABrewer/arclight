@@ -6,6 +6,9 @@ import { installAuthHook } from './hook.js';
 import { authRoutes } from './routes.js';
 import { SetupService } from './setup.js';
 import { appAuthServiceFor } from '../app-auth/index.js';
+import { ApplicationUrlCache } from '../../security-headers.js';
+import { bindHttpsHint } from './cookies.js';
+import { PortalOnlyHosts, portalHostGuard } from './portal-host-guard.js';
 
 export { authServiceFor, identityServiceFor } from './context.js';
 export { IdentityService } from './identity.js';
@@ -45,7 +48,15 @@ export function installAuth(scope: FastifyInstance, ctx: AppContext): void {
   identityServiceFor(ctx);
   // Registers the app device token (Bearer) resolver.
   appAuthServiceFor(ctx);
+  // Cookies get Secure on the https Application URL's host even when the proxy in front does not
+  // say the request was https (no X-Forwarded-Proto). Before the auth hook, which renews cookies.
+  const appUrl = new ApplicationUrlCache(ctx.db);
+  scope.addHook('onRequest', async (req) => {
+    bindHttpsHint(req, () => appUrl.matches(req));
+  });
   installAuthHook(scope, service);
+  // Portal-only hostnames refuse the admin API to browser sign-ins (AUTH-25).
+  scope.addHook('onRequest', portalHostGuard(new PortalOnlyHosts(ctx.db)));
 }
 
 // Users, sessions, API key, security settings and first-run setup.

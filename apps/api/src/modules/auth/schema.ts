@@ -17,6 +17,11 @@ export const users = sqliteTable(
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name'),
     email: text('email'),
+    /**
+     * The email was set by an admin or vouched for by an identity provider (or predates 0.24).
+     * false after the user changed it themselves; sign-in by email match skips such accounts.
+     */
+    emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(true),
     role: text('role').$type<UserRole>().notNull(),
     /** Permission bitfield (Permission in @arclight/shared). */
     permissions: integer('permissions').notNull().default(0),

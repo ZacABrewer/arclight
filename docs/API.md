@@ -50,12 +50,16 @@ in this order:
 
 1. **Session cookie** `al_session` (from `POST /auth/login` or `POST /setup/admin`):
    httpOnly, `SameSite=Lax`, `Secure` when the request arrived over https (directly or via
-   `X-Forwarded-Proto`). Only a sha256 of the token is stored. Sessions last
+   `X-Forwarded-Proto` from a trusted proxy), or when its host is the host of an https Application
+   URL. Only a sha256 of the token is stored. Sessions last
    `sessionDays` (default 30) and slide forward once past half their lifetime;
    `rememberMe: false` gives a browser-session cookie and a one-day server lifetime.
 2. **HTTP Basic** credentials, only when the auth method is `basic`.
 3. **API key** in the `X-Api-Key` header or `?apikey=` query. One key per install, generated
-   on first boot and stored in the `security` settings section. It grants admin access.
+   on first boot and stored in the `security` settings section. It grants admin access. Prefer the
+   header: a key in the URL can end up in proxy logs, browser history and `Referer` headers
+   (Arclight masks it in its own logs and sends `Referrer-Policy: same-origin`). The query form
+   stays for *arr-compatible tools.
 4. **Arclight app device token**: `Authorization: Bearer alt_…` from `POST /app/sign-in` or
    `POST /app/pair` ([app](#app-arclight-player-app-sign-in)). Checked first; a token that is not
    valid is anonymous.
@@ -67,13 +71,53 @@ in this order:
 Anonymous requests to protected routes get `401 {"error","code":"UNAUTHORIZED"}` (plus
 `WWW-Authenticate: Basic` when the method is `basic`). Unknown routes answer 404.
 
+**Client addresses.** `req.ip` (rate limits, the audit log, sessions) and the forwarded protocol
+and host come from `X-Forwarded-For` / `-Proto` / `-Host` only when the connection is from a
+trusted proxy: `ARCLIGHT_TRUSTED_PROXIES` (default: loopback and private ranges; a CIDR list,
+`private`, a hop count, `all` or `none`). The chain is read from the right and stops at the first
+untrusted hop.
+
+**Sign-in limits.** Every sign-in path (login, Basic, media-server sign-in, the second factor,
+passkeys, app sign-in, pairing and device codes, re-authentication, password change and the
+headless setup retry) shares one limiter: 10 failures per address and account, 50 per address,
+and, per account from any address after 10 failures, a delay doubling from 30 seconds up to
+5 minutes. A refusal is `429 RATE_LIMITED` with `Retry-After` (seconds). The counters are in
+memory and capped at 10,000 entries each.
+
+**Narrow credentials.** App device tokens and API keys below `admin` scope may not write
+`COMMAND_WRITE_ROUTES` (`hook.ts`): `POST /config/import`, `POST /system/backup/restore/upload`,
+`POST /system/backup/restore/:id`, `PUT /settings/backup`, `PUT /subtitle/settings`,
+`PUT /settings/solver` and `PUT /settings/vpn`, or create, change or test a `custom-script`
+notification: `403 FORBIDDEN`. Reading those settings is unchanged. An app token may write them
+for 10 minutes after confirming its user's password with `POST /app/reauth` `{ "password" }`
+(`200 { "expiresAt" }`; a wrong password is `403 INVALID_CREDENTIALS`, rate-limited like a
+sign-in, audited as `app.device.reauth`). Until then the answer is
+`403 {"code":"REAUTH_REQUIRED"}` (not 401: the token stays valid), so the app can ask for the
+password and retry. The confirmation belongs to that device and is kept in memory. App tokens idle for 90 days
+stop working (`401`; the device is removed, audited as `app.device.expired`).
+
+**Portal-only hostnames.** On a public-portal hostname with `portalOnly` on, an admin signed in
+by session, Basic, app token or the local-address rule gets `403 {"code":"PORTAL_ONLY_HOST"}`
+on routes without `config.access` (admin-only routes). Public routes, portal routes and API keys
+answer as on any other hostname.
+
+**Response headers.** Every response carries `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: same-origin`, `X-Frame-Options: SAMEORIGIN` and a `Content-Security-Policy`
+(`frame-ancestors 'self'`; HTML pages also restrict scripts to `'self'`). A route that sets its own
+policy keeps it. `Strict-Transport-Security: max-age=15552000` is sent on https requests whose host
+is the host of an https Application URL.
+
 **First launch.** Until an admin account exists, every route answers
 `403 {"code":"SETUP_REQUIRED"}`, whatever the credentials (the API key included), except
 `GET /auth/status`, `GET /setup/status`, `POST /setup/admin`, `POST /setup/complete` and
 `GET /system/ping` (and `/ping` on the compat surface). `/api/v3`, `/metrics` and the event
 socket are closed too. `GET /auth/status` reports `adminExists`; `needsSetup` stays true while
 no admin exists. `POST /setup/admin` and the headless `POST /setup/complete` create the admin
-only while none exists (409 afterwards); `POST /setup/rootfolder` needs the signed-in admin.
+only while none exists (409 afterwards), one at a time: of two racing calls only one creates an
+admin. The headless call validates its body, creates the admin, and only then creates root folders
+on disk; if a later step fails, repeating the call with the same `username`/`password` signs in as
+that admin (rate-limited like a sign-in) and finishes. `POST /setup/rootfolder` needs the
+signed-in admin.
 
 **Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
 `GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `POST /app/sign-in`, `POST /app/pair`, `POST /app/device-codes`, `POST /app/device-codes/poll`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
@@ -129,24 +173,25 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | POST | `/auth/login` | public | `{method?, username, password, rememberMe?}` → `Session`; sets the cookie. `method` (`LoginMethod`): `local` (default) checks Arclight's password; `jellyfin`/`emby`/`mediaServer` sign in against Settings > Media server (`AuthenticateByName`), creating a local `user` with the default permissions of Settings > Requests on first sign-in (`createUsersOnLogin`). 401 `INVALID_CREDENTIALS`, 400 (not configured / wrong kind), 403 (login disabled, account disabled), 429 |
-| POST | `/auth/plex/pin` | public | Plex sign-in step 1 → `PlexPin` `{id, code, authUrl}`; open `authUrl` in a popup (requests module) |
-| POST | `/auth/plex/poll` | public | `PlexPollRequest` `{id, rememberMe?}` → 202 `{pending: true}` until approved, then `Session` + cookie. Allowed for accounts already linked, or (Plex server configured, `createUsersOnLogin`) accounts that can reach that server; 403 otherwise |
+| POST | `/auth/plex/pin` | public | Plex sign-in step 1 → `PlexPin` `{id, code, authUrl}` and an HttpOnly `al_plex` cookie (15 minutes) binding the pin to this browser; open `authUrl` in a popup (requests module). 429 over the per-address limit |
+| POST | `/auth/plex/poll` | public | `PlexPollRequest` `{id, rememberMe?}` with the `al_plex` cookie from step 1 → 202 `{pending: true}` until approved, then `Session` + cookie; the pin is spent. 403 without the matching cookie, for a pin already used or expired, or for a pin started by a signed-in link. Allowed for accounts already linked, or (Plex server configured, `createUsersOnLogin`) accounts that can reach that server; 403 otherwise. 429 over the per-address or per-pin limit |
 | POST | `/auth/logout` | public | Ends the session and clears the cookie (204) |
 | GET | `/auth/status` | public | `{needsSetup, authMethod, authenticated, session}` |
 | GET | `/auth/me` | any | Current `Session` (`user`, `via`, `isAdmin`, `expiresAt`) |
 | GET | `/auth/sessions` | any | The caller's active sessions (`current` marks this one) |
 | DELETE | `/auth/sessions/:id` | any | Revoke one of the caller's sessions |
 | GET | `/user/me` | any | The signed-in user |
-| PUT | `/user/me` | any | Update own display name, email, avatar, settings |
+| PUT | `/user/me` | any | Update own display name, email, avatar, settings. A changed email is unverified (not used for sign-in matching); 409 `EMAIL_IN_USE` when another account has it |
 | PUT | `/user/me/password` | any | `{currentPassword, newPassword}`; ends the caller's other sessions (204) |
 | GET | `/user` | admin | List users |
 | GET | `/user/:id` | admin | One user |
 | POST | `/user` | admin | Create (201); 409 `USER_EXISTS` (usernames are case-insensitive) |
 | PUT | `/user/:id` | admin | Update; `password` resets it and ends the user's sessions; 409 `LAST_ADMIN` on demoting the only admin |
 | DELETE | `/user/:id` | admin | Delete (204); not yourself, not the only admin |
-| GET | `/settings/security` | admin | `{method, requireForLocal, sessionDays, apiKey}` |
+| GET | `/settings/security` | admin | `{method, requireForLocal, sessionDays, apiKey}`; `apiKey` is masked (`********` and its last four characters) |
 | PUT | `/settings/security` | admin | Update `{method, requireForLocal, sessionDays}` |
 | POST | `/settings/security/apikey` | admin | Regenerate the API key → `{apiKey}` |
+| POST | `/settings/security/apikey/reveal` | admin session | The full API key → `{apiKey}`; recorded in the audit log as `apikey.reveal`. Personal API keys (any scope) and app tokens get 403 |
 | GET | `/setup/status` | public | `{needsSetup, steps[{id, complete, optional}]}` for admin, tmdb, rootFolders, downloadClient, indexer |
 | POST | `/setup/admin` | public | Create the first admin and sign it in (201); 409 once a user exists |
 | POST | `/setup/rootfolder` | setup admin | `{path, mediaType, createIfMissing}`: create the directory if asked, add the root folder (existing path returns it) |
@@ -175,6 +220,10 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 | GET | `/log/file/:name` | Download one of them |
 | GET | `/log/stream` | WebSocket: one `LogRecord` JSON per message |
 
+Secrets are masked (`********`) before a record reaches the ring buffer, the log files or stdout:
+query values such as `apikey`, `token`, `sig`, `code` and `state`, fields such as `authorization`,
+`cookie`, `x-api-key` and `password`, and `name=value` pairs that look like credentials.
+
 ## health
 
 | Method | Path | Purpose |
@@ -193,7 +242,7 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET (WebSocket) | `/events` | Live feed: `hello` on connect, then every event bus message |
+| GET (WebSocket) | `/events` | Live feed: `hello` on connect, then every event bus message. A browser `Origin` must be one that may use credentials (see CORS under [app](#app-arclight-player-app-sign-in)), else the upgrade is `403`. The credentials are checked again every 30 seconds: a signed-out or revoked one closes the socket with `1008` |
 
 ## settings
 
@@ -925,19 +974,19 @@ Changes are announced as an `applicationUpdate` notification (`previousVersion`/
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/indexer` | List indexers |
+| GET | `/indexer` | List indexers. `settings.apiKey`, definition fields of type `password` and secret-named fields (cookie, passkey, ...) read as `********` |
 | GET | `/indexer/schema` | Indexer templates (Torznab, Newznab) |
 | GET | `/indexer/categories` | Standard category list |
 | GET | `/indexer/status` | Failure/backoff status per indexer |
 | GET | `/indexer/stats` | `?days=1..90` (default 30): `IndexerStats`, queries / grabs / failures / mean response ms per indexer and per UTC day, plus totals |
 | GET | `/indexer/health` | `?days=1\|7\|30` (default 7): `IndexerHealth`, per indexer queries, failure rate, mean / p95 response ms, mean results, zero-result share, grabs, last success / failure (with message), backoff state and a verdict (`healthy`, `slow`, `failing`, `unused`, `noResults`); the thresholds are in the response |
-| POST | `/indexer/test` | Test unsaved indexer settings (any implementation) |
+| POST | `/indexer/test` | Test unsaved indexer settings (any implementation). With `id` (a saved indexer), masked secrets are tested with the stored values |
 | POST | `/indexer/testall` | Test every saved indexer |
-| GET | `/indexer/:id` | One indexer |
+| GET | `/indexer/:id` | One indexer (secrets masked as in the list) |
 | GET | `/indexer/:id/caps` | Capabilities (`?refresh=true` refetches) |
 | GET | `/indexer/:id/download` | `?url=` a result link of that indexer: streams the `.torrent` / `.nzb` as an attachment, or `302` to a magnet. Goes through the indexer (definition login cookies, proxies). Links must be a recent search result or on one of the indexer's hosts (400 otherwise); 404 `UNAVAILABLE` when the indexer no longer has it |
 | POST | `/indexer` | Create |
-| PUT | `/indexer/:id` | Update |
+| PUT | `/indexer/:id` | Update; a masked `apiKey` or definition field keeps the stored value |
 | DELETE | `/indexer/:id` | Delete |
 | GET | `/search` | Manual search across enabled indexers; returns a release list (results stay grabbable for 30 min) |
 | POST | `/search/grab` | `SearchGrabRequest` `{guid, indexerId, force?, downloadClientId?}`: re-runs the decision engine on the cached search result and grabs it. No library match → 409 `NO_MATCH` unless `force`, which sends it untracked to the default client of its protocol (unknown in the queue). 404 when the result is no longer cached |
@@ -1356,10 +1405,10 @@ back as `********` (send it back to keep it). Links are stored in the user's set
 | GET | `/settings/mediaserver` | `MANAGE_SETTINGS` → `MediaServerSettings` (masked) |
 | PUT | `/settings/mediaserver` | `MANAGE_SETTINGS`: replace the section (URL must be http(s)) |
 | POST | `/settings/mediaserver/test` | `MANAGE_SETTINGS`; optional body = unsaved settings → `MediaServerTestResult` (`System/Info` / Plex `identity`) |
-| POST | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`. `{username, password}` (Jellyfin/Emby `AuthenticateByName`) or `{pinId}` (a completed Plex PIN; also sets `plexToken`) → `UserRequestSettings`. 403 bad credentials, 409 account linked to another user |
+| POST | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`. `{username, password}` (Jellyfin/Emby `AuthenticateByName`) or `{pinId}` (a completed Plex PIN the caller created, with its `al_plex` cookie; also sets `plexToken`) → `UserRequestSettings`. 403 bad credentials or a pin from another browser or account, 409 account linked to another user |
 | DELETE | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`: remove the link → `UserRequestSettings` |
-| POST | `/user/me/mediaserver/plex/pin` | Signed-in user: start a Plex PIN for linking (no sign-in) → `PlexPin` |
-| POST | `/user/me/mediaserver/plex/poll` | Signed-in user, `{id}`: 202 `{pending: true}` until approved, then links the Plex account to the caller (stores the token and `plexToken`; no new session) → `UserRequestSettings`; 409 when linked to another user |
+| POST | `/user/me/mediaserver/plex/pin` | Signed-in user: start a Plex PIN for linking (no sign-in) → `PlexPin`, plus the `al_plex` cookie binding it to this browser and user |
+| POST | `/user/me/mediaserver/plex/poll` | Signed-in user, `{id}`, with the `al_plex` cookie (403 otherwise, or when another user created the pin): 202 `{pending: true}` until approved, then links the Plex account to the caller (stores the token and `plexToken`; no new session) → `UserRequestSettings`; 409 when linked to another user |
 | GET | `/user/import/mediaserver` | `MANAGE_USERS` → `MediaServerUser[]` (Jellyfin/Emby users, or Plex friends) with `linkedUserId` |
 | POST | `/user/import/mediaserver` | `MANAGE_USERS`: `MediaServerImportRequest` `{externalIds?}` (absent = all) → `MediaServerImportResult`; creates linked `user`s with default permissions, skips linked/disabled ones |
 | POST | `/request/digest` | `MANAGE_REQUESTS`: send the admin digest now → `RequestsDigestResult` |
@@ -1385,7 +1434,7 @@ Jellyfin/Emby/Plex). With no server at all the library decides, as before.
 | GET | `/user/:id/requestsettings` | `UserRequestSettings`: personal notification agents, Plex token (masked), watchlist sync, `autoRequestFromWatchlist`, `mediaServerLink` (token masked) (self or `MANAGE_USERS`) |
 | PUT | `/user/:id/requestsettings` | Replace them; a masked token keeps the stored one; `mediaServerLink` is ignored (use the link routes) |
 | POST | `/user/:id/requestsettings/test` | Send a test through each enabled personal agent → `UserNotificationTestResult` |
-| GET | `/settings/requests` | `RequestsSettings` (any signed-in user; the web reads the 4K and partial-request flags) |
+| GET | `/settings/requests` | `RequestsSettings`. `MANAGE_SETTINGS` / `MANAGE_USERS`: the whole section. Other signed-in users get only the request-form switches (4K movie/series `enabled`, `partialRequestsEnabled`, `enableSpecialEpisodes`, `hideAvailable`, `hideRequested`); every other field comes back at its default |
 | PUT | `/settings/requests` | `MANAGE_SETTINGS`: replace the section |
 
 `RequestsSettings` also carries `applicationUrl` (public URL used for links in
@@ -2530,7 +2579,7 @@ choices (`GET/PUT /push/preferences`); delivery and the relay are described in
 |---|---|---|
 | GET | `/mobile/pairing` | `{ serverUrl, pushEnabled }`: the Application URL (Settings > Requests) or null, and false when the server runs with `ARCLIGHT_PUSH_RELAY=off`. The web UI encodes `arclight-admin://pair?url=<encoded base URL>` in its QR code (`mobilePairingUri`; the app still reads the older `arclight://pair` form), using its own origin when `serverUrl` is null |
 | GET | `/mobile/devices` | The caller's devices (MobileDeviceResource: id, userId, relayDeviceId, platform `ios`/`android`, deviceName, appVersion, appId, createdAt, lastSeenAt, lastError). `?all=true`: every user's, with `userName` (admins; others `403 FORBIDDEN`) |
-| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion?, appId? }`). `appId` is the app's bundle ID (for example `com.moviemethat.arclight.admin`); it is stored and sent to the relay with every notification so the relay picks the right APNs topic. Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource |
+| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion?, appId? }`). `appId` is the app's bundle ID (for example `com.moviemethat.arclight.admin`); it is stored and sent to the relay with every notification so the relay picks the right APNs topic. Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource. A device registered to another user moves only when the request carries that device's current `relaySecret` (the same phone, signed in as someone else) or comes from an admin; otherwise `409 CONFLICT` |
 | DELETE | `/mobile/devices/:id` | Unpair. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/mobile/devices/:id/test` | Send a test notification now: `{ ok, outcome: sent \| removed \| rate_limited \| failed \| disabled, message? }`. A device the relay reports gone is deleted (`removed`). One test per device per 10 s, else `429 RATE_LIMITED` |
 
@@ -2615,8 +2664,12 @@ minutes per address, and keep out of the request audit (they record `login.succe
 | DELETE | `/app/devices/:id` | Remove a device; its token stops working at once. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/app/sign-out` | With a device token: removes that device. `204`; `400 NOT_APP` without a device token |
 
-CORS: every origin is reflected with credentials, so the app's origins (`capacitor://localhost`,
-`https://localhost`, `http://localhost`) may send `Authorization`; `Content-Disposition`,
+CORS: the app's origins (`capacitor://localhost`, `https://localhost`, `http://localhost`) get
+`Access-Control-Allow-Origin` without credentials, so they may send `Authorization: Bearer`. Cookies
+(`Access-Control-Allow-Credentials: true`) are allowed only for the request's own host, the
+Application URL, the portal hostnames (while the portal is on) and `ARCLIGHT_CORS_ORIGINS`; a GET
+with signed link parameters (`sig`) is answered without credentials for any origin (cast
+receivers). Any other origin gets no CORS headers. `Vary: Origin` is always sent. `Content-Disposition`,
 `Content-Length`, `Content-Range`, `Accept-Ranges`, `Retry-After`, `X-Arclight-Backend` and
 `X-Arclight-Transcode` are exposed to scripts.
 
@@ -2748,7 +2801,7 @@ codecs, size, HDR, audio and subtitle tracks), `versions` (best first), `chapter
 | GET | `/playback/video/home` | `VideoHome` `{continueWatching, nextUp, recentMovies, recentEpisodes, genres}` |
 | GET | `/playback/movies`, `/playback/series` | `VideoBrowseQuery` `{search, sort ('title' \| 'added' \| 'year' \| 'rating'), order, genre, letter, watched ('all' \| 'unwatched' \| 'watched'), page, pageSize}` → `{items, total, page, pageSize}`; only titles with a file. Cards carry `badges` (`4K`, `HDR`, `DV`) |
 | GET | `/playback/movies/:id`, `/playback/series/:id` | A movie with its versions and the caller's progress; a series with seasons, episodes with files, played counts and `nextUp` |
-| POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}` |
+| POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}`. Only items the active profile may browse count: keys of missing titles or titles above its content limit are skipped, and a restricted series updates nothing |
 
 `/playback/search` adds `movies` and `series` when Movies & TV is on; `/playback/continue` stays
 audio only (video resumes from `/playback/video/home`). Progress uses the normal progress routes.
@@ -2878,6 +2931,10 @@ A source app that refuses Arclight (wrong key) or does not answer is reported as
 
 Implemented in `apps/api/src/modules/audit`. Every mutating `/api/v1` request is recorded by an
 `onResponse` hook; `login.success` / `login.failed` come from the auth service. Admin only.
+Request bodies are stored with secret-named keys masked (passwords, tokens, API keys, cookies,
+recovery codes, PINs, `pass`, `authkey`, ...). Routes whose bodies carry codes keep out of the request
+audit and record their own entry: sign-in, the 2FA routes (`user.2fa.enable`, `user.2fa.disable`,
+`user.2fa.recovery`), household PINs, app sign-in and pairing.
 
 | Method | Path | Purpose |
 |---|---|---|

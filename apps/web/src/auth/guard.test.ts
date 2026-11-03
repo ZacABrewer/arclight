@@ -101,6 +101,24 @@ describe('resolveAuthRedirect', () => {
     expect(safeRedirect('/login?redirect=/x')).toBe('/');
     expect(safeRedirect(undefined)).toBe('/');
   });
+
+  it.each([
+    ['//evil.example', '/'],
+    ['/\\evil.example', '/'],
+    ['/%5cevil.example', '/'],
+    ['/%5Cevil.example', '/'],
+    ['/\t/evil.example', '/'],
+    ['/\n/evil.example', '/'],
+    ['https://evil.example', '/'],
+    ['javascript:alert(1)', '/'],
+    ['/login', '/'],
+    ['/login#x', '/'],
+    ['/library?x=1#y', '/library?x=1#y'],
+    ['/player/profiles?select=2', '/player/profiles?select=2'],
+    ['/discover/search?q=a%20b', '/discover/search?q=a%20b'],
+  ])('safeRedirect(%j) is %j', (target, expected) => {
+    expect(safeRedirect(target)).toBe(expected);
+  });
 });
 
 describe('admin-only nav', () => {

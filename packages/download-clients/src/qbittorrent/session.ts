@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { safeUrl, scrubError, scrubUrl } from '../redact.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 
 export interface SessionSettings {
@@ -227,8 +228,8 @@ export class QBittorrentSession {
     } catch (error) {
       throw new DownloadClientError(
         'unreachable',
-        `Unable to reach qBittorrent at ${this.settings.baseUrl}: ${describeNetworkError(error)}`,
-        { cause: error },
+        `Unable to reach qBittorrent at ${safeUrl(this.settings.baseUrl)}: ${scrubUrl(describeNetworkError(error), url)}`,
+        { cause: scrubError(error, url) },
       );
     }
   }

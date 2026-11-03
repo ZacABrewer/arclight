@@ -353,7 +353,7 @@ describe('indexer cards', () => {
     fireEvent.click(within(jackett!).getByRole('button', { name: 'Test' }));
     expect(await within(jackett!).findByText('Test passed')).toBeTruthy();
     expect(within(jackett!).getByText('42 releases returned')).toBeTruthy();
-    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/indexer/test')?.body).toMatchObject({ name: 'Jackett', implementation: 'torznab' }));
+    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/indexer/test')?.body).toMatchObject({ id: 1, name: 'Jackett', implementation: 'torznab' }));
   });
 
   it('searches the cards by name, implementation, protocol, tag and status with "N of M"', async () => {

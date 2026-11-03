@@ -31,6 +31,7 @@ import {
   IndexerStatus,
   IndexerTemplate,
   IndexerTestAllItem,
+  IndexerTestRequest,
   IndexerTestResult,
   IndexerUpdate,
   ManualSearchRequest,
@@ -149,7 +150,8 @@ export function indexersRoutes(
 
     app.get('/indexer', { schema: { response: { 200: z.array(Indexer) } } }, async () => {
       await service.definitions.ready();
-      return service.list();
+      // Secrets go out masked; PUT and POST /indexer/test (with `id`) restore them.
+      return service.list().map((i) => service.masked(i));
     });
 
     app.get('/indexer/schema', { schema: { response: { 200: z.array(IndexerTemplate) } } }, async () =>
@@ -304,7 +306,7 @@ export function indexersRoutes(
 
     app.post(
       '/indexer/test',
-      { schema: { body: IndexerCreate, response: { 200: IndexerTestResult, ...errors } } },
+      { schema: { body: IndexerTestRequest, response: { 200: IndexerTestResult, ...errors } } },
       async (req) => service.test(req.body),
     );
 
@@ -314,7 +316,7 @@ export function indexersRoutes(
 
     app.get('/indexer/:id', { schema: { params: IdParams, response: { 200: Indexer, ...errors } } }, async (req) => {
       await service.definitions.ready();
-      return service.get(req.params.id);
+      return service.masked(service.get(req.params.id));
     });
 
     app.get(
@@ -345,7 +347,7 @@ export function indexersRoutes(
       { schema: { body: IndexerCreate, response: { 201: Indexer, ...errors } } },
       async (req, reply) => {
         await service.definitions.ready();
-        return reply.code(201).send(service.create(req.body));
+        return reply.code(201).send(service.masked(service.create(req.body)));
       },
     );
 
@@ -354,7 +356,7 @@ export function indexersRoutes(
       { schema: { params: IdParams, body: IndexerUpdate, response: { 200: Indexer, ...errors } } },
       async (req) => {
         await service.definitions.ready();
-        return service.update(req.params.id, req.body);
+        return service.masked(service.update(req.params.id, req.body));
       },
     );
 

@@ -28,6 +28,7 @@ import {
   type IndexerProxyCreate,
   type IndexerProxyTestRequest,
   type IndexerProxyUpdate,
+  type IndexerTestRequest,
   type IndexerUpdate,
   type SearchGrabRequest,
   ReleaseResource,
@@ -50,7 +51,8 @@ export const indexersApi = {
   /** Partial update; `settings` merges field by field. */
   update: (id: number, body: IndexerUpdate) => request(`/indexer/${id}`, Indexer, { method: 'PUT', json: body }),
   remove: (id: number) => request(`/indexer/${id}`, null, { method: 'DELETE' }),
-  test: (body: IndexerCreate) => request('/indexer/test', IndexerTestResult, { method: 'POST', json: body }),
+  /** With `id`, masked secrets are tested with the saved indexer's values. */
+  test: (body: IndexerTestRequest) => request('/indexer/test', IndexerTestResult, { method: 'POST', json: body }),
   testAll: () => request('/indexer/testall', IndexerTestAllItem.array(), { method: 'POST' }),
   /** Cross-indexer search (GET /search). Id lists travel comma separated. */
   search: (query: Partial<ManualSearchRequest>, signal?: AbortSignal) => {
