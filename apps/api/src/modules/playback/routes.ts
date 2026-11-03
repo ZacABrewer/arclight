@@ -54,11 +54,15 @@ import {
   type PlaybackEngine,
   type PlayerCapabilities as Capabilities,
   type PlayerSettings as Settings,
+  AddressClashResponse,
+  addressClash,
+  ErrorResponse,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
 import { audioFiles } from '../library/schema.js';
 import { getSection, setSection } from '../settings/service.js';
+import { playerUrlOf, portalUrlOf } from '../../public-urls.js';
 import { capabilitiesOf, decide, denialReply, isRemoteRequest, linkUserStillActive as linkUserStillActiveIn, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
 import { findArtwork } from './artwork.js';
 import {
@@ -324,7 +328,12 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
 
     // ---- settings (admin only) -------------------------------------------------------
     app.get('/settings/player', { schema: { response: { 200: PlayerSettings } } }, async () => playerSettings(db));
-    app.put('/settings/player', { schema: { body: PlayerSettings, response: { 200: PlayerSettings } } }, async (req) => setSection(db, 'player', req.body));
+    app.put('/settings/player', { schema: { body: PlayerSettings, response: { 200: PlayerSettings, 400: AddressClashResponse.or(ErrorResponse) } } }, async (req, reply) => {
+      // A player path or hostname may not be one the request portal already uses.
+      const clashes = addressClash(getSection(db, 'requests').publicPortal, req.body.address);
+      if (clashes.length) return reply.code(400).send({ error: 'already used by the request portal (Settings > Requests)', code: 'address-clash' as const, clashes });
+      return setSection(db, 'player', req.body);
+    });
     app.post('/settings/player/engine-test', { schema: { body: PlayerEngineTestRequest, response: { 200: PlayerEngineTestResult } } }, async (req) => {
       if (!deps.engine) return { ok: false, serverId: null, serverName: null, version: null, sample: null, message: 'The Jellyfin engine is not available' };
       const sample = db.select().from(audioFiles).orderBy(asc(audioFiles.mediaType), asc(audioFiles.id)).limit(1).get();
@@ -338,7 +347,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       // The active household profile can hide music and audiobooks (its own settings).
       const profile = req.auth?.user && req.auth.profile ? householdsFor(db).settings(req.auth.user.id, req.auth.profile.id) : null;
       if (profile) caps.sections = { ...caps.sections, music: caps.sections.music && profile.showMusic, audiobooks: caps.sections.audiobooks && profile.showAudiobooks };
-      return { ...caps, engine: engineTarget(settings) ? 'jellyfin' : 'arclight' };
+      return { ...caps, engine: engineTarget(settings) ? 'jellyfin' : 'arclight', playerUrl: playerUrlOf(db, deps.basePath), portalUrl: portalUrlOf(db, deps.basePath) };
     });
 
     // ---- items and stream links ------------------------------------------------------------

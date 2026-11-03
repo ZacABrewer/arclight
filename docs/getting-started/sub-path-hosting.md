@@ -14,6 +14,7 @@ Set the environment variable `ARCLIGHT_BASE_PATH` to the path, for example `/arc
 | Live updates and live log (WebSockets) | `wss://example.com/arclight/api/v1/events`, `.../api/v1/log/stream` |
 | Prometheus metrics | `https://example.com/arclight/metrics` |
 | Request portal paths | `https://example.com/arclight/portal`, plus any extra portal paths you set |
+| Player paths | `https://example.com/arclight/player`, plus any extra player paths you set |
 
 Rules for the value:
 
@@ -134,6 +135,8 @@ Give the full address, path included, wherever something connects to Arclight:
 | Prometheus scrape target | `metrics_path: /arclight/metrics` |
 
 Request portal paths (`/portal`, `/watch`, ...) live below the base path: `https://example.com/arclight/watch`. A portal hostname (Settings > Requests > Public request portal) answers at the base path on that hostname, for example `https://requests.example.com/arclight/`.
+
+Player paths (`/player` and the extra paths under Settings > Player > Player address) live below the base path in the same way: `https://example.com/arclight/watch`. A player hostname answers at the base path on that hostname, for example `https://watch.example.com/arclight/`, and that is the address TV sign-in shows. See [Player address](../player/address.md).
 
 The sign-in cookie keeps `Path=/`, so if you host two Arclight instances under different paths on the same hostname, signing into one signs you out of the other. Use separate hostnames for that.
 

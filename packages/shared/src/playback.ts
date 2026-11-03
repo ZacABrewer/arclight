@@ -23,6 +23,12 @@ export type PlaybackEngine = z.infer<typeof PlaybackEngine>;
 /** The built-in player path; always works and cannot be removed. */
 export const DEFAULT_PLAYER_PATH = '/player';
 
+/**
+ * The player's own pages, by first segment below /player (`/player/watch/movies`). On a player
+ * hostname these answer at the root (`/watch/movies`); the root itself is player home.
+ */
+export const PLAYER_ROUTE_SEGMENTS: readonly string[] = ['now-playing', 'music', 'books', 'search', 'watch', 'settings', 'profiles', 'link'];
+
 /** A hostname that serves the player at its root (e.g. watch.example.com). */
 export const PlayerHost = z.object({
   hostname: PortalHost.shape.hostname,

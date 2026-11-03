@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { PlayerDocument } from '@arclight/shared';
 import type { AppContext } from './app.js';
-import { injectPortalDocument, spaDecision } from './modules/requests/index.js';
+import { injectPortalDocument } from './modules/requests/index.js';
+import { spaRoute } from './address-routing.js';
 import { getSection } from './modules/settings/service.js';
 import { withBasePath } from './base-path.js';
 
@@ -11,7 +13,9 @@ import { withBasePath } from './base-path.js';
 // load (the SPA fallback). Page loads also learn where the request portal answers: portal
 // paths (/portal, /watch, ...) on any hostname and the root of portal hostnames, written
 // into index.html for the web router (modules/requests/portal-routing.ts). Portal-only
-// hostnames send admin pages back to the portal.
+// hostnames send admin pages back to the portal. The player's addresses (Settings > Player:
+// extra paths, and hostnames that show the player at their root) work the same way, with
+// <meta name="arclight-player"> (address-routing.ts decides both).
 //
 // The hostname comes from Host, or X-Forwarded-Host behind a proxy: the server always trusts
 // forwarded headers (docs/getting-started/exposing-outside-home.md).
@@ -27,6 +31,15 @@ export function injectBasePath(html: string, basePath: string): string {
   const tag = `<meta name="arclight-base" content="${basePath}" />`;
   return out.includes('<head>') ? out.replace('<head>', `<head>
     ${tag}`) : `${tag}${out}`;
+}
+
+/** index.html with the player mapping as a meta tag, like injectPortalDocument. */
+export function injectPlayerDocument(html: string, player: PlayerDocument | null): string {
+  if (!player) return html;
+  const content = JSON.stringify(player).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const tag = `<meta name="arclight-player" content="${content}" />`;
+  return html.includes('</head>') ? html.replace('</head>', `    ${tag}
+  </head>`) : `${tag}${html}`;
 }
 
 export async function registerSpa(app: FastifyInstance, ctx: AppContext, webDist: string, basePath = ''): Promise<void> {
@@ -45,9 +58,9 @@ export async function registerSpa(app: FastifyInstance, ctx: AppContext, webDist
   app.setNotFoundHandler(async (req: FastifyRequest, reply: FastifyReply) => {
     if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not found' });
     const pathname = req.url.split('?')[0] ?? '/';
-    const decision = spaDecision(getSection(ctx.db, 'requests').publicPortal, req.host, pathname);
+    const decision = spaRoute(getSection(ctx.db, 'requests').publicPortal, getSection(ctx.db, 'player').address, req.host, pathname);
     if (decision.kind === 'redirect') return reply.redirect(withBasePath(basePath, decision.location), 302);
-    const html = injectPortalDocument(await indexHtml(), decision.portal);
+    const html = injectPlayerDocument(injectPortalDocument(await indexHtml(), decision.portal), decision.player);
     // The page differs per hostname and path; never let a shared cache mix them up.
     return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').header('vary', 'Host, X-Forwarded-Host').send(html);
   });

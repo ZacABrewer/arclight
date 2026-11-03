@@ -397,4 +397,29 @@ describe('TV sign-in (device codes)', () => {
     // Still pending after the failed attempts.
     expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'pending' });
   });
+
+  it('shows the player address once the owner set one, over the address the TV used', async () => {
+    const h = await harness();
+    const lan = { ...TV, serverUrl: 'http://192.0.2.10:7878' };
+    expect((await create(h, lan)).json().verifyUrl).toBe('http://192.0.2.10:7878/player/link');
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com' });
+    // The Application URL alone is not a player address: the TV's own address still wins.
+    expect((await create(h, lan)).json().verifyUrl).toBe('http://192.0.2.10:7878/player/link');
+    setSection(h.db, 'player', { enabled: true, address: { paths: ['/tv'] } });
+    expect((await create(h, lan)).json().verifyUrl).toBe('https://media.example.com/tv/link');
+    setSection(h.db, 'player', { enabled: true, address: { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com' }] } });
+    expect((await create(h, lan)).json().verifyUrl).toBe('https://watch.example.com/link');
+  });
+});
+
+describe('sign-in QR with a player hostname', () => {
+  it('carries the player hostname as the server address', async () => {
+    const h = await harness();
+    setSection(h.db, 'requests', { applicationUrl: 'http://media.example.com' });
+    setSection(h.db, 'player', { enabled: true, address: { hosts: [{ hostname: 'watch.example.com' }] } });
+    const u = await makeUser(h, { player: true });
+    const code = (await post(h, '/api/v1/app/pair-codes', undefined, { cookie: u.cookie })).json();
+    expect(code.serverUrl).toBe('http://watch.example.com');
+    expect(parseAppPairingUri(code.qr)).toEqual({ server: 'http://watch.example.com', code: code.code });
+  });
 });

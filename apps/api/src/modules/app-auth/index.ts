@@ -2,6 +2,7 @@ import type { AppContext, AppModule } from '../../app.js';
 import { authServiceFor } from '../auth/context.js';
 import { normaliseServerUrl } from '../mobile/service.js';
 import { getSection } from '../settings/service.js';
+import { hasPlayerAddress, playerOriginOf, playerUrlOf } from '../../public-urls.js';
 import { appAuthRoutes } from './routes.js';
 import { AppAuthService, type AppAuthServiceOptions } from './service.js';
 
@@ -25,6 +26,9 @@ export function appAuthServiceFor(ctx: AppContext, overrides: Partial<Omit<AppAu
       log: ctx.log.child({ module: 'app-auth' }),
       // The Application URL (Settings → Requests), as the companion pairing uses it.
       serverUrl: () => normaliseServerUrl(getSection(ctx.db, 'requests').applicationUrl),
+      // Settings > Player > Player address: TV sign-in shows it, the sign-in QR uses a player hostname.
+      verifyBase: () => (hasPlayerAddress(ctx.db) ? playerUrlOf(ctx.db, ctx.config.basePath ?? '') : null),
+      pairServerUrl: () => playerOriginOf(ctx.db, ctx.config.basePath ?? '') ?? normaliseServerUrl(getSection(ctx.db, 'requests').applicationUrl),
       ...overrides,
     });
     const s = service;

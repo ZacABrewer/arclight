@@ -6,6 +6,7 @@ import { authServiceFor } from '../auth/index.js';
 import { evaluatePolicy, GB, needsSizeEstimate, nextOpening, windowActive, type PolicyFacts } from './policy.js';
 import { mediaRequests } from './schema.js';
 import { addUser, buildApp, NOW, setup } from './test-support.js';
+import { setSection } from '../settings/service.js';
 
 // Windows are in server local time, so every window is built around NOW's local day/hour.
 const DAY = NOW.getDay();
@@ -249,6 +250,17 @@ describe('approval policy routes', () => {
     expect(saved.json()).toMatchObject({ approvalBudgets: [{ scope: 'role', movieGb: 200 }], autoApproveIfSizeBelowGb: 4 });
     const bad = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie }, payload: { ...body, approvalWindows: [{ days: [9], startHour: 1, endHour: 2, action: 'hold' }] } });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it('PUT /settings/requests refuses portal paths and hostnames the player address uses', async () => {
+    const h = await app();
+    setSection(h.db, 'player', { address: { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com' }] } });
+    const current = (await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie } })).json() as Record<string, unknown>;
+    const put = (publicPortal: object) => h.app.inject({ method: 'PUT', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie }, payload: { ...current, publicPortal } });
+    const bad = await put({ enabled: true, paths: ['/TV'], hosts: [{ hostname: 'Watch.example.com' }] });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ code: 'address-clash', clashes: [{ field: 'paths', value: '/tv' }, { field: 'hosts', value: 'watch.example.com' }] });
+    expect((await put({ enabled: true, paths: ['/ask'], hosts: [{ hostname: 'requests.example.com' }] })).statusCode).toBe(200);
   });
 
   it('GET /request/:id/policy explains why a request is pending, for its owner and managers only', async () => {

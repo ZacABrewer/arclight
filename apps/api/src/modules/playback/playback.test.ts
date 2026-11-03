@@ -291,6 +291,23 @@ describe('access guard', () => {
     expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true, segmentDetectionRecaps: true, address: { paths: [], hosts: [] } });
     expect((await h.app.inject({ method: 'POST', url: '/api/v1/settings/player/engine-test', headers: { cookie: user.cookie }, payload: {} })).statusCode).toBe(403);
   });
+
+  it('player address: saved and read back, refused where the request portal already answers', async () => {
+    const h = await harness();
+    const admin = await signIn(h, { role: 'admin' });
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com', publicPortal: { enabled: true, paths: ['/ask'], hosts: [{ hostname: 'requests.example.com' }] } });
+    const put = (address: object) => h.app.inject({ method: 'PUT', url: '/api/v1/settings/player', headers: { cookie: admin.cookie }, payload: { enabled: true, address } });
+    const clash = await put({ paths: ['/ASK'], hosts: [{ hostname: 'Requests.example.com' }] });
+    expect(clash.statusCode).toBe(400);
+    expect(clash.json()).toMatchObject({ code: 'address-clash', clashes: [{ field: 'paths', value: '/ask' }, { field: 'hosts', value: 'requests.example.com' }] });
+    const bad = await put({ paths: ['/player'] });
+    expect(bad.statusCode).toBe(400);
+    const ok = await put({ paths: ['/tv'], hosts: [{ hostname: 'Watch.Example.com', playerOnly: false }] });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().address).toEqual({ paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: false }] });
+    expect((await get(h, '/api/v1/settings/player', admin.cookie)).json().address).toEqual(ok.json().address);
+    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json()).toMatchObject({ playerUrl: 'https://watch.example.com', portalUrl: 'https://requests.example.com' });
+  });
 });
 
 describe('stream', () => {

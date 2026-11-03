@@ -151,7 +151,7 @@ export const AppDeviceCodeRequest = z.object({
   deviceName: z.string().trim().min(1).max(100),
   platform: AppDeviceCodePlatform,
   appVersion: z.string().trim().min(1).max(40).default('unknown'),
-  /** The address the device reached the server at; `verifyUrl` is built on it (else the Application URL). */
+  /** The address the device reached the server at; `verifyUrl` is built on it (else the Application URL) unless a player address is set. */
   serverUrl: z.string().trim().max(500).optional(),
 });
 export type AppDeviceCodeRequest = z.input<typeof AppDeviceCodeRequest>;
@@ -163,7 +163,10 @@ export const AppDeviceCode = z.object({
   pollToken: z.string(),
   expiresAt: z.string(),
   intervalSec: z.number().int(),
-  /** `<serverUrl>/player/link`: where the user types the code (a QR may add `?code=<userCode>`). */
+  /**
+   * `<playerUrl>/link` (Settings > Player > Player address), else `<serverUrl>/player/link`: where
+   * the user types the code (a QR may add `?code=<userCode>`).
+   */
   verifyUrl: z.string(),
 });
 export type AppDeviceCode = z.infer<typeof AppDeviceCode>;

@@ -1350,6 +1350,14 @@ export interface AddressClash {
   value: string;
 }
 
+/** 400 from PUT /settings/player and PUT /settings/requests when the two address lists overlap. */
+export const AddressClashResponse = z.object({
+  error: z.string(),
+  code: z.literal('address-clash'),
+  clashes: z.array(z.object({ field: z.enum(['paths', 'hosts']), value: z.string() })),
+});
+export type AddressClashResponse = z.infer<typeof AddressClashResponse>;
+
 /**
  * Paths and hostnames the request portal and the player address both claim. Each may belong to
  * one of them only, so the server rejects a settings save with any clash (400 `address-clash`)

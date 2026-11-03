@@ -52,6 +52,11 @@ when you are part-way through, and **My List**. Shows list their episodes by sea
 show **More like this**. On a phone the buttons sit in a row under Play and the overview opens
 with **More**.
 
+The **More** menu (the three dots) has **Mark watched** / **Mark unwatched**, **Copy link** and,
+when a movie has two or more files, **Versions**. **Copy link** puts the title's address on the
+clipboard, on the [player address](address.md) when an admin set one (for example
+`https://watch.example.com/watch/movies/12`), else on the address you opened the player on.
+
 ## Search
 
 Type to search movies and shows, plus albums and audiobooks when those sections are on. Before

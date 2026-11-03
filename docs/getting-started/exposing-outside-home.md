@@ -176,6 +176,13 @@ To let family request titles without ever seeing the admin pages, give the [requ
 
 A Cloudflare Access policy can then stay strict on `arclight.example.com` and be looser (or off) on `requests.example.com`. Sign-ins are per hostname: signing in on one does not sign you in on the other.
 
+## A separate hostname for the player
+
+The player can get its own hostname too, for example `watch.example.com`, so family open the
+player at the root and never see the admin pages. Point the hostname at Arclight the same way,
+then add it under Settings > Player > Player address. TV sign-in and share links then use that
+address. See [Player address](../player/address.md).
+
 ## If something goes wrong
 
 | Symptom | Likely cause |
@@ -186,12 +193,14 @@ A Cloudflare Access policy can then stay strict on `arclight.example.com` and be
 | Everyone sees "Too many failed attempts" | The proxy hides client addresses, so all users share one counter. Send `X-Forwarded-For` |
 | You locked yourself out | See [locked out](../TROUBLESHOOTING.md#locked-out) |
 | The requests hostname shows the full app | It is not under Portal hostnames, the portal is off, or the proxy changes the `Host` header |
+| The player hostname shows the full app | It is not under Player address > Hostnames, or the proxy changes the `Host` header |
 
 ## Related
 
 - [../using/users-and-security.md](../using/users-and-security.md)
 - [../CLOUDFLARE.md](../CLOUDFLARE.md)
 - [sub-path-hosting.md](sub-path-hosting.md)
+- [../player/address.md](../player/address.md)
 - [install-docker.md](install-docker.md)
 - [updating.md](updating.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)

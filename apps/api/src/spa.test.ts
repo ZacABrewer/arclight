@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RequestsSettings } from '@arclight/shared';
+import { PlayerSettings, RequestsSettings } from '@arclight/shared';
 import type { AppContext } from './app.js';
 import { createTestDb } from './db/test-utils.js';
 import { setSection } from './modules/settings/service.js';
@@ -18,15 +18,16 @@ afterEach(async () => {
   dir = null;
 });
 
-async function server(portal: object) {
+async function server(portal: object, player: object = {}, basePath = '') {
   dir = await mkdtemp(path.join(tmpdir(), 'arclight-spa-'));
   await writeFile(path.join(dir, 'index.html'), '<!doctype html><html><head><title>Arclight</title></head><body><div id="root"></div></body></html>');
   await mkdir(path.join(dir, 'assets'));
   await writeFile(path.join(dir, 'assets', 'app.js'), 'console.log(1)');
   const db = await createTestDb();
   setSection(db, 'requests', RequestsSettings.parse({ publicPortal: portal }));
+  setSection(db, 'player', PlayerSettings.parse({ address: player }));
   const app = Fastify({ trustProxy: true });
-  await registerSpa(app, { db } as AppContext, dir);
+  await registerSpa(app, { db } as AppContext, dir, basePath);
   return app;
 }
 
@@ -64,5 +65,21 @@ describe('SPA fallback', () => {
     expect(admin.headers.location).toBe('/');
     const login = await app.inject({ method: 'GET', url: '/login', headers: { host: 'requests.example.com' } });
     expect(login.statusCode).toBe(200);
+  });
+
+  it('tags player paths and player hostnames, and keeps player-only hostnames to the player', async () => {
+    const player = { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] };
+    const app = await server(portal, player, '/arclight');
+    const path = await app.inject({ method: 'GET', url: '/tv/watch/movies', headers: { host: 'nas.local' } });
+    expect(path.body).toContain('<meta name="arclight-player" content="{&quot;mode&quot;:&quot;path&quot;,&quot;base&quot;:&quot;/tv&quot;}" />');
+    expect(path.body).not.toContain('arclight-portal');
+    const host = await app.inject({ method: 'GET', url: '/watch/movies/12', headers: { host: 'watch.example.com' } });
+    expect(host.body).toContain('&quot;mode&quot;:&quot;host&quot;,&quot;playerOnly&quot;:true');
+    const admin = await app.inject({ method: 'GET', url: '/library/movies', headers: { host: 'watch.example.com' } });
+    expect(admin.statusCode).toBe(302);
+    expect(admin.headers.location).toBe('/arclight/');
+    expect((await app.inject({ method: 'GET', url: '/setup', headers: { host: 'watch.example.com' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/assets/app.js', headers: { host: 'watch.example.com' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/nothing', headers: { host: 'watch.example.com' } })).statusCode).toBe(404);
   });
 });

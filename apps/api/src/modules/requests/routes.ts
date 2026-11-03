@@ -29,7 +29,10 @@ import {
   DiscoverSliderInput,
   DiscoverSliderOrder,
   DiscoverSliderUpdate,
+  AddressClashResponse,
+  addressClash,
   ErrorResponse,
+  type PublicPlayerAddress,
   Issue,
   IssueCommentInput,
   IssueCount,
@@ -105,6 +108,10 @@ export interface RequestsRouteServices {
   mediaServerLogin?: () => MediaServerLoginOption;
   /** Feature flags shown to anonymous portal visitors. */
   features?: () => PublicPortal['features'];
+  /** The portal's and the player's public addresses (public-urls.ts). */
+  publicUrls?: () => Pick<PublicPortal, 'portalUrl' | 'playerUrl'>;
+  /** The player address (Settings > Player); portal paths and hostnames may not reuse it. */
+  playerAddress?: () => PublicPlayerAddress;
 }
 
 /** Who is calling, in permission terms. API-key and bypass callers act as admin. */
@@ -302,7 +309,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.get(
       '/public/portal',
       { config: { access: { portal: true }, publicWhen: portalOn }, preHandler: limit, schema: { response: { 200: PublicPortal, ...errors } } },
-      async () => publicPortal(requests, s.mediaServerLogin ?? (() => null), s.features),
+      async () => publicPortal(requests, s.mediaServerLogin ?? (() => null), s.features, s.publicUrls),
     );
 
     // ------------------------------------------------------------------------- sliders
@@ -429,8 +436,11 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
 
     // ------------------------------------------------------------------------- settings
     app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async () => requests.settings());
-    app.put('/settings/requests', { schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors } } }, async (req) =>
-      requests.updateSettings(actorOf(req), req.body),
-    );
+    app.put('/settings/requests', { schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors, 400: AddressClashResponse.or(ErrorResponse) } } }, async (req, reply) => {
+      // A portal path or hostname may not be one the player address already uses.
+      const clashes = s.playerAddress ? addressClash(req.body.publicPortal, s.playerAddress()) : [];
+      if (clashes.length) return reply.code(400).send({ error: 'already used by the player address (Settings > Player)', code: 'address-clash' as const, clashes });
+      return requests.updateSettings(actorOf(req), req.body);
+    });
   };
 }
