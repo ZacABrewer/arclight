@@ -21,7 +21,10 @@ export function linkKey(apiKey: string): Buffer {
   return createHmac('sha256', apiKey).update('arclight stream links v1').digest();
 }
 
-/** Audio files sign as `audio:`, video files (media_files ids) as `video:`: one never opens the other. */
+/**
+ * Audio files sign as `audio:`, video files (media_files ids) as `video:`, scrub-thumbnail sheets
+ * of a video file as `trickplay:`: one never opens another.
+ */
 export type LinkDomain = 'audio' | 'video' | 'trickplay';
 
 /** `profileId` present: it is part of the MAC, so a link cannot be moved to another profile. */

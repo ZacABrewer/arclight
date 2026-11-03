@@ -103,7 +103,7 @@ The video player fills the screen. Move the mouse, tap or press a key to show th
 - Volume and mute, picture in picture and full screen.
 - **Audio & subtitles**: pick the audio track and the subtitles. If subtitles are early or late, nudge them in steps of a quarter second.
 - **Playback settings**: the version, the quality (Auto, Original, 1080p, 720p or 480p) and the speed. It also shows how the video reaches you (see below).
-- **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts.
+- **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts, when Arclight found the intro and credits by comparing a season's audio, or when an admin entered the times. Dragging the progress bar shows scrub thumbnails. See [Scrub thumbnails and intro detection](../player/scrub-thumbnails-and-intros.md).
 - Near the end of an episode, an **Up next** card counts down 10 seconds and then plays the next episode. Press **Cancel** to stay, or **Play now** to go straight away.
 
 | Key | What it does |

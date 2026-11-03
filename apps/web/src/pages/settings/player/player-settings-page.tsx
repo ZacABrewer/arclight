@@ -4,6 +4,7 @@ import { errorMessage } from '../../../api/client.js';
 import { Button, ErrorBlock, FormRow, FormSection, Input, Segmented, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { usePlayerSettings, useSavePlayerSettings, useTestPlayerEngine } from '../../../features/player/api.js';
 import { useMediaServers } from '../../../hooks/media-servers.js';
+import { PlayerMediaSection } from './player-media-section.js';
 import { SettingsPage, useDraft } from '../settings-layout.js';
 import { t } from '../../../i18n/index.js';
 
@@ -24,6 +25,10 @@ export interface PlayerSettingsDraft {
   video: boolean;
   videoMaxStreams: string;
   videoMaxStreamsPerUser: string;
+  /** Scrub thumbnails: off, made when a file is first played, or for the whole library at night. */
+  trickplay: PlayerSettings['trickplay'];
+  /** Intro and credits detection. */
+  segmentDetection: boolean;
 }
 
 /** Enabled Jellyfin and Emby connections: the servers the player can stream through. */
@@ -49,6 +54,8 @@ export function toPlayerSettingsDraft(s: PlayerSettings): PlayerSettingsDraft {
     video: s.video,
     videoMaxStreams: String(s.videoMaxStreams),
     videoMaxStreamsPerUser: String(s.videoMaxStreamsPerUser),
+    trickplay: s.trickplay,
+    segmentDetection: s.segmentDetection,
   };
 }
 
@@ -66,6 +73,8 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     video: d.video,
     videoMaxStreams: num(d.videoMaxStreams),
     videoMaxStreamsPerUser: num(d.videoMaxStreamsPerUser),
+    trickplay: d.trickplay,
+    segmentDetection: d.segmentDetection,
   });
   if (parsed.success) return { ok: true, body: parsed.data };
   const field = String(parsed.error.issues[0]?.path[0] ?? '');
@@ -143,6 +152,13 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
             />
           </FormRow>
         </FormSection>
+        <PlayerMediaSection
+          trickplay={d.trickplay}
+          segmentDetection={d.segmentDetection}
+          savedSegmentDetection={data.segmentDetection}
+          onTrickplay={(v) => set('trickplay', v)}
+          onSegmentDetection={(v) => set('segmentDetection', v)}
+        />
         <FormSection label={t('player.settings.engine')}>
           <FormRow label={t('player.settings.engineLabel')} caption={noServers ? t('player.settings.engineNoServer') : t('player.settings.engineCaption')}>
             <Segmented<PlaybackEngine>

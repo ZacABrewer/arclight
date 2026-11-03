@@ -146,6 +146,13 @@ export class Limiter {
   }
 }
 
+/**
+ * Background ffmpeg work (scrub-thumbnail sheets, intro/credits audio extraction): one run at a
+ * time server-wide. Its users also wait while every live video slot is taken (trickplay.ts,
+ * segments.ts), so background work never competes with someone watching.
+ */
+export const BackgroundMediaLimiter = new Limiter(1, 1000);
+
 // ---- disk caches --------------------------------------------------------------------------------
 
 /** A file's identity for cache keys: size and mtime, so a replaced file gets a new entry. */

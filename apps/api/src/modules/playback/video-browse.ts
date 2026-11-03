@@ -53,7 +53,7 @@ export interface VideoBrowseContext {
 
 /** Next up looks at series with an episode played this recently. */
 export const NEXT_UP_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
-const HOME_ROW = 20;
+export const HOME_ROW = 20;
 const CHUNK = 500;
 
 /** The caps a browse user plays under: the account's combined with the active profile's (browseUserOf). */
@@ -72,10 +72,10 @@ export function progressFor(ctx: VideoBrowseContext, user: BrowseUser, keys: rea
   return out;
 }
 
-const toVideoProgress = (p: PlaybackProgress | undefined): VideoProgress | null =>
+export const toVideoProgress = (p: PlaybackProgress | undefined): VideoProgress | null =>
   p && (p.played || p.positionMs > 0) ? { positionMs: p.positionMs, durationMs: p.durationMs, played: p.played } : null;
 
-const inProgress = (p: PlaybackProgress | undefined) => !!p && !p.played && p.durationMs > 0 && p.positionMs >= p.durationMs * RESUME_MIN;
+export const inProgress = (p: PlaybackProgress | undefined) => !!p && !p.played && p.durationMs > 0 && p.positionMs >= p.durationMs * RESUME_MIN;
 
 /** "#" for titles that do not start with a letter. */
 const letterOf = (title: string) => {
@@ -90,14 +90,14 @@ function paginate<T>(list: readonly T[], q: VideoBrowseQuery): { items: T[]; tot
 
 // ---- movies ------------------------------------------------------------------------------------
 
-interface MovieFacts {
+export interface MovieFacts {
   row: MovieRow;
   addedAt: string | null;
   badges: string[];
 }
 
 /** Movies with files within the caps, with their newest file date and the best file's badges. */
-function playableMovies(ctx: VideoBrowseContext, user: BrowseUser): MovieFacts[] {
+export function playableMovies(ctx: VideoBrowseContext, user: BrowseUser): MovieFacts[] {
   const r = restrictionsOf(user);
   const rows = ctx.db.select().from(movies).where(eq(movies.hasFile, true)).all().filter((m) => withinRestrictions(r, 'movie', m.certification));
   const files = ctx.db
@@ -226,7 +226,7 @@ export function movieDetails(ctx: VideoBrowseContext, user: BrowseUser, id: numb
 
 // ---- series ------------------------------------------------------------------------------------
 
-interface SeriesFacts {
+export interface SeriesFacts {
   row: SeriesRow;
   addedAt: string | null;
   episodeKeys: string[];
@@ -242,7 +242,7 @@ interface SeriesFileStats {
 }
 
 /** Series with at least one episode file within the caps, with per-series file facts (one SQL pass). */
-function playableSeries(ctx: VideoBrowseContext, user: BrowseUser): SeriesFacts[] {
+export function playableSeries(ctx: VideoBrowseContext, user: BrowseUser): SeriesFacts[] {
   const r = restrictionsOf(user);
   const rows = ctx.db.select().from(series).all().filter((s) => withinRestrictions(r, 'series', s.certification));
   if (rows.length === 0) return [];
@@ -387,7 +387,7 @@ export function seriesDetails(ctx: VideoBrowseContext, user: BrowseUser, id: num
 
 // ---- home --------------------------------------------------------------------------------------
 
-function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackProgress | undefined): VideoCard {
+export function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackProgress | undefined): VideoCard {
   const { row } = m;
   return {
     itemKey: itemKey('movie', row.id),
@@ -401,6 +401,24 @@ function movieCard(ctx: VideoBrowseContext, m: MovieFacts, progress: PlaybackPro
     thumbUrl: null,
     progress: toVideoProgress(progress),
     badges: m.badges,
+  };
+}
+
+/** A series card (itemKey null: opening it shows the series). */
+export function seriesCard(ctx: VideoBrowseContext, s: SeriesFacts): VideoCard {
+  const { row } = s;
+  return {
+    itemKey: null,
+    kind: 'series',
+    id: row.id,
+    title: row.title,
+    subtitle: row.network,
+    year: row.year || null,
+    posterUrl: imageUrl(ctx.basePath, 'series', row.id, row.images, 'poster', '342'),
+    backdropUrl: imageUrl(ctx.basePath, 'series', row.id, row.images, 'fanart', '1280'),
+    thumbUrl: null,
+    progress: null,
+    badges: s.badges,
   };
 }
 
@@ -425,7 +443,7 @@ function episodeCard(ctx: VideoBrowseContext, e: EpisodeRow, show: SeriesRow, pr
 }
 
 /** Episodes with a file by id, with their series, within the caps. */
-function episodesWithSeries(ctx: VideoBrowseContext, r: ContentRestrictions | null, ids: readonly number[]): Map<number, { episode: EpisodeRow; show: SeriesRow }> {
+export function episodesWithSeries(ctx: VideoBrowseContext, r: ContentRestrictions | null, ids: readonly number[]): Map<number, { episode: EpisodeRow; show: SeriesRow }> {
   const out = new Map<number, { episode: EpisodeRow; show: SeriesRow }>();
   for (let i = 0; i < ids.length; i += CHUNK) {
     const rows = ctx.db
