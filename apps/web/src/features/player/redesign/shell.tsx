@@ -133,7 +133,7 @@ function useScrolled(threshold = 8): boolean {
   return scrolled;
 }
 
-/** The wide header (template header; §4.5: 56 px, logo 20, tabs 15/600). */
+/** The wide header (template header: 72 px, logo 22, tabs 16/600). */
 export function WideHeader({ transparent }: { transparent?: boolean | undefined }) {
   const t = useT();
   const path = strip(useRouterState({ select: (s) => s.location.pathname }));
@@ -146,7 +146,7 @@ export function WideHeader({ transparent }: { transparent?: boolean | undefined 
   return (
     <header className={cx('rd-header', scrolled && 'is-scrolled', transparent && 'is-transparent')}>
       <PlayerLink to={redesignPaths.home} className="rd-header__brand" aria-label={t('player.redesign.nav.home')}>
-        <Lockup height={20} />
+        <Lockup height={22} />
       </PlayerLink>
       <nav className="rd-header__tabs" aria-label={t('player.redesign.nav.label')}>
         {tabs.map((tab) => (

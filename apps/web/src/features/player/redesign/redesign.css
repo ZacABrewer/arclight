@@ -1,14 +1,14 @@
 /* Arclight /player redesign (redesign spec §4.1-§4.6): the template's composition in tokens.
    Every colour, radius and font comes from --al-pl-* (styles/arclight/arclight.css), so every
    theme pack works; the `cinema` pack sets them to the design's exact values.
-   Layouts: [data-layout="wide"] (the TV composition reflowed, header 56) and
+   Layouts: [data-layout="wide"] (the TV composition reflowed, header 72 as in the design) and
    [data-layout="portrait"] (phones, touch first: top bar, tab bar, mini player). */
 
 /* ---------- root ---------- */
 .rd-root {
   --rd-scale: 1;
   --rd-gutter: calc(56px * var(--rd-scale));
-  --rd-header-h: 56px;
+  --rd-header-h: 72px;
   --rd-tabbar-h: calc(56px + env(safe-area-inset-bottom, 0px));
   --rd-topbar-h: calc(52px + env(safe-area-inset-top, 0px));
   --rd-sub: var(--al-pl-text-3);
@@ -126,9 +126,9 @@
   .rd-row:hover .rd-row__arrow, .rd-row__arrow:focus-visible { opacity: 1; }
 }
 
-/* ---------- wide header (template header; §4.5: 56 px, logo 20, tabs 15/600) ---------- */
+/* ---------- wide header (template header; §4.5: 72 px over a 100 px fade, logo 22, tabs 16/600, side 15/600) ---------- */
 .rd-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: calc(28px * var(--rd-scale)); height: var(--rd-header-h); padding: 0 calc(50px * var(--rd-scale)) 0 var(--rd-gutter); }
-.rd-header::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: calc(var(--rd-header-h) + 44px); z-index: -1; pointer-events: none;
+.rd-header::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: calc(var(--rd-header-h) + 28px); z-index: -1; pointer-events: none;
   background: linear-gradient(180deg, color-mix(in srgb, var(--al-pl-fade) 94%, transparent) 0%, color-mix(in srgb, var(--al-pl-fade) 60%, transparent) 55%, color-mix(in srgb, var(--al-pl-fade) 0%, transparent) 100%); transition: opacity .2s ease; }
 .rd-header.is-scrolled { background: color-mix(in srgb, var(--al-pl-bg) 85%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 .rd-header.is-scrolled::before { opacity: 0; }
@@ -137,7 +137,8 @@
 .rd-header__tabs::-webkit-scrollbar { display: none; }
 .rd-header__end { display: flex; align-items: center; gap: 12px; margin-left: auto; flex: none; }
 .rd-header__divider { width: 1px; height: 20px; background: color-mix(in srgb, var(--al-pl-text) 18%, transparent); }
-.rd-tab { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 6px 10px; font-size: 15px; font-weight: 600; white-space: nowrap; color: var(--al-pl-text-3); border-radius: var(--al-pl-radius); }
+.rd-tab { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 6px 10px; font-size: 16px; font-weight: 600; white-space: nowrap; color: var(--al-pl-text-3); border-radius: var(--al-pl-radius); }
+.rd-tab--side { font-size: 15px; }
 .rd-root .rd-tab[aria-current="page"], .rd-root .rd-tab:hover { color: var(--al-pl-text); }
 .rd-tab__dot { position: absolute; left: 50%; top: calc(100% - 8px); width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--al-pl-accent); box-shadow: var(--al-pl-accent-glow); }
 /* Side tabs show their label; on narrow wide screens (phones in landscape) they shrink to their icon
@@ -174,7 +175,8 @@
 .rd-main.rd-legacy { padding-top: calc(var(--rd-header-h) + 28px); }
 .rd-page { position: relative; min-width: 0; }
 
-/* ---------- hero, wide (§4.5: min(480px, 100vh - 56px), content in the left 45 %, title 44/800) ---------- */
+/* ---------- hero, wide (§4.5: min(480px, 100vh - header), content in the left 45 %, title 60/800 from
+   1280 px, scaling down to 40 on narrow wide screens) ---------- */
 .rd-hero--wide { position: relative; height: max(380px, min(480px, calc(100vh - var(--rd-header-h)))); margin-bottom: 0; }
 .rd-hero__art { position: absolute; inset: 0; overflow: hidden; display: block; }
 .rd-hero__layer { position: absolute; inset: 0; background-size: cover !important; background-position: center top !important; opacity: 0; transition: opacity .9s ease; }
@@ -185,7 +187,7 @@
     linear-gradient(90deg, color-mix(in srgb, var(--al-pl-fade) 90%, transparent) 0%, color-mix(in srgb, var(--al-pl-fade) 50%, transparent) 42%, color-mix(in srgb, var(--al-pl-fade) 0%, transparent) 70%),
     linear-gradient(0deg, var(--al-pl-fade) 0%, color-mix(in srgb, var(--al-pl-fade) 40%, transparent) 30%, var(--al-pl-tint) 60%, color-mix(in srgb, var(--al-pl-fade) 0%, transparent) 100%); }
 .rd-hero--wide .rd-hero__content { position: absolute; left: var(--rd-gutter); bottom: 40px; width: max(45%, min(540px, 60%)); max-width: 640px; display: flex; flex-direction: column; gap: 16px; }
-.rd-hero__title { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.rd-hero__title { font-size: clamp(40px, 4.7vw, 60px); font-weight: 800; line-height: 1; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .rd-hero__logo { line-height: 0; }
 .rd-hero__logo img { display: block; max-width: 70%; max-height: 120px; object-fit: contain; object-position: left bottom; }
 .rd-hero__blurb { font-size: 17px; line-height: 1.5; color: var(--al-pl-text-2); text-wrap: pretty; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
@@ -238,12 +240,13 @@
     linear-gradient(90deg, color-mix(in srgb, var(--al-pl-fade) 92%, transparent) 0%, color-mix(in srgb, var(--al-pl-fade) 55%, transparent) 45%, color-mix(in srgb, var(--al-pl-fade) 0%, transparent) 75%),
     linear-gradient(0deg, var(--al-pl-fade) 0%, color-mix(in srgb, var(--al-pl-fade) 40%, transparent) 30%, var(--al-pl-tint) 60%, color-mix(in srgb, var(--al-pl-fade) 0%, transparent) 100%); }
 .rd-detail--wide .rd-detail__body { position: relative; width: min(620px, 55%); padding: calc(var(--rd-header-h) + 56px) 0 0 var(--rd-gutter); display: flex; flex-direction: column; gap: 16px; }
-.rd-detail__title { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.rd-detail__title { font-size: clamp(40px, 4.7vw, 60px); font-weight: 800; line-height: 1; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .rd-detail__logo { line-height: 0; }
 .rd-detail__logo img { display: block; max-width: 70%; max-height: 120px; object-fit: contain; object-position: left bottom; }
 .rd-detail--wide .rd-detail__blurb { font-size: 17px; line-height: 1.5; color: var(--al-pl-text-2); max-width: 540px; text-wrap: pretty; }
 .rd-detail__buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
 .rd-detail__buttons .rd-btn--secondary { padding: 0 22px; }
+.rd-detail__buttons .rd-btn--square { padding: 0; }
 .rd-detail__more { position: relative; margin-top: 44px; }
 .rd-episodes { position: relative; margin-top: 40px; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: calc(var(--rd-header-h) + 8px); }
 .rd-episodes__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 var(--rd-gutter); }
@@ -382,8 +385,9 @@
 /* ---------- legacy music / audiobook pages inside the new chrome ---------- */
 .rd-main.rd-legacy { padding-left: var(--rd-gutter); padding-right: var(--rd-gutter); max-width: calc(1280px + 2 * var(--rd-gutter)); }
 
-/* ---------- wide, short landscape phones (height < 430: the hero takes the viewport) ---------- */
+/* ---------- wide, short landscape phones (height < 430: a 56 px header, the hero takes the viewport) ---------- */
 @media (max-height: 429px) {
+  .rd-root[data-layout="wide"] { --rd-header-h: 56px; }
   .rd-root[data-layout="wide"] .rd-hero--wide { height: 100vh; height: 100dvh; }
   .rd-root[data-layout="wide"] .rd-hero__blurb { -webkit-line-clamp: 2; }
   .rd-root[data-layout="wide"] .rd-hero__title { font-size: 36px; }
