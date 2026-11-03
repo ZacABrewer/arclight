@@ -54,10 +54,26 @@ export interface PullManagerOptions {
 
 const MAX_RETRY_MS = 10 * 60_000;
 
-/** Local path for a protocol file path ('/'-separated, starting with the torrent name). */
-export function localPathFor(root: string, protocolPath: string): string {
+/** DOS device names Windows maps to devices in every folder, with or without an extension. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])\s*(\..*)?$/i;
+
+/**
+ * Local path for a protocol file path ('/'-separated, starting with the torrent name). On
+ * Windows a ':' (a drive, or an NTFS alternate data stream such as `a:b`) and the reserved
+ * device names (CON, NUL, COM1, LPT1 ...) are refused too.
+ */
+export function localPathFor(root: string, protocolPath: string, platform: NodeJS.Platform = process.platform): string {
   const segments = protocolPath.split('/');
-  if (segments.some((s) => s === '' || s === '.' || s === '..' || s.includes('\\') || /^[a-zA-Z]:$/.test(s))) {
+  const windows = platform === 'win32';
+  const unsafe = (s: string) =>
+    s === '' ||
+    s === '.' ||
+    s === '..' ||
+    s.includes('\\') ||
+    s.includes('\0') ||
+    /^[a-zA-Z]:$/.test(s) ||
+    (windows && (s.includes(':') || WINDOWS_RESERVED.test(s)));
+  if (segments.some(unsafe)) {
     throw new Error(`Refusing unsafe file path from the agent: ${protocolPath}`);
   }
   return join(root, ...segments);

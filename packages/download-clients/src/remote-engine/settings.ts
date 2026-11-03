@@ -16,7 +16,9 @@ export const RemoteEngineSettings = z.object({
   token: z
     .string()
     .default('')
-    .describe("The agent's AGENT_TOKEN (or the other Arclight's API key). Write-only: never returned by the API."),
+    .describe(
+      "The agent's AGENT_TOKEN, or the other Arclight's agent token (its Settings > Download Clients > Act as remote engine). Write-only: never returned by the API.",
+    ),
   category: z
     .string()
     .trim()
