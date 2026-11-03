@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ApprovalBudget, DEFAULT_PORTAL_PATH, PortalHost, PortalPath, type ApprovalWindow, type PublicPortalSettings, type RequestsSettings, type User } from '@arclight/shared';
+import { ApprovalBudget, DEFAULT_PORTAL_PATH, PortalHost, PortalPath, addressClash, type ApprovalWindow, type PublicPlayerAddress, type PublicPortalSettings, type RequestsSettings, type User } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
+import { usePlayerSettings } from '../../../features/player/api.js';
 import { authKeys } from '../../../auth/guard.js';
 import { Button, EmptyState, Field, FormRow, Input, Modal, Select, Table, Textarea, Toggle, buttonClass, type Column } from '../../../arclight/index.js';
 import { getActiveUiPreferences } from '../../../lib/ui-preferences.js';
@@ -382,7 +383,8 @@ export function checkPortalHost(raw: string, existing: readonly string[]): { ok:
   return { ok: true, hostname: parsed.data.hostname };
 }
 
-function AddRow({ label, placeholder, onAdd }: { label: string; placeholder: string; onAdd: (raw: string) => string | null }) {
+/** An input plus Add; `onAdd` returns the reason the value is refused, or null once it was added. */
+export function AddRow({ label, placeholder, onAdd }: { label: string; placeholder: string; onAdd: (raw: string) => string | null }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const add = () => {
@@ -423,8 +425,16 @@ function AddRow({ label, placeholder, onAdd }: { label: string; placeholder: str
   );
 }
 
+/** Whether the player address (Settings > Player) already uses this path or hostname. */
+export function usedByPlayer(player: PublicPlayerAddress | undefined, entry: { path: string } | { hostname: string }): boolean {
+  if (!player) return false;
+  const candidate = 'path' in entry ? { paths: [entry.path], hosts: [] } : { paths: [], hosts: [{ hostname: entry.hostname, portalOnly: true }] };
+  return addressClash(candidate, player).length > 0;
+}
+
 export function PublicPortalSection({ value, onChange }: { value: PublicPortalSettings; onChange: (v: PublicPortalSettings) => void }) {
   const messageId = useId();
+  const player = usePlayerSettings().data?.address;
   return (
     <SettingsSection
       label={t('settings.requests.portal.section')}
@@ -474,6 +484,7 @@ export function PublicPortalSection({ value, onChange }: { value: PublicPortalSe
               onAdd={(raw) => {
                 const r = checkPortalPath(raw, value.paths);
                 if (!r.ok) return r.error;
+                if (usedByPlayer(player, { path: r.path })) return t('settings.requests.portal.clashPlayer');
                 onChange({ ...value, paths: [...value.paths, r.path] });
                 return null;
               }}
@@ -513,6 +524,7 @@ export function PublicPortalSection({ value, onChange }: { value: PublicPortalSe
               onAdd={(raw) => {
                 const r = checkPortalHost(raw, value.hosts.map((h) => h.hostname));
                 if (!r.ok) return r.error;
+                if (usedByPlayer(player, { hostname: r.hostname })) return t('settings.requests.portal.clashPlayer');
                 onChange({ ...value, hosts: [...value.hosts, { hostname: r.hostname, portalOnly: true }] });
                 return null;
               }}

@@ -1,4 +1,4 @@
-import { APP_AREAS, Permission, hasAnyPermission, type AppArea, type Session } from '@arclight/shared';
+import { APP_AREAS, APP_AREA_HOME, Permission, appHomeOf, canRequest as mayRequest, hasAnyPermission, type AppArea, type Session } from '@arclight/shared';
 
 // What the signed-in person may open in the web app, kept free of React. The api is the real
 // enforcer (apps/api/src/modules/auth/hook.ts: every route is admin-only unless it opts in);
@@ -43,13 +43,8 @@ export const AREA_PATHS: Readonly<Record<AppArea, readonly string[]>> = {
   wanted: ['/wanted/missing', '/wanted/cutoff', '/wanted/mismatch'],
 };
 
-/** First page of each area, in nav order. */
-export const AREA_HOME: Readonly<Record<AppArea, string>> = {
-  library: '/library/tv',
-  calendar: '/calendar',
-  activity: '/activity/queue',
-  wanted: '/wanted/missing',
-};
+/** First page of each area, in nav order (shared with the api: GET /playback/me `appHome`). */
+export const AREA_HOME: Readonly<Record<AppArea, string>> = APP_AREA_HOME;
 
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
@@ -76,14 +71,17 @@ export function hasAppPages(access: Access): boolean {
   return access.admin || access.areas.length > 0 || canManageRequestsIn(access) || canViewIssuesIn(access);
 }
 
-/** Where "Open Arclight" goes from the portal: the dashboard for admins, else the first granted page; null: none. */
+/**
+ * Where "Open Arclight" goes from the portal: the dashboard for admins, else the first granted page; null: none.
+ * The rules live in @arclight/shared (appHomeOf), so the api's `appHome` for the apps agrees.
+ */
 export function appHomeFor(access: Access): string | null {
-  if (access.admin) return '/';
-  const area = APP_AREAS.find((a) => access.areas.includes(a));
-  if (area) return AREA_HOME[area];
-  if (canManageRequestsIn(access)) return '/requests';
-  if (canViewIssuesIn(access)) return '/issues';
-  return null;
+  return appHomeOf(access.admin, access.areas, access.permissions);
+}
+
+/** May ask for titles in the request portal (any request permission; admins always). */
+export function canRequest(access: Access): boolean {
+  return access.admin || mayRequest(access.permissions);
 }
 
 /**

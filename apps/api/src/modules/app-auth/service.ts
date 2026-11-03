@@ -32,7 +32,7 @@ import { appDevices, type AppDeviceRow } from './schema.js';
 // valid for five minutes and once, so a restart simply asks for a new one.
 //
 // TV sign-in (device codes): the TV asks for a code (POST /app/device-codes, public, limited per
-// address), shows it with <serverUrl>/player/link and polls with a secret poll token; a signed-in
+// address), shows it with <playerUrl>/link (the player address, else <serverUrl>/player/link) and polls with a secret poll token; a signed-in
 // browser with player access approves the code (POST /app/device-codes/approve) and the next poll
 // gets the device token, once. Device codes are in memory too (ten minutes, single use).
 
@@ -102,6 +102,13 @@ export interface AppAuthServiceOptions {
   auth: AuthService;
   /** The configured public URL (Application URL), if any. */
   serverUrl: () => string | undefined;
+  /**
+   * The player address the owner set (Settings > Player > Player address), for TV sign-in's
+   * `<playerUrl>/link`; null: none, so the TV's own address (or the Application URL) + /player.
+   */
+  verifyBase?: () => string | null;
+  /** The server address the phone sign-in QR carries: a player hostname first; absent: `serverUrl`. */
+  pairServerUrl?: () => string | undefined;
   log?: Logger;
   now?: () => number;
 }
@@ -186,7 +193,7 @@ export class AppAuthService {
     while (this.codes.has(code)) code = generatePairCode();
     const expiresAt = t + APP_PAIR_CODE_TTL_MS;
     this.codes.set(code, { userId: user.id, expiresAt });
-    const serverUrl = this.opts.serverUrl() ?? fallbackOrigin.replace(/\/+$/, '');
+    const serverUrl = (this.opts.pairServerUrl ?? this.opts.serverUrl)() ?? fallbackOrigin.replace(/\/+$/, '');
     return { code, expiresAt: new Date(expiresAt).toISOString(), serverUrl, qr: appPairingUri(serverUrl, code) };
   }
 
@@ -229,8 +236,10 @@ export class AppAuthService {
     const expiresAt = t + APP_DEVICE_CODE_TTL_MS;
     this.deviceCodes.set(userCode, { userCode, pollToken, deviceName: input.deviceName, platform: input.platform, appVersion: input.appVersion, expiresAt, lastPollAt: 0, approvedUserId: null });
     this.pollTokens.set(pollToken, userCode);
+    // The owner's player address wins over the address the TV used (a LAN IP, say).
+    const player = this.opts.verifyBase?.() ?? null;
     const base = deviceServerUrl(input.serverUrl) ?? this.opts.serverUrl() ?? fallbackOrigin.replace(/\/+$/, '');
-    return { userCode, pollToken, expiresAt: new Date(expiresAt).toISOString(), intervalSec: APP_DEVICE_CODE_INTERVAL_SEC, verifyUrl: `${base}/player/link` };
+    return { userCode, pollToken, expiresAt: new Date(expiresAt).toISOString(), intervalSec: APP_DEVICE_CODE_INTERVAL_SEC, verifyUrl: `${player ?? `${base}/player`}/link` };
   }
 
   /** POST /app/device-codes/poll: pending, expired (or unknown), or the device token once approved. */

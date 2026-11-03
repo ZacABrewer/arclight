@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
 import { eq, isNull } from 'drizzle-orm';
-import { HOUSEHOLD_PROFILES_MAX, type ContentRestrictions } from '@arclight/shared';
+import { HOUSEHOLD_PROFILES_MAX, Permission, type ContentRestrictions } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import { openDatabase, type Db } from '../../db/index.js';
@@ -408,6 +408,10 @@ describe('per-profile state', () => {
     expect((await call(h, 'GET', '/api/v1/households/profiles/active/settings', ownerCookie)).json()).toMatchObject({ subtitleSize: 'medium', showMusic: true });
     // showMusic is a UI preference ANDed into the capabilities.
     expect((await call(h, 'GET', '/api/v1/playback/me', kidCookie)).json().sections.music).toBe(false);
+    // The account menu items (Request portal, Open Arclight) are the owner profile's only.
+    h.db.update(schema.users).set({ permissions: Permission.REQUEST | Permission.REQUEST_VIEW }).where(eq(schema.users.id, a.id)).run();
+    expect((await call(h, 'GET', '/api/v1/playback/me', kidCookie)).json()).toMatchObject({ canRequest: false, appHome: null });
+    expect((await call(h, 'GET', '/api/v1/playback/me', ownerCookie)).json()).toMatchObject({ canRequest: true, appHome: '/requests' });
 
     // My List rows are keyed by profile.
     h.db.insert(schema.profileMyList).values({ profileId: kid.id, itemKey: 'movie:77', addedAt: new Date().toISOString() }).run();

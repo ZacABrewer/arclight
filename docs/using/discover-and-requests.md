@@ -394,7 +394,7 @@ The portal is the request side of Arclight on its own: the same Discover home, b
 
 Click **Open portal** to see it. Visitors sign in with a local account or with your media server (Plex, Jellyfin or Emby), and come back to the page they were on. Without **Anonymous browsing**, visitors who are not signed in see the welcome and sign-in panes and nothing else. Anonymous visitors never see adult titles, never see anyone's requests, and are limited to a burst of 120 page requests, then 2 a second, per address. If the portal is off, visitors see "The request portal is off".
 
-The portal header has **Home**, **Movies**, **Series**, **Search** and (signed in) **My requests**, **Issues** and **Account** (password, linked media-server account, notifications, sessions); on a phone they move to a tab bar at the bottom. Signed-in users also get **Sign out**, and **Open Arclight** when they may open part of the app (admins, and users with app access).
+The portal header has **Home**, **Movies**, **Series**, **Search** and (signed in) **My requests**, **Issues** and **Account** (password, linked media-server account, notifications, sessions); on a phone they move to a tab bar at the bottom. Signed-in users also get **Sign out**, and **Open Arclight** when they may open part of the app (admins, and users with app access). From the [player](player.md), people who may request reach the portal from **Request portal** in the account menu; it opens the portal's public address while the public portal is on, else `/portal`.
 
 ### Portal paths
 

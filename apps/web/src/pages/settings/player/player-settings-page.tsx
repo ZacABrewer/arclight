@@ -4,6 +4,7 @@ import { errorMessage } from '../../../api/client.js';
 import { Button, ErrorBlock, FormRow, FormSection, Input, Segmented, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { usePlayerSettings, useSavePlayerSettings, useTestPlayerEngine } from '../../../features/player/api.js';
 import { useMediaServers } from '../../../hooks/media-servers.js';
+import { PlayerAddressSection } from './player-address-section.js';
 import { PlayerMediaSection } from './player-media-section.js';
 import { SettingsPage, useDraft } from '../settings-layout.js';
 import { t } from '../../../i18n/index.js';
@@ -29,6 +30,10 @@ export interface PlayerSettingsDraft {
   trickplay: PlayerSettings['trickplay'];
   /** Intro and credits detection. */
   segmentDetection: boolean;
+  /** Recap detection (kept as saved; set with intro and credits detection). */
+  segmentDetectionRecaps: boolean;
+  /** Extra player paths and player hostnames. */
+  address: PlayerSettings['address'];
 }
 
 /** Enabled Jellyfin and Emby connections: the servers the player can stream through. */
@@ -56,6 +61,8 @@ export function toPlayerSettingsDraft(s: PlayerSettings): PlayerSettingsDraft {
     videoMaxStreamsPerUser: String(s.videoMaxStreamsPerUser),
     trickplay: s.trickplay,
     segmentDetection: s.segmentDetection,
+    segmentDetectionRecaps: s.segmentDetectionRecaps,
+    address: s.address,
   };
 }
 
@@ -75,6 +82,8 @@ export function toPlayerSettingsBody(d: PlayerSettingsDraft): { ok: true; body: 
     videoMaxStreamsPerUser: num(d.videoMaxStreamsPerUser),
     trickplay: d.trickplay,
     segmentDetection: d.segmentDetection,
+    segmentDetectionRecaps: d.segmentDetectionRecaps,
+    address: d.address,
   });
   if (parsed.success) return { ok: true, body: parsed.data };
   const field = String(parsed.error.issues[0]?.path[0] ?? '');
@@ -237,6 +246,7 @@ function PlayerSettingsForm({ data }: { data: PlayerSettings }) {
             />
           </FormRow>
         </FormSection>
+        <PlayerAddressSection value={d.address} onChange={(v) => set('address', v)} />
       </form>
     </SettingsPage>
   );

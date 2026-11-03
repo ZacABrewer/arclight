@@ -33,6 +33,7 @@ import { mediaServersServiceFor } from '../media-servers/index.js';
 import { mediaServerAvailability, mediaServerConnections, toServerConn, type FetchLike, type MediaServerAvailability } from './media-server.js';
 import { authServiceFor } from '../auth/index.js';
 import { getFeatureSettings, getSection } from '../settings/service.js';
+import { playerUrlOf, portalUrlOf } from '../../public-urls.js';
 import { RequestNotifier, type AgentFactory, type RequestNotifierOptions } from './notify.js';
 import { mediaServerRoutes } from './media-server-routes.js';
 import { requestsRoutes } from './routes.js';
@@ -338,6 +339,8 @@ export const requestsModuleWith =
         runWatchlistSync: () => s.watchlist.sync(),
         mediaServerLogin: () => mediaServerLoginOf(ctx),
         features: () => getFeatureSettings(ctx.db),
+        publicUrls: () => ({ portalUrl: portalUrlOf(ctx.db, ctx.config.basePath ?? ''), playerUrl: playerUrlOf(ctx.db, ctx.config.basePath ?? '') }),
+        playerAddress: () => getSection(ctx.db, 'player').address,
       }),
     );
     await app.register(audioRequestsRoutes({ requests: s.requests, audio: s.audio, audioDiscover: s.audioDiscover, portalLimiter: s.portalLimiter }));

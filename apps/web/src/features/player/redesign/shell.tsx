@@ -5,7 +5,11 @@ import { Mark } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { Lockup } from '../../../arclight/lockup.js';
 import { useAuth } from '../../../auth/auth-context.js';
-import { appHomeFor } from '../../../auth/access.js';
+import { appHomeFor, canRequest } from '../../../auth/access.js';
+import { readPortalDocument } from '../../discover/portal-location.js';
+import { portalHref } from '../../discover/portal-href.js';
+import { appHref } from '../app-href.js';
+import { readPlayerDocument } from '../player-location.js';
 import { readUiPreferences } from '../../../lib/ui-preferences.js';
 import { useT } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
@@ -280,7 +284,12 @@ export function AvatarMenu({ layout }: { layout: 'wide' | 'portrait' }) {
   const [open, setOpen] = useState(false);
   const [appSignIn, setAppSignIn] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
-  const appHref = appHomeFor(access);
+  const caps = usePlaybackCapabilities().data;
+  // Open Arclight: never the root of a player hostname (app-href.ts).
+  const appLink = appHref(appHomeFor(access), readPlayerDocument(), caps?.appUrl, location.origin);
+  // Request portal: people who may request. Its public address, else the built-in /portal.
+  const portalUrl = caps?.portalUrl ?? null;
+  const portalLink = canRequest(access) ? portalHref(portalUrl, location.origin, readPortalDocument()) : null;
 
   useEffect(() => {
     if (!open || layout !== 'wide') return undefined;
@@ -350,14 +359,14 @@ export function AvatarMenu({ layout }: { layout: 'wide' | 'portrait' }) {
           <span>{t('player.redesign.profiles.manage')}</span>
         </button>
       ) : null}
-      {owner && appHref ? (
-        <a className="rd-menu__item" href={appHref}>
+      {owner && appLink ? (
+        <a className="rd-menu__item" href={appLink}>
           <RdIcon name="chevronRight" />
           <span>{t('player.account.openApp')}</span>
         </a>
       ) : null}
-      {owner ? (
-        <a className="rd-menu__item" href="/portal">
+      {owner && portalLink ? (
+        <a className="rd-menu__item" href={portalLink}>
           <RdIcon name="chevronRight" />
           <span>{t('player.account.portal')}</span>
         </a>

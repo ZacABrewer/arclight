@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PortalHost, PortalPath } from './requests.js';
 
 // Arclight's own player (the /player portal): music and audiobooks first, video later.
 // Plan: "Arclight media player plan" (phases 0 and 1). Routes live under /api/v1/playback
@@ -18,6 +19,55 @@ import { z } from 'zod';
  */
 export const PlaybackEngine = z.enum(['arclight', 'jellyfin']);
 export type PlaybackEngine = z.infer<typeof PlaybackEngine>;
+
+/** The built-in player path; always works and cannot be removed. */
+export const DEFAULT_PLAYER_PATH = '/player';
+
+/**
+ * The player's own pages, by first segment below /player (`/player/watch/movies`). On a player
+ * hostname these answer at the root (`/watch/movies`); the root itself is player home.
+ */
+export const PLAYER_ROUTE_SEGMENTS: readonly string[] = ['now-playing', 'music', 'books', 'search', 'watch', 'settings', 'profiles', 'link'];
+
+/** A hostname that serves the player at its root (e.g. watch.example.com). */
+export const PlayerHost = z.object({
+  hostname: PortalHost.shape.hostname,
+  /** Only the player, /login and /setup answer on this hostname; other pages redirect to /. */
+  playerOnly: z.boolean().default(true),
+});
+export type PlayerHost = z.infer<typeof PlayerHost>;
+
+/**
+ * Settings `player.address`: the player's public addresses, mirroring the request portal's
+ * (PublicPortalSettings). A path or hostname is either the portal's or the player's, never both
+ * (`addressClash` in requests.ts; checked by both settings PUTs).
+ */
+export const PublicPlayerAddress = z.object({
+  /** Extra paths that open the player on any hostname, besides /player (e.g. /watch). */
+  paths: z
+    .array(PortalPath)
+    .max(20)
+    .default([])
+    .refine((list) => new Set(list).size === list.length, { message: 'each path once' }),
+  /** Hostnames that show the player at their root. */
+  hosts: z
+    .array(PlayerHost)
+    .max(20)
+    .default([])
+    .refine((list) => new Set(list.map((h) => h.hostname)).size === list.length, { message: 'each hostname once' }),
+});
+export type PublicPlayerAddress = z.infer<typeof PublicPlayerAddress>;
+
+/**
+ * How the page the server sent relates to the player; written into index.html
+ * (`<meta name="arclight-player">`) like PortalDocument. path: the player answers below `base`
+ * (e.g. /watch). host: this hostname is a player hostname and the player answers at the root.
+ */
+export const PlayerDocument = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('path'), base: z.string() }),
+  z.object({ mode: z.literal('host'), playerOnly: z.boolean() }),
+]);
+export type PlayerDocument = z.infer<typeof PlayerDocument>;
 
 /**
  * Settings section `player` (GET/PUT /settings/player). The player is a preview: off until an
@@ -48,6 +98,14 @@ export const PlayerSettings = z.object({
   trickplay: z.enum(['off', 'on-play', 'library']).default('on-play'),
   /** Detect intros and credits by audio fingerprint when the file has no chapter marks. */
   segmentDetection: z.boolean().default(true),
+  /**
+   * With `segmentDetection` on: also detect "previously on" recaps by matching an episode's head
+   * against the earlier episodes of its season (the spec's `segmentDetection.recaps`; a sibling
+   * flag because `segmentDetection` is a stored boolean).
+   */
+  segmentDetectionRecaps: z.boolean().default(true),
+  /** Extra public addresses that open the player (see PublicPlayerAddress); /player always works. */
+  address: PublicPlayerAddress.default({ paths: [], hosts: [] }),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
@@ -94,6 +152,20 @@ export const PlayerCapabilities = z.object({
   /** The engine in effect: `jellyfin` when it is chosen and a Jellyfin/Emby server is set up. */
   engine: PlaybackEngine.optional(),
   sections: z.object({ music: z.boolean(), audiobooks: z.boolean(), podcasts: z.boolean(), books: z.boolean(), video: z.boolean() }),
+  /** The player's public address (first player hostname, else applicationUrl + path); null: none set. */
+  playerUrl: z.string().nullable().default(null),
+  /** The request portal's public address, built the same way; the built-in /portal while the public portal is off. */
+  portalUrl: z.string().nullable().default(null),
+  /** May request in the portal (any request permission, or admin). */
+  canRequest: z.boolean().default(false),
+  /** Where "Open Arclight" goes for this account (appHomeOf); null: no app pages. */
+  appHome: z.string().nullable().default(null),
+  /**
+   * Where the rest of Arclight answers for "Open Arclight" (origin plus base path): this
+   * request's address, or the Application URL when the request came in on a player hostname;
+   * null when there is none (the link is then hidden).
+   */
+  appUrl: z.string().nullable().default(null),
 });
 export type PlayerCapabilities = z.infer<typeof PlayerCapabilities>;
 

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Outlet, createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
+import { Outlet, createRootRouteWithContext, createRoute, composeRewrites, createRouter, lazyRouteComponent, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { ErrorView } from './components/error-boundary.js';
@@ -109,9 +109,10 @@ import { PlayerSettingsPage } from './pages/settings/player/player-settings-page
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
+import { playerOnlyRedirect, playerRewrite } from './features/player/player-location.js';
 import { basePath } from './lib/base-path.js';
 import { parseProfilesSearch, profileRedirect } from './features/player/redesign/profile-session.js';
-import type { PortalDocument } from '@arclight/shared';
+import type { PlayerDocument, PortalDocument } from '@arclight/shared';
 import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
 // Code-based route tree. Every page is a createRoute whose component is the page. The
@@ -121,6 +122,8 @@ export interface RouterContext {
   queryClient: QueryClient;
   /** How this page relates to the request portal (portal paths / hostnames); null: plain app page. */
   portal?: PortalDocument | null;
+  /** How this page relates to the player address (player paths / hostnames); null: plain app page. */
+  player?: PlayerDocument | null;
 }
 
 function RouteError({ error, reset }: ErrorComponentProps) {
@@ -157,6 +160,9 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
     // A portal-only hostname never shows the app (signed-in admins included).
     const portalOnly = portalOnlyRedirect(context.portal, location.pathname);
     if (portalOnly) throw redirect({ href: portalOnly, replace: true });
+    // A player-only hostname shows only the player (plus sign-in and setup).
+    const playerOnly = playerOnlyRedirect(context.player, location.pathname);
+    if (playerOnly) throw redirect({ href: playerOnly, replace: true });
     const status = await loadAuthStatus(context.queryClient);
     const search = location.search as Record<string, unknown>;
     const target = resolveAuthRedirect(status, location.pathname, location.href, search['redirect']);
@@ -457,11 +463,13 @@ export const routeTree = rootRoute.addChildren([
 ]);
 
 /** `base`: the sub-path this page was served under (lib/base-path.ts); "" at the root. */
-export function createAppRouter(queryClient: QueryClient, portal: PortalDocument | null = null, base: string = basePath()) {
-  const rewrite = portalRewrite(portal);
+export function createAppRouter(queryClient: QueryClient, portal: PortalDocument | null = null, base: string = basePath(), player: PlayerDocument | null = null) {
+  // Portal first, then player; their addresses never overlap (the server refuses clashes).
+  const rewrites = [portalRewrite(portal), playerRewrite(player)].filter((r) => r !== undefined);
+  const rewrite = rewrites.length > 1 ? composeRewrites(rewrites) : rewrites[0];
   return createRouter({
     routeTree,
-    context: { queryClient, portal },
+    context: { queryClient, portal, player },
     // The base path is stripped before the portal mapping and added back after it.
     ...(base ? { basepath: base } : {}),
     ...(rewrite ? { rewrite } : {}),

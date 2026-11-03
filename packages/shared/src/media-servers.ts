@@ -44,6 +44,52 @@ export function isLoginCapableKind(kind: MediaServerConnectionKind): kind is Med
 }
 
 /**
+ * Jellyfin/Emby/Plex: copy Arclight tags (movies and series) onto the server's items as tags
+ * (Plex: labels), as `prefix + tag label`. Arclight only ever removes tags it wrote itself.
+ */
+export const MediaServerTagSync = z.object({
+  enabled: z.boolean().default(false),
+  /** all: every Arclight tag; selected: only `tagIds`. */
+  mode: z.enum(['all', 'selected']).default('all'),
+  tagIds: z.array(z.number().int().positive()).max(500).default([]),
+  /** Written in front of each label, e.g. `arclight:`. */
+  prefix: z.string().trim().max(24).regex(/^[^,;]*$/).default(''),
+  /** Jellyfin/Emby: lock the Tags field so a metadata refresh keeps them. */
+  lockTags: z.boolean().default(true),
+});
+export type MediaServerTagSync = z.infer<typeof MediaServerTagSync>;
+
+/** One item a tag sync run would change (POST /mediaserver/:id/tag-sync/preview). */
+export const TagSyncChange = z.object({
+  entityType: z.enum(['movie', 'series']),
+  entityId: z.number().int(),
+  title: z.string(),
+  remoteItemId: z.string(),
+  add: z.array(z.string()),
+  remove: z.array(z.string()),
+});
+export type TagSyncChange = z.infer<typeof TagSyncChange>;
+
+/** A dry run: the first 500 changes, the total, and items the server does not have. */
+export const TagSyncPreview = z.object({
+  changes: z.array(TagSyncChange).max(500),
+  totalChanges: z.number().int(),
+  unmatched: z.number().int(),
+  truncated: z.boolean(),
+});
+export type TagSyncPreview = z.infer<typeof TagSyncPreview>;
+
+/** GET /mediaserver/:id/tag-sync. */
+export const TagSyncStatus = z.object({
+  running: z.boolean(),
+  lastRunAt: z.string().nullable(),
+  lastChanged: z.number().int(),
+  lastUnmatched: z.number().int(),
+  lastError: z.string().nullable(),
+});
+export type TagSyncStatus = z.infer<typeof TagSyncStatus>;
+
+/**
  * One stored connection. `apiKey` is a Jellyfin/Emby API key, the Plex owner's X-Plex-Token or
  * an Audiobookshelf API token (sent as `Authorization: Bearer`).
  */
@@ -87,6 +133,8 @@ export const MediaServerConfig = z.object({
    * first use. Never sent to the web UI in the connection list.
    */
   webhookToken: z.string().max(128).optional(),
+  /** Jellyfin/Emby/Plex: sync Arclight tags to this server. Absent = off. */
+  tagSync: MediaServerTagSync.optional(),
 });
 export type MediaServerConfig = z.infer<typeof MediaServerConfig>;
 
@@ -122,6 +170,8 @@ export const MediaServerInput = z.object({
   syncWatchHistory: z.boolean().default(true),
   /** Jellyfin/Emby only: mirror Jellyfin parental controls into content restrictions (default off). */
   mirrorParentalControls: z.boolean().default(false),
+  /** Jellyfin/Emby/Plex only: tag sync settings. */
+  tagSync: MediaServerTagSync.optional(),
 });
 export type MediaServerInput = z.infer<typeof MediaServerInput>;
 export type MediaServerInputRaw = z.input<typeof MediaServerInput>;

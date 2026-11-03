@@ -102,6 +102,11 @@ export function capabilitiesOf(db: Db, decision: PlayerDecision): PlayerCapabili
       books: on && features.books === true,
       video: on && playerSettings(db).video,
     },
+    playerUrl: null,
+    portalUrl: null,
+    canRequest: false,
+    appHome: null,
+    appUrl: null,
   };
 }
 

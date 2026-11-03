@@ -29,6 +29,7 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Movies & TV | Lets the player show and play movies and episodes. | On |
 | Live video slots | How many videos the server may convert or repackage at once, for everyone together. Each one costs CPU or GPU time. | 3 |
 | Live video slots per user | How many of those one person may use. Starting a new video replaces that person's oldest one. | 1 |
+| Player address | Extra paths (such as `/watch`) and hostnames (such as `watch.example.com`) that open the player. See [Player address](../player/address.md). | Only `/player` |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -194,7 +195,7 @@ To run conversions in Docker with Intel graphics, pass the GPU into the containe
 
 The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
 
-1. In the player, open the account menu (top right) and choose **Sign in to the Arclight app**.
+1. In the player, open the [account menu](../player/web.md#account-menu) (top right) and choose **Sign in to the Arclight app**.
 2. In the app, choose to scan a code and point the camera at the QR code. Or type the **server address** and the **code** shown under it.
 
 The code works once and expires after five minutes. Press **New code** for another one. You can also sign in in the app with your Arclight username and password (and your authenticator code, if you use two-factor sign-in). Accounts that sign in through a media server or only with a passkey use the code.
@@ -208,7 +209,7 @@ The app needs the same player access as the browser. If the player is off, or yo
 The Arclight app on a TV signs in with a code, so you never type a password with a remote.
 
 1. On the TV, open Arclight and choose **Enter server address**. Type your Arclight address with the remote and press **Continue**.
-2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`) and a QR code.
+2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`, or the [player address](../player/address.md) followed by `/link` when one is set) and a QR code.
 3. On your phone or computer, scan the QR code, or open that address and type the code. Sign in there if asked.
 4. Press **Sign in the TV**. The TV signs in as you within a few seconds.
 

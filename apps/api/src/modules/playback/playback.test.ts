@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import pino from 'pino';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { QUALITIES, type PlayableItem, type QualityModel } from '@arclight/shared';
+import { Permission, QUALITIES, type AppArea, type PlayableItem, type QualityModel } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import type { Db } from '../../db/index.js';
@@ -71,13 +71,15 @@ async function harness(): Promise<Harness> {
   return h;
 }
 
-async function signIn(h: Harness, opts: { player?: unknown; role?: 'user' | 'admin' } = {}): Promise<{ cookie: string; id: number }> {
+async function signIn(h: Harness, opts: { player?: unknown; role?: 'user' | 'admin'; permissions?: number; appAccess?: AppArea[] } = {}): Promise<{ cookie: string; id: number }> {
   const auth = authServiceFor(h.ctx);
   const user = await auth.createUser({
     username: `u${Math.random().toString(36).slice(2, 8)}`,
     password: 'password1',
     role: opts.role ?? 'user',
     ...(opts.player === undefined ? {} : { settings: { player: opts.player } }),
+    ...(opts.permissions === undefined ? {} : { permissions: opts.permissions }),
+    ...(opts.appAccess === undefined ? {} : { appAccess: opts.appAccess }),
   });
   return { cookie: `${SESSION_COOKIE}=${auth.createSession(user.id).token}`, id: user.id };
 }
@@ -206,7 +208,42 @@ describe('access guard', () => {
       maxBitrateKbps: 0,
       engine: 'arclight',
       sections: { music: false, audiobooks: false, podcasts: false, books: false, video: false },
+      playerUrl: 'http://localhost:80/player',
+      portalUrl: 'http://localhost:80/portal',
+      canRequest: true,
+      appHome: '/',
+      appUrl: 'http://localhost:80',
     });
+  });
+
+  it('tells the apps whether the account may request and where "Open Arclight" goes', async () => {
+    const h = await harness();
+    const me = async (opts: Parameters<typeof signIn>[1]) => {
+      const body = (await get(h, '/api/v1/playback/me', (await signIn(h, opts)).cookie)).json();
+      return { canRequest: body.canRequest, appHome: body.appHome };
+    };
+    expect(await me({ role: 'admin' })).toEqual({ canRequest: true, appHome: '/' });
+    expect(await me({ permissions: 0 })).toEqual({ canRequest: false, appHome: null });
+    expect(await me({ permissions: Permission.REQUEST_MOVIE })).toEqual({ canRequest: true, appHome: null });
+    expect(await me({ permissions: Permission.REQUEST | Permission.REQUEST_VIEW })).toEqual({ canRequest: true, appHome: '/requests' });
+    expect(await me({ permissions: Permission.VIEW_ISSUES })).toEqual({ canRequest: false, appHome: '/issues' });
+    expect(await me({ permissions: 0, appAccess: ['calendar', 'wanted'] })).toEqual({ canRequest: false, appHome: '/calendar' });
+    // The portal's address: the built-in /portal while the public portal is off (signed-in
+    // users always have it), else its first address; without an Application URL or a portal
+    // hostname, on the address this request came in on.
+    const admin = await signIn(h, { role: 'admin' });
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com', publicPortal: { enabled: false, paths: ['/ask'] } });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json().portalUrl).toBe('https://media.example.com/portal');
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com', publicPortal: { enabled: true, paths: ['/ask'] } });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json().portalUrl).toBe('https://media.example.com/ask');
+    setSection(h.db, 'requests', { applicationUrl: '', publicPortal: { enabled: true, paths: [] } });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie, { host: 'nas.example.com:7878' })).json()).toMatchObject({
+      portalUrl: 'http://nas.example.com:7878/portal',
+      playerUrl: 'http://nas.example.com:7878/player',
+    });
+    // An API-key caller has no account menu.
+    const key = authServiceFor(h.ctx).apiKey();
+    expect((await get(h, '/api/v1/playback/me', undefined, { 'x-api-key': key })).json()).toMatchObject({ canRequest: false, appHome: null });
   });
 
   it('sections follow the feature flags; API-key callers have no per-user state', async () => {
@@ -284,8 +321,29 @@ describe('access guard', () => {
     const admin = await signIn(h, { role: 'admin' });
     expect((await get(h, '/api/v1/settings/player', user.cookie)).statusCode).toBe(403);
     const saved = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/player', headers: { cookie: admin.cookie }, payload: { enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2 } });
-    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true });
+    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true, segmentDetectionRecaps: true, address: { paths: [], hosts: [] } });
     expect((await h.app.inject({ method: 'POST', url: '/api/v1/settings/player/engine-test', headers: { cookie: user.cookie }, payload: {} })).statusCode).toBe(403);
+  });
+
+  it('player address: saved and read back, refused where the request portal already answers', async () => {
+    const h = await harness();
+    const admin = await signIn(h, { role: 'admin' });
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com', publicPortal: { enabled: true, paths: ['/ask'], hosts: [{ hostname: 'requests.example.com' }] } });
+    const put = (address: object) => h.app.inject({ method: 'PUT', url: '/api/v1/settings/player', headers: { cookie: admin.cookie }, payload: { enabled: true, address } });
+    const clash = await put({ paths: ['/ASK'], hosts: [{ hostname: 'Requests.example.com' }] });
+    expect(clash.statusCode).toBe(400);
+    expect(clash.json()).toMatchObject({ code: 'address-clash', clashes: [{ field: 'paths', value: '/ask' }, { field: 'hosts', value: 'requests.example.com' }] });
+    const bad = await put({ paths: ['/player'] });
+    expect(bad.statusCode).toBe(400);
+    const ok = await put({ paths: ['/tv'], hosts: [{ hostname: 'Watch.Example.com', playerOnly: false }] });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().address).toEqual({ paths: ['/tv'], hosts: [{ hostname: 'watch.example.com', playerOnly: false }] });
+    expect((await get(h, '/api/v1/settings/player', admin.cookie)).json().address).toEqual(ok.json().address);
+    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json()).toMatchObject({ playerUrl: 'https://watch.example.com', portalUrl: 'https://requests.example.com' });
+    // "Open Arclight" on a player hostname: the Application URL, never the player's root.
+    setSection(h.db, 'player', { enabled: true, address: { paths: [], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] } });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie, { host: 'nas.example.com' })).json().appUrl).toBe('http://nas.example.com');
+    expect((await get(h, '/api/v1/playback/me', admin.cookie, { host: 'watch.example.com' })).json().appUrl).toBe('https://media.example.com');
   });
 });
 

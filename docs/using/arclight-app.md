@@ -17,12 +17,12 @@ Open [arclight.moviemethat.com/android](https://arclight.moviemethat.com/android
 
 ## Sign in
 
-- **TV:** enter your server's address with the remote (for example `http://<nas-ip>:7878` at home, or your HTTPS address). Then choose **Sign in with a code**: the TV shows a code and a QR code. On a phone or computer that is signed in to Arclight, scan the QR code or open `/player/link` on your server and type the code. The TV signs in by itself. You can also sign in with your password instead.
+- **TV:** enter your server's address with the remote (for example `http://<nas-ip>:7878` at home, or your HTTPS address). Then choose **Sign in with a code**: the TV shows a code and a QR code. On a phone or computer that is signed in to Arclight, scan the QR code or open the address the TV shows (`/player/link` on your server, or `<player address>/link` when an admin set a [player address](../player/address.md), such as `watch.example.com/link`) and type the code. The TV signs in by itself. You can also sign in with your password instead.
 - **Phone:** enter the server address and sign in, or scan the **Sign in a phone** QR code from the web player.
 
 ## Who's watching?
 
-If your account has two or more profiles, the app asks who is watching the first time you open it. A profile with a PIN asks for its 4 digits (on a TV with the on-screen number pad, on a phone with the number keyboard). Five wrong tries lock that profile for 15 minutes on that device. Each profile keeps its own My List, progress, settings and theme. Switch profiles from Settings > Profiles on a TV, or from your avatar in the top bar on a phone. While your own (owner) profile is active you can add profiles from the picker, and edit, delete, set a PIN or a Kids limit under Settings > Profiles > Manage profiles.
+If your account has two or more profiles, the app asks who is watching the first time you open it. A profile with a PIN asks for its 4 digits (on a TV with the on-screen number pad, on a phone with the number keyboard). Five wrong tries lock that profile for 15 minutes on that device. Each profile keeps its own My List, progress, settings and theme. Switch profiles from Settings > Profiles on a TV, or from your avatar in the top bar on a phone. On a phone, the avatar sheet also has **Request portal** (when your account may request) and **Open Arclight** (when your account may open part of the app). Both open in your phone's browser, which asks you to sign in. A TV shows neither. While your own (owner) profile is active you can add profiles from the picker, and edit, delete, set a PIN or a Kids limit under Settings > Profiles > Manage profiles.
 
 ## Launch intro
 

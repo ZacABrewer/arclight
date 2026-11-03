@@ -1217,13 +1217,25 @@ portal-only hostname answers `302 /` for any page that is not a portal page, `/l
 `/setup`. The hostname comes from `Host` or `X-Forwarded-Host` (forwarded headers are always
 trusted). This hides the admin UI; it is not access control (the api checks every call). While enabled,
 `GET /public/portal` → `PublicPortal {enabled, title, applicationUrl, message,
-allowAnonymousDiscover, loginMethods {local, mediaServer {kind, name?} | null, plex}}` is
+allowAnonymousDiscover, loginMethods {local, mediaServer {kind, name?} | null, plex}, portalUrl,
+playerUrl}` (the public addresses as in `GET /playback/me`) is
 public (signed-in callers may always read it). With `allowAnonymousDiscover` too, every
 `GET /discover/*` route and `GET /discoverslider` answer anonymous visitors (as a user without
 permissions: `canRequest: false`, no requests or watchlist). Anonymous calls are rate-limited
 per client IP by a token bucket (burst 120, 2 tokens / s) answering
 `429 {code: "RATE_LIMITED"}` with `Retry-After`; signed-in callers are not limited.
 Requesting always needs sign-in.
+
+`PUT /settings/requests` answers `400` `AddressClashResponse` `{error, code: 'address-clash',
+clashes: [{field: 'paths' | 'hosts', value}]}` when a portal path or hostname is already a
+player address (`PlayerSettings.address`, below); the player settings refuse portal addresses
+the same way. Page loads on a player path or hostname get `<meta name="arclight-player">` with a
+`PlayerDocument` (`{mode: "path", base}` or `{mode: "host", playerOnly}`), which the web maps
+onto `/player`. A player-only hostname answers `302 /` for any page that is not a player page,
+`/login` or `/setup`. A portal hostname wins over a player hostname. While
+`PlayerSettings.enabled` is false no page gets the player tag: extra player paths and the root
+of a player hostname answer `302 /player` (the "player is off" page), and a player-only
+hostname sends every page but `/player`, `/login` and `/setup` there too.
 
 ### Discover (TMDB proxy with Arclight status)
 
@@ -2579,9 +2591,9 @@ minutes per address, and keep out of the request audit (they record `login.succe
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/app/sign-in` | Public. `AppSignInRequest` `{username, password, deviceName (1-100), platform ('ios' \| 'android'), appVersion (1-40), totp? (6 digits), recoveryCode?}`. Answers `AppSignInResponse` `{token, deviceId, user (as GET /user/me), server: {name: 'Arclight', version}}` |
-| POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
+| POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the origin of the first player hostname (`PlayerSettings.address.hosts`, with the base path), else the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
 | POST | `/app/pair` | Public. `AppPairRequest` `{code, deviceName, platform, appVersion}`; the code is upper-cased and spaces and dashes are dropped (`abcd-efgh` works). Answers `AppSignInResponse`. A code works once: any try uses it up. Unknown codes count as failed sign-ins |
-| POST | `/app/device-codes` | Public; TV sign-in (the device-code flow). `AppDeviceCodeRequest` `{deviceName, platform ('android-tv' \| 'android' \| 'ios'), appVersion?, serverUrl?}`. `201` `AppDeviceCode` `{userCode (8 characters, shown as ABCD-EFGH), pollToken (secret), expiresAt (in 10 minutes), intervalSec (5), verifyUrl}`. `verifyUrl` is `<serverUrl, else the Application URL, else the request's origin>/player/link`. 10 codes per 10 minutes per address, then `429` |
+| POST | `/app/device-codes` | Public; TV sign-in (the device-code flow). `AppDeviceCodeRequest` `{deviceName, platform ('android-tv' \| 'android' \| 'ios'), appVersion?, serverUrl?}`. `201` `AppDeviceCode` `{userCode (8 characters, shown as ABCD-EFGH), pollToken (secret), expiresAt (in 10 minutes), intervalSec (5), verifyUrl}`. `verifyUrl` is `<playerUrl>/link` when the owner set a player address (see `GET /playback/me` `playerUrl`), else `<serverUrl, else the Application URL, else the request's origin>/player/link`. 10 codes per 10 minutes per address, then `429` |
 | POST | `/app/device-codes/poll` | Public. `{pollToken}` → `{status: 'pending'}`, `{status: 'expired'}` (also unknown or already used), or once approved `{status: 'approved', ...AppSignInResponse}` (method `device-code`; `android-tv` is stored as `android`). The token is issued once; polling faster than every 2 seconds is `429` |
 | POST | `/app/device-codes/approve` | Signed-in browser session; needs player access. `{userCode}` (case, spaces and dashes ignored) → `{deviceName, platform}`; the TV's next poll gets a token for the approving user. Unknown, expired or already approved codes are `404 DEVICE_CODE_INVALID` and count as failed sign-ins. Audited as `app.device-code.approve` |
 | GET | `/app/devices` | The caller's devices: `AppDevice[]` `{id, userId, name, platform, appVersion, createdAt, lastSeenAt, lastIp, method ('password' \| 'pairing' \| 'device-code'), current (this request's token)}`. Admins: `?all=true` for every user's, `?userId=` for one user's, each with `userName`; others `403 FORBIDDEN` |
@@ -2619,10 +2631,10 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server), video (Movies & TV on, default true), videoMaxStreams (live remux/transcode slots, default 3), videoMaxStreamsPerUser (default 1)}` (admin) |
-| PUT | `/settings/player` | Save `PlayerSettings` (admin) |
+| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server), video (Movies & TV on, default true), videoMaxStreams (live remux/transcode slots, default 3), videoMaxStreamsPerUser (default 1), address `PublicPlayerAddress` {paths (extra player paths, one segment each, like portal paths), hosts `PlayerHost[]` {hostname, playerOnly (default true)}}}` (admin) |
+| PUT | `/settings/player` | Save `PlayerSettings` (admin). A path or hostname the request portal already uses is `400` `AddressClashResponse` `{error, code: 'address-clash', clashes: [{field: 'paths' \| 'hosts', value}]}` (paths compare case-insensitively, hostnames ignore case and a trailing dot) |
 | POST | `/settings/player/engine-test` | `PlayerEngineTestRequest` `{jellyfinServerId?}`: connects to that Jellyfin/Emby server (or the first enabled one) and tries to resolve one library audio file. Answers `PlayerEngineTestResult` `{ok, serverId, serverName, version, sample: {fileId, resolved, itemId} \| null, message}` (`200` also when `ok` is false). Admin |
-| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine). Any signed-in user |
+| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine), `playerUrl` (the player's public address: `https://<first player hostname><base path>` with the Application URL's scheme, else the Application URL plus the first extra player path or `/player`) and `portalUrl` (the same for the request portal while the public portal is on, else the Application URL plus `/portal`). Without an Application URL or a hostname, both are the address the request came in on plus `/player` or `/portal`. `canRequest` (the account may request something; false on a profile that is not the owner) and `appHome` (where **Open Arclight** goes: `/` for admins, else the first page of the account's app access, `/requests` or `/issues` with those permissions, null for none and on a profile that is not the owner) and `appUrl` (where the rest of Arclight answers, origin plus base path: the request's address, or the Application URL when the request came in on a player hostname; null without one) feed the account menus. Any signed-in user |
 | GET | `/playback/item/:itemKey` | `PlayableItem`: title, subtitle (artist or authors), context (album, or `Series, book N`), artwork URL, parts, chapters, ReplayGain. `404` when unknown or without a file |
 | POST | `/playback/items` | `PlaybackItemsRequest` `{itemKeys}` (1 to 200): `PlayableItem[]` in the order asked, without duplicates; unknown keys, items without a file and turned-off sections are left out |
 | POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?, download?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads). With the Jellyfin engine each link carries `backend` (who will serve that part) and the answer `backendInUse` (`jellyfin` only when every part resolved on Jellyfin, else `arclight`) |

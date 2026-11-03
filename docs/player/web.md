@@ -15,6 +15,23 @@ The player picks one of two layouts from the window size:
 Both use the same pages. Tiles and text scale with the window between 80 % and 120 % of their
 TV size.
 
+## Account menu
+
+Select your avatar to open the account menu: your other profiles, **Settings**, **Manage
+profiles** (owner profile), **Request portal**, **Open Arclight**, **Sign in to the Arclight
+app** and **Sign out**.
+
+- **Request portal** shows when your account may request something. It opens the portal's
+  public address (the first portal hostname or path under Settings > Requests > Public request
+  portal) while the public portal is on, else the built-in `/portal`.
+- **Open Arclight** shows when your account may open part of the app: admins, users with
+  [app access](../using/users-and-security.md#app-access), and users who may manage or view
+  requests or issues. It opens the first page you may use. On a
+  [player hostname](address.md#open-arclight-on-a-player-hostname) it opens your Application
+  URL instead, and is hidden when none is set.
+
+Neither shows while a profile other than the owner is active (profiles cannot request).
+
 ## Who's watching?
 
 When your account has two or more profiles, the player asks who is watching the first time you
@@ -51,6 +68,11 @@ Backdrop, title (or its logo), details, the overview, **Play** or **Resume**, **
 when you are part-way through, and **My List**. Shows list their episodes by season; movies
 show **More like this**. On a phone the buttons sit in a row under Play and the overview opens
 with **More**.
+
+The **More** menu (the three dots) has **Mark watched** / **Mark unwatched**, **Copy link** and,
+when a movie has two or more files, **Versions**. **Copy link** puts the title's address on the
+clipboard, on the [player address](address.md) when an admin set one (for example
+`https://watch.example.com/watch/movies/12`), else on the address you opened the player on.
 
 ## Search
 
