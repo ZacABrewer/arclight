@@ -1,6 +1,8 @@
+import { routeUnsafeRegexWarnings } from './regex-log.js';
 import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault, type RouteOptions } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import { WS_MAX_PAYLOAD } from './ws-limits.js';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -137,6 +139,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   if (opts.onRoute) app.addHook('onRoute', opts.onRoute);
   if (basePath) installBasePath(app as unknown as FastifyInstance, basePath);
 
+  routeUnsafeRegexWarnings(log);
   const bus = new EventBus();
   const scheduler = new Scheduler(db, bus, log.child({ component: 'scheduler' }));
   const ctx: AppContext = { config, db, bus, scheduler, log, startedAt: new Date() };
@@ -170,7 +173,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // nosniff, Referrer-Policy, frame protection on everything; a CSP on HTML pages; HSTS on the
   // Application URL's https host (security-headers.ts).
   installSecurityHeaders(app as unknown as FastifyInstance, db);
-  await app.register(websocket);
+  await app.register(websocket, { options: { maxPayload: WS_MAX_PAYLOAD } });
 
   // Dependency-safe order: providers before the pipeline modules that consume them.
   const modules: AppModule[] = [

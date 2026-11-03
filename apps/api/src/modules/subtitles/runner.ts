@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { scriptEnvironment } from '@arclight/shared';
 
 // The one place the subtitles module starts processes (ffprobe, ffmpeg, ffsubsync, alass, the
 // post-processing command). Never through a shell, always with a timeout. Tests inject a fake.
@@ -36,7 +37,8 @@ export const execFileRunner: ProcessRunner = (command, args, opts) =>
         encoding: 'buffer',
         windowsHide: true,
         shell: false,
-        ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
+        // Only the post-processing command passes `env`: it gets a stripped environment.
+        ...(opts.env ? { env: scriptEnvironment(process.env, opts.env) } : {}),
       },
       (err, stdout, stderr) => {
         const e = err as (NodeJS.ErrnoException & { killed?: boolean; code?: number | string; signal?: string }) | null;

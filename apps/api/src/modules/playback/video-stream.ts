@@ -6,6 +6,7 @@ import type { TranscodeHwaccel } from '@arclight/shared';
 import { FfmpegRunner, parseHwaccels } from '../transcode/runner.js';
 import { testBackends } from '../transcode/hwaccel.js';
 import { buildSubtitleArgs, buildThumbnailArgs } from './video-info.js';
+import { removeOtherStamps, scheduleMediaCacheSweep } from './media-cache-prune.js';
 
 // The machinery behind live video: which encoder backend to use (the transcode module's
 // capability test, run once on first use), the WebVTT and thumbnail disk caches, and a helper
@@ -197,6 +198,10 @@ export interface MediaCacheOptions {
   /** ffmpeg runs at once (default 2) and runs that may wait for one (default 50); more answer BUSY. */
   concurrency?: number;
   maxQueue?: number;
+  /** Size cap of the subtitle and thumbnail folders (default 2 GiB), applied by a periodic sweep. */
+  maxBytes?: number;
+  /** Time between sweeps (default 6 h); 0 turns the sweep off. */
+  sweepIntervalMs?: number;
 }
 
 export class MediaCacheError extends Error {
@@ -222,7 +227,11 @@ export class MediaCache {
   constructor(private readonly opts: MediaCacheOptions) {
     this.exec = opts.exec ?? nodeExec;
     this.limiter = new Limiter(opts.concurrency ?? 2, opts.maxQueue ?? 50);
+    this.stopSweep = scheduleMediaCacheSweep(opts.dir, { maxBytes: opts.maxBytes, intervalMs: opts.sweepIntervalMs });
   }
+
+  /** Stops the periodic sweep. */
+  readonly stopSweep: () => void;
 
   private async make(sub: string, name: string, build: (bin: string, tmp: string) => Promise<readonly string[]>, timeoutMs: number): Promise<string> {
     const dir = join(this.opts.dir, sub);
@@ -260,6 +269,8 @@ export class MediaCache {
         throw new MediaCacheError('CONVERT_FAILED', 'ffmpeg could not convert this file');
       }
       await rename(tmp, target);
+      // The copies made for older versions of this source are dead now.
+      await removeOtherStamps(dir, name);
       return target;
     })().finally(() => this.pending.delete(target));
     this.pending.set(target, job);

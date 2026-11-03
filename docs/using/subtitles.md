@@ -23,7 +23,7 @@ A language profile says which subtitles you want for an item. You can have sever
 | Forced (per language) | Never | **Never**: plain subtitles only. **Also**: both a full and a forced subtitle are wanted. **Only**: only a forced subtitle. Forced subtitles translate only foreign-language dialogue. |
 | HI (per language) | Also | Hearing-impaired subtitles. **Never**: excluded. **Also**: accepted. **Only**: required. |
 | Cutoff | none (every language wanted) | Pick one language: once a subtitle for it exists, nothing else is searched. **Any language** means any one item completes the profile. |
-| Must contain | empty | Release info must match one of these (regex or plain text, not case sensitive) or the subtitle is rejected. |
+| Must contain | empty | Release info must match one of these (regex or plain text, not case sensitive) or the subtitle is rejected. A pattern that is not a valid regex, or one that could hang on a crafted release name (see [refused regular expressions](quality-profiles.md#regular-expressions-that-are-refused)), is matched as plain text. |
 | Must not contain | empty | Release info matching any of these is rejected. |
 | Keep original format (do not convert to SubRip) | off | Keep the provider's format (for example .ass) instead of converting to .srt. |
 
@@ -167,6 +167,8 @@ All under **Settings > Subtitles**.
 ### Post-processing
 
 **Run post-processing** (off by default) runs a command after each subtitle is saved, with placeholders such as the subtitle path and language. It runs without a shell. You can limit it to episodes or movies below a score with **Only for episodes below a score** and **Only for movies below a score**. The settings page lists the available placeholders.
+
+Some placeholders, such as `{{release_info}}` and `{{uploader}}`, come from the subtitle provider and can start with `-`. Put `--` before them in the command so the program reads them as values and not as options, for example `my-script --lang {{subtitles_language_code2}} -- {{subtitles}} {{release_info}}` (if your program understands `--`). The command gets the same reduced environment as a [custom script notification](notifications.md#custom-script), plus its `ARCLIGHT_*` variables.
 
 ## Sync and sync check
 

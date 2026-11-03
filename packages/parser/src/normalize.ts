@@ -1,5 +1,26 @@
 // Title clean-up shared by every layer of the parser.
 
+/**
+ * Longest title any parse entry point looks at. Real release and file names stay well under
+ * it (file systems cap a name at 255 bytes); a longer one comes from a hostile indexer or
+ * feed, and parsing it in full would only feed the regexes more text to backtrack over.
+ */
+export const MAX_TITLE_LENGTH = 512;
+/** Longest path the path parsers look at; the tail (file and nearest folders) is kept. */
+export const MAX_PATH_LENGTH = 4096;
+
+/** A title cut to MAX_TITLE_LENGTH characters. */
+export function clampTitle(title: string): string {
+  return title.length > MAX_TITLE_LENGTH ? title.slice(0, MAX_TITLE_LENGTH) : title;
+}
+
+/** A path with every segment cut to MAX_TITLE_LENGTH and the whole to MAX_PATH_LENGTH (tail kept). */
+export function clampPath(path: string): string {
+  let p = path.length > MAX_PATH_LENGTH ? path.slice(-MAX_PATH_LENGTH) : path;
+  if (p.length > MAX_TITLE_LENGTH) p = p.replace(/[^\\/]{513,}/g, (segment) => segment.slice(0, MAX_TITLE_LENGTH));
+  return p;
+}
+
 const TLD = String.raw`(?:com|net|org|to|me|tv|cc|tc|xyz|info|ws|io|ru|club|life|site|cx|cfd|biz|lol|in|pl)`;
 // A leading domain is a website tag only when bracketed, "www."-prefixed, or followed by " - ";
 // "Series.to.Me.S03" is a title.
@@ -7,7 +28,10 @@ const WEBSITE_PREFIX = new RegExp(
   String.raw`^(?:\[\s*(?:www\.)?[a-z0-9-]+\.${TLD}\s*\]|www\.[a-z0-9-]+\.${TLD}(?![a-z0-9])|[a-z0-9-]+\.${TLD}(?=\s+[-–]\s))\s*[-–:]?\s*`,
   'i',
 );
-const WEBSITE_POSTFIX = /\s*[-–]?\s*\[?\s*(?:www\.)?[a-z0-9-]+\.(?:com|net|org|to|me|tv|cc|xyz|info|ws|io|ru|club|life|site|cx|cfd|biz|lol)\s*\]?\s*$/i;
+// Written so no two whitespace runs can split the same spaces (`\s*[-–]?\s*` backtracks
+// cubically on a long run of spaces); a match never starts after a space, since the leading
+// `\s*` would have taken it.
+const WEBSITE_POSTFIX = /(?<!\s)\s*(?:[-–]\s*)?(?:\[\s*)?(?:www\.)?[a-z0-9-]+\.(?:com|net|org|to|me|tv|cc|xyz|info|ws|io|ru|club|life|site|cx|cfd|biz|lol)\s*(?:\]\s*)?$/i;
 const MEDIA_EXTENSION = /\.(mkv|mp4|avi|m4v|mov|wmv|ts|m2ts|mpg|mpeg|divx|xvid|webm|flv|ogm|iso|img|rar|zip|nzb|torrent|part\d+|r\d{2}|srt|sub|idx|nfo|sfv|txt)$/i;
 const TORRENT_TRACKER_TAG = /\[(?:rartv|rarbg|ettv|eztv|TGx|ETRG|CTRG|GloDLS|Silence|AT-TEAM|SPARROW)\]/gi;
 const BRACKET_HASH = /\[[a-f0-9]{8}\]$/i;

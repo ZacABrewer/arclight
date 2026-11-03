@@ -15,6 +15,7 @@ import {
   LOCAL_EXT,
   METADATA_PIECE_SIZE,
   MetadataAssembler,
+  MetadataHashError,
   metadataPiece,
   PexTracker,
 } from './extensions.js';
@@ -139,25 +140,86 @@ describe('extension payloads', () => {
     const info = randomBytes(METADATA_PIECE_SIZE * 2 + 100);
     const hash = createHash('sha1').update(info).digest();
     const asm = new MetadataAssembler(hash);
-    expect(asm.setSize(info.length)).toBe(true);
-    expect(asm.setSize(5)).toBe(false);
+    expect(asm.setSize(info.length, 'a')).toBe(true);
+    expect(asm.setSize(info.length, 'b')).toBe(true);
+    expect(asm.setSize(info.length, 'c')).toBe(true);
+    expect(asm.setSize(5, 'd')).toBe(false); // conflicting size: d is never asked
+    expect(asm.nextRequest('d')).toBeNull();
     expect(asm.nextRequest('a')).toBe(0);
     expect(asm.nextRequest('b')).toBe(1);
     expect(asm.nextRequest('a')).toBe(2);
     expect(asm.nextRequest('a')).toBeNull();
     asm.release('b');
     expect(asm.nextRequest('c')).toBe(1);
-    expect(asm.add(0, metadataPiece(info, 0)!)).toBeNull();
-    expect(asm.add(1, Buffer.alloc(3))).toBeNull(); // wrong size ignored
-    expect(asm.add(1, metadataPiece(info, 1)!)).toBeNull();
-    expect(asm.add(2, metadataPiece(info, 2)!)?.equals(info)).toBe(true);
+    expect(asm.add('a', 0, metadataPiece(info, 0)!)).toBeNull();
+    expect(asm.add('c', 1, Buffer.alloc(3))).toBeNull(); // wrong size ignored
+    expect(asm.add('a', 1, metadataPiece(info, 1)!)).toBeNull(); // not requested from a: ignored
+    expect(asm.add('c', 1, metadataPiece(info, 1)!)).toBeNull();
+    expect(asm.add('a', 2, metadataPiece(info, 2)!)?.equals(info)).toBe(true);
   });
 
-  it('rejects metadata that does not hash to the info-hash', () => {
+  it('rejects metadata that does not hash to the info-hash and names the sender', () => {
     const asm = new MetadataAssembler(randomBytes(20));
-    asm.setSize(10);
-    expect(() => asm.add(0, Buffer.alloc(10))).toThrow('does not match');
-    expect(new MetadataAssembler(randomBytes(20)).setSize(100 * 1024 * 1024)).toBe(false);
+    asm.setSize(10, 'a');
+    expect(asm.nextRequest('a')).toBe(0);
+    let err: unknown;
+    try {
+      asm.add('a', 0, Buffer.alloc(10));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(MetadataHashError);
+    expect((err as MetadataHashError).peers).toEqual(['a']);
+    expect(asm.nextRequest('a')).toBeNull(); // a is out
+    expect(new MetadataAssembler(randomBytes(20)).setSize(100 * 1024 * 1024, 'a')).toBe(false);
+  });
+
+  it('completes from a good peer after a bad peer with another size (DATA-23)', () => {
+    const info = randomBytes(METADATA_PIECE_SIZE + 50);
+    const asm = new MetadataAssembler(createHash('sha1').update(info).digest());
+    expect(asm.setSize(METADATA_PIECE_SIZE * 3, 'bad')).toBe(true); // first size wins
+    expect(asm.setSize(info.length, 'good')).toBe(false); // other size: not asked yet
+    expect(asm.nextRequest('good')).toBeNull();
+    for (let i = 0; i < 3; i++) expect(asm.nextRequest('bad')).toBe(i);
+    expect(asm.add('bad', 0, Buffer.alloc(METADATA_PIECE_SIZE))).toBeNull();
+    expect(asm.add('bad', 1, Buffer.alloc(METADATA_PIECE_SIZE))).toBeNull();
+    expect(() => asm.add('bad', 2, Buffer.alloc(METADATA_PIECE_SIZE))).toThrow(MetadataHashError);
+    // the good peer's size is used now
+    expect(asm.totalSize).toBe(info.length);
+    expect(asm.nextRequest('bad')).toBeNull();
+    expect(asm.nextRequest('good')).toBe(0);
+    expect(asm.nextRequest('good')).toBe(1);
+    expect(asm.add('good', 0, metadataPiece(info, 0)!)).toBeNull();
+    expect(asm.add('good', 1, metadataPiece(info, 1)!)?.equals(info)).toBe(true);
+  });
+
+  it('retries one peer at a time after a failure with several senders', () => {
+    const info = randomBytes(METADATA_PIECE_SIZE * 2);
+    const asm = new MetadataAssembler(createHash('sha1').update(info).digest());
+    asm.setSize(info.length, 'bad');
+    asm.setSize(info.length, 'good');
+    expect(asm.nextRequest('bad')).toBe(0);
+    expect(asm.nextRequest('good')).toBe(1);
+    asm.add('bad', 0, Buffer.alloc(METADATA_PIECE_SIZE));
+    let err: MetadataHashError | null = null;
+    try {
+      asm.add('good', 1, metadataPiece(info, 1)!);
+    } catch (e) {
+      err = e as MetadataHashError;
+    }
+    expect(err?.peers).toEqual([]); // not attributable
+    // single source now: the bad peer alone, then it is named
+    expect(asm.nextRequest('bad')).toBe(0);
+    expect(asm.nextRequest('good')).toBeNull();
+    expect(asm.nextRequest('bad')).toBe(1);
+    asm.add('bad', 0, Buffer.alloc(METADATA_PIECE_SIZE));
+    expect(() => asm.add('bad', 1, Buffer.alloc(METADATA_PIECE_SIZE))).toThrow(
+      expect.objectContaining({ peers: ['bad'] }) as unknown as Error,
+    );
+    expect(asm.nextRequest('good')).toBe(0);
+    expect(asm.nextRequest('good')).toBe(1);
+    asm.add('good', 0, metadataPiece(info, 0)!);
+    expect(asm.add('good', 1, metadataPiece(info, 1)!)?.equals(info)).toBe(true);
   });
 
   it('computes PEX diffs and round-trips the payload', () => {

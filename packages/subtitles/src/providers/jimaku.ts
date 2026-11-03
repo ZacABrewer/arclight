@@ -191,8 +191,25 @@ export class JimakuProvider extends BaseProvider {
 
   async download(candidate: SubtitleCandidate): Promise<SubtitleFile> {
     if (!candidate.downloadUrl) throw this.error('bad-response', 'candidate has no download url');
-    const bytes = await this.getBytes(candidate.downloadUrl, { headers: { Authorization: this.apiKey } });
+    // The download URL comes from the API response, so the API key only goes along when that
+    // URL is on the API's own host (or a subdomain of it); anywhere else gets a plain GET.
+    const bytes = await this.getBytes(candidate.downloadUrl, this.sameHost(candidate.downloadUrl) ? { headers: { Authorization: this.apiKey } } : {});
     return this.file(bytes, candidate.releaseInfo);
+  }
+
+  private sameHost(url: string): boolean {
+    let target: URL;
+    let api: URL;
+    try {
+      target = new URL(url);
+      api = new URL(this.baseUrl);
+    } catch {
+      return false;
+    }
+    if (target.protocol !== 'https:' && target.protocol !== api.protocol) return false;
+    const host = target.hostname.toLowerCase();
+    const apiHost = api.hostname.toLowerCase();
+    return host === apiHost || host.endsWith(`.${apiHost}`);
   }
 
   async test(): Promise<void> {

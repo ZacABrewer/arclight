@@ -114,6 +114,27 @@ describe('parseTorrent', () => {
     expect(() => parseTorrent(encode(root))).toThrowError(msg);
   });
 
+  it('bounds piece length, file count and total size (DATA-12)', () => {
+    const one = { name: 'x', pieces: Buffer.alloc(20), length: 1 };
+    expect(() => parseTorrent(encode({ info: { ...one, 'piece length': 2 ** 32 } }))).toThrowError('too large');
+    expect(() => parseTorrent(encode({ info: { ...one, 'piece length': 256 * 1024 * 1024 + 1 } }))).toThrowError('too large');
+    // Odd (non power of two) and very large v1 piece lengths still load.
+    expect(parseTorrent(encode({ info: { ...one, 'piece length': 3 * 16384 + 7 } })).pieceLength).toBe(3 * 16384 + 7);
+    expect(parseTorrent(encode({ info: { ...one, 'piece length': 256 * 1024 * 1024 } })).pieceLength).toBe(256 * 1024 * 1024);
+    // Too many files.
+    const files = Array.from({ length: 200_001 }, () => ({ length: 0, path: ['f'] }));
+    expect(() => parseTorrent(encode({ info: { name: 'x', 'piece length': 16384, pieces: Buffer.alloc(0), files } }))).toThrowError('too many files');
+    // Total size above the cap, and a length outside the safe integer range.
+    const big = [{ length: 2 ** 45, path: ['a'] }, { length: 2 ** 45, path: ['b'] }, { length: 2 ** 45, path: ['c'] }];
+    expect(() => parseTorrent(encode({ info: { name: 'x', 'piece length': 2 ** 28, pieces: Buffer.alloc(20), files: big } }))).toThrowError('too large');
+    expect(() => parseTorrent(encode({ info: { ...one, 'piece length': 16384, length: 2n ** 64n } }))).toThrowError('valid length');
+  });
+
+  it('requires a power-of-two piece length for v2 (BEP 52)', () => {
+    const v2 = { name: 'x', 'meta version': 2, 'piece length': 3 * 16384, 'file tree': { x: { '': { length: 1, 'pieces root': Buffer.alloc(32) } } } };
+    expect(() => parseTorrent(encode({ info: v2, 'piece layers': {} }))).toThrowError('power of two');
+  });
+
   it('prefers .utf-8 names', () => {
     const info = { name: 'bad', 'name.utf-8': 'güt', 'piece length': 16, pieces: sha1(Buffer.from('a')), length: 1 };
     expect(parseTorrent(encode({ info })).name).toBe('güt');
@@ -124,6 +145,15 @@ describe('sanitizeSegment', () => {
   it('replaces characters illegal on Windows', () => {
     expect(sanitizeSegment('a:b?c*')).toBe('a_b_c_');
     expect(sanitizeSegment('trailing. ')).toBe('trailing__');
+  });
+  it('prefixes Windows device names on Windows (DATA-28)', () => {
+    for (const n of ['CON', 'con.txt', 'NUL', 'nul.tar.gz', 'Aux', 'PRN.mkv', 'COM1', 'com9.log', 'LPT1', 'lpt3.x', 'COM¹', 'nul .txt'])
+      expect(sanitizeSegment(n, { windows: true })).toBe(`_${n}`);
+    for (const n of ['CONSOLE', 'Conan.mkv', 'com10', 'lpt', 'nullable.txt', 'auxiliary'])
+      expect(sanitizeSegment(n, { windows: true })).toBe(n);
+    // Elsewhere these are plain names: renaming would move existing downloads.
+    expect(sanitizeSegment('CON.txt', { windows: false })).toBe('CON.txt');
+    expect(sanitizeSegment('Con.Air.1997.mkv', { windows: false })).toBe('Con.Air.1997.mkv');
   });
   it('rejects traversal and separators', () => {
     expect(() => sanitizeSegment('..')).toThrow();

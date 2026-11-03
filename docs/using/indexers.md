@@ -58,6 +58,8 @@ Every row shows the protocol, privacy, language, categories and where the entry 
 
 Definition indexers also show the definition's own fields: username and password, API key, passkey, cookie, and so on, depending on the site. Saved secrets (the API key, passwords, cookies and passkeys) are hidden after saving: leave the field alone to keep the stored value, or type a new one to replace it. An "Untested definition" badge means nobody has verified that definition against the live site yet; it may need small fixes.
 
+Login cookies and credentials for a definition indexer are only sent to that site's own addresses (its mirrors and their subdomains). If the site redirects to, or links to, another host, that request goes out without them, and Arclight refuses it outright when the other host is on a local or private address. Very large answers are cut off: 8 MB for a page, 10 MB for a .torrent and 50 MB for an .nzb.
+
 ### Health, failures and backoff
 
 If an indexer fails repeatedly, Arclight backs off: the row shows "Failed" with the number of recent failures, then "Skipped until" a time, and RSS and searches skip it until then. A successful test or request clears the state. Common causes: wrong API key, site down, Cloudflare challenge, rate limiting or IP ban. See [Nothing found](../TROUBLESHOOTING.md#nothing-found) and [Cloudflare challenge](../TROUBLESHOOTING.md#cloudflare-challenge).
@@ -97,7 +99,7 @@ Settings > Indexer catalogue:
 
 How a sync works: Arclight reads the listing (one request, revalidated with its ETag, so an unchanged catalogue costs nothing), downloads only files whose hash changed, verifies each against the listing, and swaps the new set into `<config>/definitions/community/` in one step. A failed sync keeps the catalogue you had. The set it replaced is kept, and **Roll back to previous sync** restores it (it then stays until the source publishes something new). The first sync runs about a minute and a half after the server starts; after that it follows the interval, and **Sync now** runs one at once. The page shows when it last synced, how many files load, how many are limited or not supported yet, how many are overridden by a built-in definition, and the most common reasons.
 
-The catalogue only talks to the source URL (GitHub by default). Trackers are contacted only when you test, search or grab with an indexer. Behind a firewall with no access to GitHub, turn the community catalogue off or point it at a mirror. If the catalogue stops syncing for three intervals, System > Health warns (feed stale); if it syncs but nothing loads, it warns that the catalogue is empty.
+The catalogue only talks to the source URL (GitHub by default). Trackers are contacted only when you test, search or grab with an indexer. Behind a firewall with no access to GitHub, turn the community catalogue off or point it at a mirror. The source URL may be on your local network (a LAN mirror), but the definition files a listing names must be on the public internet unless they are on the same origin (scheme, host and port) as the source URL; a file pointing anywhere else on your network is refused and reported as failed. Only `http` and `https` file addresses are fetched, each file is capped at 2 MB, and redirects are checked the same way. If the catalogue stops syncing for three intervals, System > Health warns (feed stale); if it syncs but nothing loads, it warns that the catalogue is empty.
 
 ## Indexer Proxies
 
@@ -117,6 +119,12 @@ Settings > Indexer Proxies. A proxy sends an indexer's requests through somethin
 | Tags | The proxy applies to every indexer with a matching tag, unless the indexer picks a proxy explicitly |
 
 Use **Test** to check the proxy. For FlareSolverr, the test solves a real page, so it fails if the solver's browser is broken even when the container is running.
+
+### Proxies and local addresses
+
+A proxy normally looks up the site's name itself. For the indexer's own site that stays so, which keeps sites that only resolve through the proxy (or sit on your network) working. Requests that must go to the public internet are handled differently: a download link or redirect a site points at another host, and podcast feeds and episodes sent through a proxy. For those, Arclight looks the name up itself, refuses it if any answer is a local or reserved address (loopback, private, link-local), and asks the proxy to connect to the checked address instead of the name (HTTP CONNECT to `address:port`, SOCKS5 with an IP address). The `Host` header, TLS server name and certificate check still use the real name. This stops a public name that points (or is switched) to an address on your network from reaching it through the proxy.
+
+Two cases still go to the proxy by name, because only the proxy can resolve them: `.onion` addresses, and public-looking names your server's DNS cannot resolve at all (for example a proxy with its own DNS view). For those, Arclight cannot see where the proxy will connect, so a proxy that resolves such a name to an address on its own network would still reach it; use a proxy that cannot reach your LAN if that matters to you. Names that look local (`localhost`, a single word such as `nas`, or endings such as `.lan`, `.local`, `.home.arpa`) are refused before the proxy is asked.
 
 Proxies marked **Managed** were created automatically by proxy detection: "FlareSolverr (bundled)" in Docker and "Built-in solver" on a machine with a browser. They carry the tag `cloudflare`, so tagging an indexer `cloudflare` routes it through them.
 

@@ -319,9 +319,18 @@ and retries each affected notification once when the pause ends; at most 50 retr
 time, so a struggling relay never gets a burst. The last problem shows on the phone's row in
 the device list until the next successful send.
 
-Relay secrets never leave the server: no API response includes them, the audit log masks
+Relay secrets never leave the server: no API response includes them, they are sealed in the
+database (see [Secrets at rest](#secrets-at-rest-and-file-permissions)), the audit log masks
 them, and backup archives leave the `mobile_devices` table empty (overwritten, not just
 unlinked). Routes: [API.md](API.md#mobile-arclight-admin-app).
+
+## Secrets at rest and file permissions
+
+Since 0.24, Arclight seals the secrets it stores (API key, two-factor secrets, the credentials in settings, indexers, download clients, notifications and VPN, users' media-server access tokens, phone relay secrets and Year in review share links) with AES-256-GCM. The key is `secrets.key` in the config folder. Arclight's own files in the config folder (the database, logs, backups, `secrets.key`) are owner-only: files `0600`, folders `0700`. Media and download folders are left alone. For details on restoring, losing the key file and encrypted backups, see [Back up and restore](getting-started/backup-restore.md#secrets-at-rest).
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ARCLIGHT_SECRETS_AT_REST` | on | `0` writes the stored secrets back in the clear on the next start and stops sealing new ones. Use it once before downgrading to a version older than 0.24. |
 
 ## Metrics
 

@@ -6,12 +6,13 @@ import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AgentClient, type AgentEvent } from '@arclight/engine-agent';
+import { AGENT_DEPRECATION_HEADER, AgentClient, AuthThrottle, type AgentEvent } from '@arclight/engine-agent';
 import { createRemoteEngineClient, DownloadClientError } from '@arclight/download-clients';
 import { createTorrent, Session, type SessionSettings } from '@arclight/torrent-engine';
+import { settings } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { engineAgentRoutes } from './routes.js';
-import { EngineAgentService } from './service.js';
+import { ENGINE_AGENT_SETTINGS_KEY, ENGINE_AGENT_TOKEN_KEY, EngineAgentService } from './service.js';
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -56,8 +57,10 @@ function pack() {
  * The "remote" Arclight: its engine module's routes over a real Session, behind a stand-in of
  * the auth hook (X-Api-Key -> apikey, a session cookie -> session user, nothing -> anonymous).
  */
-async function remoteArclight(opts: { enabled?: boolean; running?: boolean } = {}) {
+async function remoteArclight(opts: { enabled?: boolean; running?: boolean; legacy?: boolean; throttle?: AuthThrottle } = {}) {
   const db = await createTestDb();
+  // An instance that had the agent on before 0.24: its row has no acceptApiKey.
+  if (opts.legacy) db.insert(settings).values({ key: ENGINE_AGENT_SETTINGS_KEY, value: { enabled: true }, updatedAt: new Date().toISOString() }).run();
   const root = await tmp();
   let session: Session | null = null;
   if (opts.running !== false) {
@@ -66,8 +69,14 @@ async function remoteArclight(opts: { enabled?: boolean; running?: boolean } = {
     const s = session;
     cleanups.push(() => s.shutdown());
   }
-  const service = new EngineAgentService({ db, session: () => session, downloadsRoot: () => root });
-  if (opts.enabled !== false) service.updateSettings({ enabled: true });
+  const service = new EngineAgentService({
+    db,
+    session: () => session,
+    downloadsRoot: () => root,
+    verifyApiKey: (c) => c === API_KEY,
+    ...(opts.throttle ? { throttle: opts.throttle } : {}),
+  });
+  if (opts.enabled !== false && !opts.legacy) service.updateSettings({ enabled: true });
   const app: FastifyInstance = Fastify().withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -82,7 +91,7 @@ async function remoteArclight(opts: { enabled?: boolean; running?: boolean } = {
   cleanups.push(() => app.close());
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
-  return { app, db, root, service, session, url: `http://127.0.0.1:${port}/api/v1/engine-agent` };
+  return { app, db, root, service, session, token: service.token(), url: `http://127.0.0.1:${port}/api/v1/engine-agent` };
 }
 
 async function seeder(p: ReturnType<typeof pack>) {
@@ -119,24 +128,88 @@ function waitFor<T>(cond: () => T | undefined | null | false, ms = 15_000): Prom
 describe('engine-agent module: guard', () => {
   it('answers 404 in the agent error shape while disabled', async () => {
     const { app } = await remoteArclight({ enabled: false });
-    const res = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-api-key': API_KEY } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-agent-token': 'x'.repeat(40) } });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ code: 'not-found' });
   });
 
-  it('requires the API key (a signed-in browser session is not enough)', async () => {
-    const { app } = await remoteArclight();
+  it('requires the agent token (a signed-in browser session or, on a new setup, the API key is not enough)', async () => {
+    const { app, token, service } = await remoteArclight();
+    expect(token.length).toBeGreaterThanOrEqual(32);
+    expect(service.settings().acceptApiKey).toBe(false);
     expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status' })).statusCode).toBe(401);
     const cookie = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { cookie: 'arclight_session=x' } });
     expect(cookie.statusCode).toBe(401);
     expect(cookie.json()).toMatchObject({ code: 'unauthorized' });
-    const ok = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-api-key': API_KEY } });
+    for (const headers of [{ 'x-api-key': API_KEY }, { 'x-agent-token': API_KEY }]) {
+      expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers })).statusCode).toBe(401);
+    }
+    const ok = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-agent-token': token } });
     expect(ok.statusCode).toBe(200);
+    expect(ok.headers[AGENT_DEPRECATION_HEADER]).toBeUndefined();
+    const bearer = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { authorization: `Bearer ${token}` } });
+    expect(bearer.statusCode).toBe(200);
+  });
+
+  it('keeps the API key working, with a deprecation header, where the agent was on before 0.24', async () => {
+    const { app, url, service } = await remoteArclight({ legacy: true });
+    expect(service.settings()).toMatchObject({ enabled: true, acceptApiKey: true });
+    expect(service.response().apiKeyLastUsedAt).toBeNull();
+    // A 0.23 client sends the API key in both headers; the hook resolves x-api-key.
+    const old = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-api-key': API_KEY, 'x-agent-token': API_KEY } });
+    expect(old.statusCode).toBe(200);
+    expect(old.headers[AGENT_DEPRECATION_HEADER]).toBe('api-key');
+    expect(service.response().apiKeyLastUsedAt).not.toBeNull();
+    // A 0.24 client still configured with the API key sends it as x-agent-token only.
+    const client = createRemoteEngineClient({ url, token: API_KEY });
+    cleanups.push(() => client.close());
+    const result = await client.test();
+    expect(JSON.stringify(result)).toMatch(/API key/i);
+    // Turning acceptApiKey off (after switching to the agent token) shuts that door.
+    service.updateSettings({ acceptApiKey: false });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-api-key': API_KEY } })).statusCode).toBe(401);
+    // The explicit value sticks: the pre-0.24 default applies only to the untouched row.
+    expect(service.settings().acceptApiKey).toBe(false);
+  });
+
+  it('regenerates the agent token, refusing the old one', async () => {
+    const { app, token, db } = await remoteArclight();
+    const res = await app.inject({ method: 'POST', url: '/api/v1/settings/engineagent/token' });
+    expect(res.statusCode).toBe(200);
+    const fresh = res.json().token as string;
+    expect(fresh).not.toBe(token);
+    expect(fresh.length).toBeGreaterThanOrEqual(32);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-agent-token': token } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-agent-token': fresh } })).statusCode).toBe(200);
+    // Its own row, not the settings section (config export never carries it).
+    const rows = db.select().from(settings).all();
+    expect(JSON.stringify(rows.find((r) => r.key === ENGINE_AGENT_SETTINGS_KEY)?.value ?? {})).not.toContain(fresh);
+    expect(rows.some((r) => r.key === ENGINE_AGENT_TOKEN_KEY)).toBe(true);
+  });
+
+  it('backs off an address after repeated wrong tokens (429 with retry-after)', async () => {
+    const { app, token } = await remoteArclight({ throttle: new AuthThrottle({ freeFailures: 2, baseMs: 60_000 }) });
+    const bad = { 'x-agent-token': 'w'.repeat(40) };
+    for (let i = 0; i < 3; i++) {
+      expect((await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: bad })).statusCode).toBe(401);
+    }
+    const limited = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/status', headers: { 'x-agent-token': token } });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: 'rate-limited' });
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('answers 400, not 500, for a malformed percent escape', async () => {
+    const { app, token } = await remoteArclight();
+    const res = await app.inject({ method: 'GET', url: '/api/v1/engine-agent/torrents/%E0%A4%A', headers: { 'x-agent-token': token } });
+    // Fastify refuses the URL itself here; the standalone agent's router answers 400 bad-request
+    // (packages/engine-agent security tests). Either way it is a client error, not a 500.
+    expect(res.statusCode).toBe(400);
   });
 
   it('maps a wrong API key to an auth error in the remote client', async () => {
     const { url } = await remoteArclight();
-    const client = createRemoteEngineClient({ url, token: 'wrong' });
+    const client = createRemoteEngineClient({ url, token: 'wrong-token-0123456789' });
     cleanups.push(() => client.close());
     const error = await client.test().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DownloadClientError);
@@ -146,24 +219,24 @@ describe('engine-agent module: guard', () => {
 
 describe('engine-agent module: protocol', () => {
   it('reports an arclight-kind status with a managed port and refuses port changes', async () => {
-    const { url, session, root } = await remoteArclight();
-    const client = new AgentClient({ url, token: API_KEY });
+    const { url, session, root, token } = await remoteArclight();
+    const client = new AgentClient({ url, token });
     expect(await client.status()).toMatchObject({ kind: 'arclight', running: true, portManaged: true, listenPort: session!.listenPort, downloadsRoot: root });
     const error = await client.setListenPort(40_000).catch((e: unknown) => e);
     expect((error as { code?: string }).code).toBe('conflict');
   });
 
   it('answers not-running while the engine is stopped', async () => {
-    const { url } = await remoteArclight({ running: false });
-    const client = new AgentClient({ url, token: API_KEY });
+    const { url, token } = await remoteArclight({ running: false });
+    const client = new AgentClient({ url, token });
     expect((await client.status()).running).toBe(false);
     const error = await client.list().catch((e: unknown) => e);
     expect((error as { code?: string }).code).toBe('not-running');
   });
 
   it('streams events over the Fastify WebSocket', async () => {
-    const { url, root } = await remoteArclight();
-    const client = new AgentClient({ url, token: API_KEY });
+    const { url, root, token } = await remoteArclight();
+    const client = new AgentClient({ url, token });
     const events: AgentEvent[] = [];
     const sub = client.subscribe((e) => events.push(e));
     cleanups.push(() => sub.close());
@@ -180,7 +253,7 @@ describe('engine-agent module: protocol', () => {
   it('serves settings and validates updates', async () => {
     const { app } = await remoteArclight({ enabled: false });
     const get = await app.inject({ method: 'GET', url: '/api/v1/settings/engineagent' });
-    expect(get.json()).toEqual({ enabled: false, path: '/api/v1/engine-agent', engineRunning: true });
+    expect(get.json()).toEqual({ enabled: false, acceptApiKey: false, path: '/api/v1/engine-agent', engineRunning: true, token: expect.any(String), apiKeyLastUsedAt: null });
     const put = await app.inject({ method: 'PUT', url: '/api/v1/settings/engineagent', payload: { enabled: true } });
     expect(put.json()).toMatchObject({ enabled: true });
     const bad = await app.inject({ method: 'PUT', url: '/api/v1/settings/engineagent', payload: { enabled: 'yes' } });
@@ -194,7 +267,7 @@ describe('engine-agent module: Arclight to Arclight', () => {
     const seed = await seeder(p);
     const remote = await remoteArclight();
     const local = await tmp();
-    const client = createRemoteEngineClient({ url: remote.url, token: API_KEY, category: 'tv', pullMode: true, localDownloadPath: local });
+    const client = createRemoteEngineClient({ url: remote.url, token: remote.token, category: 'tv', pullMode: true, localDownloadPath: local });
     cleanups.push(() => client.close());
     expect((await client.test()).version).toContain('arclight');
 

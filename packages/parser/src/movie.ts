@@ -1,4 +1,4 @@
-import { spaced } from './normalize.js';
+import { spaced, clampTitle } from './normalize.js';
 import type { ParsedMovieInfo } from './types.js';
 
 // Movie titles: "Title (Year) ..." or "Title.Year.Quality..." with an optional edition.
@@ -163,6 +163,7 @@ function splitTitle(part: string, cutAtTags: boolean): TitleSplit {
 }
 
 export function parseMovie(releaseTitle: string): ParsedMovieInfo | null {
+  releaseTitle = clampTitle(releaseTitle);
   let text = releaseTitle.trim();
   const imdbId = IMDB_ID.exec(text)?.groups?.['imdb']?.toLowerCase() ?? null;
   const tmdbMatch = TMDB_ID.exec(text);

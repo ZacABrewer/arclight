@@ -17,6 +17,7 @@ import { DownloadClientsService } from '../download-clients/service.js';
 import { toDirectoryForm } from '../download-clients/remote-paths.js';
 import { ImportListsService } from '../import-lists/service.js';
 import { IndexersService } from '../indexers/service.js';
+import { rootFolderPathProblem } from '../library/root-path.js';
 import { createTag, toCleanTitle, toSortTitle } from '../library/service.js';
 import { NotificationsService } from '../notifications/service.js';
 import { ProfilesService } from '../profiles/service.js';
@@ -338,6 +339,8 @@ export const HANDLERS: Handlers = {
       return null;
     },
     create: (env, item) => {
+      const problem = rootFolderPathProblem(item.payload.path);
+      if (problem) throw new Error(`${problem}: ${item.payload.path}`);
       if (!existsSync(item.payload.path)) env.warn('rootFolders', `${item.payload.path} is not accessible from Arclight (check the path mappings)`, item.sourceId);
       return env.db.insert(t.rootFolders).values({ path: item.payload.path, mediaType: item.payload.mediaType }).returning({ id: t.rootFolders.id }).get().id;
     },

@@ -60,7 +60,13 @@ export class NotificationsError extends Error {
 }
 
 /** Builds an agent from validated settings and the destination's templates. Injected in tests. */
-export type AgentFactory = (kind: NotificationAgentKind, settings: unknown, templates?: MessageTemplates) => NotificationAgent;
+/** How a factory-built agent may reach the network (personal destinations: by owner role). */
+export interface AgentContext {
+  /** Loopback / LAN targets allowed: true only for admin-owned destinations. */
+  allowPrivate: boolean;
+}
+
+export type AgentFactory = (kind: NotificationAgentKind, settings: unknown, templates?: MessageTemplates, context?: AgentContext) => NotificationAgent;
 
 /** Personal destinations hear about library events (watchlist titles) from the dispatcher. */
 export interface LibraryEventListener {

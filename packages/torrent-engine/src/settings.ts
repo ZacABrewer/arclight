@@ -48,10 +48,27 @@ export interface SessionSettings {
   utp: boolean;
   /** Listen on IPv6 too (`::`) when available and `listenAddress` is null; use IPv6 peers. */
   ipv6: boolean;
-  /** Concurrent HTTP requests to web seeds (BEP 19) per torrent. 0 disables web seeds. */
+  /**
+   * Pieces fetched from web seeds (BEP 19) at once per torrent, lowered so at most 64 MiB of
+   * pieces is held in memory. 0 disables web seeds.
+   */
   webSeedConnectionsPerTorrent: number;
   /** Base back-off after a web seed error, doubled per consecutive failure. */
   webSeedRetryMs: number;
+  /**
+   * Connect to peers (and DHT nodes) on loopback, LAN and other non-public addresses that
+   * trackers, the DHT, PEX or a magnet's `x.pe` hand out. Off by default, so a hostile peer or
+   * torrent cannot make the engine probe the local network. Peers passed to `addTorrent`
+   * directly, and peers from a local tracker that `allowLocalTrackers` lets through, are
+   * always used.
+   */
+  allowLocalPeers: boolean;
+  /**
+   * Contact trackers and web seeds on loopback, LAN and other non-public addresses (a LAN
+   * tracker). Off by default: the .torrent or magnet picks these URLs, so every request
+   * (redirects included) must reach public addresses only.
+   */
+  allowLocalTrackers: boolean;
   /** Default share ratio after which seeding stops (null = unlimited). */
   seedRatioLimit: number | null;
   /** Default seeding time after which seeding stops, in ms (null = unlimited). */
@@ -139,6 +156,8 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   ipv6: true,
   webSeedConnectionsPerTorrent: 4,
   webSeedRetryMs: 30_000,
+  allowLocalPeers: false,
+  allowLocalTrackers: false,
   seedRatioLimit: null,
   seedTimeLimitMs: null,
   seedLimitAction: 'pause',

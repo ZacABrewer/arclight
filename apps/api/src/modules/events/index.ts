@@ -4,6 +4,7 @@ import { OriginPolicy, parseCorsOrigins } from '../../origin-policy.js';
 import { authServiceFor } from '../auth/context.js';
 import { credentialsOf } from '../auth/hook.js';
 import { dbEventOwners, eventViewerOf, eventVisibleTo, type EventViewer } from './filter.js';
+import { admitSocket, sendBounded } from '../../ws-limits.js';
 
 export { eventVisibleTo, eventViewerOf, dbEventOwners, type EventViewer, type EventOwners } from './filter.js';
 
@@ -39,6 +40,7 @@ export const eventsModuleWith =
         socket.close(1008, 'authentication required');
         return;
       }
+      if (!admitSocket(socket, req.auth)) return;
       let viewer: EventViewer = eventViewerOf(req.auth);
       const userId = req.auth.user?.id ?? null;
       const creds = credentialsOf(req);
@@ -47,7 +49,7 @@ export const eventsModuleWith =
       const unsubscribe = ctx.bus.subscribe((event) => {
         if (socket.readyState !== socket.OPEN) return;
         if (!eventVisibleTo(event, viewer, owners)) return;
-        socket.send(JSON.stringify(event));
+        sendBounded(socket, JSON.stringify(event));
       });
       let checking = false;
       const timer = setInterval(() => {

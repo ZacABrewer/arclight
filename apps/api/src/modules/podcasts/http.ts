@@ -5,7 +5,8 @@ import { createWriteStream } from 'node:fs';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
-import { openHttpConnectTunnel, openSocks5Tunnel, type NetworkProxy } from '@arclight/indexers';
+import { openHttpConnectTunnel, openSocks5Tunnel, proxyDialHost, ProxyError, type NetworkProxy } from '@arclight/indexers';
+import { createSafeFetch, isBlockedAddress, isPrivateHostname, normalizeHost, type ResolveAll, type SafeFetch } from '@arclight/net';
 import { redactFeedUrl, redactUrlsInText } from '@arclight/shared';
 import { VERSION } from '../../version.js';
 
@@ -45,28 +46,104 @@ export class PodcastHttpError extends Error {
 // Transports
 // ---------------------------------------------------------------------------------------
 
-/** Direct (global fetch) or through an HTTP CONNECT / SOCKS5 proxy (node http + tunnel). */
-export function transportFor(proxy: NetworkProxy | undefined, fetchImpl: typeof fetch = globalThis.fetch): Transport {
-  if (!proxy) {
-    return (url, init) =>
-      fetchImpl(url, { method: init.method ?? 'GET', headers: init.headers, redirect: 'manual', ...(init.signal ? { signal: init.signal } : {}) });
-  }
-  return (url, init) => proxiedRequest(proxy, url, init);
+/**
+ * Where a transport may connect (DATA-06). Feed hosts, enclosure hosts and redirects are all
+ * chosen by the publisher (or by whoever suggested the feed), so local and reserved addresses
+ * are refused on every hop. The one exception is `trustedHost`: the host of a feed an admin
+ * added under a LAN name or address (`nas.lan`, `10.0.0.5`), which keeps self-hosted feeds and
+ * their same-host episode files working. Any other private host stays blocked.
+ *
+ * Through a proxy the name is resolved and vetted here and the proxy is handed the address,
+ * so a public name that resolves to a LAN address is refused too (see `proxyDialHost` for the
+ * `.onion` / proxy-only-DNS fallback). The trusted host still goes to the proxy by name.
+ */
+export interface TransportPolicy {
+  trustedHost?: string;
+  /** Test seam: resolver for the proxied path. */
+  resolve?: ResolveAll;
 }
 
-async function proxiedRequest(proxy: NetworkProxy, raw: string, init: Parameters<Transport>[1]): Promise<Response> {
+/** The host to trust for a stored feed URL: only a LAN name or address, never a public name. */
+export function lanFeedHost(feedUrl: string): string | undefined {
+  try {
+    const host = normalizeHost(new URL(feedUrl).hostname);
+    return host && isPrivateHostname(host) ? host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hostAllowed(policy: TransportPolicy, host: string): boolean {
+  return policy.trustedHost !== undefined && normalizeHost(host) === policy.trustedHost;
+}
+
+// Callers set their own deadlines (feed timeout, download idle timer) and size caps, so the
+// safe fetch adds neither; it pins every connection to a vetted address.
+const publicFetch = createSafeFetch({ timeoutMs: 0, maxBytes: Number.POSITIVE_INFINITY, maxRedirects: 0 });
+const trustedFetches = new Map<string, SafeFetch>();
+
+function directFetch(policy: TransportPolicy): SafeFetch {
+  const host = policy.trustedHost;
+  if (host === undefined) return publicFetch;
+  let f = trustedFetches.get(host);
+  if (!f) {
+    if (trustedFetches.size >= 64) trustedFetches.delete(trustedFetches.keys().next().value as string);
+    f = createSafeFetch({
+      timeoutMs: 0,
+      maxBytes: Number.POSITIVE_INFINITY,
+      maxRedirects: 0,
+      allowAddress: (address, hostname) => !isBlockedAddress(address) || hostAllowed(policy, hostname),
+    });
+    trustedFetches.set(host, f);
+  }
+  return f;
+}
+
+/**
+ * Direct (address-checked safe fetch) or through an HTTP CONNECT / SOCKS5 proxy (node http +
+ * tunnel). `fetchImpl` is a test seam that bypasses the address check.
+ */
+export function transportFor(proxy: NetworkProxy | undefined, fetchImpl?: typeof fetch, policy: TransportPolicy = {}): Transport {
+  // LAN names are refused before any lookup; both paths then vet the resolved address (the
+  // direct path through the safe fetch, the proxied path before the tunnel is opened).
+  const refuse = (url: string): Promise<never> | null => {
+    const host = new URL(url).hostname;
+    if (!isPrivateHostname(host) || hostAllowed(policy, host)) return null;
+    return Promise.reject(new PodcastHttpError(`${redactFeedUrl(url)}: local network addresses are not allowed for podcasts`));
+  };
+  if (!proxy) {
+    const f: SafeFetch | typeof fetch = fetchImpl ?? directFetch(policy);
+    return (url, init) =>
+      (fetchImpl ? null : refuse(url)) ?? f(url, { method: init.method ?? 'GET', headers: init.headers, redirect: 'manual', ...(init.signal ? { signal: init.signal } : {}) });
+  }
+  return (url, init) => refuse(url) ?? proxiedRequest(proxy, url, init, policy);
+}
+
+async function proxiedRequest(proxy: NetworkProxy, raw: string, init: Parameters<Transport>[1], policy: TransportPolicy): Promise<Response> {
   const url = new URL(raw);
   const secure = url.protocol === 'https:';
   const port = Number(url.port) || (secure ? 443 : 80);
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (init.signal?.aborted) throw init.signal.reason;
+  // Resolve and vet the target here and tunnel to that address (DNS rebinding through the
+  // proxy); the admin's trusted LAN feed host keeps going to the proxy by name.
+  let dial = host;
+  if (!hostAllowed(policy, host)) {
+    try {
+      dial = await proxyDialHost(host, policy.resolve ? { resolve: policy.resolve } : {});
+    } catch (err) {
+      if (err instanceof ProxyError && err.code === 'blocked') throw new PodcastHttpError(`${redactFeedUrl(raw)}: local network addresses are not allowed for podcasts`);
+      throw err;
+    }
+  }
   // Open the tunnel (and TLS on top) first, then hand that socket to node's HTTP client.
   const open = proxy.type === 'socks5' ? openSocks5Tunnel : openHttpConnectTunnel;
-  const tunnel = await open(proxy, host, port, 30_000);
+  const tunnel = await open(proxy, dial, port, 30_000);
   let socket: Socket = tunnel;
   if (secure) {
     socket = await new Promise<Socket>((resolve, reject) => {
-      const t = tls.connect({ socket: tunnel, servername: net.isIP(host) ? undefined : host, ALPNProtocols: ['http/1.1'] });
+      // The certificate is checked against the URL's name (`host`), not the dialled address.
+      const t = tls.connect({ socket: tunnel, host, servername: net.isIP(host) ? undefined : host, ALPNProtocols: ['http/1.1'] });
       t.once('secureConnect', () => resolve(t));
       t.once('error', (err) => {
         tunnel.destroy();
@@ -156,6 +233,7 @@ export async function follow(
     try {
       response = await transport(url, { headers, ...(init.signal ? { signal: init.signal } : {}), ...(init.method ? { method: init.method } : {}) });
     } catch (err) {
+      if (err instanceof PodcastHttpError) throw err;
       throw new PodcastHttpError(`${redactFeedUrl(url)}: ${networkMessage(err)}`);
     }
     if (response.status >= 300 && response.status < 400 && response.status !== 304) {
@@ -179,6 +257,7 @@ export async function follow(
 function networkMessage(err: unknown): string {
   if (err instanceof Error) {
     if (err.name === 'AbortError' || err.name === 'TimeoutError') return 'timed out';
+    if ((err as { code?: string }).code === 'blocked') return 'local network addresses are not allowed for podcasts';
     const cause = (err as { cause?: { code?: string; message?: string } }).cause;
     return cause?.code ?? cause?.message ?? err.message;
   }
@@ -314,6 +393,12 @@ export async function downloadFile(transport: Transport, url: string, dest: stri
     await response.body.cancel().catch(() => undefined);
     throw new PodcastHttpError(`${redactFeedUrl(final)}: the server sent a web page instead of the episode`);
   }
+  // Episode files are audio or video (often served as octet-stream); text, JSON and XML
+  // answers are never kept as an episode (DATA-06).
+  if (ct && !isMediaContentType(ct)) {
+    await response.body.cancel().catch(() => undefined);
+    throw new PodcastHttpError(`${redactFeedUrl(final)}: the server sent ${ct.split(';')[0]!.trim()} instead of an audio or video file`);
+  }
   let bytes = 0;
   let timer: NodeJS.Timeout | undefined;
   const arm = () => {
@@ -344,4 +429,15 @@ export async function downloadFile(transport: Transport, url: string, dest: stri
   }
   if (bytes === 0) throw new PodcastHttpError(`${redactFeedUrl(final)}: the server sent an empty file`);
   return { bytes, contentType: ct, url: final };
+}
+
+/** Content types an episode file may arrive as. */
+export function isMediaContentType(ct: string): boolean {
+  const type = ct.split(';')[0]!.trim().toLowerCase();
+  if (!type) return true;
+  if (/^(audio|video)\//.test(type)) return true;
+  if (/^text\//.test(type)) return false;
+  if (/^application\/(json|xml|javascript|x-www-form-urlencoded|xhtml)|[+](xml|json)$/.test(type)) return false;
+  // application/octet-stream, binary/octet-stream, application/ogg, application/mp4, ...
+  return true;
 }

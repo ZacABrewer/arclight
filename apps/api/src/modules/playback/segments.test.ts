@@ -82,7 +82,7 @@ describe('pure helpers', () => {
     expect(windowOf('head', 150_000)).toEqual({ startMs: 0, lengthMs: 60_000 });
     expect(windowOf('tail', 3_000_000)).toEqual({ startMs: 2_580_000, lengthMs: 420_000 });
     expect(windowOf('tail', 150_000)).toEqual({ startMs: 97_500, lengthMs: 52_500 });
-    expect(buildAudioExtractArgs('/m/e.mkv', 1, 97_500, 52_500)).toEqual(['-nostdin', '-v', 'error', '-ss', '97.500', '-t', '52.500', '-i', '/m/e.mkv', '-map', '0:a:1', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1']);
+    expect(buildAudioExtractArgs('/m/e.mkv', 1, 97_500, 52_500)).toEqual(['-nostdin', '-v', 'error', '-ss', '97.500', '-t', '52.500', '-protocol_whitelist', 'file,pipe', '-i', '/m/e.mkv', '-map', '0:a:1', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1']);
     expect(buildAudioExtractArgs('/m/e.mkv', 0, 0, 60_000)).not.toContain('-ss');
     expect(defaultAudioOrdinal({ audioStreams: [{ default: false }, { default: true }] } as MediaInfo)).toBe(1);
     expect(defaultAudioOrdinal(null)).toBe(0);

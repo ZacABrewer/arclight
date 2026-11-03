@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { rename, rm } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { locateFfmpeg, type FileExists } from '../../transcode/runner.js';
+import { fileInput } from '../../transcode/input-protocols.js';
 
 // ffmpeg for the music importer: cutting cue images into tracks, writing tags (and a cover) into
 // imported files, and measuring ReplayGain. The argument builders are pure and exported for
@@ -158,8 +159,7 @@ export function splitArgs(input: { source: string; destination: string; startMs:
     '-y',
     // Input seeking decodes from the nearest point and is sample-accurate for re-encodes.
     ...(input.startMs > 0 ? ['-ss', seconds(input.startMs)] : []),
-    '-i',
-    input.source,
+    ...fileInput(input.source),
     ...(input.endMs !== null ? ['-t', seconds(input.endMs - input.startMs)] : []),
     '-map',
     '0:a:0',
@@ -187,9 +187,8 @@ export function tagWriteArgs(path: string, temp: string, input: { tags: TrackTag
     '-v',
     'error',
     '-y',
-    '-i',
-    path,
-    ...(cover ? ['-i', cover] : []),
+    ...fileInput(path),
+    ...(cover ? fileInput(cover) : []),
     '-map',
     '0:a',
     // Keep an existing picture unless a new cover replaces it.
@@ -213,8 +212,7 @@ export function replayGainArgs(path: string, span?: { startMs: number; endMs: nu
     '-v',
     'info',
     ...(span && span.startMs > 0 ? ['-ss', seconds(span.startMs)] : []),
-    '-i',
-    path,
+    ...fileInput(path),
     ...(span && span.endMs !== null ? ['-t', seconds(span.endMs - span.startMs)] : []),
     '-map',
     '0:a:0',

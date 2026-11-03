@@ -120,14 +120,35 @@ export function metadataPiece(info: Buffer, piece: number): Buffer | null {
   return info.subarray(start, start + METADATA_PIECE_SIZE);
 }
 
+/** The assembled metadata did not hash to the info-hash. `peers` sent it alone (ban them). */
+export class MetadataHashError extends TorrentEngineError {
+  constructor(readonly peers: string[]) {
+    super('peer', 'received metadata does not match the info-hash');
+  }
+}
+
+/** Peers whose announced metadata size is remembered (one per connection, bounded anyway). */
+const MAX_SIZE_PEERS = 1024;
+
 /**
  * Assembles the info dict from ut_metadata pieces and verifies it against the info-hash.
  * Tracks which pieces are outstanding so several peers can contribute.
+ *
+ * Every peer's announced size is kept; only peers that announced the size being assembled
+ * are asked, and a piece is only taken from the peer it was requested from. When the result
+ * does not hash, a lone contributor is reported for banning; with several contributors the
+ * next attempt uses one peer at a time so a bad one can be told apart. After a failure the
+ * size is chosen again from the peers still connected.
  */
 export class MetadataAssembler {
   private size = 0;
   private pieces: (Buffer | null)[] = [];
+  private contributors: (string | null)[] = [];
   private requested = new Map<number, { peer: string; at: number }>();
+  private readonly sizes = new Map<string, number>();
+  /** After an unattributable failure: one peer at a time. */
+  private singleSource = false;
+  private exclusive: { peer: string; at: number } | null = null;
 
   constructor(
     readonly infoHash: Buffer,
@@ -138,20 +159,46 @@ export class MetadataAssembler {
     return this.size;
   }
 
-  /** Accepts a metadata size announced by a peer. Returns false when it is invalid or conflicting. */
-  setSize(size: number): boolean {
-    if (size <= 0 || size > MAX_METADATA_SIZE) return false;
-    if (this.size === 0) {
-      this.size = size;
-      this.pieces = new Array<Buffer | null>(metadataPieceCount(size)).fill(null);
-      return true;
-    }
+  /**
+   * Records the metadata size `peer` announced. Returns true when it is valid and matches the
+   * size being assembled (the first valid size becomes it), i.e. when the peer may be asked.
+   */
+  setSize(size: number, peer: string): boolean {
+    if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_METADATA_SIZE) return false;
+    if (!this.sizes.has(peer) && this.sizes.size >= MAX_SIZE_PEERS) return false;
+    this.sizes.set(peer, size);
+    if (this.size === 0) this.use(size);
     return this.size === size;
+  }
+
+  private use(size: number): void {
+    this.size = size;
+    const n = size > 0 ? metadataPieceCount(size) : 0;
+    this.pieces = new Array<Buffer | null>(n).fill(null);
+    this.contributors = new Array<string | null>(n).fill(null);
+    this.requested.clear();
+    this.exclusive = null;
+  }
+
+  /** Picks the size again from the peers still known (none stored yet, or after a failure). */
+  private reselect(): void {
+    if (this.size > 0 && [...this.sizes.values()].includes(this.size)) return;
+    const next = this.sizes.values().next().value;
+    this.use(next ?? 0);
   }
 
   /** Next piece to request from `peer` (pieces time out after `timeoutMs`), or null. */
   nextRequest(peer: string, timeoutMs = 10_000): number | null {
+    if (this.size === 0 || this.sizes.get(peer) !== this.size) return null;
     const now = this.now();
+    if (this.singleSource) {
+      if (this.exclusive && this.exclusive.peer !== peer && now - this.exclusive.at < timeoutMs * 3) return null;
+      if (this.exclusive?.peer !== peer) {
+        // The previous source stalled or left: its pieces cannot be mixed with another peer's.
+        if (this.exclusive) this.clearPieces();
+        this.exclusive = { peer, at: now };
+      }
+    }
     for (let i = 0; i < this.pieces.length; i++) {
       if (this.pieces[i]) continue;
       const r = this.requested.get(i);
@@ -162,29 +209,50 @@ export class MetadataAssembler {
     return null;
   }
 
-  /** Frees pieces requested from a peer that rejected us or disconnected. */
+  private clearPieces(): void {
+    this.pieces.fill(null);
+    this.contributors.fill(null);
+    this.requested.clear();
+  }
+
+  /** Frees pieces requested from a peer that rejected us; without `piece`, the peer left. */
   release(peer: string, piece?: number): void {
     for (const [i, r] of this.requested) if (r.peer === peer && (piece === undefined || piece === i)) this.requested.delete(i);
+    if (piece !== undefined) return;
+    this.sizes.delete(peer);
+    if (this.exclusive?.peer === peer) {
+      this.exclusive = null;
+      this.clearPieces();
+    }
+    if (!this.pieces.some((b) => b !== null)) this.reselect();
   }
 
   /**
-   * Stores a piece. Returns the full verified info dict once complete, `null` while pieces
-   * are missing. Throws (and resets) when the assembled data does not match the info-hash.
+   * Stores a piece `peer` sent. Returns the full verified info dict once complete, `null` while
+   * pieces are missing. Pieces not requested from this peer are ignored. Throws a
+   * `MetadataHashError` (and resets) when the result does not match the info-hash.
    */
-  add(piece: number, data: Buffer): Buffer | null {
+  add(peer: string, piece: number, data: Buffer): Buffer | null {
     if (this.size === 0 || piece < 0 || piece >= this.pieces.length) return null;
+    if (this.requested.get(piece)?.peer !== peer || this.pieces[piece]) return null;
     const expected = piece === this.pieces.length - 1 ? this.size - piece * METADATA_PIECE_SIZE : METADATA_PIECE_SIZE;
     if (data.length !== expected) return null;
     this.pieces[piece] = Buffer.from(data);
+    this.contributors[piece] = peer;
     this.requested.delete(piece);
+    if (this.exclusive) this.exclusive.at = this.now();
     if (this.pieces.some((p) => p === null)) return null;
     const full = Buffer.concat(this.pieces as Buffer[]);
     const hash = createHash('sha1').update(full).digest();
-    if (!hash.equals(this.infoHash)) {
-      this.pieces.fill(null);
-      throw new TorrentEngineError('peer', 'received metadata does not match the info-hash');
-    }
-    return full;
+    if (hash.equals(this.infoHash)) return full;
+    const from = [...new Set(this.contributors.filter((c): c is string => c !== null))];
+    const bad = from.length === 1 ? from : [];
+    // Several sources: retry one at a time so the next failure has a single culprit.
+    this.singleSource = from.length > 1;
+    for (const b of bad) this.sizes.delete(b);
+    this.use(0);
+    this.reselect();
+    throw new MetadataHashError(bad);
   }
 }
 

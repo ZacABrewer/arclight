@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { MediaInfo } from '@arclight/shared';
 import type { Probe, ProbeResult } from '../imports/index.js';
 import { needsFrameProbe, parseFfprobeOutput } from './parse.js';
+import { ffprobeArgs } from '../transcode/input-protocols.js';
 
 // Locating and running ffprobe. The process call is injectable (`exec`) so tests feed recorded
 // JSON instead of spawning anything.
@@ -119,7 +120,7 @@ export class FfprobeRunner implements MediaProber {
     const bin = await this.binary();
     const { stdout } = await this.exec(
       bin,
-      ['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams', path],
+      ffprobeArgs(['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams'], path),
       { timeoutMs: this.timeoutMs },
     );
     let frames: string | null = null;
@@ -128,7 +129,7 @@ export class FfprobeRunner implements MediaProber {
         frames = (
           await this.exec(
             bin,
-            ['-v', 'error', '-print_format', 'json', '-select_streams', 'v:0', '-read_intervals', '%+#1', '-show_frames', '-show_entries', 'frame=side_data_list', path],
+            ffprobeArgs(['-v', 'error', '-print_format', 'json', '-select_streams', 'v:0', '-read_intervals', '%+#1', '-show_frames', '-show_entries', 'frame=side_data_list'], path),
             { timeoutMs: this.timeoutMs },
           )
         ).stdout;
@@ -147,7 +148,7 @@ export class FfprobeRunner implements MediaProber {
   async probeDuration(path: string): Promise<number | null> {
     try {
       const bin = await this.binary();
-      const { stdout } = await this.exec(bin, ['-v', 'error', '-print_format', 'json', '-show_entries', 'format=duration', path], {
+      const { stdout } = await this.exec(bin, ffprobeArgs(['-v', 'error', '-print_format', 'json', '-show_entries', 'format=duration'], path), {
         timeoutMs: this.timeoutMs,
       });
       const d = Number((JSON.parse(stdout) as { format?: { duration?: string } }).format?.duration);

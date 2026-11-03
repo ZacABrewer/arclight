@@ -1,6 +1,9 @@
 import { networkInterfaces as osNetworkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { VpnError } from './errors.js';
-import { psQuote, type ShellRunner } from './shell.js';
+import type { ShellRunner } from './shell.js';
+
+/** The environment variable that carries the adapter name into PowerShell. */
+export const ADAPTER_ENV = 'ARCLIGHT_VPN_ADAPTER';
 
 // Finding the IPv4 address of a named network adapter. Node's os.networkInterfaces() is tried
 // first (it keys adapters by their friendly name on Windows too, and is cheap enough for the
@@ -25,8 +28,13 @@ function usable(ip: string): boolean {
   return IPV4.test(ip) && !ip.startsWith('169.254.') && !ip.startsWith('127.');
 }
 
+/**
+ * Adapter names are admin-set and reach PowerShell (through an environment variable) and netsh.
+ * Real names such as "Ethernet 2", "Wi-Fi", "ProtonVPN" or "vEthernet (WSL) #2" pass; control
+ * characters, backticks and ASCII or "smart" quotes (U+2018 to U+201E) are refused.
+ */
 export function assertInterfaceName(name: string): void {
-  if (name.trim() === '' || name.length > 256 || /[\u0000-\u001f"]/.test(name)) {
+  if (name.trim() === '' || name.length > 256 || /[\u0000-\u001f\u007f"`‘-„]/.test(name)) {
     throw new VpnError('config', `Invalid network adapter name "${name}".`);
   }
 }
@@ -65,12 +73,12 @@ export async function findInterfaceIPv4(name: string, deps: InterfaceProbeDeps):
   if (deps.platform !== 'win32') return null;
 
   try {
-    const ps = await deps.shell('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      `Get-NetIPAddress -InterfaceAlias ${psQuote(name)} -AddressFamily IPv4 -ErrorAction Stop | Select-Object -ExpandProperty IPAddress`,
-    ]);
+    // The name travels in an environment variable, so nothing in it can break out of the script.
+    const ps = await deps.shell(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', `Get-NetIPAddress -InterfaceAlias $env:${ADAPTER_ENV} -AddressFamily IPv4 -ErrorAction Stop | Select-Object -ExpandProperty IPAddress`],
+      { env: { [ADAPTER_ENV]: name } },
+    );
     if (ps.code === 0) {
       const ip = parseGetNetIpAddress(ps.stdout);
       if (ip) return ip;

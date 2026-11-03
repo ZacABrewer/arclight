@@ -1,10 +1,11 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AddMovieRequest, AddSeriesRequest, QUALITIES, QualityModel, type MonitorOption } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { qualityProfiles } from '../../db/schema.js';
+import { qualityProfiles, rootFolders as rootFoldersTable, series as seriesTable } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { LibraryError } from './errors.js';
 import * as lib from './schema.js';
@@ -189,6 +190,7 @@ describe('root folders', () => {
 
   it('rejects relative, missing and nested paths and duplicates', async () => {
     await expect(svc.addRootFolder(db, { path: 'relative/tv', mediaType: 'series' })).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(svc.addRootFolder(db, { path: '/', mediaType: 'series' })).rejects.toMatchObject({ code: 'VALIDATION' });
     await expect(svc.addRootFolder(db, { path: join(tmp, 'does-not-exist'), mediaType: 'series' })).rejects.toMatchObject({
       code: 'ROOT_FOLDER_INACCESSIBLE',
     });
@@ -488,10 +490,26 @@ describe('series updates', () => {
     await expect(svc.deleteSeries(db, s.id)).rejects.toThrow(/not found/);
   });
 
-  it('refuses to delete files when the series path is not inside its root folder', async () => {
+  it('refuses a hand-set path outside every root folder', () => {
     const s = addSeriesWith('all');
-    svc.updateSeries(db, s.id, { path: tmp }, NOW);
+    expect(() => svc.updateSeries(db, s.id, { path: tmp }, NOW)).toThrow(/inside a root folder/);
+    expect(() => svc.updateSeries(db, s.id, { path: tvRoot }, NOW)).toThrow(/inside a root folder/);
+    expect(svc.getSeries(db, s.id).path).toBe(s.path);
+  });
+
+  it('refuses to delete files when the series path is not inside its root folder, before touching the row', async () => {
+    const s = addSeriesWith('all');
+    db.update(seriesTable).set({ path: tmp }).where(eq(seriesTable.id, s.id)).run();
     await expect(svc.deleteSeries(db, s.id, { deleteFiles: true })).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect(svc.getSeries(db, s.id).path).toBe(tmp);
+  });
+
+  it('refuses to delete a folder whose root folder is no longer registered', async () => {
+    const s = addSeriesWith('all');
+    db.delete(rootFoldersTable).run();
+    await mkdir(s.path, { recursive: true });
+    await expect(svc.deleteSeries(db, s.id, { deleteFiles: true })).rejects.toMatchObject({ code: 'VALIDATION' });
+    await rm(s.path, { recursive: true });
   });
 });
 
@@ -703,6 +721,16 @@ describe('media files', () => {
     expect(svc.getMovie(db, m.id, NOW)).toMatchObject({ hasFile: false, movieFileId: null });
     await expect(rm(onDisk)).rejects.toThrow();
     await expect(svc.deleteMediaFile(db, mf.file.id)).rejects.toThrow(/not found/);
+  });
+
+  it('refuses to delete a media file from disk when it is outside every root folder', async () => {
+    const m = svc.addMovie(db, movieMeta(), movieReq(), NOW);
+    const outside = join(tmp, 'outside.mkv');
+    await writeFile(outside, 'data');
+    const mf = svc.addMediaFile(db, { mediaType: 'movie', movieId: m.id, relativePath: 'outside.mkv', path: outside, sizeBytes: 4, quality, languages: [] }, NOW);
+    await expect(svc.deleteMediaFile(db, mf.file.id, { deleteFromDisk: true })).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect(svc.getMovie(db, m.id, NOW)).toMatchObject({ hasFile: true });
+    await rm(outside); // still on disk
   });
 });
 

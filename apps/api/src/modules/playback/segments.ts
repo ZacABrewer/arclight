@@ -10,6 +10,7 @@ import { findRecapSteps, type RecapReference } from './recaps.js';
 import { buildBoundaryProbeArgs, ffmpegLog, type LogRunner, parseQuietGaps, probeWindow, snapToGap } from './segment-boundaries.js';
 import { videoFingerprints, videoSegmentOverrides, videoSegments, videoSegmentScans } from './segments-schema.js';
 import { fileStamp, type Limiter } from './video-stream.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Intro and credits detection. Segments come from three places, and per type the first one that
 // has it wins: a manual edit (admin), a chapter mark in the file, an audio fingerprint match.
@@ -73,8 +74,7 @@ export function buildAudioExtractArgs(input: string, audioOrdinal: number, start
     ...(startMs > 0 ? ['-ss', secs(startMs)] : []),
     '-t',
     secs(lengthMs),
-    '-i',
-    input,
+    ...fileInput(input),
     '-map',
     `0:a:${audioOrdinal}`,
     '-ac',

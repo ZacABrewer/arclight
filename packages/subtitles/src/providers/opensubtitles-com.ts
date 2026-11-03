@@ -184,7 +184,10 @@ export class OpenSubtitlesComProvider extends BaseProvider {
     const body = await this.parseJson<{ token?: string; base_url?: string }>(res);
     if (!body.token) throw this.error('bad-response', 'login response has no token');
     this.token = body.token;
-    this.host = (body.base_url || DEFAULT_HOST).replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    // The API host comes from the login response and gets the token and API key on every call,
+    // so only an opensubtitles.com host (e.g. vip-api.opensubtitles.com) is accepted.
+    const host = (body.base_url || DEFAULT_HOST).replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
+    this.host = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.opensubtitles\.com$/.test(host) ? host : DEFAULT_HOST;
     this.tokenAt = this.now();
   }
 
@@ -196,7 +199,7 @@ export class OpenSubtitlesComProvider extends BaseProvider {
     const s = res.status;
     let body: Record<string, unknown> = {};
     try {
-      body = JSON.parse(await res.text()) as Record<string, unknown>;
+      body = JSON.parse(await this.readText(res)) as Record<string, unknown>;
     } catch {
       // non-JSON error body
     }
@@ -377,9 +380,12 @@ export class OpenSubtitlesComProvider extends BaseProvider {
     const reset = body.reset_time_utc ? Date.parse(body.reset_time_utc) : NaN;
     this.lastQuota = { requests: body.requests, remaining: body.remaining, resetAt: Number.isNaN(reset) ? undefined : reset };
     if (!body.link) throw this.error('bad-response', 'download response has no link');
+    if (!/^https?:\/\//i.test(body.link)) throw this.error('bad-response', 'download link is not an http(s) URL');
+    // The link points at the provider's file host, taken from the response: it is fetched with
+    // no API key or session token (only the default User-Agent).
     const linkRes = await this.request(body.link);
     if (!linkRes.ok) throw await this.mapError(linkRes);
-    const bytes = new Uint8Array(await linkRes.arrayBuffer());
+    const bytes = await this.readBytes(linkRes);
     return this.file(bytes, body.file_name ?? (typeof candidate.token?.fileName === 'string' ? candidate.token.fileName : undefined));
   }
 }

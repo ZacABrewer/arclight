@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from 'node:child_process';
+import { scriptEnvironment } from '@arclight/shared';
 import type { CustomScriptSettings } from '../settings.js';
 import { NotificationError, type NotificationEvent } from '../types.js';
 import { ALL_EVENTS, BaseAgent, type AgentDeps } from './base.js';
@@ -109,7 +110,8 @@ export class CustomScriptAgent extends BaseAgent {
   }
 
   protected deliver(event: NotificationEvent): Promise<void> {
-    const env: NodeJS.ProcessEnv = { ...process.env, ...eventToEnv(event) };
+    // A stripped environment: standard variables plus the event's, not the server's secrets.
+    const env: NodeJS.ProcessEnv = scriptEnvironment(process.env, eventToEnv(event));
     const args = splitArguments(this.settings.arguments);
 
     return new Promise<void>((resolve, reject) => {

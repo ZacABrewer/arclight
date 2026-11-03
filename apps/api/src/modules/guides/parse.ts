@@ -1,3 +1,4 @@
+import { validateCustomFormat } from '@arclight/profiles-engine';
 import { CustomFormatInput, type CustomFormatSpec, type GuideApp } from '@arclight/shared';
 import { mapSpec } from '../migrate/mappers/custom-formats.js';
 
@@ -57,6 +58,10 @@ export function parseGuideFormat(raw: unknown, app: GuideApp, file: string): Gui
     specifications,
   });
   if (!parsed.success) return `${file}: ${parsed.error.issues[0]?.message ?? 'invalid format'}`;
+  // A pattern that could backtrack for ever on a hostile release title refuses the whole
+  // format: dropping only that specification would change what the format matches.
+  const issues = validateCustomFormat(parsed.data);
+  if (issues.length) return `${file}: ${issues[0]!.message}`;
 
   const scores: Record<string, number> = {};
   if (isObj(raw.trash_scores)) {

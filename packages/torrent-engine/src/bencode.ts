@@ -242,7 +242,8 @@ export function getString(d: BDict, key: string): string | undefined {
 export function getInt(d: BDict, key: string): number | undefined {
   const v = d[key];
   if (typeof v === 'number') return v;
-  if (typeof v === 'bigint') return Number(v);
+  // A bigint is outside the safe integer range: Number() would round it silently, so a
+  // length or offset could come out different from what the torrent says. Treat it as missing.
   return undefined;
 }
 

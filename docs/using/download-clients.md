@@ -117,7 +117,7 @@ Drives the engine agent on a seedbox or another Arclight. Setup, the agent's env
 | Setting | Default | What it does |
 |---|---|---|
 | Agent URL | `http://localhost:7879` (template) | `http://seedbox:7879` for the standalone agent, or `http://other-arclight:7878/api/v1/engine-agent` for another Arclight |
-| Token | empty | The agent's `AGENT_TOKEN`, or the other Arclight's API key. Never shown again after saving |
+| Token | empty | The agent's `AGENT_TOKEN`, or the other Arclight's agent token (its Remote engine panel). Never shown again after saving |
 | Category | `arclight` | Category on the agent |
 | Post-Import Category (advanced) | none | Category after import |
 | Pull Mode | Off | Copy finished downloads from the agent over HTTP (resumable, SHA-256 checked) into the local folder before importing. Off means the agent shares storage with Arclight |
@@ -125,7 +125,7 @@ Drives the engine agent on a seedbox or another Arclight. Setup, the agent's env
 | Copy Limit (KiB/s) (advanced) | empty (unlimited) | Pull mode: throttle for copying |
 | Follow VPN Port (advanced) | Off | Apply this Arclight's VPN forwarded port to the agent. Only for an agent behind the same VPN connection |
 
-To make this Arclight usable as an agent for another one, turn on **Act as remote engine** in the Remote engine panel on Settings > Download Clients. The panel shows the endpoint address to enter on the other side. The other instance signs in with this instance's API key (Settings > Security) as the token.
+To make this Arclight usable as an agent for another one, turn on **Act as remote engine** in the Remote engine panel on Settings > Download Clients. The panel shows the endpoint address and the **agent token** to enter on the other side (**Show**, **Copy**, and **Regenerate** to replace it). The token opens only the remote engine routes, not the rest of the API. Instances that were already remote engines before 0.24 also show **Also accept the API key (deprecated)**, on, so remotes set up with the API key keep working; switch them to the agent token, then turn it off. See [Upgrading from 0.23](../REMOTE-ENGINE.md#upgrading-from-023).
 
 ## Remote path mappings
 
@@ -172,7 +172,9 @@ These settings apply to the built-in engine only. The top of the page shows live
 | TCP | On | Accept and open TCP peer connections |
 | uTP | On | Accept and open uTP peer connections on the UDP port |
 | IPv6 | On | Also listen on IPv6 and use IPv6 peers when available |
-| Web seed connections | 4 | Concurrent HTTP requests to web seeds per torrent (0 to 32). 0 turns web seeds off |
+| Web seed connections | 4 | Pieces fetched from web seeds at once per torrent (0 to 32; fewer for pieces over 16 MiB). 0 turns web seeds off |
+| Local network peers | Off | Connect to peers on loopback, LAN or other private addresses that trackers, DHT and peer exchange hand out. See [Local network addresses](#local-network-addresses) |
+| Local network trackers and web seeds | Off | Allow trackers and web seeds on loopback, LAN or other private addresses. See [Local network addresses](#local-network-addresses) |
 
 If you switch both TCP and uTP off, the page warns that no peer can connect. The Resume data folder (fast-resume data and saved `.torrent` files, inside your config folder) is shown but cannot be changed.
 
@@ -258,6 +260,19 @@ A torrent whose resume data still matches its files does not use a slot: it is a
 ### Magnets without metadata
 
 A magnet link has no file list until a peer sends it. If no peer has it, the torrent would wait for days. After **Magnet metadata timeout** minutes of active time (only time the torrent is running counts) the torrent fails with "no metadata after N minutes: no peers had this magnet". Arclight then handles it like any failed download: it is removed (when **Remove Failed** is on) and, with automatic re-download of failed downloads on (the default), the release is blocklisted and a different one is searched for. Set the timeout to 0 to wait forever. See [Magnet failed: no metadata](../TROUBLESHOOTING.md#magnet-no-metadata).
+
+### Local network addresses
+
+A `.torrent` file, a magnet link, a tracker or another peer can name any address, including ones on your own network (your router, NAS admin pages, other services). So by default the engine only talks to public addresses that came from those sources:
+
+- Trackers and web seeds on loopback, LAN (10.x, 172.16-31.x, 192.168.x), link-local and other private or reserved addresses are refused ("tracker refused: ..."). This is checked again on every redirect and after the name is looked up, so a public name that points at a private address is refused too.
+- Peers with such addresses from trackers, DHT, peer exchange and the `x.pe` part of a magnet are ignored.
+
+If you run your own tracker or seedbox at home, turn on **Local network trackers and web seeds**. Peers handed out by a tracker that is itself on a local address are then used as well, so a home tracker works without the peer setting. Turn on **Local network peers** only if you also want LAN peers from DHT, peer exchange and public trackers (for example two clients on the same network that find each other through a public swarm). Both apply to the trackers and web seeds of torrents started after the change; peer addresses are filtered from then on. Binding to the VPN is not affected: the engine still sends everything from the tunnel address.
+
+The engine also protects itself from peers that send bad data: a peer IP that took part in 3 pieces that failed the hash check, or that sent magnet metadata that does not match the info-hash, is banned for that torrent ("banned peer ... for 1 h: ..." in the log). Bans are temporary, because many people can share one address (mobile networks, VPN exits): the first ban lasts 1 hour and each repeat ban of the same IP lasts twice as long, up to 24 hours. A day after its last ban ends, an IP starts again at 1 hour.
+
+Web seeds download whole pieces. Each piece is checked against its hash in memory and written only if it matches, so a web server that sends wrong data never changes your files. A web seed with 3 failed pieces is turned off for that torrent. Web seeds are not used for torrents with pieces over 32 MiB (the web seed row shows "not used: pieces are over 32 MiB"); with large pieces, fewer pieces are fetched at once so at most 64 MiB is held in memory per torrent.
 
 ### Resume data and shutdown
 

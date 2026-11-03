@@ -2,6 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { APP_TOKEN_PREFIX, Permission, type AppArea } from '@arclight/shared';
 import { AuthError, type AuthService, type RequestAuth, type RequestCredentials } from './service.js';
 import { readCookie, SESSION_COOKIE, setSessionCookie } from './cookies.js';
+import { isOwnOutboundSocket, OUTBOUND_HEADER, trackOutboundSockets } from '@arclight/net';
+
+trackOutboundSockets();
 
 /**
  * Who besides admins may call a route. A route without it is admin-only for every method,
@@ -114,8 +117,11 @@ export function profileMay(method: string, routeUrl: string | undefined): boolea
   });
 }
 
-/** Route prefixes that answer without credentials; the setup routes guard themselves. */
-export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
+/**
+ * Route prefixes that answer without credentials; the setup routes guard themselves, and the
+ * engine-agent protocol checks its own agent token (a secret that opens only those routes).
+ */
+export const PUBLIC_PREFIXES: readonly string[] = ['/setup/', '/engine-agent/'];
 
 /** Routes a Jellyfin plugin key may call (decided on the matched route pattern). */
 export const PLUGIN_ROUTE_PREFIX = `${API_PREFIX}/jellyfin/`;
@@ -173,7 +179,14 @@ export const SECRET_ROUTES: ReadonlySet<string> = new Set([
   `${API_PREFIX}/apikeys/:id`,
   `${API_PREFIX}/config/export`,
   `${API_PREFIX}/system/backup/:id/download`,
+  // The engine agent token (shown and replaced there).
+  `${API_PREFIX}/settings/engineagent`,
+  `${API_PREFIX}/settings/engineagent/token`,
   '/api/v3/config/host',
+  // The folder browser lists the server's disks: not for read-scope keys (DATA-46).
+  `${API_PREFIX}/filesystem`,
+  `${API_PREFIX}/filesystem/mkdir`,
+  '/api/v3/filesystem',
 ]);
 
 /**
@@ -308,10 +321,22 @@ export function credentialsOf(req: FastifyRequest): RequestCredentials {
     bearer: parseBearer(req.headers.authorization),
     // The socket peer plus every forwarded address; all must be local for the bypass.
     addresses: addressesOf(req),
+    selfRequest: isSelfRequest(req),
     // Forward-auth trusts the TCP peer only: X-Forwarded-For is whatever the client sent.
     peer: (req.socket as FastifyRequest['socket'] | undefined)?.remoteAddress,
     header: (name) => firstString(req.headers[name.toLowerCase()]),
   };
+}
+
+/**
+ * A request Arclight made to itself: the TCP peer is one of this process's own outbound
+ * sockets, or the request carries the safe fetch's marker header (looped back through a
+ * reverse proxy). Such requests never get the local-address bypass (DATA-01).
+ */
+function isSelfRequest(req: FastifyRequest): boolean {
+  if (req.headers[OUTBOUND_HEADER] !== undefined) return true;
+  const socket = req.socket as FastifyRequest['socket'] | undefined;
+  return isOwnOutboundSocket(socket?.remoteAddress, socket?.remotePort);
 }
 
 /** Peer and forwarded addresses; none (so no local bypass) when the request has no socket. */

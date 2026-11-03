@@ -281,7 +281,7 @@ export function planImport(db: Db, raw: unknown, opts: ImportOptions = {}): { ou
         continue;
       }
       const entry: unknown = second.data;
-      for (const c of def.check?.(entry) ?? []) {
+      for (const c of def.check?.(entry, key) ?? []) {
         (c.level === 'error' ? errors : warnings).push({ path: `${path}.${c.field}`, message: c.message });
       }
       for (const ref of def.refsOf(entry)) {

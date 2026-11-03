@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sealedJson } from '../../db/secret-box.js';
 import type {
   ImportListCleanupAction,
   ImportListFilters,
@@ -30,7 +31,7 @@ export const importLists = sqliteTable('import_lists', {
   minimumAvailability: text('minimum_availability').$type<MinimumAvailability>().notNull().default('released'),
   mediaType: text('media_type').$type<ImportListMediaType>().notNull(),
   /** Per-implementation settings (secrets in clear; masked by the service on read). */
-  settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  settings: sealedJson('settings').$type<Record<string, unknown>>().notNull(),
   /** Hours between syncs of this list; null = the global `importLists.syncIntervalHours`. */
   syncIntervalHours: integer('sync_interval_hours'),
   filters: text('filters', { mode: 'json' }).$type<ImportListFilters>().notNull().default({}),

@@ -15,6 +15,12 @@ import {
 } from '@arclight/shared';
 import type { FeedStatusReport } from '../../feeds.js';
 import type { DefinitionStore } from './definitions.js';
+import { readLimitedText, SafeFetchError } from '@arclight/net';
+
+/** Largest feed index read (thousands of entries stay far below it). */
+const MAX_FEED_INDEX_BYTES = 4 * 1024 * 1024;
+/** Largest single definition file read. */
+const MAX_FEED_FILE_BYTES = 2 * 1024 * 1024;
 
 // Definition feed: a remote `index.json` ({ schemaVersion, definitions: [{ id, version, file,
 // sha256 }] }) plus the YAML files it names. Changed files are downloaded into
@@ -238,8 +244,9 @@ export class DefinitionFeed {
     if (!res.ok) return fail(`${indexUrl}: HTTP ${res.status}`);
     let raw: unknown;
     try {
-      raw = JSON.parse(await res.text()) as unknown;
-    } catch {
+      raw = JSON.parse(await readLimitedText(res, MAX_FEED_INDEX_BYTES)) as unknown;
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'tooLarge') return fail(`${indexUrl}: ${err.message}`);
       return fail(`${indexUrl}: not JSON`);
     }
     const parsed = DefinitionFeedIndex.safeParse(raw);
@@ -269,7 +276,7 @@ export class DefinitionFeed {
       try {
         const fr = await this.get(fileUrl, signal);
         if (!fr.ok) throw new Error(`HTTP ${fr.status}`);
-        text = await fr.text();
+        text = await readLimitedText(fr, MAX_FEED_FILE_BYTES);
       } catch (err) {
         result.rejected.push({ id: entry.id, version: entry.version, reason: `download failed: ${err instanceof Error ? err.message : String(err)}` });
         continue;

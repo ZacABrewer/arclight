@@ -19,6 +19,7 @@ import { booksFromRows } from '../audiobooks/service.js';
 import { podcastCalendarItems } from '../podcasts/service.js';
 import { albumStatistics } from '../music/statistics.js';
 import { getSection } from '../settings/service.js';
+import { sealString } from '../../db/secret-box.js';
 
 // Calendar over the library tables: episodes by air date, movies by each of their release
 // dates, while `features.music` is on albums by release date and, while `features.audiobooks`
@@ -267,14 +268,14 @@ export class CalendarService {
 
   // ---- iCal token ----------------------------------------------------------------------------
 
-  /** The per-install feed token, created on first use. */
+  /** The per-install feed token, created on first use (sealed at rest: the row value is the bare string). */
   icsToken(): string {
     const row = this.db.select().from(settings).where(eq(settings.key, ICS_TOKEN_KEY)).get();
     if (typeof row?.value === 'string' && row.value.length > 0) return row.value;
     const token = randomBytes(24).toString('hex');
     this.db
       .insert(settings)
-      .values({ key: ICS_TOKEN_KEY, value: token, updatedAt: this.now().toISOString() })
+      .values({ key: ICS_TOKEN_KEY, value: sealString(token), updatedAt: this.now().toISOString() })
       .onConflictDoNothing()
       .run();
     // Another request may have won the race; re-read so everyone agrees.
@@ -287,8 +288,8 @@ export class CalendarService {
     const token = randomBytes(24).toString('hex');
     this.db
       .insert(settings)
-      .values({ key: ICS_TOKEN_KEY, value: token, updatedAt: this.now().toISOString() })
-      .onConflictDoUpdate({ target: settings.key, set: { value: token, updatedAt: this.now().toISOString() } })
+      .values({ key: ICS_TOKEN_KEY, value: sealString(token), updatedAt: this.now().toISOString() })
+      .onConflictDoUpdate({ target: settings.key, set: { value: sealString(token), updatedAt: this.now().toISOString() } })
       .run();
     return token;
   }

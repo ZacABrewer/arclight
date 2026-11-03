@@ -59,6 +59,12 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/user/me/apikeys': 'portal',
   'DELETE /api/v1/user/me/apikeys/:id': 'portal',
   'GET /api/v1/calendar/feed.ics': 'public',
+  // engine-agent protocol: the route guard checks the agent token (engine-agent/routes.ts)
+  'GET /api/v1/engine-agent/events': 'public',
+  'GET /api/v1/engine-agent/*': 'public',
+  'POST /api/v1/engine-agent/*': 'public',
+  'PUT /api/v1/engine-agent/*': 'public',
+  'DELETE /api/v1/engine-agent/*': 'public',
   // the Arclight player app: password sign-in and QR pairing (rate-limited), then a device token
   'POST /api/v1/app/sign-in': 'public',
   'POST /api/v1/app/pair': 'public',
@@ -705,6 +711,23 @@ describe('first launch', () => {
     expect(folder.statusCode).toBe(403);
     const noAdmin = await h.app.inject({ method: 'POST', url: '/api/v1/setup/complete', payload: { tmdbApiKey: 'k' } });
     expect(noAdmin.statusCode).toBe(400);
+  });
+});
+
+describe('local-address bypass and requests to itself (DATA-01)', () => {
+  it('lets a local browser in but never a request this process made to itself', async () => {
+    const h = await harness();
+    setSection(h.db, 'security', SecuritySettings.parse({ setupComplete: true, method: 'forms', requireForLocal: false }));
+    // Someone on the LAN (or on the same machine, another process): the opted-in bypass applies.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '127.0.0.1' })).statusCode).toBe(200);
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '192.168.1.5' })).statusCode).toBe(200);
+    // Looped back through a reverse proxy: the safe fetch's marker header is still there.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/series', remoteAddress: '127.0.0.1', headers: { 'x-arclight-outbound': '1' } })).statusCode).toBe(401);
+    // A real loopback connection opened by this process (any client: fetch here).
+    await h.app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (h.app.server.address() as { port: number }).port;
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/series`);
+    expect(res.status).toBe(401);
   });
 });
 

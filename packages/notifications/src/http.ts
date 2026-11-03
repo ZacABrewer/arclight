@@ -3,11 +3,16 @@
  * timeout, and maps transport failures and non-2xx responses to `NotificationError`.
  */
 
+import { readLimited } from '@arclight/net';
 import { NotificationError, type NotificationAgentKind, type NotificationErrorCode } from './types.js';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
+/** Largest response body a notification service may send back (they answer with a few KB). */
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
+/** How much of an error body is read for the message. */
+const ERROR_SNIPPET_BYTES = 4096;
 
 export interface HttpRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -59,7 +64,15 @@ export async function httpRequest(
     };
     if (options.body !== undefined) init.body = options.body;
     response = await fetchImpl(url, init);
+    // The body is read here, under the same timer and with a size cap, so a remote that
+    // streams slowly or endlessly cannot hold the request (or memory) open.
+    if (response.ok || options.acceptStatuses?.includes(response.status)) {
+      const body = await readLimited(response, MAX_RESPONSE_BYTES);
+      const noBody = response.status === 204 || response.status === 205 || response.status === 304;
+      return new Response(noBody ? null : new Uint8Array(body), { status: response.status, statusText: response.statusText, headers: response.headers });
+    }
   } catch (error) {
+    if (error instanceof NotificationError) throw error;
     if (controller.signal.aborted) {
       throw new NotificationError(agent, 'timeout', `Request to ${label} timed out`, { cause: error });
     }
@@ -69,8 +82,6 @@ export async function httpRequest(
   } finally {
     clearTimeout(timer);
   }
-
-  if (response.ok || options.acceptStatuses?.includes(response.status)) return response;
 
   const snippet = await safeText(response);
   throw new NotificationError(
@@ -89,13 +100,28 @@ export async function readJson<T>(response: Response, agent: NotificationAgentKi
   }
 }
 
+/** The start of an error body, for the message. Never reads more than a few KB. */
 async function safeText(response: Response): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const timer = setTimeout(() => void reader.cancel().catch(() => undefined), 5_000);
   try {
-    const text = await response.text();
-    return text.replace(/\s+/g, ' ').trim().slice(0, 200);
+    while (total < ERROR_SNIPPET_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
   } catch {
-    return '';
+    // Keep what arrived.
+  } finally {
+    clearTimeout(timer);
+    await reader.cancel().catch(() => undefined);
   }
+  const text = Buffer.concat(chunks).subarray(0, ERROR_SNIPPET_BYTES).toString('utf8');
+  return text.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 /** Host + path only: never echo query strings, which may carry tokens. */

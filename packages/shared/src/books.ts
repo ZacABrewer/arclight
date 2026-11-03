@@ -550,7 +550,7 @@ export const BooksLibraryApp = z.object({
   name: z.string().min(1),
   implementation: BooksLibraryAppImplementation,
   enabled: z.boolean(),
-  url: z.string().url(),
+  url: z.string().url({ protocol: /^https?$/ }),
   apiKey: z.string(),
   username: z.string(),
   password: z.string(),

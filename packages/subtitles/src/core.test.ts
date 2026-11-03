@@ -196,6 +196,16 @@ describe('languages', () => {
     expect(parseLanguageTag('English')).toBe('en');
     expect(parseLanguageTag('Farsi')).toBe('fa');
     expect(parseLanguageTag('und')).toBeUndefined();
+    expect(parseLanguageTag('pt-419')).toBe('pt-419');
+  });
+  it('refuses subtags that are neither a script nor a region (DATA-29)', () => {
+    // The tag becomes part of a subtitle file name: no path pieces, no stream names.
+    expect(parseLanguageTag('en-/../')).toBeUndefined();
+    expect(parseLanguageTag('en-a:bc')).toBeUndefined();
+    expect(parseLanguageTag('en-a.bc')).toBeUndefined();
+    expect(parseLanguageTag('en-12ab')).toBe('en');
+    expect(parseLanguageTag('sr-Latn')).toBe('sr-Latn');
+    expect(parseLanguageTag('en-gb')).toBe('en-GB');
     expect(languageName('pt-BR')).toBe('Portuguese (Brazil)');
   });
   it('language strings (R1.4)', () => {

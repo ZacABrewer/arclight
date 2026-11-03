@@ -155,6 +155,26 @@ filtered: non-admins get their own request and issue events (everyone's with Vie
 View issues), library events with the Library, Calendar or Wanted area and queue, download,
 history, release and import events with the Activity area; nothing else.
 
+Local bypass and self-requests: with "Require for local addresses" off, local peers skip sign-in,
+but never a request this Arclight process made to itself. The server records the local address and
+port of every outbound socket it opens and refuses the bypass when an incoming request's TCP peer
+is one of them; every request made through the safe fetch (`@arclight/net`) also carries
+`x-arclight-outbound: 1`, and a request with that header never gets the bypass (this covers a loop
+back through a reverse proxy).
+
+WebSocket limits (all sockets: `/events`, `/log/stream`, `/engine-agent/events`): frames from the
+client may be at most 64 KiB (larger ones close the socket with code 1009); a client that falls
+more than 1 MB behind is closed with code 1013 and should reconnect; at most 10 sockets are open
+per user (or per credential type for keys), and the next one is closed with 1013.
+
+The folder browser (`GET /filesystem`, `POST /filesystem/mkdir`, compat `GET /api/v3/filesystem`)
+is a secret route: personal keys need the admin scope, and app device tokens cannot call it.
+
+Push subscriptions (`POST /push/subscription`): `endpoint` must be `https://`. For non-admins it
+must be on a browser push service (`fcm.googleapis.com`, `android.googleapis.com`,
+`*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`); admins may use any
+public HTTPS host. Local addresses are refused (`400`).
+
 Media-server sign-in (`POST /auth/login` with a media-server method, `POST /auth/plex/poll`)
 never signs in an admin (`403`), and only ever creates `role: 'user'` accounts with no app
 access and no local password (`localPassword: false`). `PUT /user/:id` refuses to promote such
@@ -2982,7 +3002,7 @@ table (`DiscordBotSettings`); saving restarts the bot.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId}`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
+| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId, allowUnlinkedSearch}`; `allowUnlinkedSearch` (default `false`, API only) lets users who have not run `/link` use `/search`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
 | GET | `/discordbot/status` | Admin. `DiscordBotStatus`: `state` (`disabled`/`connecting`/`connected`/`reconnecting`/`error`), bot user, `connectedAt`, `lastError`, `reconnectAttempts`, `commandsRegistered`, `linkedUsers` |
 | POST | `/discordbot/test` | Admin. Optional `DiscordBotSettings` body (mask = stored token). `GET /users/@me` with the token, then posts a test embed to `requestChannelId` when set → `DiscordBotTestResult` |
 | POST | `/user/me/discord/link-code` | Signed-in user (not API key). One-time 8-character code valid 10 minutes (a newer code replaces older ones) → `DiscordLinkCode` `{code, expiresAt, linkedDiscordUserId}` |
@@ -2999,8 +3019,11 @@ original response is edited):
 | `/link <code>` | Links the caller to the Arclight user who created the code |
 | `/request <title> [year] [4k]` | TMDB multi-search; up to 5 matches as buttons. A click creates the request as the linked user (`requests.create`, series request all seasons), so permissions, quotas, approval policies and content caps apply. Unlinked users are told to create a code under Profile > Discord |
 | `/status [title]` | The linked user's requests (up to 10), filtered by title |
-| `/search <title>` | TMDB matches with library / request status (normal and 4K) |
+| `/search <title>` | TMDB matches with library / request status (normal and 4K). Needs a linked account unless `allowUnlinkedSearch` is on |
 | `/pending` | Up to 5 pending requests with Approve/Decline buttons. Allowed for linked users with `MANAGE_REQUESTS` (who act as themselves) and for members holding `adminRoleId` (who act as the system; `modifiedBy` stays empty). Checked again on each click |
+
+Title lookups (`/search` and the search step of `/request`, both TMDB calls) are limited to 5
+per Discord user per minute; further calls get a "searching too often" reply.
 
 Request events (`created`, `approved`, `completed`) are posted as embeds to `requestChannelId`
 through `POST /channels/{id}/messages` with the bot token. Health check
@@ -3011,13 +3034,13 @@ fatal close code.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/torrent` | Engine settings plus `effectiveDownloadsRoot` and `resumeDir`. The transport options `encryption` (`preferred` / `required` / `disabled`), `tcp`, `utp`, `ipv6` and `webSeedConnectionsPerTorrent` are filled with the engine defaults when never saved. Also `diskGuard` (boolean, default true), `maxActiveChecks` (1 to 16, default 2) and `metadataTimeoutMinutes` (0 to 10080, default 60, 0 = never) |
-| PUT | `/settings/torrent` | Any subset; omitted keys keep their stored value. Applied live: limits, queue, `diskGuard`, `maxActiveChecks`, `metadataTimeoutMinutes`, `encryption` and `webSeedConnectionsPerTorrent` at once; `tcp` / `utp` / `ipv6` re-open the sockets on the same port; `dht` restarts the engine |
+| GET | `/settings/torrent` | Engine settings plus `effectiveDownloadsRoot` and `resumeDir`. The transport options `encryption` (`preferred` / `required` / `disabled`), `tcp`, `utp`, `ipv6`, `webSeedConnectionsPerTorrent`, `localPeers` and `localTrackers` (both default false: loopback / LAN peers from trackers, DHT and PEX, and loopback / LAN trackers and web seeds, are refused) are filled with the engine defaults when never saved. Also `diskGuard` (boolean, default true), `maxActiveChecks` (1 to 16, default 2) and `metadataTimeoutMinutes` (0 to 10080, default 60, 0 = never) |
+| PUT | `/settings/torrent` | Any subset; omitted keys keep their stored value. Applied live: limits, queue, `diskGuard`, `maxActiveChecks`, `metadataTimeoutMinutes`, `encryption`, `webSeedConnectionsPerTorrent`, `localPeers` and `localTrackers` at once (the last one for torrents started afterwards); `tcp` / `utp` / `ipv6` re-open the sockets on the same port; `dht` restarts the engine |
 | GET | `/torrent/status` | Engine state, bound address/port, VPN binding, `dhtNodes`, `dht6Nodes`, `utpConnections`, `peers`, `encryptedPeers`, `encryptedPeerRatio` (0..1), rates, counts per state. While the VPN tunnel guard limits the engine: `tunnelGuard` (`downloadLimit`, `uploadLimit`, `connectionLimit`; bytes/s, null = not limited). With the disk guard on: `diskGuard` (`downloadLimit` in bytes/s or null when not limiting, `writeRate`, `backlogBytes`, `backlogLimitBytes`, `checksActive`, `checksQueued`). `limits` holds the configured `maxConnections`, `maxConnectionsPerTorrent`, `maxActiveDownloads` and `maxActiveSeeds` |
 | GET | `/torrent/torrents` | `?id=&category=`: detailed torrents. Each peer has `encrypted` and `transport` (`tcp` / `utp`); each torrent has `webSeeds` (url, rate, downloaded, active requests, failures, `retryAt`, `lastError`), `superSeeding` and `limits` |
 | POST | `/torrent/:id/recheck` | Re-hash the payload |
 | POST | `/torrent/:id/pause` / `resume` | Pause / resume (resume is 409 while the VPN kill switch holds) |
-| POST | `/torrent/:id/move` | `{ savePath }` |
+| POST | `/torrent/:id/move` | `{ savePath }`: an absolute folder inside the engine downloads folder, a built-in client's save or category folder, or a library root folder (compared by real path); anything else is 400 |
 | POST | `/torrent/:id/priority` | `{ files?: [{ index, priority 0..7 }], sequential? }` |
 | POST | `/torrent/:id/limits` | `{ uploadLimit?, downloadLimit?, peerUploadLimit?, peerDownloadLimit? }` in bytes/s (0 = unlimited); omitted keys keep their value; persisted in the resume data |
 | POST | `/torrent/:id/superseed` | `{ enabled }`: BEP 16 super-seeding |
@@ -3046,9 +3069,10 @@ trust a payload whose file sizes match (fast-resume data with every piece) and q
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/engineagent` | `{ enabled, path, engineRunning }` |
-| PUT | `/settings/engineagent` | `{ enabled? }` (admin) |
-| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the API key in `X-Api-Key` (a browser session is refused, 401). Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
+| GET | `/settings/engineagent` | `{ enabled, acceptApiKey, path, engineRunning, token, apiKeyLastUsedAt }` (admin; sessions and admin-scoped keys only, since it holds the agent token) |
+| PUT | `/settings/engineagent` | `{ enabled?, acceptApiKey? }` (admin) |
+| POST | `/settings/engineagent/token` | Replaces the agent token; returns the settings (admin) |
+| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the agent token in `X-Agent-Token` or `Authorization: Bearer` (a browser session is refused, 401). The token opens no other route. While `acceptApiKey` is on (instances upgraded from 0.23 with the agent on), the API key is also accepted and answers carry `x-agent-deprecation: api-key`. Repeated wrong tokens from one address get 429 `rate-limited` with `Retry-After`. Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
 | GET (WS) | `/engine-agent/events` | Agent event stream (`hello`, `added`, `removed`, `stateChange`, `completed`, `metadata`, `listenPort`) |
 
 The `remoteEngine` download client kind has settings `url`, `token` (write-only, masked like

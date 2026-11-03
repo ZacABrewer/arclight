@@ -10,6 +10,7 @@ import type {
   SubtitleQuery,
 } from '../types.js';
 import { BaseProvider, languageSet } from './base.js';
+import { fileInput } from '../ffmpeg-input.js';
 
 // Whisper: generate subtitles from the audio with a user-run Whisper ASR web service
 // (asr + detect-language endpoints). Provider of last resort.
@@ -48,7 +49,7 @@ export function buildAudioExtractArgs(o: AudioArgsInput): string[] {
   return [
     o.ffmpegPath ?? 'ffmpeg',
     '-nostdin', '-hide_banner', '-loglevel', 'error',
-    '-i', o.input,
+    ...fileInput(o.input),
     '-map', o.audioStreamLanguage3 ? `0:a:m:language:${o.audioStreamLanguage3}?` : '0:a:0',
     '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
     '-f', o.container ?? 'wav',
@@ -213,7 +214,7 @@ export class WhisperProvider extends BaseProvider {
     }
     const res = await this.request(this.asrUrl(candidate), { method: 'POST', body: this.form(audio), timeoutMs: this.transcribeTimeoutMs });
     if (!res.ok) throw this.statusError(res, 'asr');
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = await this.readBytes(res);
     return { bytes, format: 'srt', encoding: 'utf-8' };
   }
 

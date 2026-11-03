@@ -384,3 +384,48 @@ describe('IndexerCatalogueEmpty health check', () => {
     expect(await run({ enabled: true, lastSuccessAt: '2026-10-26T00:00:00Z', files: 5, supported: 3 })).toEqual([]);
   });
 });
+
+describe('community catalogue: file URLs come from the remote listing', () => {
+  it('fetches LAN files only from the listing origin; a file on another loopback port is refused with zero hits', async () => {
+    const { createServer } = await import('node:http');
+    const good = await fixture('alphatracker.yml');
+    let stubHits = 0;
+    const stub = createServer((_req, res) => {
+      stubHits++;
+      res.end(good);
+    });
+    await new Promise<void>((r) => stub.listen(0, '127.0.0.1', r));
+    const stubPort = (stub.address() as { port: number }).port;
+    const listing = createServer((req, res) => {
+      const origin = `http://127.0.0.1:${(listing.address() as { port: number }).port}`;
+      if (req.url === '/listing') {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify([
+          { name: 'alphatracker.yml', type: 'file', sha: gitBlobSha1(Buffer.from(good)), download_url: `${origin}/raw/alphatracker.yml` },
+          { name: 'evil.yml', type: 'file', sha: gitBlobSha1(Buffer.from(good)), download_url: `http://127.0.0.1:${stubPort}/evil.yml` },
+        ]));
+      } else if (req.url === '/raw/alphatracker.yml') res.end(good);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => listing.listen(0, '127.0.0.1', r));
+    try {
+      const config = await mkdtemp(join(tmpdir(), 'arclight-community-'));
+      dirs.push(config);
+      const customDir = join(config, 'definitions');
+      const communityDir = join(customDir, 'community');
+      const settings = CommunityCatalogueSettings.parse({ url: `http://127.0.0.1:${(listing.address() as { port: number }).port}/listing` });
+      const store = new DefinitionStore({ customDir, feedDir: join(customDir, 'feed'), communityDir, communityEnabled: () => true });
+      await store.ready();
+      // No fetch override: the real address-checked fetches run against the loopback servers.
+      const catalogue = new CommunityCatalogue({ store, dir: communityDir, settings: () => settings, log: pino({ level: 'silent' }) });
+      const result = await catalogue.sync();
+      expect(result.added).toBe(1);
+      expect(result.failed).toEqual([{ file: 'evil.yml', reason: expect.stringMatching(/local or reserved/) }]);
+      expect(stubHits).toBe(0);
+      expect(await readdir(communityDir)).toContain('alphatracker.yml');
+    } finally {
+      await new Promise((r) => stub.close(r));
+      await new Promise((r) => listing.close(r));
+    }
+  });
+});

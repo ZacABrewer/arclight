@@ -22,13 +22,21 @@ import { z } from 'zod';
  *   GET    /torrents/:id/files/:index/sha256     AgentFileChecksum
  *   GET    /events                               WebSocket, text frames of AgentEvent JSON
  *
- * Authentication: the standalone agent takes its shared token in `x-agent-token` (or
- * `Authorization: Bearer <token>`); an Arclight acting as agent takes its API key in
- * `x-api-key`. Clients send the token in all of them. Errors are `AgentErrorBody` JSON.
+ * Authentication: the token goes in `x-agent-token` (or `Authorization: Bearer <token>` for the
+ * standalone agent). The standalone agent's token is AGENT_TOKEN; an Arclight acting as agent
+ * has its own agent token, which only opens these routes (Settings > Download Clients). An
+ * Arclight from before 0.24 read its full API key from `x-api-key` instead: clients fall back
+ * to that header only when such an instance refuses `x-agent-token`. Repeated bad tokens from
+ * one address answer 429 `rate-limited` for a growing time. Errors are `AgentErrorBody` JSON.
  */
 
 export const AGENT_PROTOCOL_VERSION = 1;
 export const AGENT_TOKEN_HEADER = 'x-agent-token';
+/**
+ * Set on responses an Arclight agent answered for a caller that signed in with its full API key
+ * (accepted for remotes set up before 0.24). The client surfaces it as a Test warning.
+ */
+export const AGENT_DEPRECATION_HEADER = 'x-agent-deprecation';
 
 export const AgentTorrentState = z.enum(['checking', 'downloadingMetadata', 'downloading', 'seeding', 'paused', 'queued', 'error']);
 export type AgentTorrentState = z.infer<typeof AgentTorrentState>;
@@ -152,6 +160,7 @@ export const AgentErrorCode = z.enum([
   'incomplete',
   'range',
   'not-running',
+  'rate-limited',
   'internal',
 ]);
 export type AgentErrorCode = z.infer<typeof AgentErrorCode>;
@@ -181,5 +190,6 @@ export const AGENT_ERROR_STATUS: Readonly<Record<AgentErrorCode, number>> = {
   incomplete: 409,
   range: 416,
   'not-running': 503,
+  'rate-limited': 429,
   internal: 500,
 };

@@ -156,6 +156,8 @@ export interface RequestCredentials {
   bearer?: string | undefined;
   /** Socket peer followed by every forwarded address. */
   addresses: readonly (string | undefined)[];
+  /** The request came from this Arclight process itself: never the local bypass (DATA-01). */
+  selfRequest?: boolean | undefined;
   /** The TCP peer alone (forward-auth trusts only this). */
   peer?: string | undefined;
   /** Reads a request header (forward-auth). */
@@ -1177,7 +1179,7 @@ export class AuthService {
       const forwarded = await this.forwardAuth(creds);
       if (forwarded) return { auth: forwarded };
     }
-    if (this.bypasses(creds.addresses)) {
+    if (!creds.selfRequest && this.bypasses(creds.addresses)) {
       return { auth: { user: null, via: 'bypass', isAdmin: true, appAccess: APP_AREAS } };
     }
     return { auth: null };

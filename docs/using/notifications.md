@@ -249,6 +249,8 @@ Sends each event to any URL you choose.
 
 A script runs with Arclight's own permissions. In Docker the script must exist inside the container. A script that hangs is killed after the timeout.
 
+The script gets a reduced environment: the standard variables a program needs (`PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TZ`, `TEMP`/`TMP`/`TMPDIR`, `PUID`/`PGID`, and on Windows `SystemRoot`, `ComSpec`, `PATHEXT`, `USERPROFILE`, `APPDATA` and the other system folders) plus the event's `ARCLIGHT_*` variables. Other variables of the Arclight server, which can hold passwords or keys, are not passed on. If a script needs one of them, list its name in the server variable `ARCLIGHT_SCRIPT_ENV` (names separated by commas or spaces; `*` passes the whole environment, as before 0.24).
+
 ## Events (Notify on)
 
 | Switch | Fires when | Notes |
@@ -446,7 +448,7 @@ All but the last two are on by default. Each destination also has an on/off swit
 
 **Privacy and safety for the server.**
 
-- Non-admin users cannot point a destination at the Arclight machine or your home network: localhost, private and link-local addresses and local-only names (a single word, or ending in `.local`, `.lan`, `.internal` and similar) are refused. Otherwise a user could make your server call into your LAN. Admins are not restricted.
+- Non-admin users cannot point a destination at the Arclight machine or your home network: localhost, private and link-local addresses and local-only names (a single word, or ending in `.local`, `.lan`, `.internal` and similar) are refused. Otherwise a user could make your server call into your LAN. The check is made again on every send, on the address the name resolves to and on every redirect, so a public name that points at a local address, or a public address that redirects to one, is refused too. Admins are not restricted. If an admin loses the admin role, their destinations follow the same rules from the next send.
 - Non-admins see only the category of an error ("could not reach the server", "rejected the credentials") and not the raw text the remote server returned.
 - Secrets are masked after saving, like server connections.
 
@@ -468,7 +470,7 @@ Separate from connections: each user can receive notifications in their own brow
 
 The same three choices apply to phones paired through the [Arclight mobile app](mobile-app.md): one setting per user, for every browser and phone.
 
-Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first, for example through a reverse proxy. If notifications are blocked for the site, allow them in the browser's site settings. On iPhone and iPad, add Arclight to the home screen first. Each browser you enable is its own subscription, and a subscription the browser has revoked is removed automatically.
+Notes: browser push needs HTTPS (or `localhost`). Arclight only accepts subscriptions on the browsers' own push services (Google, Mozilla, Apple and Microsoft); an admin may also use another public HTTPS push service. Push services on your local network are refused, and a push service that answers with a redirect counts as a failed send. Open Arclight over HTTPS first, for example through a reverse proxy. If notifications are blocked for the site, allow them in the browser's site settings. On iPhone and iPad, add Arclight to the home screen first. Each browser you enable is its own subscription, and a subscription the browser has revoked is removed automatically.
 
 ## Weekly newsletter
 

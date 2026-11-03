@@ -1,7 +1,7 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { Session, type SessionOptions } from '@arclight/torrent-engine';
-import type { AgentConfig } from './config.js';
+import { agentSecurityWarnings, AgentConfigError, type AgentConfig } from './config.js';
 import { EngineAgentCore } from './core.js';
 import { NetworkFollower, type NetworkFollowerOptions } from './network.js';
 import { createAgentServer, type AgentServer } from './server.js';
@@ -35,6 +35,15 @@ export interface StartAgentOptions {
 /** Starts the engine, the network follower and the HTTP API. */
 export async function startAgent(config: AgentConfig, options: StartAgentOptions = {}): Promise<RunningAgent> {
   const log = options.log ?? jsonLog;
+  let tls: { cert: Buffer; key: Buffer } | undefined;
+  if (config.tls) {
+    try {
+      tls = { cert: await readFile(config.tls.certPath), key: await readFile(config.tls.keyPath) };
+    } catch (error) {
+      throw new AgentConfigError(`Cannot read AGENT_TLS_CERT / AGENT_TLS_KEY: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  for (const warning of agentSecurityWarnings(config)) log('warn', warning);
   await mkdir(config.downloadsRoot, { recursive: true });
   await mkdir(config.resumeDir, { recursive: true });
 
@@ -63,6 +72,7 @@ export async function startAgent(config: AgentConfig, options: StartAgentOptions
   const server = createAgentServer({
     core,
     token: config.token,
+    ...(tls ? { tls } : {}),
     ...(options.pingIntervalMs !== undefined ? { pingIntervalMs: options.pingIntervalMs } : {}),
     onRequest: ({ method, path, status }) => {
       if (status >= 400) log('warn', 'request failed', { method, path, status });
@@ -77,7 +87,7 @@ export async function startAgent(config: AgentConfig, options: StartAgentOptions
     throw error;
   }
   log('info', 'engine agent listening', {
-    api: `${address.address}:${address.port}`,
+    api: `${tls ? 'https' : 'http'}://${address.address}:${address.port}`,
     peerPort: session.listenPort,
     bind: session.settings.listenAddress ?? 'all interfaces',
     downloads: config.downloadsRoot,

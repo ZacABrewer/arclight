@@ -135,9 +135,9 @@ export const ImdbListSettings = z.object({
   /** `ls` list id or `ur` user id (that user's watchlist). */
   listId: z.string().trim().regex(/^(ls|ur)\d+$/, 'expected an IMDb list id (ls...) or user id (ur...)'),
 });
-export const RssListSettings = z.object({ url: z.url() });
+export const RssListSettings = z.object({ url: z.url({ protocol: /^https?$/ }) });
 export const StevenLuSettings = z.object({
-  url: z.url().default('https://s3.amazonaws.com/popular-movies/movies.json'),
+  url: z.url({ protocol: /^https?$/ }).default('https://s3.amazonaws.com/popular-movies/movies.json'),
 });
 
 export const TmdbCompanySettings = z.object({ companyId: z.number().int().positive(), ...TmdbFilters });
@@ -181,7 +181,7 @@ export const LetterboxdSettings = z
       .trim()
       .regex(/^[a-z0-9-]+$/, 'expected the list slug from its URL')
       .optional(),
-    url: z.url().optional(),
+    url: z.url({ protocol: /^https?$/ }).optional(),
     limit: z.number().int().min(1).max(1000).default(250),
   })
   .superRefine((s, ctx) => {
@@ -252,14 +252,14 @@ export const SimklSettings = z.object({
 });
 export const JellyfinFavoritesSettings = z.object({
   serverType: z.enum(['jellyfin', 'emby']).default('jellyfin'),
-  url: z.url(),
+  url: z.url({ protocol: /^https?$/ }),
   apiKey: z.string().min(1),
   /** Whose favourites; matched case-insensitively against the server's users. */
   username: z.string().trim().min(1),
 });
 /** Any JSON or CSV document of titles with TMDB/IMDb/TVDB ids. */
 export const CustomUrlSettings = z.object({
-  url: z.url(),
+  url: z.url({ protocol: /^https?$/ }),
   format: z.enum(['auto', 'json', 'csv']).default('auto'),
   /** Dotted path to the array inside a JSON document (e.g. `data.items`); empty = auto-detect. */
   itemsPath: z.string().trim().optional(),

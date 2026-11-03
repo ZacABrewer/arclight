@@ -58,6 +58,16 @@ async function webServer(root: string): Promise<WebServer> {
   return state;
 }
 
+/** True when a run of the 0x5a "bad seed" filler is in any payload file under `dir`. */
+async function anyBadBytesOnDisk(dir: string, p: ReturnType<typeof payload>): Promise<boolean> {
+  const run = Buffer.alloc(64, 0x5a);
+  for (const f of p.files) {
+    const data = await readFile(join(dir, 'pack', ...f.path)).catch(() => null);
+    if (data?.includes(run)) return true;
+  }
+  return false;
+}
+
 describe('web seed URLs', () => {
   it('builds GetRight-style file URLs', () => {
     const multi = { name: 'My Pack', isMultiFile: true };
@@ -90,6 +100,84 @@ describe('web seeds (BEP 19)', () => {
     expect(web.requests.every((r) => r.local?.endsWith('127.0.0.1'))).toBe(true);
     expect(lt.getStats().downloaded).toBeGreaterThanOrEqual(lt.getStats().totalBytes);
   }, 30_000);
+
+  it('refuses loopback / LAN web seeds unless allowLocalTrackers is on (DATA-11)', async () => {
+    const p = payload();
+    const root = await env.tmp();
+    await writePayload(root, 'pack', p);
+    const web = await webServer(root);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [web.base] });
+    const leecher = await env.session({ savePath: await env.tmp(), allowLocalTrackers: false, webSeedRetryMs: 50 });
+    const lt = await leecher.addTorrent({ torrent });
+    const refused = await waitFor(() => lt.getWebSeeds().find((w) => w.failures > 0));
+    expect(refused.lastError).toMatch(/local or reserved/);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(web.requests).toHaveLength(0);
+  });
+
+  it('disables a web seed whose data keeps failing the hash check (DATA-24)', async () => {
+    const p = payload();
+    const root = await env.tmp();
+    // Serve the right sizes with the wrong bytes.
+    await writePayload(root, 'pack', { files: p.files.map((f) => ({ path: f.path, data: Buffer.alloc(f.data.length, 0x5a) })) });
+    const web = await webServer(root);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [web.base] });
+    const dir = await env.tmp();
+    const leecher = await env.session({ savePath: dir, webSeedConnectionsPerTorrent: 1 });
+    const lt = await leecher.addTorrent({ torrent });
+    const off = await waitFor(() => lt.getWebSeeds().find((w) => /disabled/.test(w.lastError ?? '')));
+    expect(off.retryAt).toBeNull();
+    const seen = web.requests.length;
+    await new Promise((r) => setTimeout(r, 300));
+    expect(web.requests.length).toBe(seen);
+    expect(lt.hashFailureCount).toBeGreaterThanOrEqual(3);
+    // The bad bytes were checked in memory and dropped: none of them reached the disk.
+    expect(await anyBadBytesOnDisk(dir, p)).toBe(false);
+  }, 30_000);
+
+  it('never writes a web seed piece that fails the hash check, and a good seed still completes (DATA-11)', async () => {
+    const p = payload();
+    const badRoot = await env.tmp();
+    await writePayload(badRoot, 'pack', { files: p.files.map((f) => ({ path: f.path, data: Buffer.alloc(f.data.length, 0x5a) })) });
+    const bad = await webServer(badRoot);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [bad.base] });
+    const dir = await env.tmp();
+    const leecher = await env.session({ savePath: dir, webSeedConnectionsPerTorrent: 1 });
+    const lt = await leecher.addTorrent({ torrent });
+    const warned: string[] = [];
+    lt.on('warning', (m) => warned.push(m));
+    await waitFor(() => lt.hashFailureCount >= 1);
+    expect(warned.some((w) => /from a web seed failed hash check/.test(w))).toBe(true);
+    expect(await anyBadBytesOnDisk(dir, p)).toBe(false);
+    expect(lt.getStats().downloaded).toBeGreaterThan(0);
+    await leecher.removeTorrent(lt.infoHashHex, false);
+
+    // Same torrent, a bad and a good seed: completes with the right bytes.
+    const goodRoot = await env.tmp();
+    await writePayload(goodRoot, 'pack', p);
+    const good = await webServer(goodRoot);
+    const both = createTorrent({ name: 'pack', files: p.files, pieceLength: 32 * 1024, urlList: [bad.base, good.base] });
+    const dir2 = await env.tmp();
+    const leecher2 = await env.session({ savePath: dir2, webSeedConnectionsPerTorrent: 2 });
+    const lt2 = await leecher2.addTorrent({ torrent: both.torrent });
+    await completed(lt2);
+    expect(await payloadMatches(dir2, 'pack', p)).toBe(true);
+    expect(good.requests.length).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('does not use web seeds for pieces over the in-memory limit', async () => {
+    const p = payload();
+    const root = await env.tmp();
+    await writePayload(root, 'pack', p);
+    const web = await webServer(root);
+    const { torrent } = createTorrent({ name: 'pack', files: p.files, pieceLength: 64 * 1024 * 1024, urlList: [web.base] });
+    const leecher = await env.session({ savePath: await env.tmp() });
+    const lt = await leecher.addTorrent({ torrent });
+    const ws = await waitFor(() => lt.getWebSeeds().find((w) => w.lastError));
+    expect(ws.lastError).toMatch(/over 32 MiB/);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(web.requests).toHaveLength(0);
+  });
 
   it('backs off after server errors and then recovers', async () => {
     const p = payload();

@@ -16,6 +16,8 @@ Each row shows the free space left on that drive. The bar turns orange below 100
 
 Removing a root folder only makes Arclight stop using it. No files on disk are touched.
 
+A root folder must be an absolute path that already exists, and root folders may not be inside each other. A whole drive or the filesystem root (`/`, `C:\`) is not accepted. Root folders brought in by a configuration import or a migration from Sonarr or Radarr follow the same rules, except that a folder Arclight cannot reach yet is accepted with a warning (migration) or as is (import).
+
 > Tip: in Docker, mount ONE share as `/data` (`${DATA_ROOT}:/data`) and keep downloads in `/data/downloads` and the library in `/data/media/tv` and `/data/media/movies`. Linux cannot hard-link across two different mounts, even when both are on the same disk, so separate mounts for downloads and library force a full copy on every import. With one mount, imports are instant hardlinks and seeding keeps working. See [Folders and hardlinks](../getting-started/folders-and-hardlinks.md).
 
 ## Naming
@@ -135,10 +137,11 @@ A release is also rejected when it holds no video file at all (no audio file for
 When a completed download contains archives and no video of its own, Arclight extracts them into a hidden `.arclight-unpacked` folder next to the download. It never extracts inside the download itself. It then imports from there and removes the extracted copies, so the original archives stay in place and the torrent keeps seeding.
 
 - Multi-part sets are joined. An archive found inside an archive is extracted once more (one level only).
-- Before extracting, Arclight checks the free space on that drive against **Minimum free space**. When there is not enough, the import waits and is retried.
+- Before extracting, Arclight checks the free space on that drive against **Minimum free space**. It checks again before extracting archives found inside archives. When there is not enough, the import waits and is retried.
+- Arclight rejects a release as unsafe (likely a decompression bomb) when one of its archives would unpack to more than 20 times its own size (plus 256 MiB of head-room), when everything together, nested archives included, would unpack to more than 20 times the download's archives, or when the archives list more than 20,000 entries. Nothing is extracted from the offending archive.
 - While it works, the queue row shows **Unpacking 42%**.
 - This works for the built-in engine and for qBittorrent, Transmission, Deluge and rTorrent. SABnzbd and NZBGet unpack downloads themselves, so usenet downloads are never unpacked again.
-- Unpacking uses 7-Zip (`7zz`, version 23 or newer for RAR5). The Docker image includes it. On other installs, put `7zz` or `7z` on the PATH, or set `ARCLIGHT_7ZIP` to its full path. Without it, archived downloads stay blocked and Health shows [seven-zip-missing](../TROUBLESHOOTING.md#seven-zip-missing).
+- Unpacking uses 7-Zip (`7zz`, version 25.00 or newer recommended; 23 or newer for RAR5). Older 7-Zip releases (including p7zip 16.02) can be tricked by an archive link into writing outside the staging folder, so with them Arclight rejects any archive that contains links and logs a warning. On 7-Zip builds that support it, Arclight passes `-snld-` so links that point outside the folder are never created. The Docker image includes it. On other installs, put `7zz` or `7z` on the PATH, or set `ARCLIGHT_7ZIP` to its full path. Without it, archived downloads stay blocked and Health shows [seven-zip-missing](../TROUBLESHOOTING.md#seven-zip-missing).
 
 ### Hardlink, copy or move
 

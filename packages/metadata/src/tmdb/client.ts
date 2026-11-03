@@ -60,6 +60,7 @@ import {
   tmdbTvSearchResponseSchema,
   type TmdbConfiguration,
 } from './schemas.js';
+import { readLimitedJson } from '../body.js';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -341,7 +342,7 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
 
       let body: unknown;
       try {
-        body = await response.json();
+        body = await readLimitedJson(response);
       } catch (cause) {
         throw new MetadataError('bad-response', 'TMDB returned non-JSON content', {
           httpStatus: response.status,

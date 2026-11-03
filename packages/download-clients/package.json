@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@arclight/engine-agent": "workspace:*",
+    "@arclight/net": "workspace:*",
     "@arclight/torrent-engine": "workspace:*",
     "zod": "^4.1.12"
   },

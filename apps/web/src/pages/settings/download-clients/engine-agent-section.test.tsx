@@ -34,7 +34,7 @@ let calls: Array<{ url: string; method: string; body: unknown }>;
 
 beforeEach(() => {
   calls = [];
-  agent = { enabled: false, path: '/api/v1/engine-agent', engineRunning: true };
+  agent = { enabled: false, acceptApiKey: false, path: '/api/v1/engine-agent', engineRunning: true, token: 'agent-token-0123456789abcdefghijklmnopqrstuvwxyz', apiKeyLastUsedAt: null };
   const responses: Record<string, unknown> = {
     '/api/v1/downloadclient': [remote],
     '/api/v1/downloadclient/schema': [],
@@ -50,6 +50,10 @@ beforeEach(() => {
       calls.push({ url, method, body });
       if (url === '/api/v1/settings/engineagent') {
         if (method === 'PUT') agent = { ...agent, ...body };
+        return new Response(JSON.stringify(agent), { status: 200 });
+      }
+      if (url === '/api/v1/settings/engineagent/token' && method === 'POST') {
+        agent = { ...agent, token: 'fresh-token-0123456789abcdefghijklmnopqrstuvwxyz' };
         return new Response(JSON.stringify(agent), { status: 200 });
       }
       const found = responses[url];
@@ -86,7 +90,7 @@ describe('remote engine', () => {
     expect(within(card).getByText('http://seedbox:7879').className).toContain('al-card-line--mono');
   });
 
-  it('shows the endpoint, engine state and API key hint, and turns the agent on with PUT', async () => {
+  it('shows the endpoint, engine state and agent token, and turns the agent on with PUT', async () => {
     expect(EngineAgentSettingsResponse.safeParse(agent).success).toBe(true);
     renderPage();
     const section = await screen.findByRole('region', { name: 'Remote engine' }, { timeout: 5000 });
@@ -94,7 +98,12 @@ describe('remote engine', () => {
     expect(toggle.checked).toBe(false);
     expect(within(section).getByText(engineAgentUrl(window.location.origin, '/api/v1/engine-agent'))).toBeTruthy();
     expect(within(section).getByText('Running').className).toContain('al-chip');
-    expect(within(section).getByRole('link', { name: 'Open Security' }).getAttribute('href')).toBe('/settings/security');
+    const token = within(section).getByLabelText('Token') as HTMLInputElement;
+    expect(token.value).not.toContain('agent-token');
+    fireEvent.click(within(section).getByRole('button', { name: 'Show' }));
+    expect(token.value).toBe('agent-token-0123456789abcdefghijklmnopqrstuvwxyz');
+    // The deprecated API-key switch stays hidden on a setup that never used it.
+    expect(within(section).queryByLabelText('Also accept the API key (deprecated)')).toBeNull();
 
     fireEvent.click(toggle);
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/v1/settings/engineagent')).toBe(true));
@@ -102,8 +111,28 @@ describe('remote engine', () => {
     await waitFor(() => expect((within(section).getByLabelText('Act as remote engine') as HTMLInputElement).checked).toBe(true));
   });
 
+  it('regenerates the agent token after a confirm', async () => {
+    renderPage();
+    const section = await screen.findByRole('region', { name: 'Remote engine' }, { timeout: 5000 });
+    fireEvent.click(await within(section).findByRole('button', { name: 'Regenerate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Regenerate token' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/settings/engineagent/token')).toBe(true));
+    await waitFor(() => expect((within(section).getByLabelText('Token') as HTMLInputElement).value).toBe('fresh-token-0123456789abcdefghijklmnopqrstuvwxyz'));
+  });
+
+  it('shows the deprecated API-key switch and a notice while a remote still uses the API key', async () => {
+    agent = { ...agent, enabled: true, acceptApiKey: true, apiKeyLastUsedAt: new Date(Date.now() - 60_000).toISOString() };
+    renderPage();
+    const section = await screen.findByRole('region', { name: 'Remote engine' }, { timeout: 5000 });
+    const toggle = (await within(section).findByLabelText('Also accept the API key (deprecated)')) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    expect(within(section).getByRole('status').textContent).toMatch(/signed in with the API key/);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ acceptApiKey: false }));
+  });
+
   it('warns when the agent is on but the torrent engine is not running', async () => {
-    agent = { enabled: true, path: '/api/v1/engine-agent', engineRunning: false };
+    agent = { ...agent, enabled: true, engineRunning: false };
     renderPage();
     const section = await screen.findByRole('region', { name: 'Remote engine' }, { timeout: 5000 });
     expect((await within(section).findByRole('alert')).textContent).toMatch(/torrent engine is not running/);

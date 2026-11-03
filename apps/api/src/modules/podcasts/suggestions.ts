@@ -103,7 +103,12 @@ export class PodcastSuggestions {
 
   async create(actor: SuggestionActor, input: CreatePodcastSuggestion): Promise<PodcastSuggestion> {
     this.assertMaySuggest(actor);
-    const preview = await this.opts.podcasts.preview(input.feedUrl);
+    // Suggestions reach public hosts only, and a failure comes back as one generic message, so
+    // the preview cannot be used to probe the server's network (DATA-06).
+    const preview = await this.opts.podcasts.preview(input.feedUrl).catch((err: unknown) => {
+      if (err instanceof PodcastsError && err.code === 'FEED') throw new PodcastsError('FEED', 'that address could not be read as a podcast feed');
+      throw err;
+    });
     if (preview.podcastId !== null) throw new PodcastsError('CONFLICT', `${preview.title} is already in the library`);
     const pending = this.db.select().from(podcastSuggestions).where(eq(podcastSuggestions.status, 'pending')).all();
     const dup = pending.find((p) => sameFeedUrl(p.feedUrl, input.feedUrl) || (input.itunesId != null && p.itunesId === input.itunesId));

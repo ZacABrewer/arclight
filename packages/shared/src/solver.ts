@@ -12,6 +12,7 @@ export const SolverSettings = z.object({
     .describe('Browser executable; empty = auto-detect (Edge, Chrome, Brave, Chromium in that order).'),
   timeoutSeconds: z.number().int().min(5).max(300).default(60).describe('Give up on a challenge after this many seconds.'),
   idleCloseSeconds: z.number().int().min(0).max(86_400).default(300).describe('Close the browser after this long without work (0 = keep it open).'),
+  allowPrivateTargets: z.boolean().default(false).describe('Let the solver load loopback and LAN addresses (off: only public hosts).'),
 });
 export type SolverSettings = z.infer<typeof SolverSettings>;
 

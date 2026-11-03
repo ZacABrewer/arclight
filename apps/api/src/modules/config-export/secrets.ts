@@ -25,6 +25,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Keys never copied from imported JSON: `JSON.parse` makes `__proto__` an own key, and assigning
+ * it onto a fresh object would swap that object's prototype.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export function isUnsafeKey(key: string): boolean {
+  return UNSAFE_KEYS.has(key);
+}
+
 /** Deep copy with every non-empty secret value replaced by SECRET_MASK. */
 export function maskSecrets<T>(value: T): T {
   return walk(value, false) as T;
@@ -34,7 +44,7 @@ function walk(value: unknown, secret: boolean): unknown {
   if (Array.isArray(value)) return value.map((v) => walk(v, secret));
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = walk(v, secret || isSecretKey(k));
+    for (const [k, v] of Object.entries(value)) if (!isUnsafeKey(k)) out[k] = walk(v, secret || isSecretKey(k));
     return out;
   }
   if (secret && typeof value === 'string' && value !== '') return SECRET_MASK;
@@ -68,6 +78,7 @@ export function resolveMasks(incoming: unknown, current: unknown, onMissing: (pa
     const cur = isPlainObject(current) ? current : {};
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(incoming)) {
+      if (isUnsafeKey(k)) continue;
       const resolved = resolveMasks(v, cur[k], onMissing, path ? `${path}.${k}` : k);
       if (resolved !== undefined) out[k] = resolved;
     }

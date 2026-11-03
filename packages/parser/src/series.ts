@@ -1,4 +1,4 @@
-import { spaced } from './normalize.js';
+import { spaced, clampTitle } from './normalize.js';
 import type { ParsedSeriesInfo, SeriesTitleInfo } from './types.js';
 
 // Series parsing.
@@ -89,6 +89,7 @@ const COUNTRY_SUFFIX = /^(?<t>.+?)[ (]+(?<country>US|UK|AU|CA|NZ)\)?$/;
 
 /** Split a parsed series title into title / title-without-year / year / country. */
 export function parseSeriesTitleInfo(rawTitle: string): SeriesTitleInfo {
+  rawTitle = clampTitle(rawTitle);
   const title = spaced(rawTitle).replace(/\s*[-–]\s*$/, '').trim();
   let year = 0;
   let country: string | null = null;
@@ -693,7 +694,10 @@ function parseSeasonPack(ctx: Ctx): ParsedSeriesInfo | null {
   if (special) return build(special[1]!, ctx, (info) => { info.seasons = [Number(special[2])]; info.special = true; });
 
   // British "Title - Series 1 (1970)"
-  const series = /^(.*?)[-_. ]+-[-_. ]+Series[-_. ]?(\d{1,2})(?![\dEex])(?=$|[-_. )\]\[(])/i.exec(t);
+  // The separator run must hold a "-" that is neither its first nor its last character.
+  // Written as one run that starts at a run boundary, so separators cannot be split between
+  // overlapping classes (that backtracked cubically on long runs of "-", "- ", "-_").
+  const series = /^(.*?)(?<![-_. ])[-_. ][_. ]*-[-_. ]+Series[-_. ]?(\d{1,2})(?![\dEex])(?=$|[-_. )\]\[(])/i.exec(t);
   if (series) return build(series[1]!, ctx, (info) => { info.seasons = [Number(series[2])]; info.fullSeason = true; });
 
   // Full season: "S01", "Season 1", "Saison3", "S2014", "(Season 04)", "[Sezon 3]", "(2016/S01/"
@@ -707,7 +711,9 @@ function parseSeasonPack(ctx: Ctx): ParsedSeriesInfo | null {
 
 /** "Title - The Complete Series (2010-2015)", "Title.COMPLETE.SERIES": every season, no numbers. */
 function parseCompleteSeries(ctx: Ctx): ParsedSeriesInfo | null {
-  const m = /^(.+?)[-_. ]+(?:-[-_. ]+)?(?:the[-_. ]+)?Complete[-_. ]+Series(?![a-z])/i.exec(ctx.text);
+  // `[-_. ]+(?:-[-_. ]+)?` is just one separator run; it starts at a run boundary (or after
+  // the one required title character) so the run is not re-split on every backtrack.
+  const m = /^(.+?)(?:(?<![-_. ])|(?<=^[-_. ]))[-_. ]+(?:the[-_. ]+)?Complete[-_. ]+Series(?![a-z])/i.exec(ctx.text);
   if (!m || !m[1]!.trim()) return null;
   return build(m[1]!, ctx, (info) => {
     info.fullSeason = true;
@@ -771,6 +777,7 @@ function seasonOfTitleMatch(g: Array<string | undefined>): number | null {
  * title does not end in season words.
  */
 export function splitSeasonTitle(title: string): { title: string; season: number | 'final'; part: number } | null {
+  title = clampTitle(title);
   const m = new RegExp(String.raw`^(.+?)[-_. :]+${TITLE_SEASON}[-_. ]*$`, 'i').exec(title.trim());
   if (!m || !m[1]!.trim()) return null;
   const n = seasonOfTitleMatch(m.slice(2, 7));
@@ -972,6 +979,7 @@ function acceptable(info: ParsedSeriesInfo | null, ctx: Ctx): ParsedSeriesInfo |
 const REJECT: ParsedSeriesInfo = emptyInfo();
 
 export function parseSeries(releaseTitle: string): ParsedSeriesInfo | null {
+  releaseTitle = clampTitle(releaseTitle);
   const ctx = prepareSeries(releaseTitle);
   if (!ctx.text.trim() && !ctx.subGroup) return null;
 
@@ -1016,6 +1024,7 @@ function cjkEpisodeRange(info: ParsedSeriesInfo, raw: string): void {
  * extra (OVA, NCOP, NCED, Special).
  */
 export function parseSeasonTitle(releaseTitle: string): { title: string; fullSeason: true } | null {
+  releaseTitle = clampTitle(releaseTitle);
   const ctx = prepareSeries(releaseTitle);
   if (!ctx.subGroup && !/\[[^\]]*\]\s*$/.test(ctx.text)) {
     // Without a group prefix only "Title [tags]" qualifies.

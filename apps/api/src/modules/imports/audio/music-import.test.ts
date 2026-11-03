@@ -1077,3 +1077,17 @@ describe('import wiring for music (history, notifications, media-server refresh)
     }
   });
 });
+
+describe('mayRemoveSource (DATA-03)', () => {
+  it('never removes a filesystem root or a folder outside the named downloads folder', async () => {
+    const { mayRemoveSource } = await import('./music-import.js');
+    const { resolve: res } = await import('node:path');
+    const dl = res('/dl');
+    expect(mayRemoveSource(res('/'), undefined)).toBe(false);
+    expect(mayRemoveSource(join(dl, 'Album'), undefined)).toBe(true);
+    expect(mayRemoveSource(join(dl, 'Album'), dl)).toBe(true);
+    expect(mayRemoveSource(dl, dl)).toBe(false);
+    expect(mayRemoveSource(join(dl, '..'), dl)).toBe(false);
+    expect(mayRemoveSource(res('/data/other'), dl)).toBe(false);
+  });
+});

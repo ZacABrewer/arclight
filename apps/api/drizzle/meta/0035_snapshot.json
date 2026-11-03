@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f21cb0e4-8f12-4a39-a2ff-e62b2eccc74f",
+  "id": "6aaf75a3-e297-4054-bdc4-0a31df096f75",
   "prevId": "c769026a-98db-4722-aa91-0b9fe4017489",
   "tables": {
     "jobs": {
@@ -16193,6 +16193,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "user_id": {
           "name": "user_id",
           "type": "integer",
@@ -16227,6 +16234,13 @@
           "name": "wrapped_shares_token_idx",
           "columns": [
             "token"
+          ],
+          "isUnique": true
+        },
+        "wrapped_shares_token_hash_idx": {
+          "name": "wrapped_shares_token_hash_idx",
+          "columns": [
+            "token_hash"
           ],
           "isUnique": true
         },

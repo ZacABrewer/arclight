@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises';
 import { parseFile, type IAudioMetadata, type IOptions } from 'music-metadata';
 import { nodeExec, type ExecFn, type FfprobeRunner } from '../../media-analysis/runner.js';
+import { ffprobeArgs } from '../../transcode/input-protocols.js';
 
 // Reading audio tags and stream facts (design 9.1). `music-metadata` is the primary reader
 // (in-process, a few ms per file); ffprobe is the fallback when it cannot parse a file and the
@@ -495,7 +496,7 @@ export function createFfprobeTagReader(opts: FfprobeTagReaderOptions): TagReader
       try {
         ({ stdout } = await exec(
           bin,
-          ['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams', '-show_chapters', path],
+          ffprobeArgs(['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams', '-show_chapters'], path),
           { timeoutMs },
         ));
       } catch (err) {

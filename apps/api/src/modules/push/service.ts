@@ -15,6 +15,7 @@ import type { Db } from '../../db/index.js';
 import { settings, users } from '../../db/schema.js';
 // Until src/db/schema.ts re-exports it, the module reads its own table directly.
 import { pushSubscriptions } from './schema.js';
+import { pushEndpointProblem } from './endpoint-policy.js';
 import { generateVapidKeys, sendWebPush, type EncryptOptions, type VapidKeys } from './webpush.js';
 
 // Browser notifications: VAPID keys (settings section `push`, generated once), per-user
@@ -136,6 +137,8 @@ export class PushService {
    */
   subscribe(userId: number, input: PushSubscriptionInput, opts: { isAdmin?: boolean } = {}): PushSubscriptionResource {
     const { db } = this.opts;
+    const problem = pushEndpointProblem(input.endpoint, opts.isAdmin === true);
+    if (problem) throw new PushError('VALIDATION', problem);
     const existing = db.select({ userId: pushSubscriptions.userId, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth }).from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, input.endpoint)).get();
     if (existing && existing.userId !== userId && !opts.isAdmin && !(sameSecret(existing.p256dh, input.keys.p256dh) && sameSecret(existing.auth, input.keys.auth))) {
       throw new PushError('CONFLICT', 'this push subscription belongs to another account');

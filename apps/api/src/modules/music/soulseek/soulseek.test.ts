@@ -1,7 +1,7 @@
 import type { LightMyRequestResponse } from 'fastify';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ import { ProfilesService } from '../../profiles/index.js';
 import { setSection } from '../../settings/service.js';
 import { defaultAlbumTypeProfile } from '../service.js';
 import { soulseekDownloads } from './schema.js';
-import { localPathOf, searchQueryFor } from './service.js';
+import { isStrictlyInside, localPathOf, searchQueryFor } from './service.js';
 import { setSoulseekRuntime, soulseekServiceFor } from './index.js';
 
 // The Soulseek source over the full app against an in-memory slskd (FakeSlskd): no network.
@@ -340,5 +340,26 @@ describe('helpers', () => {
   it('builds a plain word query and slskd local paths', () => {
     expect(searchQueryFor('AC/DC', 'Back in Black (Remastered)')).toBe('AC DC Back in Black Remastered');
     expect(localPathOf('/downloads', 'music\\A\\B\\01.flac')).toBe(join('/downloads', 'B', '01.flac'));
+  });
+
+  it('keeps peer-supplied names strictly inside the downloads folder (DATA-03)', () => {
+    const dl = resolve('/dl');
+    for (const remote of ['@@x\\..\\a.flac', '..\\..\\a.flac', 'x/./a.flac', 'C:\\a.flac', 'a\\b\\..', '\\\\', '']) {
+      const path = localPathOf(dl, remote);
+      expect(isStrictlyInside(dl, path), `${remote} -> ${path}`).toBe(true);
+      // The import folder is the file's parent, which must also be strictly inside.
+      expect(isStrictlyInside(dl, join(path, '..')), `${remote} -> ${path}`).toBe(true);
+    }
+    expect(localPathOf(dl, '@@x\\..\\a.flac')).toBe(join(dl, '_', 'a.flac'));
+  });
+
+  it('refuses an import folder that is the downloads folder or outside it', () => {
+    const dl = resolve('/dl');
+    expect(isStrictlyInside(dl, dl)).toBe(false);
+    expect(isStrictlyInside(dl, resolve('/'))).toBe(false);
+    expect(isStrictlyInside(dl, join(dl, '..'))).toBe(false);
+    expect(isStrictlyInside(dl, resolve('/dl-other/x'))).toBe(false);
+    expect(isStrictlyInside(dl, join(dl, 'Album'))).toBe(true);
+    expect(isStrictlyInside(dl, join(dl, '..x'))).toBe(true);
   });
 });

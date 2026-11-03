@@ -11,7 +11,7 @@ export type PushPublicKey = z.infer<typeof PushPublicKey>;
 
 /** What PushSubscription.toJSON() gives the browser, plus the user agent. */
 export const PushSubscriptionInput = z.object({
-  endpoint: z.url().max(2048),
+  endpoint: z.url({ protocol: /^https$/ }).max(2048),
   expirationTime: z.number().nullish(),
   keys: z.object({
     /** Client public key, base64url (65 bytes). */

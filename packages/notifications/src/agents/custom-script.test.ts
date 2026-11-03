@@ -92,7 +92,23 @@ describe('CustomScriptAgent', () => {
     expect(record.args).toEqual(['--json', 'a b']);
     expect(record.env.ARCLIGHT_EVENT_TYPE).toBe('grab');
     expect(record.env.ARCLIGHT_MEDIA_TITLE).toBe('Signal Lost');
-    expect(record.env.PATH ?? record.env.Path).toBeDefined(); // inherits the parent environment
+    expect(record.env.PATH ?? record.env.Path).toBeDefined(); // keeps the standard variables
+  });
+
+  it('does not hand the server environment (secrets) to the script', async () => {
+    process.env['ARCLIGHT_TEST_SECRET'] = 'hunter2';
+    process.env['SOME_DB_PASSWORD'] = 'hunter2';
+    try {
+      const spawner = fakeSpawn(({ child }) => child.emit('close', 0, null));
+      await createAgent('custom-script', { path: '/scripts/notify.sh', arguments: '' }, { spawn: spawner.spawn }).send(GRAB);
+      const env = spawner.records[0]!.env;
+      expect(env['ARCLIGHT_TEST_SECRET']).toBeUndefined();
+      expect(env['SOME_DB_PASSWORD']).toBeUndefined();
+      expect(env.ARCLIGHT_EVENT_TYPE).toBe('grab');
+    } finally {
+      delete process.env['ARCLIGHT_TEST_SECRET'];
+      delete process.env['SOME_DB_PASSWORD'];
+    }
   });
 
   it('fails with scriptFailed on a non-zero exit, including stderr', async () => {

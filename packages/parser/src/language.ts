@@ -1,3 +1,5 @@
+import { clampTitle } from './normalize.js';
+
 // Language detection from release names. Languages are identified by English name, the same
 // vocabulary the subtitles and profiles layers use. A release that names no language is
 // "Unknown" (the caller decides what that means: usually the title's original language).
@@ -153,6 +155,7 @@ function collect(text: string, rule: Rule, filter: (m: RegExpExecArray) => boole
 }
 
 export function parseLanguages(releaseTitle: string, releaseGroup: string | null = null): string[] {
+  releaseTitle = clampTitle(releaseTitle);
   const text = languageSegment(stripGroup(releaseTitle, releaseGroup)).replace(BRACKETED_DOMAIN, ' ');
   const found: string[] = [];
   const add = (name: string) => {

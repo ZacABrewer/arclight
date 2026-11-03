@@ -53,8 +53,20 @@ export interface CommandDeps {
   linkedUser: (discordUserId: string) => LinkedUser | undefined;
   /** Consumes a link code; returns the Arclight username or null when the code is unknown/expired. */
   redeemLinkCode: (code: string, discordUserId: string) => string | null;
+  /** True when /search may be used without a linked account (default: linked accounts only). */
+  allowUnlinkedSearch?: () => boolean;
+  /** Clock for the per-user title lookup throttle (tests). */
+  now?: () => number;
   log?: Logger;
 }
+
+/** Title lookups (/search and /request, which hit TMDB) allowed per Discord user per window. */
+export const LOOKUP_LIMIT = 5;
+export const LOOKUP_WINDOW_MS = 60_000;
+/** Beyond this many tracked users, expired entries are dropped on the next lookup. */
+const LOOKUP_TRACKED_MAX = 1000;
+
+const THROTTLED = 'You are searching too often. Wait a minute and try again.';
 
 const NOT_LINKED =
   'Your Discord account is not linked to Arclight yet. Open Arclight, go to Profile > Discord, create a link code and run `/link <code>` here.';
@@ -90,7 +102,27 @@ export function actorFor(user: LinkedUser): Actor {
 }
 
 export class CommandHandler {
+  /** Discord user id -> timestamps of recent title lookups (sliding window). */
+  private readonly lookups = new Map<string, number[]>();
+
   constructor(private readonly deps: CommandDeps) {}
+
+  /** Records a title lookup for `discordUserId`; false when the user is over the limit. */
+  private allowLookup(discordUserId: string): boolean {
+    const now = this.deps.now?.() ?? Date.now();
+    const since = now - LOOKUP_WINDOW_MS;
+    if (this.lookups.size > LOOKUP_TRACKED_MAX) {
+      for (const [id, times] of this.lookups) if ((times.at(-1) ?? 0) <= since) this.lookups.delete(id);
+    }
+    const recent = (this.lookups.get(discordUserId) ?? []).filter((t) => t > since);
+    if (recent.length >= LOOKUP_LIMIT) {
+      this.lookups.set(discordUserId, recent);
+      return false;
+    }
+    recent.push(now);
+    this.lookups.set(discordUserId, recent);
+    return true;
+  }
 
   private discordUser(i: DiscordInteraction): { id: string; username: string } | undefined {
     return i.member?.user ?? i.user;
@@ -125,7 +157,7 @@ export class CommandHandler {
       case 'status':
         return this.status(who.id, option(i, 'title'));
       case 'search':
-        return this.search(String(option(i, 'title') ?? ''));
+        return this.search(who.id, String(option(i, 'title') ?? ''));
       case 'pending':
         return this.pending(i);
       default:
@@ -161,6 +193,7 @@ export class CommandHandler {
 
   private async requestSearch(discordUserId: string, title: string, year: unknown, is4k: boolean): Promise<DiscordMessage> {
     if (!this.deps.linkedUser(discordUserId)) return text(NOT_LINKED);
+    if (!this.allowLookup(discordUserId)) return text(THROTTLED);
     let results = await this.searchTitles(title);
     if (typeof year === 'number') results = results.filter((r) => r.year === year);
     results = results.slice(0, 5);
@@ -209,7 +242,9 @@ export class CommandHandler {
     };
   }
 
-  private async search(title: string): Promise<DiscordMessage> {
+  private async search(discordUserId: string, title: string): Promise<DiscordMessage> {
+    if (!this.deps.allowUnlinkedSearch?.() && !this.deps.linkedUser(discordUserId)) return text(NOT_LINKED);
+    if (!this.allowLookup(discordUserId)) return text(THROTTLED);
     const results = (await this.searchTitles(title)).slice(0, 5);
     if (results.length === 0) return text(`Nothing found for "${title}".`);
     const statuses = {

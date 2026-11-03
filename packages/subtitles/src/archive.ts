@@ -3,6 +3,16 @@ import { detectFormatFromBytes } from './formats.js';
 import type { SubtitleFile } from './types.js';
 import { isXz, xzDecompress } from './xz.js';
 
+/**
+ * Largest subtitle payload accepted at any stage: a download, one decompressed layer or one zip
+ * entry. Real subtitle files are well under 1 MB, so 20 MiB leaves room for big packs while a
+ * decompression bomb stops long before it can hurt the process.
+ */
+export const MAX_SUBTITLE_BYTES = 20 * 1024 * 1024;
+/** A zip entry that claims more than this ratio (and is not tiny) is treated as a bomb. */
+const MAX_ZIP_RATIO = 1000;
+const zlibLimit = { maxOutputLength: MAX_SUBTITLE_BYTES };
+
 // Archive handling (spec providers 1.11): sniff by content, read zip (store/deflate),
 // gunzip, un-xz, refuse rar/7z, and pick the right subtitle entry out of a pack.
 
@@ -79,13 +89,24 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
       encrypted,
       read: () => {
         if (encrypted) throw new ArchiveError('unsupported-archive', `zip: ${name} is encrypted`);
+        if (size > MAX_SUBTITLE_BYTES) throw new ArchiveError('bad-archive', `zip: ${name} is too large`);
+        if (size > 1024 * 1024 && size > compressedSize * MAX_ZIP_RATIO) {
+          throw new ArchiveError('bad-archive', `zip: ${name} has an implausible compression ratio`);
+        }
         if (view.getUint32(localOffset, true) !== 0x04034b50) throw new ArchiveError('bad-archive', 'zip: bad local header');
         const ln = view.getUint16(localOffset + 26, true);
         const le = view.getUint16(localOffset + 28, true);
         const start = localOffset + 30 + ln + le;
         const data = bytes.subarray(start, start + compressedSize);
         if (method === 0) return data.slice();
-        if (method === 8) return new Uint8Array(inflateRawSync(data));
+        if (method === 8) {
+          // The declared size can lie, so the inflater is capped as well.
+          try {
+            return new Uint8Array(inflateRawSync(data, zlibLimit));
+          } catch (err) {
+            throw new ArchiveError('bad-archive', `zip: ${(err as Error).message}`);
+          }
+        }
         throw new ArchiveError('unsupported-archive', `zip: compression method ${method} not supported`);
       },
     });
@@ -95,7 +116,7 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
 
 export function gunzip(bytes: Uint8Array): Uint8Array {
   try {
-    return new Uint8Array(gunzipSync(bytes));
+    return new Uint8Array(gunzipSync(bytes, zlibLimit));
   } catch (err) {
     throw new ArchiveError('bad-archive', `gzip: ${(err as Error).message}`);
   }
@@ -213,7 +234,7 @@ export function extractSubtitle(file: SubtitleFile, hints: PickHints = {}, depth
 
 function unxz(bytes: Uint8Array): Uint8Array {
   try {
-    return xzDecompress(bytes);
+    return xzDecompress(bytes, MAX_SUBTITLE_BYTES);
   } catch (err) {
     throw new ArchiveError('bad-archive', (err as Error).message);
   }

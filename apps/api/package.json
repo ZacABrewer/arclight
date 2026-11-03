@@ -19,6 +19,7 @@
     "@arclight/indexers": "workspace:*",
     "@arclight/media-servers": "workspace:*",
     "@arclight/metadata": "workspace:*",
+    "@arclight/net": "workspace:*",
     "@arclight/notifications": "workspace:*",
     "@arclight/organizer": "workspace:*",
     "@arclight/parser": "workspace:*",

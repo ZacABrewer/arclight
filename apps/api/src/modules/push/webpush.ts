@@ -1,4 +1,5 @@
 import { createCipheriv, createECDH, createPrivateKey, hkdfSync, randomBytes, sign } from 'node:crypto';
+import { createSafeFetch, readLimitedText } from '@arclight/net';
 
 // Web Push with node:crypto only:
 // - RFC 8291 message encryption (ECDH P-256 + HKDF-SHA-256 + AES-128-GCM) in the RFC 8188
@@ -137,16 +138,22 @@ export interface SendResult {
   message?: string;
 }
 
+const pushFetch = createSafeFetch({ timeoutMs: 15_000, maxBytes: 64 * 1024, maxRedirects: 0 });
+
 /** Encrypt `payload` and POST it to the subscription's push service. */
 export async function sendWebPush(target: PushTarget, payload: string, opts: SendOptions): Promise<SendResult> {
   const body = encryptPayload(Buffer.from(payload, 'utf8'), target, opts.encrypt);
   const url = new URL(target.endpoint);
   const now = opts.now?.() ?? new Date();
   const jwt = vapidJwt(opts.vapid, url.origin, opts.subject, Math.floor(now.getTime() / 1000) + 12 * 3600);
-  const doFetch = opts.fetchImpl ?? fetch;
+  // Endpoints are user-supplied: https only, the resolved address vetted (safe fetch), and a
+  // redirect is a failure, never followed (DATA-05).
+  if (url.protocol !== 'https:') return { status: 0, ok: false, gone: false, message: 'push endpoint is not https' };
+  const doFetch = opts.fetchImpl ?? pushFetch;
   let res: Response;
   try {
     res = await doFetch(target.endpoint, {
+      redirect: 'manual',
       method: 'POST',
       headers: {
         authorization: `vapid t=${jwt}, k=${opts.vapid.publicKey}`,
@@ -163,6 +170,6 @@ export async function sendWebPush(target: PushTarget, payload: string, opts: Sen
   }
   const ok = res.status >= 200 && res.status < 300;
   const gone = res.status === 404 || res.status === 410;
-  const text = ok ? '' : await res.text().catch(() => '');
-  return { status: res.status, ok, gone, ...(text ? { message: text.slice(0, 300) } : {}) };
+  const text = await readLimitedText(res, 4096).catch(() => '');
+  return { status: res.status, ok, gone, ...(text && !ok ? { message: text.slice(0, 300) } : {}) };
 }

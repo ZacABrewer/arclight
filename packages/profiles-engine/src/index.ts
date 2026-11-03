@@ -37,6 +37,7 @@ export {
   specDomains,
   formatMatches,
   isValidPattern,
+  patternProblem,
   matchCustomFormats,
   meetsMinFormatScore,
   resolveFileLayout,
@@ -62,6 +63,7 @@ export {
 export {
   applicableReleaseProfiles,
   isValidTerm,
+  termProblem,
   matchesReleaseProfiles,
   matchesTerm,
   matchingTerms,

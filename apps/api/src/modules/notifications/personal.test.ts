@@ -230,12 +230,78 @@ describe('host checks', () => {
     for (const host of ['10.0.0.1', '172.16.5.4', '169.254.1.1', '127.0.0.1', 'fd12:3456::1', 'fe80::1', '::ffff:192.168.0.1', 'router', 'box.home.arpa']) {
       expect(isPrivateHost(host), host).toBe(true);
     }
-    for (const host of ['ntfy.sh', '8.8.8.8', '172.32.0.1', 'hooks.example.com', '2001:db8::1']) {
+    for (const host of ['ntfy.sh', '8.8.8.8', '172.32.0.1', 'hooks.example.com', '2606:4700:4700::1111']) {
       expect(isPrivateHost(host), host).toBe(false);
     }
     expect(privateTarget({ host: '192.168.0.2', port: 8080 })).toBe('192.168.0.2');
     expect(privateTarget({ urls: ['ntfys://ntfy.sh/topic', 'json://10.1.1.1/x'] })).toBe('10.1.1.1');
     expect(privateTarget({ url: 'https://ntfy.sh/x' })).toBeUndefined();
+  });
+
+  it('catches every IPv4-in-IPv6 and shorthand spelling (DATA-01, DATA-42)', () => {
+    for (const host of [
+      '[::ffff:7f00:1]',
+      '::ffff:a9fe:a9fe',
+      '0:0:0:0:0:ffff:7f00:1',
+      '::127.0.0.1',
+      '64:ff9b::7f00:1',
+      'fec0::1',
+      '198.18.0.1',
+      '127.1',
+      '0x7f.1',
+      '0177.0.0.1',
+      '2001:db8::1',
+    ]) {
+      expect(isPrivateHost(host), host).toBe(true);
+    }
+    expect(privateTarget({ url: 'http://[::ffff:127.0.0.1]:8080/api' })).toBeDefined();
+    expect(privateTarget({ url: 'http://0x7f.1/' })).toBeDefined();
+  });
+});
+
+describe('default agents send through the safe fetch (DATA-01, DATA-42)', () => {
+  async function loopbackStub() {
+    const http = await import('node:http');
+    let hits = 0;
+    const server = http.createServer((_req, res) => {
+      hits += 1;
+      res.end('ok');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    return { port, hits: () => hits, close: () => new Promise((r) => server.close(r)) };
+  }
+
+  it('a destination saved while admin cannot reach the LAN once the owner is demoted', async () => {
+    const db = await createTestDb({ ...tables, ...requestsSchema });
+    const personal = new PersonalNotifications({ db, log, now: () => new Date(NOW), sleep: async () => {} });
+    const stub = await loopbackStub();
+    try {
+      const admin = addUser(db, { username: 'boss', role: 'admin' });
+      const created = personal.create(admin.id, dest('lan', { events: ['requestApproved'] }, { url: `http://127.0.0.1:${stub.port}/hook` }));
+      expect(created.id).toBeGreaterThan(0);
+      db.update((await import('../auth/schema.js')).users).set({ role: 'user', permissions: 0 }).run();
+      const outcomes = await personal.dispatch(admin.id, 'requestApproved', approved(admin.id));
+      expect(outcomes[0]?.ok).toBe(false);
+      expect(stub.hits()).toBe(0);
+    } finally {
+      await stub.close();
+    }
+  });
+
+  it('a non-admin test send to a mapped-IPv6 loopback URL is refused before any request', async () => {
+    const db = await createTestDb({ ...tables, ...requestsSchema });
+    const personal = new PersonalNotifications({ db, log, now: () => new Date(NOW), sleep: async () => {} });
+    const stub = await loopbackStub();
+    try {
+      const user = addUser(db, { username: 'pat' });
+      await expect(
+        personal.test(user.id, dest('x', {}, { url: `http://[::ffff:127.0.0.1]:${stub.port}/hook` }), false),
+      ).rejects.toThrow(/local network address/);
+      expect(stub.hits()).toBe(0);
+    } finally {
+      await stub.close();
+    }
   });
 });
 

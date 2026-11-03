@@ -372,10 +372,20 @@ export class ContainerUpdater {
       const ordered = orderParentsFirst([...set.values()]);
 
       // 1. Pull new images for the containers that have an update (dependents keep theirs).
+      // Pull the exact digest the check compared (not the tag, which may have moved since),
+      // then point the tag at it so the recreated container keeps its `repo:tag` reference.
+      const latestById = new Map(wanted.map((w) => [w.id, w.latestDigest]));
       for (const c of ordered) {
         if (!pullIds.has(c.Id)) continue;
         const ref = parseImageRef(c.Config.Image);
-        await docker.pull(pullName(ref), ref.tag);
+        const name = pullName(ref);
+        const digest = latestById.get(c.Id);
+        if (digest && /^sha256:[0-9a-f]{64}$/i.test(digest)) {
+          await docker.pull(name, digest);
+          await docker.tag(`${name}@${digest}`, name, ref.tag);
+        } else {
+          await docker.pull(name, ref.tag);
+        }
       }
 
       // 2. Create the replacements under temporary names, parents first.

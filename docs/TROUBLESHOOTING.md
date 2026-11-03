@@ -126,6 +126,7 @@ Arclight also does step 1 for you. With **Recover stalled downloads** on (Settin
 - Incoming connections are impossible: no forwarded port, or the listening port is blocked. Outgoing connections still work, so you get fewer peers, not none.
 - You are on a private tracker and the tracker rejected the announce (passkey, ratio or account problem). DHT and peer exchange are not used for private torrents.
 - A transport setting is switched off. If both TCP and uTP are off, no peer can connect at all (Settings > Torrent Engine warns about this).
+- The tracker or the peers are on your local network. Trackers, web seeds and peers on loopback / LAN addresses are refused by default; the tracker row shows "tracker refused: ...". See [Local network addresses](using/download-clients.md#local-network-addresses).
 
 **How to confirm:**
 
@@ -758,7 +759,7 @@ Source: `RemoteEngineUnreachable` (error).
 
 **How to confirm:** the Health message includes the engine name, its address and the error. Settings > Download Clients > **Test**.
 
-**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. Setup details: [Remote engine](REMOTE-ENGINE.md).
+**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. "rejected the token" means the Token field does not match: the agent's `AGENT_TOKEN`, or for another Arclight its agent token (from 0.24 its API key works only while that instance still accepts it). HTTP 429 means too many wrong tokens from this address; fix the token and wait for the back-off (up to 15 minutes). An `https://` agent with a self-signed certificate needs `NODE_EXTRA_CA_CERTS` on this Arclight. Setup details: [Remote engine](REMOTE-ENGINE.md).
 
 <a id="download-client-removes-completed-downloads"></a>
 ### Download client removes completed downloads
@@ -1205,7 +1206,7 @@ Source: `FfprobeMissing` (warning).
 **Fix:**
 
 - Docker: the image ships ffmpeg; check you are not overriding `PATH`.
-- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary.
+- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary. Use ffmpeg 6.0 or newer, see [Requirements](getting-started/requirements.md#ffmpeg-native-installs).
 - Restart Arclight, then press **Analyze** on a title or run the AnalyzeMedia task under System > Tasks.
 
 <a id="orphan-files-found"></a>

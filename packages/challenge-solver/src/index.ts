@@ -10,7 +10,7 @@ export { detectChallenge, CHALLENGE_TITLES, CHALLENGE_HTML_MARKERS } from './cha
 export type { PageSnapshot, ChallengeVerdict, ChallengeKind } from './challenge.js';
 export { findBrowser, browserCandidates } from './browser.js';
 export type { BrowserCandidate, FindBrowserOptions } from './browser.js';
-export { launchBrowser, browserArgs, parseDevToolsActivePort, parseDevToolsListening, DEFAULT_LAUNCH_TIMEOUT_MS } from './launch.js';
+export { launchBrowser, browserArgs, parseDevToolsActivePort, parseDevToolsListening, runningAsRoot, ALLOW_ROOT_ENV, DEFAULT_LAUNCH_TIMEOUT_MS } from './launch.js';
 export type { LaunchOptions, LaunchedBrowser } from './launch.js';
 export { CdpConnection, DEFAULT_CDP_TIMEOUT_MS } from './cdp.js';
 export type { WebSocketLike, WebSocketFactory, CdpListener, CdpParams } from './cdp.js';
@@ -21,6 +21,9 @@ export {
   DEFAULT_SOLVE_TIMEOUT_MS,
   DEFAULT_IDLE_CLOSE_MS,
   DEFAULT_POLL_INTERVAL_MS,
+  MAX_REQUEST_TIMEOUT_MS,
+  DEFAULT_MAX_SESSIONS,
+  DEFAULT_SESSION_IDLE_MS,
 } from './solver.js';
 export type { ChallengeSolverOptions, SolveRequest, SolveResult, SolverCookie, SolverLogLevel } from './solver.js';
 export { handleFlareSolverrCommand, SOLVER_API_VERSION } from './flaresolverr-api.js';

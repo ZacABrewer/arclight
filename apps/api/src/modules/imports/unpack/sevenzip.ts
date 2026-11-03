@@ -26,7 +26,22 @@ export interface ArchiveEntry {
   sizeBytes: number;
   folder: boolean;
   encrypted: boolean;
+  /** A symbolic or hard link (only set when the listing says so). */
+  link?: true;
 }
+
+/** What the installed 7-Zip can do safely. */
+export interface SevenZipInfo {
+  /** "25.01", or null when the banner could not be read. */
+  version: string | null;
+  /** 25.00 or newer: extraction refuses links that point outside the output folder (CVE-2025-11001 class). */
+  linkSafe: boolean;
+  /** The binary accepts `-snld-` (never create dangerous links), so it is passed on every extraction. */
+  snldSwitch: boolean;
+}
+
+/** The first 7-Zip release whose extraction will not write through a link out of the output folder. */
+export const MIN_LINK_SAFE_MAJOR = 25;
 
 export interface ArchiveListing {
   type: string | null;
@@ -99,6 +114,44 @@ export function findSevenZip(options: { refresh?: boolean; runner?: Runner; env?
   return lookup;
 }
 
+/** The version in a 7-Zip banner ("7-Zip (z) 26.03 (x64)", "7-Zip [64] 16.02", "7-Zip 24.09"), or null. */
+export function parseSevenZipVersion(text: string): { major: number; minor: number; text: string } | null {
+  const m = /7-Zip(?:\s+\([a-z]\))?(?:\s+\[\d+\])?\s+(\d+)\.(\d+)/i.exec(text);
+  if (!m) return null;
+  return { major: Number(m[1]), minor: Number(m[2]), text: `${m[1]}.${m[2]}` };
+}
+
+const infoCache = new Map<string, Promise<SevenZipInfo>>();
+
+/**
+ * Reads the 7-Zip version and probes for `-snld-` (an unknown switch makes 7-Zip fail with
+ * "Unknown switch" before it looks at the archive). Cached per binary unless a runner is given.
+ */
+export function describeSevenZip(binary: string, runner?: Runner): Promise<SevenZipInfo> {
+  const cached = runner ? undefined : infoCache.get(binary);
+  if (cached) return cached;
+  const run = runner ?? spawnRunner;
+  const lookup = (async (): Promise<SevenZipInfo> => {
+    let version: ReturnType<typeof parseSevenZipVersion> = null;
+    try {
+      const r = await run(binary, ['i'], { timeoutMs: 10_000 });
+      version = parseSevenZipVersion(`${r.stdout}\n${r.stderr}`);
+    } catch {
+      // unreadable: treated as an old version
+    }
+    let snldSwitch = false;
+    try {
+      const probe = await run(binary, ['x', '-y', '-snld-', '-o.', '--', 'arclight-probe-missing.7z'], { timeoutMs: 10_000 });
+      snldSwitch = !/unknown switch|unsupported switch|incorrect command line/i.test(`${probe.stdout}\n${probe.stderr}`);
+    } catch {
+      snldSwitch = false;
+    }
+    return { version: version?.text ?? null, linkSafe: version !== null && version.major >= MIN_LINK_SAFE_MAJOR, snldSwitch };
+  })();
+  if (!runner) infoCache.set(binary, lookup);
+  return lookup;
+}
+
 /** Classifies 7-Zip's output of a failed run. */
 export function classifyFailure(output: string): SevenZipFailure {
   if (/wrong password|cannot open encrypted archive|encrypted archive/i.test(output)) return 'encrypted';
@@ -154,11 +207,15 @@ export function parseSltListing(stdout: string): ArchiveListing {
     const path = fields.get('Path');
     if (path === undefined || path === '') continue;
     const attributes = fields.get('Attributes') ?? '';
+    // Links show up as a link target field, or as a Unix mode starting with "l" ("A_ lrwxrwxrwx").
+    const link =
+      ['Symbolic Link', 'Hard Link', 'Link'].some((k) => (fields.get(k) ?? '') !== '') || /(?:^|\s)-?l[r-][w-][xsStT-]/.test(attributes);
     entries.push({
       path,
       sizeBytes: Number(fields.get('Size') ?? 0) || 0,
       folder: fields.get('Folder') === '+' || attributes.startsWith('D'),
       encrypted: fields.get('Encrypted') === '+',
+      ...(link ? { link: true as const } : {}),
     });
   }
   return { type, entries };
@@ -178,6 +235,8 @@ export class SevenZip {
     readonly binary: string,
     private readonly runner: Runner = spawnRunner,
     private readonly timeoutMs = 6 * 60 * 60_000,
+    /** From describeSevenZip; null when unknown (treated as an old, link-unsafe 7-Zip). */
+    readonly info: SevenZipInfo | null = null,
   ) {}
 
   /** Lists an archive (the first volume of a set). Throws SevenZipError. */
@@ -201,7 +260,7 @@ export class SevenZip {
   async extract(archive: string, outDir: string, onProgress?: (fraction: number) => void, archiveName = archive): Promise<void> {
     const r = await this.runner(
       this.binary,
-      ['x', '-y', '-aoa', '-bsp1', '-bso0', '-bb0', `-p${DUMMY_PASSWORD}`, `-o${outDir}`, '--', archive],
+      ['x', '-y', '-aoa', ...(this.info?.snldSwitch ? ['-snld-'] : []), '-bsp1', '-bso0', '-bb0', `-p${DUMMY_PASSWORD}`, `-o${outDir}`, '--', archive],
       {
         timeoutMs: this.timeoutMs,
         ...(onProgress

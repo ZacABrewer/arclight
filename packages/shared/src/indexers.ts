@@ -671,7 +671,7 @@ export const DEFINITION_FEED_SCHEMA_VERSION = 1;
 export const DefinitionFeedSettings = z.object({
   enabled: z.boolean().default(true),
   /** Base URL; `index.json` and every entry's `file` are resolved against it. */
-  url: z.string().url().default(DEFAULT_DEFINITION_FEED_URL),
+  url: z.string().url({ protocol: /^https?$/ }).default(DEFAULT_DEFINITION_FEED_URL),
   /** 1-168 hours between automatic syncs. */
   intervalHours: z.number().int().min(1).max(168).default(12),
   /** auto: sync on the interval and install. manual: only POST /indexer/definition/feed/sync. */
@@ -702,7 +702,7 @@ export const DEFAULT_COMMUNITY_CATALOGUE_URL = `https://api.github.com/repos/Pro
 export const CommunityCatalogueSettings = z.object({
   /** Off: the community definitions are not loaded (files stay on disk) and nothing is fetched. */
   enabled: z.boolean().default(true),
-  url: z.string().url().default(DEFAULT_COMMUNITY_CATALOGUE_URL),
+  url: z.string().url({ protocol: /^https?$/ }).default(DEFAULT_COMMUNITY_CATALOGUE_URL),
   /** 1-168 hours between automatic syncs. */
   intervalHours: z.number().int().min(1).max(168).default(24),
 });

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { realpath, stat } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseMagnet, parseTorrent, TorrentEngineError, type Session, type Torrent } from '@arclight/torrent-engine';
 import {
@@ -42,6 +42,39 @@ export interface EngineAgentCoreOptions {
   vpn?: () => { interface: string | null; up: boolean | null };
   /** How often a getter-backed session is re-checked for event subscriptions. Default 2 s. */
   sessionPollMs?: number;
+  /** Most file checksums kept in memory (least recently used dropped). Default 512. */
+  checksumCacheSize?: number;
+}
+
+/** Default bound of the checksum cache. */
+export const CHECKSUM_CACHE_SIZE = 512;
+
+/**
+ * Real path of `path` when it exists; otherwise the real path of its deepest existing ancestor
+ * with the missing segments appended (they cannot be links yet).
+ */
+export async function realpathOfExisting(path: string): Promise<string> {
+  const missing: string[] = [];
+  let current = resolve(path);
+  for (;;) {
+    try {
+      const real = await realpath(current);
+      return missing.length ? join(real, ...missing.reverse()) : real;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+      const parent = dirname(current);
+      if (parent === current) return resolve(path);
+      missing.push(basename(current));
+      current = parent;
+    }
+  }
+}
+
+/** True when `child` is `parent` or inside it (both absolute, already resolved). */
+export function isInside(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 /** A file to stream back: the range is inclusive. */
@@ -59,6 +92,11 @@ export interface FileRange {
  */
 export class EngineAgentCore {
   private readonly checksums = new Map<string, { size: number; mtimeMs: number; hash: Promise<string> }>();
+
+  /** Checksums currently cached (diagnostics and tests). */
+  get checksumCacheEntries(): number {
+    return this.checksums.size;
+  }
 
   constructor(private readonly opts: EngineAgentCoreOptions) {}
 
@@ -87,14 +125,17 @@ export class EngineAgentCore {
     return resolve(typeof r === 'function' ? r() : r);
   }
 
-  /** Resolves `path` and refuses anything outside the downloads root. */
-  private insideRoot(path: string): string {
+  /**
+   * Resolves `path` and refuses anything outside the downloads root, also through symbolic links:
+   * the real path of the target (or of its deepest existing parent) must be inside the root's.
+   */
+  private async insideRoot(path: string): Promise<string> {
     const root = this.downloadsRoot();
     const full = resolve(root, path);
-    const rel = relative(root, full);
-    if (rel.startsWith('..') || isAbsolute(rel)) {
-      throw new AgentError('forbidden', `Save path ${path} is outside the agent downloads folder ${root}.`);
-    }
+    const refuse = () => new AgentError('forbidden', `Save path ${path} is outside the agent downloads folder ${root}.`);
+    if (!isInside(root, full)) throw refuse();
+    const [realRoot, realTarget] = await Promise.all([realpathOfExisting(root), realpathOfExisting(full)]);
+    if (!isInside(realRoot, realTarget)) throw refuse();
     return full;
   }
 
@@ -196,9 +237,20 @@ export class EngineAgentCore {
     const f = await this.completeFile(id, index);
     let cached = this.checksums.get(f.path);
     if (!cached || cached.size !== f.size || cached.mtimeMs !== f.mtimeMs) {
-      cached = { size: f.size, mtimeMs: f.mtimeMs, hash: sha256File(f.path) };
-      this.checksums.set(f.path, cached);
-      cached.hash.catch(() => this.checksums.delete(f.path));
+      const entry = { size: f.size, mtimeMs: f.mtimeMs, hash: sha256File(f.path) };
+      cached = entry;
+      entry.hash.catch(() => {
+        if (this.checksums.get(f.path) === entry) this.checksums.delete(f.path);
+      });
+    }
+    // Re-insert: the Map's order is least recently used first.
+    this.checksums.delete(f.path);
+    this.checksums.set(f.path, cached);
+    const max = Math.max(1, this.opts.checksumCacheSize ?? CHECKSUM_CACHE_SIZE);
+    while (this.checksums.size > max) {
+      const oldest = this.checksums.keys().next().value;
+      if (oldest === undefined) break;
+      this.checksums.delete(oldest);
     }
     return { index, length: f.size, sha256: await cached.hash };
   }
@@ -218,7 +270,7 @@ export class EngineAgentCore {
       throw new AgentError('bad-request', `Invalid torrent: ${messageOf(error)}`, { cause: error });
     }
     if (session.getTorrent(id)) return { id, duplicate: true };
-    const savePath = this.insideRoot(options.savePath ?? (options.category ? join(this.downloadsRoot(), options.category) : this.downloadsRoot()));
+    const savePath = await this.insideRoot(options.savePath ?? (options.category ? join(this.downloadsRoot(), options.category) : this.downloadsRoot()));
     try {
       await session.addTorrent({
         ...(torrentFile ? { torrent: torrentFile } : { magnet: options.magnet as string }),
@@ -258,7 +310,7 @@ export class EngineAgentCore {
 
   async setSavePath(id: string, savePath: string): Promise<void> {
     const { session, t } = this.torrent(id);
-    const target = this.insideRoot(savePath);
+    const target = await this.insideRoot(savePath);
     if (target === resolve(t.savePath)) return;
     await t.moveStorage(target);
     await session.saveResumeData(t);

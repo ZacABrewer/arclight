@@ -220,3 +220,70 @@ describe('DHT', () => {
     expect(b.getNodes()).toContainEqual({ host: '127.0.0.1', port: a.port });
   });
 });
+
+describe('DHT hostile input (DATA-22, DATA-55)', () => {
+  /** A fake node answering every query with `reply(query)`. */
+  async function fakeNode(reply: (q: BDict) => BDict): Promise<{ port: number; queries: number }> {
+    const s = dgram.createSocket('udp4');
+    await new Promise<void>((r) => s.bind(0, '127.0.0.1', () => r()));
+    const state = { port: s.address().port, queries: 0 };
+    s.on('message', (m, rinfo) => {
+      let q: BDict;
+      try {
+        q = decode(m) as BDict;
+      } catch {
+        return;
+      }
+      state.queries++;
+      s.send(encode({ t: q.t as Buffer, y: 'r', r: { id: randomBytes(20), ...reply(q) } } as never), rinfo.port, rinfo.address);
+    });
+    open.push({ close: () => s.close() } as unknown as DHT);
+    return state;
+  }
+  const compactNodes = (n: number, host: number[], basePort: number) =>
+    Buffer.concat(Array.from({ length: n }, (_, i) => Buffer.concat([randomBytes(20), Buffer.from(host), Buffer.from([((basePort + i) >> 8) & 0xff, (basePort + i) & 0xff])])));
+  const compactPeer = (host: number[], port: number) => Buffer.from([...host, (port >> 8) & 0xff, port & 0xff]);
+
+  it('drops node and peer addresses that allowAddress refuses', async () => {
+    // Hands out nodes and peers on 127.0.0.3 (still loopback, so nothing leaves the machine).
+    const evil = await fakeNode(() => ({
+      token: Buffer.from('tok'),
+      nodes: compactNodes(50, [127, 0, 0, 3], 30000),
+      values: [compactPeer([127, 0, 0, 3], 1), compactPeer([127, 0, 0, 1], 2)],
+    }));
+    const d = await makeNode([`127.0.0.1:${evil.port}`], { queryTimeoutMs: 100, allowAddress: (h) => h === '127.0.0.1' });
+    await d.bootstrap();
+    expect(d.getNodes().every((n) => n.host === '127.0.0.1')).toBe(true);
+    // Lookups only reach allowed nodes: seed the table with the evil node itself (allowed).
+    d.addNode({ host: '127.0.0.1', port: evil.port });
+    await new Promise((r) => setTimeout(r, 50));
+    const res = await d.getPeers(randomBytes(20));
+    expect(res.peers.every((p) => p.host === '127.0.0.1')).toBe(true);
+    d.addNode({ host: '127.0.0.3', port: 1 });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(d.getNodes().some((n) => n.host === '127.0.0.3')).toBe(false);
+  });
+
+  it('keeps a lookup bounded when nodes flood it with contacts and peers', async () => {
+    const ports: number[] = [];
+    const fakes = [];
+    for (let f = 0; f < 3; f++) {
+      fakes.push(
+        await fakeNode(() => ({
+          token: Buffer.from('tok'),
+          // the other fakes plus 600 dead contacts (closed loopback ports)
+          nodes: Buffer.concat([...ports.map((p) => compactNodes(1, [127, 0, 0, 1], p)), compactNodes(600, [127, 0, 0, 1], 40000 + f * 1000)]),
+          values: Array.from({ length: 2500 }, (_, i) => compactPeer([127, 0, 0, 1], 1 + f * 2500 + i)),
+        })),
+      );
+      ports.push(fakes[f]!.port);
+    }
+    const d = await makeNode([], { queryTimeoutMs: 50 });
+    for (const p of ports) d.addNode({ host: '127.0.0.1', port: p });
+    for (let i = 0; i < 50 && d.nodeCount < 3; i++) await new Promise((r) => setTimeout(r, 10));
+    const started = Date.now();
+    const res = await d.getPeers(randomBytes(20));
+    expect(res.peers.length).toBe(5000);
+    expect(Date.now() - started).toBeLessThan(10_000);
+  }, 20_000);
+});

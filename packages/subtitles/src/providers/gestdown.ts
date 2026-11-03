@@ -83,7 +83,7 @@ export class GestdownProvider extends BaseProvider {
     if (res.status === 404) return [];
     if (!res.ok) throw this.statusError(res, 'show lookup');
     try {
-      const body = JSON.parse(await res.text()) as { shows?: GestdownShow[] };
+      const body = JSON.parse(await this.readText(res)) as { shows?: GestdownShow[] };
       return Array.isArray(body.shows) ? body.shows.filter((s) => s && s.id) : [];
     } catch {
       return [];
@@ -103,7 +103,7 @@ export class GestdownProvider extends BaseProvider {
       if (res.status === 404) return [];
       if (!res.ok) throw this.statusError(res, 'episode subtitles');
       try {
-        const body = JSON.parse(await res.text()) as { matchingSubtitles?: GestdownSubtitle[] };
+        const body = JSON.parse(await this.readText(res)) as { matchingSubtitles?: GestdownSubtitle[] };
         return Array.isArray(body.matchingSubtitles) ? body.matchingSubtitles : [];
       } catch {
         return [];

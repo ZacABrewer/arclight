@@ -167,10 +167,36 @@ describe('/status and /search', () => {
     const h = await harness();
     const u = addUser(h.db);
     await h.services.requests.create({ userId: u.id, permissions: P.REQUEST }, { mediaType: 'movie', tmdbId: 604 });
+    await linked(h, '888');
     const reply = await run(h, interaction({ command: 'search', options: { title: 'matrix' } }, '888'));
     const fields = reply.embeds![0]!.fields!;
     expect(fields.find((f) => f.name.startsWith('The Matrix (1999)'))!.value).toBe('Not requested');
     expect(fields.find((f) => f.name.startsWith('The Matrix Reloaded'))!.value).toBe('Requested');
+  });
+
+  it('/search needs a linked account unless unlinked search is allowed', async () => {
+    const h = await harness();
+    const refused = await run(h, interaction({ command: 'search', options: { title: 'matrix' } }, '889'));
+    expect(refused.content).toContain('/link <code>');
+    expect(refused.embeds ?? []).toEqual([]);
+    const open = await harness({ settings: { allowUnlinkedSearch: true } });
+    const reply = await run(open, interaction({ command: 'search', options: { title: 'matrix' } }, '889'));
+    expect(reply.embeds![0]!.fields!.length).toBeGreaterThan(0);
+  });
+
+  it('throttles title lookups per Discord user (the 6th within a minute)', async () => {
+    const h = await harness();
+    await linked(h, '890');
+    await linked(h, '891');
+    for (let n = 0; n < 5; n++) {
+      const ok = await run(h, interaction({ command: 'search', options: { title: 'matrix' } }, '890'));
+      expect(ok.embeds![0]!.fields!.length).toBeGreaterThan(0);
+    }
+    const sixth = await run(h, interaction({ command: 'search', options: { title: 'matrix' } }, '890'));
+    expect(sixth.content).toMatch(/too often/);
+    // /request shares the budget; other users are unaffected.
+    expect((await run(h, interaction({ command: 'request', options: { title: 'matrix' } }, '890'))).content).toMatch(/too often/);
+    expect((await run(h, interaction({ command: 'search', options: { title: 'matrix' } }, '891'))).embeds![0]!.fields!.length).toBeGreaterThan(0);
   });
 });
 

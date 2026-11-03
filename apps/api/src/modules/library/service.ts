@@ -45,6 +45,7 @@ import { episodeAiredMs, episodeReleaseMs, isMovieReleased, matchesReleaseFilter
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { listSearchCondition } from '../../db/list-search.js';
+import { insideAnyRoot, rootFolderPathProblem } from './root-path.js';
 import { LibraryError } from './errors.js';
 import { rewriteTagReferences } from '../tag-rules/references.js';
 import { albums, artists, audioFiles, authors, books, qualityProfiles, tracks } from '../../db/schema.js';
@@ -259,7 +260,8 @@ export async function getRootFolder(db: LibraryDb, id: number): Promise<RootFold
 
 export async function addRootFolder(db: LibraryDb, req: AddRootFolderRequest): Promise<RootFolder> {
   const path = req.path.trim().replace(/[\\/]+$/, '') || req.path.trim();
-  if (!isAbsolute(path)) throw new LibraryError('VALIDATION', 'root folder path must be absolute');
+  const problem = rootFolderPathProblem(path);
+  if (problem) throw new LibraryError('VALIDATION', problem);
 
   const info = await describeRootFolder(path);
   if (!info.accessible) {
@@ -658,6 +660,7 @@ export function updateSeries(db: Db, id: number, req: UpdateSeriesRequest, now: 
       patch.path = req.path;
     }
     if (patch.path && patch.path !== current.path) {
+      requireInsideRoot(tx, patch.path);
       const clash = tx.select({ id: t.series.id }).from(t.series).where(eq(t.series.path, patch.path)).get();
       if (clash) throw new LibraryError('CONFLICT', `a series already uses the path ${patch.path}`);
     }
@@ -878,6 +881,7 @@ export function refreshSeriesMetadata(db: Db, id: number, meta: SeriesMetadataIn
 export async function deleteSeries(db: Db, id: number, opts: DeleteMediaOptions = {}): Promise<void> {
   const row = db.select().from(t.series).where(eq(t.series.id, id)).get();
   if (!row) throw LibraryError.notFound('series', id);
+  if (opts.deleteFiles) checkRemovableFolder(db, row.path, row.rootFolderPath);
   db.transaction((tx) => {
     if (opts.addExclusion) {
       tx.insert(t.importExclusions)
@@ -887,14 +891,30 @@ export async function deleteSeries(db: Db, id: number, opts: DeleteMediaOptions 
     }
     tx.delete(t.series).where(eq(t.series.id, id)).run(); // cascades to seasons, episodes, media_files
   });
-  if (opts.deleteFiles) await removeMediaFolder(row.path, row.rootFolderPath);
+  if (opts.deleteFiles) await removeMediaFolder(db, row.path, row.rootFolderPath);
 }
 
-async function removeMediaFolder(path: string, rootFolderPath: string): Promise<void> {
-  // Never delete the root folder itself or anything outside it, whatever the row says.
-  if (resolve(path) === resolve(rootFolderPath) || !isPathInside(rootFolderPath, path)) {
+function registeredRoots(db: LibraryDb): string[] {
+  return db.select({ path: t.rootFolders.path }).from(t.rootFolders).all().map((r) => r.path);
+}
+
+/** Library paths set by hand must lie inside a registered root folder. */
+function requireInsideRoot(db: LibraryDb, path: string): void {
+  if (!insideAnyRoot(registeredRoots(db), path)) {
+    throw new LibraryError('VALIDATION', `path must be inside a root folder: ${path}`);
+  }
+}
+
+function checkRemovableFolder(db: LibraryDb, path: string, rootFolderPath: string): void {
+  // Never delete the root folder itself or anything outside it, whatever the row says; the
+  // row's root folder must also still be a registered one.
+  if (resolve(path) === resolve(rootFolderPath) || !isPathInside(rootFolderPath, path) || !insideAnyRoot(registeredRoots(db), path)) {
     throw new LibraryError('VALIDATION', `refusing to delete ${path}: not inside its root folder ${rootFolderPath}`);
   }
+}
+
+async function removeMediaFolder(db: LibraryDb, path: string, rootFolderPath: string): Promise<void> {
+  checkRemovableFolder(db, path, rootFolderPath);
   await rm(path, { recursive: true, force: true });
 }
 
@@ -1115,6 +1135,7 @@ export function updateMovie(db: Db, id: number, req: UpdateMovieRequest, now: st
       patch.path = req.path;
     }
     if (patch.path && patch.path !== current.path) {
+      requireInsideRoot(tx, patch.path);
       const clash = tx.select({ id: t.movies.id }).from(t.movies).where(eq(t.movies.path, patch.path)).get();
       if (clash) throw new LibraryError('CONFLICT', `a movie already uses the path ${patch.path}`);
     }
@@ -1161,6 +1182,7 @@ export function refreshMovieMetadata(db: LibraryDb, id: number, meta: MovieMetad
 export async function deleteMovie(db: Db, id: number, opts: DeleteMediaOptions = {}): Promise<void> {
   const row = db.select().from(t.movies).where(eq(t.movies.id, id)).get();
   if (!row) throw LibraryError.notFound('movie', id);
+  if (opts.deleteFiles) checkRemovableFolder(db, row.path, row.rootFolderPath);
   db.transaction((tx) => {
     if (opts.addExclusion) {
       tx.insert(t.importExclusions)
@@ -1170,7 +1192,7 @@ export async function deleteMovie(db: Db, id: number, opts: DeleteMediaOptions =
     }
     tx.delete(t.movies).where(eq(t.movies.id, id)).run();
   });
-  if (opts.deleteFiles) await removeMediaFolder(row.path, row.rootFolderPath);
+  if (opts.deleteFiles) await removeMediaFolder(db, row.path, row.rootFolderPath);
 }
 
 export function listImportExclusions(db: LibraryDb): ImportExclusion[] {
@@ -1412,6 +1434,10 @@ function repointEpisodes(db: LibraryDb, episodeIds: readonly number[]): void {
 export async function deleteMediaFile(db: Db, id: number, opts: { deleteFromDisk?: boolean } = {}): Promise<void> {
   const row = db.select().from(t.mediaFiles).where(eq(t.mediaFiles.id, id)).get();
   if (!row) throw LibraryError.notFound('media file', id);
+  // Only ever remove files that live inside a registered root folder.
+  if (opts.deleteFromDisk && !insideAnyRoot(registeredRoots(db), row.path)) {
+    throw new LibraryError('VALIDATION', `refusing to delete ${row.path}: not inside a root folder`);
+  }
   db.transaction((tx) => {
     const affected = [
       ...tx.select({ id: t.episodes.id }).from(t.episodes).where(eq(t.episodes.episodeFileId, id)).all().map((r) => r.id),

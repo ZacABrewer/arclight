@@ -31,6 +31,7 @@ import type { EngineInsights } from '../download-clients/service.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
 import { DiskGuard } from './disk-guard.js';
+import { containingRoot, moveRoots } from './move-roots.js';
 import { applySeedingRules, type SeedingRulesPorts, type SeedingRulesResult } from './seeding-rules.js';
 import { speedMode } from './speed.js';
 import { combineLimit, GUARD_CONNECTIONS_PER_SECOND, GUARD_HALF_OPEN, tcpConnectProbe, TunnelGuard } from './tunnel-guard.js';
@@ -240,6 +241,8 @@ export class TorrentService {
       utp: t.utp,
       ipv6: t.ipv6,
       webSeedConnectionsPerTorrent: t.webSeedConnectionsPerTorrent,
+      allowLocalPeers: t.localPeers,
+      allowLocalTrackers: t.localTrackers,
       listenPort: binding.port,
       listenAddress: binding.address,
       ...this.connectionLimits(s),
@@ -1028,9 +1031,21 @@ export class TorrentService {
     await session.resumeTorrent(torrent.infoHashHex);
   }
 
+  /**
+   * Moves a torrent's files. The target must sit inside a configured folder (the engine
+   * downloads folder, a built-in client's save or category folder, a library root folder),
+   * compared by real path, so "Move" cannot write into /etc or the config directory.
+   */
   async move(id: string, savePath: string): Promise<void> {
     const { session, torrent } = this.require(id);
-    await torrent.moveStorage(savePath);
+    const roots = moveRoots(this.db, this.effectiveDownloadsRoot(), this.downloadClients?.list() ?? []);
+    if (!(await containingRoot(savePath, roots))) {
+      throw new TorrentModuleError(
+        'VALIDATION',
+        'Move target must be an absolute folder inside the downloads folder, a built-in client save folder or a library root folder.',
+      );
+    }
+    await torrent.moveStorage(resolve(savePath));
     await session.saveResumeData(torrent);
   }
 
@@ -1095,6 +1110,8 @@ export type TorrentSettingsFilled = Omit<TorrentSettings, keyof typeof TORRENT_T
   utp: boolean;
   ipv6: boolean;
   webSeedConnectionsPerTorrent: number;
+  localPeers: boolean;
+  localTrackers: boolean;
 };
 
 export function withTransportDefaults(s: TorrentSettings): TorrentSettingsFilled {
@@ -1105,6 +1122,8 @@ export function withTransportDefaults(s: TorrentSettings): TorrentSettingsFilled
     utp: s.utp ?? TORRENT_TRANSPORT_DEFAULTS.utp,
     ipv6: s.ipv6 ?? TORRENT_TRANSPORT_DEFAULTS.ipv6,
     webSeedConnectionsPerTorrent: s.webSeedConnectionsPerTorrent ?? TORRENT_TRANSPORT_DEFAULTS.webSeedConnectionsPerTorrent,
+    localPeers: s.localPeers ?? TORRENT_TRANSPORT_DEFAULTS.localPeers,
+    localTrackers: s.localTrackers ?? TORRENT_TRANSPORT_DEFAULTS.localTrackers,
   };
 }
 

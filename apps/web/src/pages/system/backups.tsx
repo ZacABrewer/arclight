@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Backup, BackupSettings, BackupType } from '@arclight/shared';
+import { BACKUP_BAD_PASSPHRASE, BACKUP_PASSPHRASE_REQUIRED, SECRET_MASK, type Backup, type BackupSettings, type BackupType } from '@arclight/shared';
 import { backupApi } from '../../api/backup.js';
+import { ApiError } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, Field, FormSection, Input, LinkButton, Pane, Skeleton, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
@@ -25,7 +26,15 @@ export function SystemBackupsPage() {
   const remove = useDeleteBackup();
   const restore = useRestoreBackup();
   const toast = useToast();
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPendingState] = useState<Pending | null>(null);
+  // Encrypted backups: the passphrase field shows once the server asks for one (or for an .enc upload).
+  const [passphrase, setPassphrase] = useState('');
+  const [askPassphrase, setAskPassphrase] = useState(false);
+  const setPending = (next: Pending | null) => {
+    setPendingState(next);
+    setPassphrase('');
+    setAskPassphrase(next?.kind === 'upload' && next.file.name.toLowerCase().endsWith('.enc'));
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   // Search: file name, type and the shown date (`?q=` in the URL). Select all picks the matches only.
   const search = useClientListSearch(backups.data, (b) => [b.name, b.type, TYPE_LABELS[b.type], formatStamp(b.time)]);
@@ -42,18 +51,35 @@ export function SystemBackupsPage() {
     if (pending.kind === 'delete') {
       await remove.mutateAsync(pending.backup.id);
       setPending(null);
-    } else if (pending.kind === 'restore') {
-      await restore.mutateAsync({ id: pending.backup.id });
-      restored();
-    } else {
-      await restore.mutateAsync({ file: pending.file });
-      restored();
+      return;
     }
+    const given = askPassphrase && passphrase !== '' ? passphrase : undefined;
+    try {
+      await restore.mutateAsync(pending.kind === 'restore' ? { id: pending.backup.id, passphrase: given } : { file: pending.file, passphrase: given });
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === BACKUP_PASSPHRASE_REQUIRED || err.code === BACKUP_BAD_PASSPHRASE)) {
+        setAskPassphrase(true);
+        throw new Error(err.code === BACKUP_BAD_PASSPHRASE ? t('system.backups.wrongPassphrase') : t('system.backups.enterThePassphrase'));
+      }
+      throw err;
+    }
+    restored();
   };
 
   const columns: Column<Backup>[] = [
     { key: 'name', header: t('common.name'), mono: true, cell: (b) => <span className="sys-break">{b.name}</span>, sortValue: (b) => b.name },
-    { key: 'type', header: t('common.type'), width: '140px', cell: (b) => <Chip tone={TYPE_TONES[b.type]}>{TYPE_LABELS[b.type]}</Chip>, sortValue: (b) => b.type },
+    {
+      key: 'type',
+      header: t('common.type'),
+      width: '220px',
+      cell: (b) => (
+        <span className="sys-row-actions">
+          <Chip tone={TYPE_TONES[b.type]}>{TYPE_LABELS[b.type]}</Chip>
+          {b.encrypted ? <Chip tone="muted">{t('system.backups.encrypted')}</Chip> : null}
+        </span>
+      ),
+      sortValue: (b) => b.type,
+    },
     { key: 'size', header: t('common.size'), width: '100px', align: 'right', mono: true, cell: (b) => formatBytes(b.size), sortValue: (b) => b.size },
     {
       key: 'time',
@@ -99,7 +125,7 @@ export function SystemBackupsPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".zip,application/zip"
+              accept=".zip,.enc,application/zip,application/octet-stream"
               className="al-sr-only"
               aria-label={t('system.backups.backupFileToRestore')}
               data-testid="backup-upload"
@@ -172,6 +198,11 @@ export function SystemBackupsPage() {
               {t('system.backups.restore')} <span className="al-num">{pendingName}</span>{t('system.backups.theBackupReplacesTheCurrent')} <span className="al-num">arclight.db.pre-restore</span>.
             </p>
             <p>{t('system.backups.arclightMustBeRestartedAfterwards')}</p>
+            {askPassphrase ? (
+              <Field label={t('system.backups.passphrase')}>
+                <Input type="password" autoComplete="off" value={passphrase} onChange={(e) => setPassphrase(e.currentTarget.value)} />
+              </Field>
+            ) : null}
           </>
         ) : null}
       </ConfirmModal>
@@ -181,9 +212,13 @@ export function SystemBackupsPage() {
 
 type Draft = Record<keyof BackupSettings, string>;
 
+/** Shortest backup passphrase the server accepts. */
+const MIN_PASSPHRASE = 8;
+
 function toDraft(s: BackupSettings): Draft {
   return {
     folder: s.folder,
+    encryptionPassphrase: s.encryptionPassphrase,
     intervalDays: String(s.intervalDays),
     hour: String(s.hour),
     retentionCount: String(s.retentionCount),
@@ -210,8 +245,13 @@ export function parseBackupDraft(d: Draft): { value: BackupSettings } | { errors
   }
   const folder = d.folder.trim();
   if (folder && !/^([a-zA-Z]:[\\/]|[\\/])/.test(folder)) errors.folder = t('system.backups.useAnAbsolutePathOr');
+  // SECRET_MASK keeps the stored passphrase; '' turns encryption off.
+  const encryptionPassphrase = d.encryptionPassphrase;
+  if (encryptionPassphrase !== '' && encryptionPassphrase !== SECRET_MASK && encryptionPassphrase.length < MIN_PASSPHRASE) {
+    errors.encryptionPassphrase = t('system.backups.passphraseTooShort', { min: MIN_PASSPHRASE });
+  }
   if (Object.keys(errors).length) return { errors };
-  return { value: { folder, ...nums } };
+  return { value: { folder, ...nums, encryptionPassphrase } };
 }
 
 function BackupSettingsPane() {
@@ -264,6 +304,16 @@ function BackupSettingsPane() {
             {field('folder', t('system.backups.folder'), t('system.backups.folderHelp'), { type: 'text' })}
             {field('intervalDays', t('system.backups.intervalDays'), t('system.backups.intervalDaysHelp'), { min: 0, max: 365 })}
             {field('hour', t('system.backups.hourOfDay'), t('system.backups.hourOfDayHelp'), { min: 0, max: 23 })}
+          </FormSection>
+          <FormSection label={t('system.backups.encryption')}>
+            <Field inline label={t('system.backups.passphrase')} error={errors.encryptionPassphrase}>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={draft.encryptionPassphrase}
+                onChange={(e) => setDraft({ ...draft, encryptionPassphrase: e.currentTarget.value })}
+              />
+            </Field>
           </FormSection>
           <FormSection label={t('common.retention')}>
             {field('retentionCount', t('system.backups.keepAtMost'), t('system.backups.keepAtMostHelp'), { min: 0, max: 1000 })}

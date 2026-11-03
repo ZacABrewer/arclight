@@ -7,6 +7,7 @@
  */
 import type { z } from 'zod';
 import { httpStatusError, sendHttp, validate } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 
 export const SABNZBD = 'SABnzbd';
@@ -68,7 +69,7 @@ export class SabnzbdApi {
     }
 
     const response = await sendHttp(this.runtime, SABNZBD, url, init);
-    const text = await response.text();
+    const text = await readBodyText(SABNZBD, response);
     if (!response.ok) throw httpStatusError(SABNZBD, response.status, `mode=${mode}`, text);
 
     const trimmed = text.trim();

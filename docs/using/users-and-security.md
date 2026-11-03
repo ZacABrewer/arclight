@@ -11,7 +11,7 @@ Under "Authentication" you choose how people sign in from a browser:
 | Setting | Default | What it does |
 |---|---|---|
 | Method | Login page | **Login page**: a normal sign-in form. **Browser prompt (HTTP Basic)**: the browser shows its own username and password box. **None on the local network**: no sign-in for devices on your home network. |
-| Require for local addresses | On | When on, even devices on your home network must sign in. Turn it off and requests from the same machine and the private network (192.168.x, 10.x and similar) skip sign-in. |
+| Require for local addresses | On | When on, even devices on your home network must sign in. Turn it off and requests from the same machine and the private network (192.168.x, 10.x and similar) skip sign-in. Requests Arclight itself makes (a webhook, a feed or a redirect that points back at Arclight) never skip sign-in, even from the same machine. |
 | Session length (days) | 30 | How long a sign-in lasts, 1 to 365 days. |
 
 The API key always works for apps, whatever you choose here.
