@@ -108,6 +108,11 @@ export class NativeVideoLauncher {
   private profilePromise: Promise<VideoDeviceProfile> | null = null;
   /** Latest seek request wins. */
   private seekToken = 0;
+  /**
+   * Bumped by every open and by a close: an open that finishes after the player was closed (Back
+   * pressed while the next episode loads) or after a newer open must not (re)open the screen.
+   */
+  private openGen = 0;
   private started = false;
 
   constructor(deps: NativeVideoDeps) {
@@ -151,7 +156,7 @@ export class NativeVideoLauncher {
   launch = async (itemKey: string, opts: OpenVideoOptions = {}): Promise<void> => {
     this.deps.pauseAudio();
     try {
-      await this.open(itemKey, opts);
+      await this.open(itemKey, opts, ++this.openGen);
     } catch (err) {
       this.deps.onError?.(err instanceof Error ? err.message : String(err));
       throw err;
@@ -172,12 +177,14 @@ export class NativeVideoLauncher {
   }
 
   /** Fetch the item, ask for a session and open the native player (an open one loads it in place). */
-  private async open(itemKey: string, opts: OpenVideoOptions): Promise<void> {
+  private async open(itemKey: string, opts: OpenVideoOptions, gen: number): Promise<void> {
+    const stale = () => gen !== this.openGen;
     const [item, progress, profile] = await Promise.all([
       this.deps.fetchItem(itemKey),
       opts.restart || (opts.startMs ?? 0) > 0 ? Promise.resolve(null) : this.deps.fetchProgress(itemKey).catch(() => null),
       this.profile(),
     ]);
+    if (stale()) return;
     if (!item.video) throw new Error(t('player.video.error.load'));
     const startMs = startPosition(opts, progress, item.durationMs);
     const base = {
@@ -188,6 +195,8 @@ export class NativeVideoLauncher {
     };
     const session = await this.deps.requestSession(this.request(base, profile, startMs));
     const next = item.next ? await this.deps.fetchItem(item.next).catch(() => null) : null;
+    // Closed (or another item opened) while the session was being prepared.
+    if (stale()) return;
     const durationMs = session.durationMs || item.durationMs;
     this.current = {
       ...base,
@@ -233,9 +242,11 @@ export class NativeVideoLauncher {
       const nextArt = httpUrl(next.artworkUrl) ?? httpUrl(next.backdropUrl);
       options.next = { itemKey: next.itemKey, title: next.title, ...(nextSub ? { subtitle: nextSub } : {}), ...(nextArt ? { artworkUrl: nextArt } : {}) };
     }
+    const opened = this.current;
     await this.deps.plugin.playVideo(options);
-    this.report('start');
-    if (this.current) this.current.started = true;
+    if (this.current !== opened) return;
+    this.report('start', opened);
+    opened.started = true;
   }
 
   // ---- reports -------------------------------------------------------------------------
@@ -283,7 +294,11 @@ export class NativeVideoLauncher {
     try {
       session = await this.deps.requestSession(this.request(c, await this.profile(), e.positionMs));
     } catch (err) {
-      if (token === this.seekToken) this.deps.onError?.(err instanceof Error ? err.message : String(err));
+      if (token !== this.seekToken || this.current !== c) return;
+      // The native screen waits (spinner) for an answer that will not come: close it rather than
+      // leave it stuck, and say why (the toast shows once the app is back in front).
+      this.deps.onError?.(err instanceof Error ? err.message : String(err));
+      await this.deps.plugin.closeVideo().catch(() => undefined);
       return;
     }
     // A newer seek, or the player moved on / closed meanwhile.
@@ -306,19 +321,25 @@ export class NativeVideoLauncher {
   }
 
   private async onNext(e: VideoNextEvent): Promise<void> {
+    const gen = ++this.openGen;
     const c = this.current;
     if (c) {
-      // Up next fires at the credits: this one counts as watched.
-      c.positionMs = Math.max(c.positionMs, c.durationMs);
-      this.report('stop', c);
-      await this.deps.markPlayed(c.item.itemKey).catch(() => undefined);
+      // Let go of it first: a close arriving meanwhile must not report it a second time.
       this.current = null;
+      this.seekToken++;
+      // The countdown / the end / "Play now" at the credits: this one counts as watched. The
+      // "Next episode" button mid-way (completed: false) only saves where it stopped.
+      const watched = e.completed !== false;
+      if (watched) c.positionMs = Math.max(c.positionMs, c.durationMs);
+      if (c.started) this.report('stop', c);
+      if (watched) await this.deps.markPlayed(c.item.itemKey).catch(() => undefined);
     }
     try {
-      await this.open(e.itemKey, {});
+      // Closed while marking: stay closed.
+      if (gen === this.openGen) await this.open(e.itemKey, {}, gen);
     } catch (err) {
       this.deps.onError?.(err instanceof Error ? err.message : String(err));
-      await this.deps.plugin.closeVideo().catch(() => undefined);
+      if (gen === this.openGen) await this.deps.plugin.closeVideo().catch(() => undefined);
     } finally {
       this.deps.refresh();
     }
@@ -326,6 +347,8 @@ export class NativeVideoLauncher {
 
   private async onClosed(e: VideoClosedEvent): Promise<void> {
     const c = this.matches(e.itemKey);
+    // The screen is gone: a pending open (the next episode loading) must not bring it back.
+    if (c || !this.current) this.openGen++;
     if (c) {
       this.current = null;
       this.seekToken++;

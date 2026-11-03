@@ -361,7 +361,10 @@ export class VideoPlayback {
       this.set({ positionMs: target, ...(s.status === 'ended' ? { status: 'ready' as const } : {}) });
       if (s.status === 'ended') this.playElement();
     } else {
+      const token = this.token + 1;
       await this.load(target, { keepPlaying: this.wantPlay || s.status === 'ended' });
+      // Left the item (its `stop` is sent) or a newer seek / switch took over: no stale report.
+      if (this.disposed || token !== this.token) return;
     }
     this.reporter.report('seek', { positionMs: target });
   };

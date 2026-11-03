@@ -155,6 +155,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private boolean upNextShown;
     private boolean upNextCancelled;
     private boolean upNextFired;
+    /** Whether the item that fired up next counted as watched (false: "Next episode" mid-way). */
+    private boolean upNextCompleted;
     private long upNextStartedAt;
     private long lastProgressAt;
     @Nullable private AlertDialog dialog;
@@ -243,9 +245,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         close.setOnClickListener(v -> finishWithClose(false, null));
         audioButton.setOnClickListener(v -> showAudioPicker());
         subtitlesButton.setOnClickListener(v -> showSubtitlePicker());
-        nextButton.setOnClickListener(v -> fireNext());
+        nextButton.setOnClickListener(v -> fireNext(false));
         skipButton.setOnClickListener(v -> skipSegment());
-        upNextPlay.setOnClickListener(v -> fireNext());
+        upNextPlay.setOnClickListener(v -> fireNext(true));
         upNextCancel.setOnClickListener(v -> cancelUpNext());
         // TV remotes have Back; the close button is for touch.
         if (tv) close.setVisibility(View.GONE);
@@ -335,8 +337,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         if (dialog != null) dialog.dismiss();
-        if (req != null && !closed && isFinishing()) {
-            // Finished without our own close path (PiP window dismissed, task removed).
+        if (req != null && !closed) {
+            // Gone without our own close path (PiP window dismissed, task removed, or recreated by
+            // the system for a change not in configChanges: the new instance has no request and
+            // finishes at once, so this is the end of playback either way).
             closed = true;
             controller.closed(req.itemKey, currentMediaMs(), durationMs(), isCompleted(), null);
         }
@@ -386,11 +390,14 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         upNextShown = false;
         upNextCancelled = false;
         upNextFired = false;
+        upNextCompleted = false;
         lastProgressAt = SystemClock.elapsedRealtime();
         shownSkip = null;
         handler.removeCallbacks(sendSeek);
         seekBar.cancelScrub();
-        rawVtt.clear();
+        synchronized (rawVtt) {
+            rawVtt.clear();
+        }
         if (dialog != null) dialog.dismiss();
 
         setText(eyebrow, request.subtitle);
@@ -439,6 +446,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         }
         // The stream starts later than media time 0: fetch, shift and side-load local copies.
         final long offset = r.streamStartMs;
+        // Keyed by item too: ids ("e0", "x12") repeat across items, and a fetch for the previous
+        // episode can finish after load() cleared the cache.
+        final String cachePrefix = r.itemKey + "|";
         final List<VideoRequest.Subtitle> list = new ArrayList<>(r.subtitles);
         final Map<String, String> headers = r.headers;
         final File dir = subtitleDir();
@@ -449,12 +459,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 try {
                     String raw;
                     synchronized (rawVtt) {
-                        raw = rawVtt.get(s.id);
+                        raw = rawVtt.get(cachePrefix + s.id);
                     }
                     if (raw == null) {
                         raw = fetchText(s.url, headers);
                         synchronized (rawVtt) {
-                            rawVtt.put(s.id, raw);
+                            rawVtt.put(cachePrefix + s.id, raw);
                         }
                     }
                     File f = new File(dir, gen + "-" + Math.abs(s.id.hashCode()) + ".vtt");
@@ -581,9 +591,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     private void onEnded() {
         VideoRequest r = req;
-        if (r == null || awaitingJs) return;
+        if (r == null || awaitingJs || closed) return;
         if (r.next != null && !upNextCancelled) {
-            fireNext();
+            fireNext(true);
         } else {
             finishWithClose(true, null);
         }
@@ -671,7 +681,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     private void onTick() {
         VideoRequest r = req;
-        if (r == null || player == null) return;
+        // Closed: finish() is pending; nothing may fire (an up-next countdown would reopen the screen).
+        if (r == null || player == null || closed) return;
         long pos = currentMediaMs();
         long dur = durationMs();
         long buffered = r.toMediaMs(player.getBufferedPosition());
@@ -731,7 +742,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     private void sendSeekRequest() {
         VideoRequest r = req;
-        if (r == null || pendingSeekMs < 0) return;
+        if (r == null || pendingSeekMs < 0 || closed) return;
         awaitingJs = true;
         updateLoading();
         controller.seekRequest(r.itemKey, pendingSeekMs, r.selectedAudio, r.selectedSubtitle);
@@ -844,7 +855,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (!player.isPlaying()) upNextStartedAt += TICK_MS;
         long left = VideoTimeline.UP_NEXT_COUNTDOWN_MS - (SystemClock.elapsedRealtime() - upNextStartedAt);
         upNextLabel.setText(getString(R.string.video_up_next) + " · " + getString(R.string.video_playing_in, Math.max(0, (int) Math.ceil(left / 1000.0))));
-        if (left <= 0) fireNext();
+        if (left <= 0) fireNext(true);
     }
 
     private void hideUpNext() {
@@ -860,18 +871,23 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         showControls(true);
     }
 
-    /** Up next fires: report the final position, tell JS, wait for its playVideo. */
-    private void fireNext() {
+    /**
+     * Up next fires: report the final position, tell JS, wait for its playVideo. {@code atEnd}: the
+     * countdown, the end of the stream or "Play now" on the card (the item counts as watched);
+     * otherwise ("Next episode" button, media key) only when the position says so.
+     */
+    private void fireNext(boolean atEnd) {
         VideoRequest r = req;
-        if (r == null || r.next == null || upNextFired) return;
+        if (r == null || r.next == null || upNextFired || closed) return;
         controller.progress(r.itemKey, currentMediaMs(), durationMs(), false);
+        upNextCompleted = atEnd || isCompleted();
         upNextFired = true;
         awaitingJs = true;
         hideUpNext();
         skipButton.setVisibility(View.GONE);
         player.pause();
         updateLoading();
-        controller.next(r.next.itemKey);
+        controller.next(r.next.itemKey, upNextCompleted);
     }
 
     // =====================================================================================
@@ -1025,6 +1041,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // Finishing from onCreate (no request): the views were never bound.
+        if (req == null || controls == null) return super.dispatchKeyEvent(event);
         int code = event.getKeyCode();
         if (handleMediaKey(code, event)) return true;
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
@@ -1115,7 +1133,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 }
                 return true;
             case KeyEvent.KEYCODE_MEDIA_NEXT:
-                if (down && event.getRepeatCount() == 0) fireNext();
+                if (down && event.getRepeatCount() == 0) fireNext(false);
                 return true;
             case KeyEvent.KEYCODE_MEDIA_STOP:
                 if (down) finishWithClose(false, null);
@@ -1216,9 +1234,13 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             long pos = completed ? Math.max(currentMediaMs(), durationMs()) : currentMediaMs();
             controller.closed(r.itemKey, pos, durationMs(), completed || isCompleted(), error);
         } else if (r != null) {
-            // Up next fired and JS never followed up: still report the close (completed).
-            controller.closed(r.itemKey, durationMs(), durationMs(), true, error);
+            // Up next fired and JS never followed up: still report the close (completed when the
+            // up next counted it as watched, else where it stopped).
+            long pos = upNextCompleted ? durationMs() : currentMediaMs();
+            controller.closed(r.itemKey, pos, durationMs(), upNextCompleted, error);
         }
+        handler.removeCallbacks(tick);
+        handler.removeCallbacks(sendSeek);
         if (player != null) player.pause();
         finish();
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);

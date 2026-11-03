@@ -439,6 +439,11 @@ export interface VideoSeekRequestEvent {
  */
 export interface VideoNextEvent {
   itemKey: string;
+  /**
+   * The current item counts as watched (countdown, the end, "Play now" on the up-next card).
+   * False for the "Next episode" button / media key before the credits. Absent: true.
+   */
+  completed?: boolean;
 }
 
 export interface VideoClosedEvent {

@@ -126,9 +126,10 @@ public final class VideoController {
         emit("videoSeekRequest", o, false);
     }
 
-    void next(String nextItemKey) {
+    void next(String nextItemKey, boolean completed) {
         JSONObject o = new JSONObject();
         put(o, "itemKey", nextItemKey);
+        put(o, "completed", completed);
         emit("videoNext", o, true);
     }
 

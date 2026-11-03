@@ -80,6 +80,31 @@ describe('VideoPlayback', () => {
     expect(reports[0]).toMatchObject({ event: 'start', playMethod: 'DirectPlay' });
   });
 
+  it('sends no seek report after the item was left mid-request (its stop is the last word)', async () => {
+    let release: (() => void) | null = null;
+    let calls = 0;
+    const { p, el, reports } = setup((body) => session({ method: 'transcode', reasons: ['audio-codec'], seekable: false, streamStartMs: body.startMs ?? 0 }));
+    const inner = (p as unknown as { deps: { requestSession: (b: VideoSessionRequest) => Promise<VideoSession> } }).deps;
+    const original = inner.requestSession;
+    inner.requestSession = (b) => {
+      calls += 1;
+      if (calls === 1) return original(b);
+      return new Promise<VideoSession>((resolve) => {
+        release = () => resolve(session({ method: 'transcode', reasons: ['audio-codec'], seekable: false, streamStartMs: b.startMs ?? 0 }));
+      });
+    };
+    await p.start(0);
+    el.fire('loadedmetadata');
+    const seeking = p.seek(600_000);
+    p.dispose();
+    release!();
+    await seeking;
+    await flush();
+    const events = reports.map((r) => r.event);
+    expect(events.at(-1)).toBe('stop');
+    expect(events).not.toContain('seek');
+  });
+
   it('seeks a seekable stream in place', async () => {
     const { p, el, requests } = setup();
     current = p;

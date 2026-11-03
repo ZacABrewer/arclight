@@ -246,6 +246,49 @@ describe('NativeVideoLauncher', () => {
     expect(deps.refresh).toHaveBeenCalled();
   });
 
+  it('"Next episode" before the credits (completed: false) saves the place and does not mark played', async () => {
+    const { launcher, plugin, deps, emit, reports } = setup({ 'episode:1': episode(1, { next: 'episode:2' }), 'episode:2': episode(2) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoProgress', { itemKey: 'episode:1', positionMs: 120_000, durationMs: 1_000_000, paused: false });
+    await emit('videoNext', { itemKey: 'episode:2', completed: false });
+    await flush();
+    expect(deps.markPlayed).not.toHaveBeenCalled();
+    const stops = reports.filter((r) => r.key === 'episode:1' && r.report.event === 'stop');
+    expect(stops).toHaveLength(1);
+    expect(stops[0]!.report.positionMs).toBe(120_000);
+    expect(plugin.playVideo).toHaveBeenCalledTimes(2);
+  });
+
+  it('a close while the next episode loads keeps the player closed (no reopen, no second stop)', async () => {
+    const { launcher, plugin, deps, emit, reports } = setup({ 'episode:1': episode(1, { next: 'episode:2' }), 'episode:2': episode(2) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    let markDone: (() => void) | null = null;
+    deps.markPlayed.mockImplementationOnce(() => new Promise<undefined>((resolve) => (markDone = () => resolve(undefined))));
+    await emit('videoNext', { itemKey: 'episode:2' });
+    // Back pressed on the spinner: the native side closes with the old item's key.
+    await emit('videoClosed', { itemKey: 'episode:1', positionMs: 1_000_000, durationMs: 1_000_000, completed: true });
+    markDone!();
+    await flush();
+    await flush();
+    expect(plugin.playVideo).toHaveBeenCalledTimes(1);
+    expect(reports.filter((r) => r.key === 'episode:1' && r.report.event === 'stop')).toHaveLength(1);
+    expect(launcher.playing).toBeNull();
+  });
+
+  it('a seek the server refuses closes the player instead of leaving it waiting', async () => {
+    const { launcher, plugin, deps, emit } = setup({ 'episode:1': episode(1) });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    deps.requestSession.mockRejectedValueOnce(new Error('busy'));
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 300_000 });
+    await flush();
+    expect(plugin.replaceVideoStream).not.toHaveBeenCalled();
+    expect(plugin.closeVideo).toHaveBeenCalledTimes(1);
+    expect(deps.onError).toHaveBeenCalledWith('busy');
+  });
+
   it('closes the player when the next item cannot load', async () => {
     const { launcher, plugin, deps, emit } = setup({ 'episode:1': episode(1, { next: 'episode:9' }) });
     await launcher.start();
