@@ -104,7 +104,7 @@ The video player fills the screen. Move the mouse, tap or press a key to show th
 - Play and pause, back and forward 10 seconds, and a seek bar with marks for chapters.
 - Volume and mute, picture in picture and full screen.
 - **Audio & subtitles**: pick the audio track and the subtitles. If subtitles are early or late, nudge them in steps of a quarter second.
-- **Playback settings**: the version, the quality (Auto, Original, 1080p, 720p or 480p) and the speed. It also shows how the video reaches you (see below).
+- **Playback settings**: the version, the quality and the speed. It also shows how the video reaches you (see below). When the video comes as HLS, the quality list is the stream's own steps (for example Original, 1080p, 720p, 480p, 360p) and picking one switches in place.
 - **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts, when Arclight found the intro and credits by comparing a season's audio, or when an admin entered the times. Dragging the progress bar shows scrub thumbnails. See [Scrub thumbnails and intro detection](../player/scrub-thumbnails-and-intros.md).
 - Near the end of an episode, an **Up next** card counts down 10 seconds and then plays the next episode. Press **Cancel** to stay, or **Play now** to go straight away.
 
@@ -122,7 +122,9 @@ TV remotes and game pads work too: the arrows move between buttons, and **OK** p
 
 ### How video reaches you
 
-Arclight sends the original file when your browser can play it (**direct play**). When it cannot, for example because of the file type, the video or audio format, HDR, or your bitrate limit, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power. A converted stream starts again from the new point when you seek, which can take a moment.
+Arclight sends the original file when your browser can play it (**direct play**). When it cannot, for example because of the file type, the video or audio format, HDR, or your bitrate limit, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power.
+
+Repacked and converted video comes as **HLS**: short pieces the browser fetches as it plays. Seeking, going back and changing quality happen in place, without starting a new stream. On **Auto** the player picks the step your connection and the server can keep up with, and goes down a step when either falls behind. The video badge shows it, for example `HLS · 1080p · QSV` (the last part is the graphics encoder the server uses, such as QSV or VAAPI, and is left out when it converts on the CPU). If direct play keeps stalling on Auto, the player switches to HLS by itself. Safari plays HLS itself, so there Auto is the only quality that switches in place.
 
 Subtitles that are text (SRT, ASS, WebVTT) are drawn by the player. Picture subtitles (PGS, VobSub) are burned into the video, which means converting it.
 
@@ -184,7 +186,7 @@ How a video reaches you depends on what your device can play:
 - **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
 - **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
 
-The player says which one it uses and why. Remuxed and converted streams cannot be fetched in ranges, so seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+The player says which one it uses and why. In a browser, remuxed and converted video comes as HLS, so seeking stays in place (see [How video reaches you](#how-video-reaches-you)). Older apps get one stream instead, and there seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
 
 Text subtitles (SRT, ASS, WebVTT, embedded or next to the file) can be turned on and off at any time. Picture subtitles (PGS, VobSub) have to be burned into the picture, which means a transcode.
 
