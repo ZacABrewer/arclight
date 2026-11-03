@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '@web/i18n/index';
 import { tvRuntime } from './tv-runtime';
 
@@ -33,9 +34,14 @@ function useScopeFocus(ref: RefObject<HTMLElement | null>) {
   }, [ref]);
 }
 
-/** A trapped full-stage panel. Escape (the remote's Back) calls onClose. */
+/**
+ * A trapped full-stage panel. Escape (the remote's Back) calls onClose. It is rendered into the
+ * stage itself, so a panel opened from inside a section (the title page's "more" button) still
+ * covers the whole screen rather than that section.
+ */
 export function TvPanel({ children, onClose, label, className = 'tv-panel' }: { children: ReactNode; onClose: () => void; label: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [stage] = useState(() => (typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('[data-tv-stage]')));
   useScopeFocus(ref);
   const close = useRef(onClose);
   close.current = onClose;
@@ -51,11 +57,12 @@ export function TvPanel({ children, onClose, label, className = 'tv-panel' }: { 
     el?.addEventListener('keydown', onKey);
     return () => el?.removeEventListener('keydown', onKey);
   }, []);
-  return (
+  const panel = (
     <div ref={ref} className={className} data-tv-scope="" role="dialog" aria-modal="true" aria-label={label}>
       {children}
     </div>
   );
+  return stage ? createPortal(panel, stage) : panel;
 }
 
 /** Digits typed on a keyboard or the remote's number keys while `active`. */

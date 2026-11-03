@@ -1548,13 +1548,12 @@
   justify-content: center;
 }
 
+/* The backdrop covers the whole screen; the padding keeps the rows in a centred 1000px column. */
 .tv-manage__editor {
-  padding: 108px 56px 40px;
+  padding: 108px max(56px, calc((100% - 1000px) / 2 + 56px)) 40px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 1000px;
-  margin: 0 auto;
 }
 
 .tv-manage__head {
