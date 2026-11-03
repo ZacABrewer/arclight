@@ -53,3 +53,37 @@ export function hasLinkParams(query: unknown): boolean {
   const q = (query ?? {}) as Record<string, unknown>;
   return typeof q['sig'] === 'string' && q['u'] !== undefined && q['exp'] !== undefined;
 }
+
+// Artwork links: one signature per user and expiry opens every artwork URL (image loaders such as
+// <img> in the Arclight app cannot send a Bearer header). A different MAC domain from streams, so
+// neither kind of signature works as the other.
+
+export interface ArtworkLink {
+  userId: number;
+  /** Expiry, seconds since the epoch. */
+  exp: number;
+}
+
+function artworkMac(key: Buffer, link: ArtworkLink): string {
+  return createHmac('sha256', key).update(`art:${link.userId}:${link.exp}`).digest('base64url');
+}
+
+/** The query string that opens artwork URLs (`u=&exp=&sig=`). */
+export function artworkLinkQuery(key: Buffer, link: ArtworkLink): string {
+  return `u=${link.userId}&exp=${link.exp}&sig=${artworkMac(key, link)}`;
+}
+
+/** Checks an artwork link's query at `nowMs`. */
+export function verifyArtworkLink(key: Buffer, query: { u?: unknown; exp?: unknown; sig?: unknown }, nowMs: number): LinkCheck {
+  const userId = Number(query.u);
+  const exp = Number(query.exp);
+  const sig = typeof query.sig === 'string' ? query.sig : '';
+  if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(exp) || exp <= 0 || !/^[A-Za-z0-9_-]{43}$/.test(sig)) {
+    return { ok: false, reason: 'MALFORMED' };
+  }
+  const expected = Buffer.from(artworkMac(key, { userId, exp }));
+  const given = Buffer.from(sig);
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return { ok: false, reason: 'BAD_SIGNATURE' };
+  if (exp * 1000 <= nowMs) return { ok: false, reason: 'EXPIRED' };
+  return { ok: true, userId };
+}

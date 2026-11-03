@@ -5,6 +5,7 @@ import { applicationUrlOf } from './routes-identity.js';
 import { installAuthHook } from './hook.js';
 import { authRoutes } from './routes.js';
 import { SetupService } from './setup.js';
+import { appAuthServiceFor } from '../app-auth/index.js';
 
 export { authServiceFor, identityServiceFor } from './context.js';
 export { IdentityService } from './identity.js';
@@ -42,6 +43,8 @@ export function installAuth(scope: FastifyInstance, ctx: AppContext): void {
   service.ensureApiKey();
   // Registers the forward-auth resolver before the first request.
   identityServiceFor(ctx);
+  // Registers the app device token (Bearer) resolver.
+  appAuthServiceFor(ctx);
   installAuthHook(scope, service);
 }
 

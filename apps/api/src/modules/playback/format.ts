@@ -67,3 +67,19 @@ export function commonLabel(labels: readonly (string | null)[]): string | null {
   }
   return best;
 }
+
+const TRANSCODE_EXT: Record<string, string> = { aac: '.aac', opus: '.opus', mp3: '.mp3' };
+
+/**
+ * `Content-Disposition: attachment` for a download of `path` (a transcode swaps the extension).
+ * An ASCII fallback name for old clients plus the UTF-8 name (RFC 6266 / 5987).
+ */
+export function downloadDisposition(path: string, transcodeFormat: string | null): string {
+  const base = path.split(/[\\/]/).pop() || 'audio';
+  const ext = extname(base);
+  const stem = (ext ? base.slice(0, -ext.length) : base) || 'audio';
+  const name = `${stem}${transcodeFormat ? (TRANSCODE_EXT[transcodeFormat] ?? ext) : ext}`.replace(/[\u0000-\u001f\u007f]/g, '');
+  const ascii = name.normalize('NFKD').replace(/[^\x20-\x7e]/g, '').replace(/["\\;%]/g, '_').replace(/\s+/g, ' ').trim() || 'audio';
+  const utf8 = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+}

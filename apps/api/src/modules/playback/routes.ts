@@ -7,6 +7,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import {
+  ArtworkLinkResponse,
   AudiobookHome,
   Bookmark,
   BookmarkInput,
@@ -29,10 +30,13 @@ import {
   PlayerSearchResponse,
   PlayerSettings,
   PlayerTrackPage,
+  PlaybackItemsRequest,
   PlaybackProgress,
   PlaylistTrackMove,
   PlaylistTracksAdd,
   PlayQueue,
+  ProgressBatchRequest,
+  ProgressBatchResponse,
   ProgressBeacon,
   ProgressListResponse,
   ProgressQuery,
@@ -51,6 +55,7 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { sessions, userApiKeys, users } from '../auth/schema.js';
+import { appDevices } from '../app-auth/schema.js';
 import { audioFiles } from '../library/schema.js';
 import { getSection, setSection } from '../settings/service.js';
 import { capabilitiesOf, decide, denialReply, isRemoteRequest, playerSettings, requirePlayer, subjectOf, type PlayerDecision } from './access.js';
@@ -69,10 +74,10 @@ import {
   type BrowseContext,
   type BrowseUser,
 } from './browse.js';
-import { mimeOf } from './format.js';
+import { downloadDisposition, mimeOf } from './format.js';
 import { playableItem } from './items.js';
 import type { EngineTarget, JellyfinEngine } from './jellyfin.js';
-import { hasLinkParams, linkKey, linkQuery, verifyLink } from './links.js';
+import { artworkLinkQuery, hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from './links.js';
 import type { ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
 import { BookmarkStore, PlayerNotFound, PlaylistFull, PlaylistStore, QueueStore } from './stores.js';
@@ -107,7 +112,9 @@ const KeyParams = z.object({ itemKey: ItemKey });
 const FileParams = z.object({ fileId: z.coerce.number().int().positive() });
 const ArtworkParams = z.object({ kind: z.enum(['album', 'artist', 'book']), id: z.coerce.number().int().positive() });
 const SearchQuery = z.object({ q: z.string().max(200).default('') });
-const StreamQueryWithLink = StreamQuery.extend({ u: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() });
+const LinkParams = { u: z.string().max(20).optional(), exp: z.string().max(20).optional(), sig: z.string().max(100).optional() };
+const StreamQueryWithLink = StreamQuery.extend(LinkParams);
+const ArtworkQuery = z.object(LinkParams);
 
 const MAX_PROGRESS_KEYS = 200;
 
@@ -176,10 +183,13 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   }
 
   /**
-   * A signed link stays usable while its user may still sign in: some unexpired session or
-   * personal API key. "Sign out everywhere", a password change and deleting the user end it.
+   * A signed link stays usable while its user may still sign in: some unexpired session, a
+   * personal API key or a signed-in Arclight app device. "Sign out everywhere", a password
+   * change and deleting the user end it.
    */
   function linkUserStillActive(userId: number): boolean {
+    const device = db.select({ id: appDevices.id }).from(appDevices).where(eq(appDevices.userId, userId)).get();
+    if (device) return true;
     const at = new Date(now()).toISOString();
     const session = db
       .select({ id: sessions.id })
@@ -326,13 +336,25 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- items and stream links ------------------------------------------------------------
     app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => itemOr404(req.params.itemKey));
 
+    // Several items at once (queues, offline downloads): missing ones and turned-off sections are left out, order kept.
+    app.post('/playback/items', { ...player, config: { ...user, audit: false }, schema: { body: PlaybackItemsRequest, response: { 200: z.array(PlayableItem), ...errors } } }, async (req) => {
+      const out: PlayableItem[] = [];
+      for (const key of [...new Set(req.body.itemKeys)]) {
+        const parsed = parseItemKey(key);
+        const item = parsed && sectionEnabled(parsed.kind) ? playableItem(browse, key) : null;
+        if (item) out.push(item);
+      }
+      return out;
+    });
+
     app.post('/playback/stream-links', { ...playerUser, schema: { body: StreamLinksRequest, response: { 200: StreamLinksResponse, ...errors } } }, async (req) => {
       const userId = userIdOf(req);
       const item = itemOr404(req.body.itemKey);
       const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
       const key = linkKey(deps.apiKey());
       const origin = `${req.protocol}://${req.host}`;
-      const format = req.body.format === 'original' ? '' : `format=${req.body.format}&${req.body.bitrateKbps ? `bitrateKbps=${req.body.bitrateKbps}&` : ''}`;
+      const format =
+        (req.body.format === 'original' ? '' : `format=${req.body.format}&${req.body.bitrateKbps ? `bitrateKbps=${req.body.bitrateKbps}&` : ''}`) + (req.body.download ? 'download=1&' : '');
       const backends = await backendsOf(item.parts.map((p) => p.fileId));
       const links = item.parts.map((p) => ({
         fileId: p.fileId,
@@ -374,6 +396,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
           bitrate = cap;
         }
         reply.header('cache-control', 'private, no-cache');
+        // ?download=1: save as a file (the transcode's extension when converting).
+        if (req.query.download === '1' || req.query.download === 'true') reply.header('content-disposition', downloadDisposition(file.path, format === 'original' ? null : format));
         // The Jellyfin engine, when chosen: same format and cap, bytes from the server.
         const target = engineTarget();
         if (target) {
@@ -418,13 +442,35 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     });
 
     // ---- artwork ------------------------------------------------------------------------------
-    app.get('/playback/artwork/:kind/:id', { ...player, schema: { params: ArtworkParams } }, async (req, reply) => {
+    // A query string that opens every artwork URL without credentials (<img> in the Arclight app, cast receivers).
+    app.post('/playback/artwork-link', { ...playerUser, config: { ...user, audit: false }, schema: { response: { 200: ArtworkLinkResponse, ...errors } } }, async (req) => {
+      const userId = userIdOf(req);
+      const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
+      return { query: artworkLinkQuery(linkKey(deps.apiKey()), { userId, exp }), expiresAt: new Date(exp * 1000).toISOString() };
+    });
+
+    /** Signed artwork links: the link's user must still be active and allowed to use the player. */
+    const artworkGuard = async (req: FastifyRequest, reply: FastifyReply) => {
+      if (req.auth) return guard(req, reply);
+      const check = verifyArtworkLink(linkKey(deps.apiKey()), req.query as Record<string, unknown>, now());
+      if (!check.ok) return reply.code(403).send({ error: check.reason === 'EXPIRED' ? 'this artwork link has expired' : 'this artwork link is not valid', code: `LINK_${check.reason}` });
+      const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
+      if (!row || !linkUserStillActive(row.id)) return reply.code(403).send({ error: 'this artwork link was revoked', code: 'LINK_REVOKED' });
+      const decision = decide(playerSettings(db), { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, isRemoteRequest(req));
+      if (decision.denial) return denialReply(reply, decision.denial);
+    };
+
+    app.get(
+      '/playback/artwork/:kind/:id',
+      { config: { ...user, publicWhen: (req: FastifyRequest) => hasLinkParams(req.query) }, preHandler: artworkGuard, schema: { params: ArtworkParams, querystring: ArtworkQuery } },
+      async (req, reply) => {
       if (!sectionEnabled(req.params.kind === 'book' ? 'audiobook' : 'music')) return reply.code(404).send({ error: 'no artwork', code: 'NOT_FOUND' });
       const art = await findArtwork(db, req.params.kind, req.params.id);
       if (!art) return reply.code(404).send({ error: 'no artwork', code: 'NOT_FOUND' });
       if (art.kind === 'redirect') return reply.redirect(art.url, 302);
       return reply.header('content-type', art.mimeType).header('cache-control', 'private, max-age=86400').send(art.body);
-    });
+      },
+    );
 
     // ---- progress -----------------------------------------------------------------------------
     app.put('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressReport, response: { 200: PlaybackProgress, ...errors } } }, async (req) =>
@@ -445,6 +491,23 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         deps.progress.report(userIdOf(req), key, report, now());
         return reply.code(204).send(null);
       });
+    });
+
+    // An offline queue: oldest device time first, each with the single-report rules (stale ones are not applied).
+    app.post('/playback/progress/batch', { ...playerUser, config: { ...user, audit: false }, schema: { body: ProgressBatchRequest, response: { 200: ProgressBatchResponse, ...errors } } }, async (req) => {
+      const userId = userIdOf(req);
+      const time = (r: { clientTime?: string | undefined }) => {
+        const t = r.clientTime ? Date.parse(r.clientTime) : Number.NaN;
+        return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+      };
+      const order = req.body.reports.map((r, i) => ({ r, i })).sort((a, b) => time(a.r) - time(b.r) || a.i - b.i);
+      const results: ProgressBatchResponse['results'] = new Array(order.length);
+      for (const { r, i } of order) {
+        const { itemKey: key, ...report } = r;
+        const outcome = deps.progress.report(userId, key, report, now());
+        results[i] = { itemKey: key, accepted: outcome.accepted, progress: outcome.progress };
+      }
+      return { results };
     });
 
     app.patch('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressUpdate, response: { 200: PlaybackProgress, ...errors } } }, async (req) =>

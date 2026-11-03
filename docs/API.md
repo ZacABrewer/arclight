@@ -56,7 +56,10 @@ in this order:
 2. **HTTP Basic** credentials, only when the auth method is `basic`.
 3. **API key** in the `X-Api-Key` header or `?apikey=` query. One key per install, generated
    on first boot and stored in the `security` settings section. It grants admin access.
-4. **Local bypass**: once setup is complete and an admin exists, requests where the socket peer *and* every
+4. **Arclight app device token**: `Authorization: Bearer alt_…` from `POST /app/sign-in` or
+   `POST /app/pair` ([app](#app-arclight-player-app-sign-in)). Checked first; a token that is not
+   valid is anonymous.
+5. **Local bypass**: once setup is complete and an admin exists, requests where the socket peer *and* every
    `X-Forwarded-For` hop are loopback, RFC 1918, IPv4 link-local, IPv6 ULA or link-local skip
    sign-in when the method is `none` or `requireForLocal` is false. Public addresses always
    need credentials, so `none` never opens the api to the internet.
@@ -73,7 +76,7 @@ no admin exists. `POST /setup/admin` and the headless `POST /setup/complete` cre
 only while none exists (409 afterwards); `POST /setup/rootfolder` needs the signed-in admin.
 
 **Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
-`GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
+`GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `POST /app/sign-in`, `POST /app/pair`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
 and `/setup/*` (which guard themselves: writes need the admin once one exists, and answer
 409 `SETUP_COMPLETE` after setup). The SPA's static files are outside `/api/v1`.
 A GET route may also be public conditionally: `config: { publicWhen: (req) => boolean }` is
@@ -2543,6 +2546,48 @@ book) with the `library` app area, `queue` and `history` with `activity`; every 
 Manage requests or View requests (else their own), every issue with Manage issues or View
 issues (else their own). Settings entities, users, tags and tasks are admin only.
 
+## app (Arclight player app sign-in)
+
+Contract: `packages/shared/src/app-auth.ts`; module `apps/api/src/modules/app-auth`. The
+standalone Arclight player app bundles its own UI (origin `capacitor://localhost` on iOS,
+`https://localhost` on Android), so it cannot use the session cookie. It signs in once, with a
+password or with a one-time code from the web player, and gets a **device token**
+(`alt_` + 43 base64url characters, 32 random bytes) that it sends as
+`Authorization: Bearer <token>` on every request. Only the sha256 of the token is stored (table
+`app_devices`); the token is returned once.
+
+A device token acts as its user on every route that user may call (portal routes, the player,
+streams, and admin routes for admins), with no CSRF step. It may not call the session-only routes
+(own password, two-factor, passkeys, identities, personal API keys, sessions, `POST /app/pair-codes`)
+or the secret routes; those answer `403`. An unknown or removed `alt_` token is anonymous (`401`), never
+the local bypass. `lastSeenAt` and `lastIp` are written at most once a minute. A device's token
+ends when the device is removed, when the app signs out, and with every "sign out everywhere":
+a password change or reset, a role change and deleting the user.
+
+Errors: `{error, code}`. `400 VALIDATION`, `401 INVALID_CREDENTIALS`, `401 TOTP_REQUIRED` (the
+password was right; ask for the authenticator code and send it as `totp`), `401 TOTP_INVALID`,
+`403 PAIRING_REQUIRED` (the account cannot sign in with an Arclight password: local sign-in is off
+for user accounts, or its only second factor is a passkey; pair with a code instead),
+`403 TWO_FACTOR_SETUP_REQUIRED` (an admin without two-factor while it is required),
+`403 PLAYER_DISABLED`, `403 PLAYER_NOT_ALLOWED`, `401 PAIR_CODE_INVALID`, `410 PAIR_CODE_EXPIRED`,
+`429 RATE_LIMITED`. Sign-in and pairing share the web sign-in's limit of 10 failures per 15
+minutes per address, and keep out of the request audit (they record `login.success` /
+`login.failed` with `method: app` or `app-pairing`, and `app.device.create`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/app/sign-in` | Public. `AppSignInRequest` `{username, password, deviceName (1-100), platform ('ios' \| 'android'), appVersion (1-40), totp? (6 digits), recoveryCode?}`. Answers `AppSignInResponse` `{token, deviceId, user (as GET /user/me), server: {name: 'Arclight', version}}` |
+| POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
+| POST | `/app/pair` | Public. `AppPairRequest` `{code, deviceName, platform, appVersion}`; the code is upper-cased and spaces and dashes are dropped (`abcd-efgh` works). Answers `AppSignInResponse`. A code works once: any try uses it up. Unknown codes count as failed sign-ins |
+| GET | `/app/devices` | The caller's devices: `AppDevice[]` `{id, userId, name, platform, appVersion, createdAt, lastSeenAt, lastIp, method ('password' \| 'pairing'), current (this request's token)}`. Admins: `?all=true` for every user's, `?userId=` for one user's, each with `userName`; others `403 FORBIDDEN` |
+| DELETE | `/app/devices/:id` | Remove a device; its token stops working at once. `204`; `404` when it is not the caller's (admins: any) |
+| POST | `/app/sign-out` | With a device token: removes that device. `204`; `400 NOT_APP` without a device token |
+
+CORS: every origin is reflected with credentials, so the app's origins (`capacitor://localhost`,
+`https://localhost`, `http://localhost`) may send `Authorization`; `Content-Disposition`,
+`Content-Length`, `Content-Range`, `Accept-Ranges`, `Retry-After`, `X-Arclight-Backend` and
+`X-Arclight-Transcode` are exposed to scripts.
+
 ## Player (music and audiobooks)
 
 Contract: `packages/shared/src/playback.ts`; module `apps/api/src/modules/playback`. The built-in
@@ -2574,10 +2619,13 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 | POST | `/settings/player/engine-test` | `PlayerEngineTestRequest` `{jellyfinServerId?}`: connects to that Jellyfin/Emby server (or the first enabled one) and tries to resolve one library audio file. Answers `PlayerEngineTestResult` `{ok, serverId, serverName, version, sample: {fileId, resolved, itemId} \| null, message}` (`200` also when `ok` is false). Admin |
 | GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine). Any signed-in user |
 | GET | `/playback/item/:itemKey` | `PlayableItem`: title, subtitle (artist or authors), context (album, or `Series, book N`), artwork URL, parts, chapters, ReplayGain. `404` when unknown or without a file |
-| POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads). With the Jellyfin engine each link carries `backend` (who will serve that part) and the answer `backendInUse` (`jellyfin` only when every part resolved on Jellyfin, else `arclight`) |
-| GET, HEAD | `/stream/audio/:fileId` | The audio. `?format=original\|aac\|opus\|mp3&bitrateKbps=&startMs=` (below) |
-| GET | `/playback/artwork/:kind/:id` | `album`, `artist` or `book`: a cover image in the folder (cover/folder/front, artist/folder/poster), else the picture embedded in the first file, else a `302` to the catalogue image, else `404` |
+| POST | `/playback/items` | `PlaybackItemsRequest` `{itemKeys}` (1 to 200): `PlayableItem[]` in the order asked, without duplicates; unknown keys, items without a file and turned-off sections are left out |
+| POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?, download?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads). With the Jellyfin engine each link carries `backend` (who will serve that part) and the answer `backendInUse` (`jellyfin` only when every part resolved on Jellyfin, else `arclight`) |
+| GET, HEAD | `/stream/audio/:fileId` | The audio. `?format=original\|aac\|opus\|mp3&bitrateKbps=&startMs=&download=1` (below) |
+| GET | `/playback/artwork/:kind/:id` | `album`, `artist` or `book`: a cover image in the folder (cover/folder/front, artist/folder/poster), else the picture embedded in the first file, else a `302` to the catalogue image, else `404`. Without credentials with an artwork link's query appended |
+| POST | `/playback/artwork-link` | `ArtworkLinkResponse` `{query: "u=&exp=&sig=", expiresAt}`: append `?<query>` to any artwork URL so image loaders (`<img>` in the app, cast receivers) can fetch it without credentials; valid `streamLinkHours` |
 | PUT | `/playback/progress/:itemKey` | `ProgressReport` `{event, positionMs, durationMs, deviceId, clientTime, speed?, ...}`; answers the stored `PlaybackProgress` |
+| POST | `/playback/progress/batch` | `ProgressBatchRequest` `{reports}`: 1 to 500 reports, each with `itemKey` (an offline queue). Applied oldest `clientTime` first with the usual rules, so the newest wins and stale ones are not applied. Answers `ProgressBatchResponse` `{results: [{itemKey, accepted, progress}]}` in request order |
 | POST | `/playback/progress/beacon` | The same report plus `itemKey`, sent with `navigator.sendBeacon` (a `text/plain` JSON body is accepted on this route only); `204` |
 | PATCH | `/playback/progress/:itemKey` | `ProgressUpdate` `{played?, favorite?, prefs?}`. `played: true` counts a play and moves to the end; `false` resets to the start |
 | GET | `/playback/progress?itemKeys=a,b` | Effective progress for up to 200 keys (own merged with a linked media-server account) |
@@ -2624,11 +2672,20 @@ on Jellyfin, Jellyfin is unreachable, or it answers `401`, `403`, `404` or `5xx`
 served by Arclight's own engine instead and a warning is logged (rate-limited). Arclight's
 transcode limits do not apply to proxied streams.
 
+Downloads: `?download=1` adds `Content-Disposition: attachment` with the file's name (an ASCII
+`filename` with `"`, `\`, `;` and `%` replaced, plus the UTF-8 `filename*`). With a `format`
+the name takes that format's extension (`.aac` is ADTS AAC, `.opus` Ogg Opus, `.mp3`) and the
+whole file is converted from the start (no ranges). `download: true` on `POST /playback/stream-links`
+puts `download=1` in each link.
+
 Signed links (`?u=&exp=&sig=`, HMAC-SHA256 over file, user and expiry with a key derived from the
-install's API key) let the stream route work without a cookie. A link is refused with `403`:
+install's API key) let the stream route work without a cookie or token; the format, start and
+download parameters are not signed and may be changed. A link is refused with `403`:
 `LINK_MALFORMED`, `LINK_BAD_SIGNATURE` (tampered, or for another file), `LINK_EXPIRED`,
-`LINK_REVOKED` (the user is gone or has no active session or API key left), or one of the access
-codes above when the user has lost player access.
+`LINK_REVOKED` (the user is gone or has no active session, API key or Arclight app device left), or one of the access
+codes above when the user has lost player access. Artwork links work the same way over user and
+expiry only (a different signature, so stream and artwork links do not work for each other).
+Streams and artwork also take the Arclight app's device token directly.
 
 Progress rules: a report whose `clientTime` is older than the stored update is ignored (offline
 queues send late; future times count as now). Reaching 90 % (`PLAYED_THRESHOLD`) marks the item
