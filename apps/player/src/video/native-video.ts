@@ -12,7 +12,7 @@ import type {
   VideoQuality,
 } from '@arclight/shared';
 import type { OpenVideoOptions } from '@web/features/player/video/video-launcher';
-import { audioTrackLabel, episodeCode, resumePoint } from '@web/features/player/video/format';
+import { audioTrackLabel, episodeCode, playerEpisodeLine, playerHeading, resumePoint } from '@web/features/player/video/format';
 import { t } from '@web/i18n/index';
 import type {
   ArclightPlayerPlugin,
@@ -114,7 +114,19 @@ export function streamInfo(item: PlayableItem, session: VideoSession): string {
   return [t(`player.video.method.${session.method}`), [res, range].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
 }
 
-/** The line under the title: "S2 · E5 · Show" for episodes, the year for movies. */
+/**
+ * The overlay's title and the line under it: the series name over "S1 E3 · Episode name" for
+ * episodes; movies keep their title over the year.
+ */
+export function itemTitles(item: PlayableItem): { title: string; subtitle: string | undefined } {
+  if (item.kind !== 'episode') return { title: item.title, subtitle: itemSubtitle(item) };
+  const title = playerHeading(item);
+  // Without a series name the title already is the episode's: the line then carries only the code.
+  const episodeTitle = title === item.title ? null : (item.pause?.episodeTitle ?? item.title);
+  return { title, subtitle: playerEpisodeLine(item.seasonNumber, item.episodeNumber, episodeTitle) || undefined };
+}
+
+/** The up-next card's line under the next title: "S2 · E5" for episodes, the year for movies. */
 export function itemSubtitle(item: PlayableItem): string | undefined {
   if (item.kind === 'episode') {
     const code = item.seasonNumber != null || item.episodeNumber != null ? episodeCode(item.seasonNumber, item.episodeNumber) : null;
@@ -252,6 +264,7 @@ export class NativeVideoLauncher {
       started: false,
     };
     const v = item.video;
+    const titles = itemTitles(item);
     const options: PlayVideoOptions = {
       itemKey: item.itemKey,
       url: session.url,
@@ -260,7 +273,7 @@ export class NativeVideoLauncher {
       startPositionMs: startMs,
       seekable: session.seekable,
       durationMs,
-      title: item.title,
+      title: titles.title,
       streamInfo: streamInfo(item, session),
       subtitles: subtitlesOf(session),
       selectedSubtitle: this.current.subtitle,
@@ -272,8 +285,7 @@ export class NativeVideoLauncher {
       chapters: item.chapters.map((c) => ({ title: c.title, startMs: c.startMs })),
       segments: item.segments ?? [],
     };
-    const subtitle = itemSubtitle(item);
-    if (subtitle) options.subtitle = subtitle;
+    if (titles.subtitle) options.subtitle = titles.subtitle;
     const art = httpUrl(item.artworkUrl);
     if (art) options.artworkUrl = art;
     const backdrop = httpUrl(item.backdropUrl);

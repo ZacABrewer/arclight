@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildVideoProfile, type ProfileProbes } from './profile.js';
-import { clock, cueTextAt, parseVtt, resumePoint, segmentAt, upNextFrom, watchedShare } from './format.js';
+import { clock, cueTextAt, parseVtt, playerEpisodeLine, playerHeading, resumePoint, segmentAt, upNextFrom, watchedShare } from './format.js';
 import { defaultVideoLauncher, getVideoLauncher, openVideo, playHref, playSearch, setVideoLauncher } from './video-launcher.js';
 
 describe('video-launcher', () => {

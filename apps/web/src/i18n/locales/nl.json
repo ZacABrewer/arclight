@@ -8276,6 +8276,7 @@
   "player.video.emptyTitle": "Nog niets om te kijken",
   "player.video.endsAt": "eindigt om {time}",
   "player.video.episodeCode": "S{season} · A{episode}",
+  "player.video.episodeShort": "S{season} A{episode}",
   "player.video.episodeN": "Aflevering {n}",
   "player.video.episodes": "Afleveringen",
   "player.video.episodesWatched": "{played} van {count} bekeken",

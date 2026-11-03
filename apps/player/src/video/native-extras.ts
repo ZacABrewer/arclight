@@ -1,6 +1,7 @@
 import type { PlayableItem, PlayerSeriesDetails, ProfileSettings, TrickplayManifest, VideoPauseInfo } from '@arclight/shared';
 import { t } from '@web/i18n/index';
 import { chipLabels } from '@web/features/player/redesign/chips';
+import { playerEpisodeLine } from '@web/features/player/video/format';
 import type { NativeEpisodeSeason, NativePauseInfo, NativeTrickplay, NativeVideoPrefs, NativeVideoString, NativeVideoTheme } from '../native/definitions';
 
 // The redesign's extra PlayVideoOptions (spec §5.9), built in JS so the native overlay shows
@@ -13,11 +14,10 @@ export function durationLabel(ms: number): string {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 }
 
-/** "S2 · E5 · The Long Meridian" (null for movies). */
+/** "S2 E5 · The Long Meridian" under the series name (null for movies). */
 export function episodeLine(p: Pick<VideoPauseInfo, 'seasonNumber' | 'episodeNumber' | 'episodeTitle'>): string | null {
   if (p.seasonNumber == null && p.episodeNumber == null) return null;
-  const parts = [p.seasonNumber != null ? `S${p.seasonNumber}` : null, p.episodeNumber != null ? `E${p.episodeNumber}` : null, p.episodeTitle];
-  return parts.filter(Boolean).join(' · ');
+  return playerEpisodeLine(p.seasonNumber, p.episodeNumber, p.episodeTitle);
 }
 
 export function pauseInfo(item: PlayableItem): NativePauseInfo | undefined {

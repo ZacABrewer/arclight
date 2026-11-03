@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile, VideoSession, VideoSessionRequest } from '@arclight/shared';
 import type { ArclightPlayerPlugin } from '../native/definitions';
-import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, startPosition } from './native-video';
+import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, itemTitles, startPosition } from './native-video';
 import { ProfileSettings, type PlayerSeriesDetails } from '@arclight/shared';
 import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf, videoStrings } from './native-extras';
 
@@ -148,6 +148,22 @@ describe('start position and labels', () => {
     const line = itemSubtitle(episode(3, { subtitle: 'S1:E3', context: null }));
     expect(line).toBeTruthy();
     expect(line!.replace(/[^a-z0-9]/gi, '').toLowerCase()).toBe('s1e3');
+  });
+
+  it('episodes: the series name is the title, "S1 E3 · Episode name" the line under it', () => {
+    // The server's shape: subtitle = the series, context = the code.
+    const e3 = episode(3, { title: 'The Long Meridian', subtitle: 'The Show', context: 'S1:E3', seasonNumber: 1, episodeNumber: 3 });
+    expect(itemTitles(e3)).toEqual({ title: 'The Show', subtitle: 'S1 E3 · The Long Meridian' });
+    // The pause info's names win when present.
+    const paused = { ...e3, pause: { title: 'Show (2024)', episodeTitle: 'Meridian' } as PlayableItem['pause'] };
+    expect(itemTitles(paused)).toEqual({ title: 'Show (2024)', subtitle: 'S1 E3 · Meridian' });
+    // No series name: the episode title stays the title and the line is just the code.
+    expect(itemTitles(episode(4, { title: 'Four', subtitle: null, context: 'S1:E4' }))).toEqual({ title: 'Four', subtitle: 'S1 E4' });
+  });
+
+  it('movies keep their title over the year', () => {
+    const movie = { ...episode(5), kind: 'movie', title: 'A Film', year: 2024, subtitle: null } as PlayableItem;
+    expect(itemTitles(movie)).toEqual({ title: 'A Film', subtitle: '2024' });
   });
 });
 
@@ -374,7 +390,7 @@ describe('NativeVideoLauncher', () => {
     expect(fetchSeries).toHaveBeenCalledWith(7);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const opts = plugin.playVideo.mock.calls[0]![0] as unknown as Record<string, any>;
-    expect(opts.pause).toMatchObject({ title: 'The Show', episodeLine: 'S1 · E1 · Pilot', overview: 'Ov', backdropUrl: 'http://server.example.com/b.jpg' });
+    expect(opts.pause).toMatchObject({ title: 'The Show', episodeLine: 'S1 E1 · Pilot', overview: 'Ov', backdropUrl: 'http://server.example.com/b.jpg' });
     expect(opts.pause.meta).toEqual([{ text: '2024' }, { text: 'TV-14', boxed: true }, { text: '17m' }]);
     expect(opts.trickplay).toMatchObject({ intervalMs: 10_000, sheets: ['http://server.example.com/s0.jpg'] });
     expect(opts.seasons[0].episodes[0]).toMatchObject({ title: '1. Pilot', runtime: '45m', progress: 1, played: true });
@@ -427,7 +443,7 @@ describe('native extras', () => {
   });
 
   it('builds the episode line and skips pause info without data', () => {
-    expect(episodeLine({ seasonNumber: 2, episodeNumber: 5, episodeTitle: 'The Long Meridian' })).toBe('S2 · E5 · The Long Meridian');
+    expect(episodeLine({ seasonNumber: 2, episodeNumber: 5, episodeTitle: 'The Long Meridian' })).toBe('S2 E5 · The Long Meridian');
     expect(episodeLine({ seasonNumber: null, episodeNumber: null, episodeTitle: null })).toBeNull();
     expect(pauseInfo(episode(1))).toBeUndefined();
   });

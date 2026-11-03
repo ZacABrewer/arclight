@@ -15,7 +15,7 @@ import { RdIcon } from '../redesign/icons.js';
 import { MetaLine } from '../redesign/meta-line.js';
 import { Art } from '../redesign/tiles.js';
 import { useShow, videoApi } from './api.js';
-import { chapterAt, clock, cueTextAt, episodeCode, languageName, parseVtt, resumePoint, segmentAt, type Cue } from './format.js';
+import { chapterAt, clock, cueTextAt, episodeCode, languageName, parseVtt, playerEpisodeLine, playerHeading, resumePoint, segmentAt, type Cue } from './format.js';
 import { watchPaths } from './paths.js';
 import { VideoPlayback, type VideoState } from './playback.js';
 import { EpisodesPanel, SettingsPanel, TracksPanel, type PanelId } from './player-panels.js';
@@ -601,10 +601,10 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
   const trickplay = useTrickplay(state?.session?.mediaFileId ?? null, state?.session?.trickplay ?? null);
   const sheets = trickplay.data?.status === 'ready' && trickplay.data.sheets.length ? trickplay.data : null;
 
-  // §5.1 top line: "S1 · E2 · Title", or "2025 · PG-13".
-  const heading = item.kind === 'episode' ? (item.pause?.title ?? item.context ?? item.title) : item.title;
+  // §5.1 top line: the series name over "S1 E2 · Title" for episodes; the title over "2025 · PG-13".
+  const heading = playerHeading(item);
   const sub = useMemo(() => {
-    if (item.kind === 'episode') return [episodeCode(item.seasonNumber, item.episodeNumber), item.pause?.episodeTitle ?? item.title].filter(Boolean).join(' · ');
+    if (item.kind === 'episode') return playerEpisodeLine(item.seasonNumber, item.episodeNumber, item.pause?.episodeTitle ?? item.title);
     return [item.year ? String(item.year) : null, item.pause?.certification ?? null].filter(Boolean).join(' · ') || t('player.video.movie');
   }, [item, t]);
 
@@ -912,11 +912,10 @@ export function PauseScreen({ item, remainingMs, onDismiss }: { item: PlayableIt
   const t = useT();
   const p = item.pause;
   const [logoFailed, setLogoFailed] = useState(false);
-  const title = p?.title ?? (item.kind === 'episode' ? (item.context ?? item.title) : item.title);
+  const title = playerHeading(item);
   const logo = (p?.logoUrl ?? item.logoUrl) || null;
   const backdrop = (p?.backdropUrl ?? item.backdropUrl) || null;
-  const episodeLine =
-    item.kind === 'episode' ? [episodeCode(p?.seasonNumber ?? item.seasonNumber, p?.episodeNumber ?? item.episodeNumber), p?.episodeTitle ?? item.title].filter(Boolean).join(' · ') : null;
+  const episodeLine = item.kind === 'episode' ? playerEpisodeLine(p?.seasonNumber ?? item.seasonNumber, p?.episodeNumber ?? item.episodeNumber, p?.episodeTitle ?? item.title) : null;
   const chips: MediaChips | null = p?.chips
     ? p.chips.tmdbScore === null && p.tmdbScore !== null
       ? { ...p.chips, tmdbScore: p.tmdbScore }

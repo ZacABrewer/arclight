@@ -8276,6 +8276,7 @@
   "player.video.emptyTitle": "Todavía no hay nada que ver",
   "player.video.endsAt": "termina a las {time}",
   "player.video.episodeCode": "T{season} · E{episode}",
+  "player.video.episodeShort": "T{season} E{episode}",
   "player.video.episodeN": "Episodio {n}",
   "player.video.episodes": "Episodios",
   "player.video.episodesWatched": "{played} de {count} vistos",

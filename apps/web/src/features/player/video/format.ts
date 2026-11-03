@@ -53,6 +53,22 @@ export function episodeCode(season: number | null | undefined, episode: number |
   return t('player.video.episodeCode', { season: season ?? 0, episode: episode ?? 0 });
 }
 
+/**
+ * The video player's episode line under the series title: "S1 E3 · Episode name" (the overlay,
+ * the pause screen, the native player). Without numbers it is just the name.
+ */
+export function playerEpisodeLine(season: number | null | undefined, episode: number | null | undefined, title: string | null | undefined): string {
+  const code =
+    season != null && episode != null ? t('player.video.episodeShort', { season, episode }) : episode != null ? `E${episode}` : season != null ? `S${season}` : null;
+  return [code, title || null].filter(Boolean).join(' · ');
+}
+
+/** The player's heading for an item: the series name for episodes (falling back to the episode's own title), else the title. */
+export function playerHeading(item: { kind: string; title: string; subtitle: string | null; pause?: { title: string } | undefined }): string {
+  if (item.kind !== 'episode') return item.title;
+  return item.pause?.title || item.subtitle || item.title;
+}
+
 const languageNames = new Map<string, Intl.DisplayNames | null>();
 
 /** ISO 639-1/2 → the language's name in the UI locale ("eng" → "English"); the code itself when unknown. */
