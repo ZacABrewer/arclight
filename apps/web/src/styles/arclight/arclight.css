@@ -133,6 +133,34 @@
   --al-tone-people: rgba(110,246,255,.12); --al-tone-people-ink: var(--al-text-1);
 }
 
+/* ---- player tokens (redesign spec §4.1): every /player redesign surface reads --al-pl-*.
+   Derived from the tokens above so every theme pack works unedited; the `cinema` pack
+   (themes/cinema) sets them to the design's exact values. var() resolves on <html>, which
+   carries data-theme, so a pack's own --al-* values feed the derivation. ---- */
+:root {
+  --al-pl-bg: var(--al-void);
+  --al-pl-text: var(--al-text-1); --al-pl-text-2: var(--al-text-2); --al-pl-text-3: var(--al-text-3); --al-pl-text-4: var(--al-text-4);
+  --al-pl-cert-border: var(--al-text-5);
+  --al-pl-accent: var(--al-cyan);
+  --al-pl-accent-glow: 0 0 10px color-mix(in srgb, var(--al-cyan) 70%, transparent);
+  --al-pl-primary-bg: var(--al-text-1); --al-pl-primary-text: var(--al-void);
+  --al-pl-fill: color-mix(in srgb, var(--al-text-1) 14%, transparent);
+  --al-pl-surface: color-mix(in srgb, var(--al-text-1) 4.5%, transparent);
+  --al-pl-track: color-mix(in srgb, var(--al-text-1) 25%, transparent);
+  --al-pl-line: var(--al-line-2);
+  --al-pl-panel: color-mix(in srgb, var(--al-pl-bg) 97%, transparent);
+  --al-pl-tint: color-mix(in srgb, var(--al-mark-from, #2f7bff) 10%, transparent);
+  --al-pl-fade: var(--al-pl-bg);
+  --al-pl-radius: var(--al-radius-card); --al-pl-radius-lg: var(--al-radius-control);
+  --al-pl-font: var(--al-font);
+  /* focus ring: White frame (default) and Cyan glow (profile setting Focus highlight) */
+  --al-pl-focus-color: var(--al-pl-text);
+  --al-pl-focus-inset: inset 0 0 0 3px var(--al-pl-bg);
+  --al-pl-focus-glow: 0 0 24px color-mix(in srgb, var(--al-pl-accent) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--al-pl-accent) 25%, transparent);
+  /* placeholder art: oklch lightness stops + chroma (redesign/placeholder.ts) */
+  --al-pl-placeholder-l1: 0.55; --al-pl-placeholder-l2: 0.32; --al-pl-placeholder-l3: 0.18; --al-pl-placeholder-c: 0.11;
+}
+
 /* ---------- base ---------- */
 html, body { margin: 0; background: var(--al-void); color: var(--al-text-2); font-family: var(--al-font); -webkit-font-smoothing: antialiased; }
 *, *::before, *::after { box-sizing: border-box; }

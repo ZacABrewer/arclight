@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
-import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Menu, Pane, Popover, Skeleton, buttonClass, isTypingTarget, type MenuItem } from '../../../arclight/index.js';
+import { Outlet, useRouterState } from '@tanstack/react-router';
+import { EmptyState, ErrorBlock, Pane, buttonClass, cx, isTypingTarget } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { appHomeFor } from '../../../auth/access.js';
 import { errorMessage } from '../../../api/client.js';
@@ -8,42 +8,21 @@ import { t } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
 import { BOOK_SKIP_MS } from '../engine/media-session.js';
 import { PlayerProvider, usePlayer } from '../player-context.js';
-import { AppSignInDialog } from './app-sign-in.js';
 import { MiniPlayer } from './mini-player.js';
 import { BrowsePlayerContext, type BrowsePlayerActions } from '../browse/player-hooks.js';
+import { useLayout } from '../redesign/layout.js';
+import { RdLoading } from '../redesign/pages/common.js';
+import { RdProfilesPage } from '../redesign/pages/profiles.js';
+import { wasProfilePicked } from '../redesign/profile-session.js';
+import { BottomTabBar, PortraitMiniPlayer, PortraitTopBar, RedesignRoot, WideHeader, isLegacyPage, useProfilesView } from '../redesign/shell.js';
 import '../player.css';
 
-// Layout of every /player page: header (mark, sections, search, account), the page, and the
-// mini-player docked at the bottom. The PlayerProvider lives here, so playback carries on
+// Layout of every /player page: the redesign chrome (header or top bar and tab bar), the page,
+// and the mini-player. The PlayerProvider lives here, so playback carries on
 // while moving between player pages.
 
 /** Music track skip for the arrow keys; audiobooks use BOOK_SKIP_MS. */
 export const KEY_SKIP_MS = 10_000;
-
-interface Section {
-  id: string;
-  to: string;
-  label: () => string;
-  /** Not built yet: shown greyed out with "Coming soon". */
-  soon?: boolean;
-}
-
-const SECTIONS: readonly Section[] = [
-  { id: 'video', to: '/player/watch', label: () => t('player.nav.video') },
-  { id: 'music', to: '/player/music', label: () => t('player.nav.music') },
-  { id: 'books', to: '/player/books', label: () => t('player.nav.books') },
-  { id: 'podcasts', to: '', label: () => t('player.nav.podcasts'), soon: true },
-];
-
-/** The full-screen video player has its own keys and no mini-player under it. */
-const isVideoPlayer = (pathname: string) => pathname.startsWith('/player/watch/play');
-
-function sectionOf(pathname: string): string | null {
-  if (pathname.startsWith('/player/watch')) return 'video';
-  if (pathname.startsWith('/player/music')) return 'music';
-  if (pathname.startsWith('/player/books')) return 'books';
-  return null;
-}
 
 /** Gives the browse pages (features/player/browse) the actions they use from the shared player. */
 function BrowsePlayerBridge({ children }: { children: ReactNode }) {
@@ -56,6 +35,11 @@ function BrowsePlayerBridge({ children }: { children: ReactNode }) {
   return <BrowsePlayerContext.Provider value={value}>{children}</BrowsePlayerContext.Provider>;
 }
 
+/** The full-screen video player has its own keys and no chrome around it. */
+const isVideoPlayer = (pathname: string) => pathname.startsWith('/player/watch/play');
+/** Pages whose art runs under the header (the hero on Home, the backdrop on details). */
+const isOverlayPage = (p: string) => p === '/player' || p === '/player/' || p === '/player/watch' || p === '/player/watch/' || /^\/player\/watch\/(movies|shows)\/[^/]+\/?$/.test(p);
+
 /** Guard + chrome. */
 export function PlayerLayout() {
   const { status, user } = useAuth();
@@ -66,9 +50,14 @@ export function PlayerLayout() {
     document.title = t('player.documentTitle');
   }, []);
 
-  let body: ReactNode;
-  if (!signedIn || caps.isPending) body = <PlayerShell bare><Skeleton lines={6} /></PlayerShell>;
-  else if (caps.data && caps.data.enabled && caps.data.allowed) {
+  if (!signedIn || caps.isPending) {
+    return (
+      <RedesignRoot className="rd-bare">
+        <RdLoading />
+      </RedesignRoot>
+    );
+  }
+  if (caps.data && caps.data.enabled && caps.data.allowed) {
     return (
       <PlayerProvider capabilities={caps.data}>
         <BrowsePlayerBridge>
@@ -79,88 +68,66 @@ export function PlayerLayout() {
         <PlayerShortcuts />
       </PlayerProvider>
     );
-  } else body = <PlayerShell bare><PlayerOff error={caps.isError ? caps.error : null} /></PlayerShell>;
-  return body;
+  }
+  return (
+    <RedesignRoot className="rd-bare">
+      <main className="pl-main rd-legacy">
+        <PlayerOff error={caps.isError ? caps.error : null} />
+      </main>
+    </RedesignRoot>
+  );
 }
 
-function PlayerShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
+/**
+ * The redesign chrome (spec §4.4-§4.6). Wide: the header over the page. Portrait: the top bar,
+ * the bottom tab bar and the mini player. The music and audiobook pages keep their own page frame
+ * inside it. "Who's watching?" comes first when the account has two or more profiles and none was
+ * picked in this tab.
+ */
+function PlayerShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const section = sectionOf(pathname);
-  const caps = usePlaybackCapabilities(!bare);
-  const videoOn = caps.data?.sections.video ?? false;
+  const layout = useLayout() === 'portrait' ? 'portrait' : 'wide';
+  const { profiles, loaded } = useProfilesView();
+  const onProfiles = pathname.startsWith('/player/profiles');
+  const [picked, setPicked] = useState(wasProfilePicked);
+  const gate = loaded && profiles.length >= 2 && !picked && !wasProfilePicked() && !onProfiles && !isVideoPlayer(pathname);
+
+  if (gate) {
+    return (
+      <RedesignRoot className="rd-bare">
+        <RdProfilesPage gate onPicked={() => setPicked(true)} />
+      </RedesignRoot>
+    );
+  }
+  if (isVideoPlayer(pathname) || onProfiles) {
+    return <RedesignRoot className="rd-bare">{children}</RedesignRoot>;
+  }
+
+  const legacy = isLegacyPage(pathname);
+  const overlay = isOverlayPage(pathname);
   return (
-    <div className="al-app pl-app" data-video-player={isVideoPlayer(pathname) || undefined}>
-      <Backdrop vx={0.5} horizon={0.7} />
-      <header className="pl-head">
-        <Link to="/player" className="pl-brand" aria-label={t('player.nav.home')}>
-          <Mark size={28} />
-        </Link>
-        {!bare ? (
-          <nav className="pl-tabs" aria-label={t('player.nav.label')}>
-            {SECTIONS.map((s) =>
-              s.soon || (s.id === 'video' && !videoOn) ? (
-                <span key={s.id} className="pl-tabs__link is-soon" aria-disabled="true" title={t('player.nav.comingSoon')}>
-                  {s.label()}
-                  <span className="pl-tabs__soon">{t('player.nav.comingSoon')}</span>
-                </span>
-              ) : (
-                // Browse routes register under /player (router.tsx playerSectionRoutes).
-                <Link key={s.id} to={s.to as '/player'} className="pl-tabs__link" aria-current={section === s.id ? 'page' : undefined}>
-                  {s.label()}
-                </Link>
-              ),
-            )}
-          </nav>
-        ) : null}
-        <div className="pl-head__end">
-          {!bare ? (
-            <Link to={'/player/search' as '/player'} className={buttonClass({ variant: 'ghost', iconOnly: true, className: 'pl-head__btn' })} aria-label={t('player.nav.search')}>
-              <Icon name="search" size={20} />
-            </Link>
-          ) : null}
-          <AccountMenu />
-        </div>
-      </header>
-      <main className="pl-main" id="player-main">
+    <RedesignRoot className={cx('al-app', 'pl-app', `rd-shell--${layout}`)}>
+      {layout === 'wide' ? <WideHeader transparent={overlay} /> : <PortraitTopBar transparent={overlay} />}
+      <main className={cx('rd-main', legacy && 'pl-main rd-legacy')} id="player-main" data-overlay={overlay || undefined}>
         {children}
       </main>
-      {!bare ? <DockedMiniPlayer /> : null}
-    </div>
+      {layout === 'wide' ? (
+        <DockedMiniPlayer />
+      ) : (
+        <>
+          <PortraitMiniPlayer />
+          <BottomTabBar />
+        </>
+      )}
+    </RedesignRoot>
   );
 }
 
-/** The mini-player, except on Now playing (which is the full version of it). */
+/** Wide: the classic docked mini-player, except on Now playing (which is the full version of it). */
 function DockedMiniPlayer() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (pathname.startsWith('/player/now-playing') || isVideoPlayer(pathname)) return null;
+  if (pathname.startsWith('/player/now-playing')) return null;
   return <MiniPlayer />;
-}
-
-function AccountMenu() {
-  const { user, access, logout } = useAuth();
-  const appHref = appHomeFor(access);
-  const [appSignIn, setAppSignIn] = useState(false);
-  const items: MenuItem[] = [
-    ...(appHref ? [{ id: 'app', label: t('player.account.openApp'), href: appHref }] : []),
-    { id: 'portal', label: t('player.account.portal'), href: '/portal' },
-    ...(user ? [{ id: 'app-sign-in', label: t('player.account.appSignIn'), onSelect: () => setAppSignIn(true) }] : []),
-    { id: 'signout', label: t('player.account.signOut'), onSelect: () => void logout(), separatorBefore: true },
-  ];
-  return (
-    <>
-      <Popover
-        placement="bottom-end"
-        width={240}
-        label={t('player.account.menu')}
-        trigger={(props) => (
-          <Button variant="ghost" className="pl-head__btn" icon={<Icon name="user" size={20} />} aria-label={t('player.account.menu')} {...props} />
-        )}
-      >
-        {(close) => <Menu items={items} onDone={close} header={user ? <span className="pl-account__name">{user.displayName || user.username}</span> : null} />}
-      </Popover>
-      <AppSignInDialog open={appSignIn} onClose={() => setAppSignIn(false)} />
-    </>
-  );
 }
 
 /** Shown when the player is off, or this account may not use it. */

@@ -25,9 +25,14 @@ afterEach(() => {
 
 const lastQuery = (calls: Call[], path: string) => [...calls].reverse().find((c) => c.path === path)?.search;
 
-describe('WatchHomePage', () => {
-  it('shows continue watching and recent shelves, and resumes from a card', async () => {
+// The /player/watch pages are the redesign pages (redesign spec §4.4-§4.5); the shell's
+// sections come from /playback/me.
+const me = { enabled: true, allowed: true, remote: false, canStream: true, maxBitrateKbps: 0, sections: { music: false, audiobooks: false, podcasts: false, books: false, video: true } };
+
+describe('RdHomePage (/player/watch)', () => {
+  it('shows the Continue Watching row and resumes from a tile', async () => {
     stubFetch({
+      [api('/me')]: me,
       [api('/video/home')]: emptyHome({
         continueWatching: [
           {
@@ -51,130 +56,127 @@ describe('WatchHomePage', () => {
       }),
     });
     renderBrowse('/player/watch');
-    expect(await screen.findByRole('heading', { name: 'Continue watching' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Recently added movies' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Continue Watching' })).toBeTruthy();
+    const tonight = screen.getByRole('region', { name: 'Movies for Tonight' });
+    expect(within(tonight).getByRole('link', { name: /New Film/ }).getAttribute('href')).toBe('/player/watch/movies/4');
     await userEvent.click(screen.getByRole('button', { name: /Halfway Film/ }));
     expect(launched[0]).toMatchObject({ itemKey: 'movie:3', opts: { startMs: 1_800_000 } });
   });
 
   it('shows the empty state', async () => {
-    stubFetch({ [api('/video/home')]: emptyHome() });
+    stubFetch({ [api('/me')]: me, [api('/video/home')]: emptyHome() });
     renderBrowse('/player/watch');
     expect(await screen.findByText('Nothing to watch yet')).toBeTruthy();
   });
+
+  it('puts quality chips in the hero meta line, not over the art', async () => {
+    stubFetch({
+      [api('/me')]: me,
+      [api('/video/home')]: emptyHome(),
+      [api('/video/featured')]: {
+        items: [
+          {
+            kind: 'movie',
+            id: 8,
+            title: 'Saltwater Kings',
+            year: 2024,
+            certification: 'PG-13',
+            runtimeMinutes: 116,
+            seasonCount: null,
+            genres: ['Adventure'],
+            overview: 'Two brothers.',
+            backdropUrl: null,
+            logoUrl: null,
+            kicker: 'trending',
+            kickerWeekday: null,
+            chips: { resolution: '4K', dynamicRange: null, audio: null, audioLanguages: [], sizeBytes: null, tmdbScore: 7.8, certification: 'PG-13' },
+            play: { itemKey: 'movie:8', seasonNumber: null, episodeNumber: null, progress: null },
+            inMyList: false,
+          },
+        ],
+      },
+    });
+    renderBrowse('/player/watch');
+    expect(await screen.findByRole('heading', { name: 'Saltwater Kings' })).toBeTruthy();
+    expect(screen.getByText('Trending this week')).toBeTruthy();
+    const chips = [...document.querySelectorAll('.rd-meta__chip')].map((c) => c.textContent);
+    expect(chips).toEqual(['4K', 'TMDB 7.8']);
+    expect(document.querySelector('.rd-hero__art .rd-meta__chip, .rd-tile__art .rd-meta__chip')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(launched[0]?.itemKey).toBe('movie:8');
+  });
 });
 
-describe('MoviesPage', () => {
-  it('lists movies with links and sends sort, genre, watched and letter filters', async () => {
-    const calls = stubFetch({ [api('/movies')]: page([movie(1, { title: 'Alpha' }), movie(2, { title: 'Beta', genres: ['Sci-Fi'] })]) });
+describe('RdMoviesPage (/player/watch/movies)', () => {
+  it('lists movies as tiles linking to their pages and filters by genre', async () => {
+    const calls = stubFetch({
+      [api('/me')]: me,
+      [api('/video/home')]: emptyHome({ genres: ['Sci-Fi'] }),
+      [api('/movies')]: page([movie(1, { title: 'Alpha' }), movie(2, { title: 'Beta', genres: ['Sci-Fi'] })]),
+    });
     renderBrowse('/player/watch/movies');
-    const list = await screen.findByRole('list', { name: 'Movies' });
-    expect(within(list).getByRole('link', { name: /Alpha/ }).getAttribute('href')).toBe('/player/watch/movies/1');
-    expect(lastQuery(calls, api('/movies'))?.get('sort')).toBe('title');
-
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Sort/ }), 'added');
-    await waitFor(() => expect(lastQuery(calls, api('/movies'))?.get('sort')).toBe('added'));
-    expect(lastQuery(calls, api('/movies'))?.get('order')).toBe('desc');
-
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Genre/ }), 'Sci-Fi');
+    expect(await screen.findByRole('heading', { name: 'Movies' })).toBeTruthy();
+    expect((await screen.findByRole('link', { name: /Alpha/ })).getAttribute('href')).toBe('/player/watch/movies/1');
+    expect(screen.getByText('2 titles')).toBeTruthy();
+    const genres = screen.getByRole('group', { name: 'Genres' });
+    expect(within(genres).getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+    await userEvent.click(within(genres).getByRole('button', { name: 'Sci-Fi' }));
     await waitFor(() => expect(lastQuery(calls, api('/movies'))?.get('genre')).toBe('Sci-Fi'));
-
-    const watched = screen.getByRole('group', { name: 'Watched filter' });
-    await userEvent.click(within(watched).getByRole('button', { name: 'Unwatched' }));
-    await waitFor(() => expect(lastQuery(calls, api('/movies'))?.get('watched')).toBe('unwatched'));
-    expect(within(watched).getByRole('button', { name: 'Unwatched' }).getAttribute('aria-pressed')).toBe('true');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Starts with B' }));
-    await waitFor(() => expect(lastQuery(calls, api('/movies'))?.get('letter')).toBe('B'));
-  });
-
-  it('plays a movie from its card through openVideo', async () => {
-    stubFetch({ [api('/movies')]: page([movie(1, { title: 'Alpha' })]) });
-    renderBrowse('/player/watch/movies');
-    await userEvent.click(await screen.findByRole('button', { name: 'Play Alpha' }));
-    expect(launched[0]?.itemKey).toBe('movie:1');
-  });
-
-  it('remembers the poster size', async () => {
-    stubFetch({ [api('/movies')]: page([movie(1)]) });
-    renderBrowse('/player/watch/movies');
-    const list = await screen.findByRole('list', { name: 'Movies' });
-    expect(list.getAttribute('data-density')).toBe('m');
-    await userEvent.click(within(screen.getByRole('group', { name: 'Poster size' })).getByRole('button', { name: 'L' }));
-    await waitFor(() => expect(screen.getByRole('list', { name: 'Movies' }).getAttribute('data-density')).toBe('l'));
   });
 
   it('says when there are no movies', async () => {
-    stubFetch({ [api('/movies')]: page([]) });
+    stubFetch({ [api('/me')]: me, [api('/video/home')]: emptyHome(), [api('/movies')]: page([]) });
     renderBrowse('/player/watch/movies');
-    expect(await screen.findByText('No movies yet')).toBeTruthy();
+    expect(await screen.findByText('No titles here yet.')).toBeTruthy();
   });
 });
 
-describe('MovieDetailsPage', () => {
-  it('plays from the start when there is no saved place, and marks watched', async () => {
-    const calls = stubFetch({
-      [api('/movies/5')]: movieDetails(5, { title: 'Fifth Film' }),
-      [`POST ${api('/watched')}`]: { updated: 1 },
-    });
+describe('RdMoviePage (/player/watch/movies/$id)', () => {
+  it('plays from the start when there is no saved place', async () => {
+    stubFetch({ [api('/me')]: me, [api('/movies/5')]: movieDetails(5, { title: 'Fifth Film' }) });
     renderBrowse('/player/watch/movies/5');
     expect(await screen.findByRole('heading', { name: /Fifth Film/ })).toBeTruthy();
-    expect(screen.getByText('Example Studio')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Play' }));
     expect(launched[0]).toMatchObject({ itemKey: 'movie:5', opts: { restart: true } });
-    await userEvent.click(screen.getByRole('button', { name: 'Mark watched' }));
-    await waitFor(() => expect(calls.find((c) => c.path === api('/watched'))?.body).toEqual({ itemKeys: ['movie:5'], played: true }));
   });
 
-  it('offers resume and restart, and passes the chosen version', async () => {
-    const v = movieDetails(6).versions[0]!;
-    stubFetch({
-      [api('/movies/6')]: movieDetails(6, {
-        runtimeMinutes: 100,
-        progress: { positionMs: 3_000_000, durationMs: 6_000_000, played: false },
-        versions: [
-          { ...v, label: '4K HDR', mediaFileId: 601 },
-          { ...v, label: '1080p', mediaFileId: 602 },
-        ],
-      }),
+  it('offers Resume and Start over when there is a saved place, and adds to My List', async () => {
+    const calls = stubFetch({
+      [api('/me')]: me,
+      [api('/movies/6')]: movieDetails(6, { runtimeMinutes: 100, progress: { positionMs: 3_000_000, durationMs: 6_000_000, played: false } }),
+      [`PUT ${api(`/my-list/${encodeURIComponent('movie:6')}`)}`]: null,
     });
     renderBrowse('/player/watch/movies/6');
-    const versions = await screen.findByRole('radiogroup', { name: 'Versions' });
-    await userEvent.click(within(versions).getByRole('radio', { name: /^1080p/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Resume from 50:00' }));
-    expect(launched[0]).toMatchObject({ itemKey: 'movie:6', opts: { startMs: 3_000_000, mediaFileId: 602 } });
-    await userEvent.click(screen.getByRole('button', { name: 'Restart' }));
-    expect(launched[1]).toMatchObject({ opts: { restart: true, mediaFileId: 602 } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Resume' }));
+    expect(launched[0]).toMatchObject({ itemKey: 'movie:6', opts: { startMs: 3_000_000 } });
+    expect(screen.getByText('50m left')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Start over' }));
+    expect(launched[1]).toMatchObject({ opts: { restart: true } });
+    await userEvent.click(screen.getByRole('button', { name: 'My List' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.path === api(`/my-list/${encodeURIComponent('movie:6')}`))).toBe(true));
   });
 });
 
-describe('ShowDetailsPage', () => {
-  it('lists seasons and episodes, plays next up, and marks a season and an episode', async () => {
-    const calls = stubFetch({
-      [api('/series/9')]: seriesDetails(9, { title: 'Ninth Show' }),
-      [`POST ${api('/watched')}`]: { updated: 1 },
-    });
+describe('RdShowPage (/player/watch/shows/$id)', () => {
+  it('plays next up and switches seasons', async () => {
+    stubFetch({ [api('/me')]: me, [api('/series/9')]: seriesDetails(9, { title: 'Ninth Show' }) });
     renderBrowse('/player/watch/shows/9');
     expect(await screen.findByRole('heading', { name: /Ninth Show/ })).toBeTruthy();
-    const tabs = screen.getByRole('tablist', { name: 'Seasons' });
-    expect(within(tabs).getAllByRole('tab')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Play S1 · E2' })).toBeTruthy();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Play S1 · E2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Play S1 E2' }));
     expect(launched[0]).toMatchObject({ itemKey: 'episode:42', opts: { restart: true } });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mark Episode title 42 watched' }));
-    await waitFor(() => expect(calls.filter((c) => c.path === api('/watched')).at(-1)?.body).toEqual({ itemKeys: ['episode:42'], played: true }));
-
-    await userEvent.click(screen.getByRole('button', { name: 'Mark season watched' }));
-    await waitFor(() => expect(calls.filter((c) => c.path === api('/watched')).at(-1)?.body).toEqual({ seriesId: 9, seasonNumber: 1, played: true }));
-
-    await userEvent.click(within(tabs).getByRole('tab', { name: /Season 2/ }));
-    expect(await screen.findByRole('button', { name: /Play S2 · E1 · Episode title 43/ })).toBeTruthy();
+    const seasons = screen.getByRole('group', { name: 'Seasons' });
+    expect(within(seasons).getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByText('2. Episode title 42')).toBeTruthy();
+    await userEvent.click(within(seasons).getByRole('button', { name: /Season 2/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /1\. Episode title 43/ }));
+    expect(launched[1]).toMatchObject({ itemKey: 'episode:43', opts: { restart: true } });
   });
 
   it('resumes an episode in progress', async () => {
     stubFetch({
+      [api('/me')]: me,
       [api('/series/9')]: seriesDetails(9, {
         seasons: [
           {
@@ -189,7 +191,7 @@ describe('ShowDetailsPage', () => {
       }),
     });
     renderBrowse('/player/watch/shows/9');
-    await userEvent.click(await screen.findByRole('button', { name: /Resume S1 · E1 · Episode title 50/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Resume S1 E1' }));
     expect(launched[0]).toMatchObject({ itemKey: 'episode:50', opts: { startMs: 600_000 } });
   });
 });

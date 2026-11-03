@@ -166,6 +166,28 @@ Tron cuts corners ("chamfers") with `clip-path`, which would clip rounded corner
 pack that drops them sets `--al-chamfer: 0px;` and `--al-chamfer-clip: none;`. The modal and
 float-bar cuts have their own sizes, `--al-chamfer-modal` and `--al-chamfer-bar`.
 
+**Player tokens.** The player at `/player` draws with its own `--al-pl-*` tokens, which default
+to the app tokens above, so every pack works there without changes. Override them when the
+player should look different from the admin app:
+
+| Token | Used for |
+|---|---|
+| `--al-pl-bg`, `--al-pl-fade` | Page background; the colour hero and detail art fade into |
+| `--al-pl-text`, `--al-pl-text-2` to `-4` | Titles; meta lines and blurbs; subtitles; input hints and faint labels |
+| `--al-pl-accent`, `--al-pl-accent-glow` | Active tab dot, progress, toggles, the PIN caret |
+| `--al-pl-primary-bg`, `--al-pl-primary-text` | The Play button |
+| `--al-pl-fill`, `--al-pl-surface`, `--al-pl-track` | Secondary buttons and chips; setting rows; progress tracks |
+| `--al-pl-line`, `--al-pl-panel`, `--al-pl-tint` | Dividers; menus, sheets and the mini player; the hero's colour wash |
+| `--al-pl-cert-border` | The boxed rating (PG-13) in meta lines |
+| `--al-pl-radius`, `--al-pl-radius-lg` | Tiles and buttons; setting rows and inputs |
+| `--al-pl-placeholder-c`, `--al-pl-placeholder-l1` to `-l3` | Artwork stand-ins while posters load or when a title has none |
+| `--al-pl-font` | Player type |
+| `--al-pl-focus-color`, `--al-pl-focus-inset`, `--al-pl-focus-glow` | The keyboard focus ring (White frame) and the Cyan glow option |
+
+Each player profile picks its own theme under **Settings → Display → Theme** in the player.
+Profiles that have not picked one use **Cinema**, the player's own look: warm charcoal, white
+type, a cyan accent, 8 px corners and Figtree. Leaving `/player` puts your account theme back.
+
 ### Backdrops
 
 `backdrop` in `theme.json` picks what is drawn behind the app:
