@@ -3,7 +3,6 @@ package com.moviemethat.arclight.cast;
 import android.app.Activity;
 import android.content.Context;
 import android.net.Uri;
-import android.util.Log;
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -28,6 +27,7 @@ import com.google.android.gms.cast.framework.media.RemoteMediaClient;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.images.WebImage;
+import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackHub;
 import com.moviemethat.arclight.player.QueueModel;
 import com.moviemethat.arclight.player.TrackInfo;
@@ -92,12 +92,12 @@ public final class CastController implements PlaybackHub.CastBridge {
             CastContext.getSharedInstance(app, main)
                     .addOnSuccessListener(main, this::attach)
                     .addOnFailureListener(main, e -> {
-                        Log.i(TAG, "Cast is not available: " + e.getMessage());
+                        SafeLog.i(TAG, "Cast is not available: " + e.getMessage());
                         failed = true;
                         emitState();
                     });
         } catch (RuntimeException | LinkageError e) {
-            Log.i(TAG, "Cast is not available: " + e.getMessage());
+            SafeLog.i(TAG, "Cast is not available: " + e.getMessage());
             failed = true;
         }
     }
@@ -191,7 +191,7 @@ public final class CastController implements PlaybackHub.CastBridge {
         if (c == null) return;
         CastQueueMapper.Plan plan = CastQueueMapper.plan(tracks, index);
         if (plan.startIndex < 0) {
-            Log.w(TAG, "Nothing in the queue can be cast (downloaded files only)");
+            SafeLog.w(TAG, "Nothing in the queue can be cast (downloaded files only)");
             return;
         }
         List<MediaQueueItem> items = new ArrayList<>(plan.tracks.size());

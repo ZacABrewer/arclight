@@ -6,10 +6,10 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.util.UnstableApi;
+import com.moviemethat.arclight.SafeLog;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -110,7 +110,7 @@ public final class ArtworkProvider extends ContentProvider {
             if (!tmp.renameTo(file)) throw new FileNotFoundException("rename failed");
             return file;
         } catch (IOException e) {
-            Log.w(TAG, "Artwork fetch failed", e);
+            SafeLog.w(TAG, "Artwork fetch failed", e);
             //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             throw e instanceof FileNotFoundException ? (FileNotFoundException) e : new FileNotFoundException(e.getMessage());

@@ -16,7 +16,6 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.format.DateFormat;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.util.Rational;
 import android.util.TypedValue;
 import android.view.FocusFinder;
@@ -53,11 +52,13 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.session.MediaSession;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
 import com.moviemethat.arclight.R;
+import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackMapping;
 import com.moviemethat.arclight.video.ui.ControlsView;
 import com.moviemethat.arclight.video.ui.EpisodesPanel;
@@ -149,7 +150,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** Bumped for every stream started: late subtitle work for an older one is dropped. */
     private int generation;
     private boolean tracksApplied;
-    private boolean everReady;
+    /** Read on the loader thread too (StartPolicy). */
+    private volatile boolean everReady;
     /** Waiting for JS: a replaceVideoStream (seek / audio change) or the next / picked item. */
     private boolean awaitingJs;
     /** A seek target sent (or about to be sent) to JS, shown on the bar meanwhile; -1 = none. */
@@ -190,6 +192,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        SafeLog.install();
         VideoRequest request = controller.takePending();
         if (request == null) {
             // Recreated by the system after the process died, or JS closed it already.
@@ -631,7 +634,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                     }
                     uri = Uri.fromFile(f);
                 } catch (Exception e) {
-                    Log.w(TAG, "Subtitle " + s.id + " unavailable", e);
+                    SafeLog.w(TAG, "Subtitle " + s.id + " unavailable", e);
                 }
                 files.add(uri);
             }
@@ -664,14 +667,27 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         HttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(USER_AGENT)
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(15_000)
+                .setConnectTimeoutMs(StartFailure.CONNECT_TIMEOUT_MS)
                 // A transcode can take a while to produce its first bytes.
                 .setReadTimeoutMs(45_000)
                 .setDefaultRequestProperties(r.headers);
-        player.setMediaSource(new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, http)).createMediaSource(item.build()),
-                r.seekable ? r.toPlayerMs(mediaPositionMs) : 0);
+        DefaultMediaSourceFactory sources = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, http))
+                .setLoadErrorHandlingPolicy(new StartPolicy());
+        player.setMediaSource(sources.createMediaSource(item.build()), r.seekable ? r.toPlayerMs(mediaPositionMs) : 0);
         player.prepare();
         player.setPlayWhenReady(playWhenReady);
+    }
+
+    /** Media3's retries, except for a server that cannot be reached at the start (StartFailure). */
+    private final class StartPolicy extends DefaultLoadErrorHandlingPolicy {
+        @Override
+        public long getRetryDelayMsFor(@NonNull LoadErrorInfo info) {
+            if (info.exception instanceof HttpDataSource.HttpDataSourceException) {
+                HttpDataSource.HttpDataSourceException e = (HttpDataSource.HttpDataSourceException) info.exception;
+                if (StartFailure.giveUp(everReady, e.type, e.reason)) return C.TIME_UNSET;
+            }
+            return super.getRetryDelayMsFor(info);
+        }
     }
 
     private static MediaItem.SubtitleConfiguration subtitleConfig(VideoRequest.Subtitle s, Uri uri) {
@@ -764,7 +780,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             http = ((HttpDataSource.InvalidResponseCodeException) cause).responseCode;
         }
         String code = PlaybackMapping.errorCode(error.errorCode, http, false);
-        Log.w(TAG, "Playback failed (" + code + ")", error);
+        SafeLog.w(TAG, "Playback failed (" + code + ")", error);
         finishWithClose(false, code);
     }
 
@@ -1613,7 +1629,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         try {
             setPictureInPictureParams(p);
         } catch (RuntimeException e) {
-            Log.w(TAG, "PiP params rejected", e);
+            SafeLog.w(TAG, "PiP params rejected", e);
         }
     }
 
@@ -1627,7 +1643,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 try {
                     enterPictureInPictureMode(p);
                 } catch (RuntimeException e) {
-                    Log.w(TAG, "PiP failed", e);
+                    SafeLog.w(TAG, "PiP failed", e);
                 }
             }
         }

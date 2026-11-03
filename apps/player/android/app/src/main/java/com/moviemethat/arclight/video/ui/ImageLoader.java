@@ -4,10 +4,10 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.util.LruCache;
 import android.widget.ImageView;
 import androidx.annotation.Nullable;
+import com.moviemethat.arclight.SafeLog;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -85,7 +85,7 @@ public final class ImageLoader {
                     byte[] data = fetch(url, h);
                     bmp = decode(data, targetWidthPx);
                 } catch (Exception e) {
-                    Log.w(TAG, "Overlay image unavailable", e);
+                    SafeLog.w(TAG, "Overlay image unavailable", e);
                 }
                 final Bitmap result = bmp;
                 if (result != null) cache.put(key, result);

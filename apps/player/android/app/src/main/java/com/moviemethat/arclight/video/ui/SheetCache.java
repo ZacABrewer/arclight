@@ -5,9 +5,9 @@ import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.Log;
 import android.util.LruCache;
 import androidx.annotation.Nullable;
+import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.video.VideoRequest;
 import java.util.HashSet;
 import java.util.Map;
@@ -86,7 +86,7 @@ public final class SheetCache {
                     o.inPreferredConfig = Bitmap.Config.RGB_565;
                     bmp = BitmapFactory.decodeByteArray(data, 0, data.length, o);
                 } catch (Exception e) {
-                    Log.w(TAG, "Trickplay sheet " + sheet + " unavailable", e);
+                    SafeLog.w(TAG, "Trickplay sheet " + sheet + " unavailable", e);
                 }
                 final Bitmap result = bmp;
                 main.post(() -> {
