@@ -3,7 +3,6 @@
   "app.loading": "Starting…",
   "app.offline": "Offline",
   "app.offlineHelp": "You're offline. Downloads still play; your listening progress is saved and sent when you're back online.",
-
   "app.nav.home": "Home",
   "app.nav.music": "Music",
   "app.nav.books": "Books",
@@ -12,13 +11,11 @@
   "app.nav.settings": "Settings",
   "app.nav.label": "Sections",
   "app.nav.back": "Back",
-
   "app.welcome.title": "Your music and audiobooks, from your own server",
   "app.welcome.body": "Arclight plays the music and audiobooks on your Arclight server, at home or on the go, and keeps downloads for offline listening.",
   "app.welcome.scan": "Scan a pairing code",
   "app.welcome.enter": "Enter server address",
   "app.welcome.scanHelp": "In Arclight on the web, open the player, then your account menu → Sign in to the Arclight app.",
-
   "app.addServer.title": "Connect to a server",
   "app.addServer.address": "Server address",
   "app.addServer.addressHint": "For example 192.168.1.20:7878 or music.example.com",
@@ -32,11 +29,9 @@
   "app.addServer.error.tls": "{host} has a certificate this phone doesn't trust.",
   "app.addServer.error.not-arclight": "{host} answered, but it isn't an Arclight server.",
   "app.addServer.error.cors": "{host} refused the app. Update Arclight on the server.",
-
   "app.scan.instructions": "Point the camera at the pairing code shown in Arclight",
   "app.scan.notPairing": "That QR code isn't an Arclight pairing code.",
   "app.scan.failed": "Couldn't scan. Allow camera access for Arclight in the system settings, or enter the address instead.",
-
   "app.signIn.title": "Sign in",
   "app.signIn.to": "to {server}",
   "app.signIn.username": "Username",
@@ -66,17 +61,14 @@
   "app.signIn.error.network": "Couldn't reach the server.",
   "app.signIn.error.unknown": "Sign-in failed: {message}",
   "app.signIn.expired": "You were signed out of {server}. Sign in again to keep listening.",
-
   "app.home.greeting": "Listening",
   "app.home.offlineTitle": "Downloaded",
-
   "app.car.continue": "Continue",
   "app.car.albums": "Albums",
   "app.car.artists": "Artists",
   "app.car.playlists": "Playlists",
   "app.car.books": "Books",
   "app.car.downloads": "Downloads",
-
   "app.downloads.title": "Downloads",
   "app.downloads.empty": "Nothing downloaded yet",
   "app.downloads.emptyHelp": "Download what's playing or your queue to listen without a connection.",
@@ -103,9 +95,7 @@
   "app.downloads.error.no-space": "Not enough free space on this phone.",
   "app.downloads.error.unavailable": "Downloads need the latest Arclight app on this phone.",
   "app.downloads.error.failed": "Couldn't start the download: {message}",
-
   "app.queue.title": "Queue",
-
   "app.settings.title": "Settings",
   "app.settings.accounts": "Accounts",
   "app.settings.addAccount": "Add a server or account",
@@ -140,12 +130,23 @@
   "app.settings.pending": "{count, plural, one {# progress update waiting to be sent} other {# progress updates waiting to be sent}}",
   "app.settings.original": "Original",
   "app.settings.aac": "AAC {kbps} kbps",
-
   "app.player.off": "The player isn't available for this account.",
   "app.player.offHelp": "The player may be turned off on the server, or this account may not be allowed to use it.",
   "app.player.retry": "Try again",
-
   "app.common.cancel": "Cancel",
   "app.common.confirm": "Confirm",
-  "app.common.close": "Close"
+  "app.common.close": "Close",
+  "app.tv.movies": "Movies",
+  "app.tv.shows": "Shows",
+  "app.tv.welcomeHelp": "Then confirm a code on your phone or computer, no typing a password with the remote.",
+  "app.tv.code.open": "On your phone or computer, open",
+  "app.tv.code.enter": "Sign in there if asked, then enter this code (or scan the QR code):",
+  "app.tv.code.label": "Sign-in code",
+  "app.tv.code.waiting": "Waiting for you to confirm…",
+  "app.tv.code.qr": "QR code that opens the confirm page with the code filled in",
+  "app.tv.code.approved": "Confirmed. Signing in…",
+  "app.tv.code.starting": "Getting a code…",
+  "app.tv.code.expired": "The code expired. Get a new one to keep going.",
+  "app.tv.code.newCode": "Get a new code",
+  "app.tv.code.instead": "Sign in with a code instead"
 }

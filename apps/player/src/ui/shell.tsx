@@ -10,6 +10,7 @@ import '@web/features/player/player.css';
 import { useNet, useServices, useSession } from '../app/context';
 import { signedOutTarget } from '../app/router';
 import { useBrowseDownloads } from './downloads';
+import { TvFrame } from '../tv/tv-shell';
 
 // Chrome of every signed-in screen: a slim top bar (back, mark, offline badge, settings), the
 // page, the mini-player and the bottom tabs. The player lives here so playback carries on
@@ -26,7 +27,10 @@ interface Tab {
 /** Gives the web browse pages the actions they use from the shared player. */
 function BrowsePlayerBridge({ children }: { children: ReactNode }) {
   const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
-  const downloads = useBrowseDownloads();
+  const services = useServices();
+  const browseDownloads = useBrowseDownloads();
+  // Downloads are phone-only: a TV keeps nothing offline.
+  const downloads = services.tv ? null : browseDownloads;
   const currentItemKey = state.current?.itemKey ?? null;
   const value = useMemo<BrowsePlayerActions>(
     () => ({ currentItemKey, playing: state.playing, playItems, playItem: (key) => playItem(key), playNext, addToQueue, toggle, ...downloads }),
@@ -105,18 +109,24 @@ function PlayerOffNotice({ onRetry }: { onRetry: () => void }) {
 }
 
 function Frame({ children, bare }: { children: ReactNode; bare?: boolean }) {
+  const services = useServices();
+  if (services.tv) return <TvFrame bare={bare}>{children}</TvFrame>;
+  return <PhoneFrame bare={bare}>{children}</PhoneFrame>;
+}
+
+function PhoneFrame({ children, bare }: { children: ReactNode; bare?: boolean | undefined }) {
   const t = useT();
   const net = useNet();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const tabs: Tab[] = [
-    { id: 'home', to: '/player', icon: 'home', label: t('app.nav.home'), match: (p) => p === '/player' || p === '/player/' },
+    { id: 'home', to: '/player', icon: 'home', label: t('app.nav.home'), match: (p) => p === '/player' || p === '/player/' || p.startsWith('/player/watch') },
     { id: 'music', to: '/player/music', icon: 'library', label: t('app.nav.music'), match: (p) => p.startsWith('/player/music') },
     { id: 'books', to: '/player/books', icon: 'file', label: t('app.nav.books'), match: (p) => p.startsWith('/player/books') },
     { id: 'search', to: '/player/search', icon: 'search', label: t('app.nav.search'), match: (p) => p.startsWith('/player/search') },
     { id: 'downloads', to: '/player/downloads', icon: 'download', label: t('app.nav.downloads'), match: (p) => p.startsWith('/player/downloads') },
   ];
-  const isRoot = ['/player', '/player/', '/player/music', '/player/books', '/player/search', '/player/downloads'].includes(pathname);
+  const isRoot = ['/player', '/player/', '/player/watch', '/player/music', '/player/books', '/player/search', '/player/downloads'].includes(pathname);
   const onNowPlaying = pathname.startsWith('/player/now-playing');
   return (
     <div className="al-app pl-app app-shell">

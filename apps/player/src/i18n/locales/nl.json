@@ -1,0 +1,15 @@
+{
+  "app.tv.movies": "Films",
+  "app.tv.shows": "Series",
+  "app.tv.welcomeHelp": "Bevestig daarna een code op je telefoon of computer, zonder een wachtwoord te typen met de afstandsbediening.",
+  "app.tv.code.open": "Open op je telefoon of computer",
+  "app.tv.code.enter": "Log daar in als dat gevraagd wordt en voer deze code in (of scan de QR-code):",
+  "app.tv.code.label": "Aanmeldcode",
+  "app.tv.code.waiting": "Wachten op je bevestiging…",
+  "app.tv.code.qr": "QR-code die de bevestigingspagina met de code opent",
+  "app.tv.code.approved": "Bevestigd. Bezig met aanmelden…",
+  "app.tv.code.starting": "Code ophalen…",
+  "app.tv.code.expired": "De code is verlopen. Vraag een nieuwe aan om verder te gaan.",
+  "app.tv.code.newCode": "Nieuwe code aanvragen",
+  "app.tv.code.instead": "Aanmelden met een code"
+}

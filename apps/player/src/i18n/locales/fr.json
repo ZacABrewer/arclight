@@ -1,0 +1,15 @@
+{
+  "app.tv.movies": "Films",
+  "app.tv.shows": "Séries",
+  "app.tv.welcomeHelp": "Confirmez ensuite un code sur votre téléphone ou ordinateur, sans taper de mot de passe à la télécommande.",
+  "app.tv.code.open": "Sur votre téléphone ou ordinateur, ouvrez",
+  "app.tv.code.enter": "Connectez-vous si demandé, puis saisissez ce code (ou scannez le QR code) :",
+  "app.tv.code.label": "Code de connexion",
+  "app.tv.code.waiting": "En attente de votre confirmation…",
+  "app.tv.code.qr": "QR code qui ouvre la page de confirmation avec le code déjà saisi",
+  "app.tv.code.approved": "Confirmé. Connexion…",
+  "app.tv.code.starting": "Obtention d’un code…",
+  "app.tv.code.expired": "Le code a expiré. Demandez-en un nouveau pour continuer.",
+  "app.tv.code.newCode": "Obtenir un nouveau code",
+  "app.tv.code.instead": "Se connecter avec un code"
+}

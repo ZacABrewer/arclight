@@ -186,11 +186,31 @@ The app needs the same player access as the browser. If the player is off, or yo
 
 The Arclight app on a TV signs in with a code, so you never type a password with a remote.
 
-1. On the TV, open Arclight and choose to sign in with a code. The TV shows a code and a QR code.
-2. On your phone or computer, scan the QR code, or open `/player/link` on your Arclight address and type the code.
-3. Press **Sign in the TV**.
+1. On the TV, open Arclight and choose **Enter server address**. Type your Arclight address with the remote and press **Continue**.
+2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`) and a QR code.
+3. On your phone or computer, scan the QR code, or open that address and type the code. Sign in there if asked.
+4. Press **Sign in the TV**. The TV signs in as you within a few seconds.
 
-The TV signs in as you. The code works once and expires after a few minutes. If it has expired, the TV shows a new one.
+The code works once and expires after ten minutes. The TV gets a fresh code on its own a few times; after that it asks you to press **Get a new code**. **Sign in with a password instead** is there too, for accounts that have one.
+
+## Movies & TV in the Arclight app
+
+With Movies & TV turned on, the app's **Home** tab is the Movies & TV home, with the same shelves and pages as the browser. On Android, video plays in the app's own full-screen player, which plays more files directly than a browser can (for example HEVC, HDR and surround sound, when the device supports them).
+
+- **Resume** continues where you stopped. **Play** on a title you are part way through also continues; use **Restart** on the movie or episode page to start over.
+- The player has **Audio & subtitles**, the chapters, **Skip intro** / **Skip credits** and an **Up next** countdown that plays the next episode in the same player.
+- Your place is saved as you watch. Without a connection, the app keeps the updates and sends them once it is back online.
+
+## Arclight on a TV
+
+On Google TV and Android TV, the app opens a layout made for the remote:
+
+- A rail on the left with **Home**, **Movies**, **Shows**, **Search**, **Music** and **Settings**. Press left from the page to open it.
+- The TV home shows the backdrop and details of whatever has focus, with rows of **Continue watching**, **Next up**, **Recently added movies**, **New episodes** and genres underneath. **OK** on a Continue watching or Next up card plays it straight away.
+- The arrows move to the nearest item in that direction and the focused item is always highlighted. **Back** closes an open panel, then goes back a page, then moves to the rail, and from the rail leaves the app. Each page remembers where you were.
+- Downloads and Android Auto are not shown on a TV.
+
+To try the TV layout in a browser while developing, add `?tv=1` to the app's address (`?tv=0` turns it off).
 
 ## Continue listening
 

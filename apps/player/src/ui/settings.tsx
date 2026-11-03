@@ -165,12 +165,16 @@ export function SettingsPage() {
           <Row label={t('app.settings.wifiQuality')} htmlFor="set-wifi">
             <Select id="set-wifi" options={qualityOptions} value={settings.wifiQuality} onChange={(e) => setQuality('wifiQuality', e.target.value)} />
           </Row>
-          <Row label={t('app.settings.cellularQuality')} hint={t('app.settings.qualityHint')} htmlFor="set-cell">
-            <Select id="set-cell" options={qualityOptions} value={settings.cellularQuality} onChange={(e) => setQuality('cellularQuality', e.target.value)} />
-          </Row>
+          {/* A TV has no mobile data; it keeps no downloads either. */}
+          {!services.tv ? (
+            <Row label={t('app.settings.cellularQuality')} hint={t('app.settings.qualityHint')} htmlFor="set-cell">
+              <Select id="set-cell" options={qualityOptions} value={settings.cellularQuality} onChange={(e) => setQuality('cellularQuality', e.target.value)} />
+            </Row>
+          ) : null}
         </Pane>
       </section>
 
+      {!services.tv ? (
       <section className="app-section">
         <h2 className="app-section__title">{t('app.settings.downloads')}</h2>
         <Pane>
@@ -202,6 +206,7 @@ export function SettingsPage() {
           </Row>
         </Pane>
       </section>
+      ) : null}
 
       <section className="app-section">
         <h2 className="app-section__title">{t('app.settings.privacy')}</h2>

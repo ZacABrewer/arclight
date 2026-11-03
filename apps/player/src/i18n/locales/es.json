@@ -1,0 +1,15 @@
+{
+  "app.tv.movies": "Películas",
+  "app.tv.shows": "Series",
+  "app.tv.welcomeHelp": "Después confirma un código en tu móvil u ordenador, sin escribir una contraseña con el mando.",
+  "app.tv.code.open": "En tu móvil u ordenador, abre",
+  "app.tv.code.enter": "Inicia sesión allí si te lo pide y escribe este código (o escanea el código QR):",
+  "app.tv.code.label": "Código de inicio de sesión",
+  "app.tv.code.waiting": "Esperando tu confirmación…",
+  "app.tv.code.qr": "Código QR que abre la página de confirmación con el código ya puesto",
+  "app.tv.code.approved": "Confirmado. Iniciando sesión…",
+  "app.tv.code.starting": "Obteniendo un código…",
+  "app.tv.code.expired": "El código ha caducado. Pide uno nuevo para seguir.",
+  "app.tv.code.newCode": "Pedir un código nuevo",
+  "app.tv.code.instead": "Iniciar sesión con un código"
+}
