@@ -61,9 +61,12 @@ describe('appUrlOf ("Open Arclight")', () => {
     expect(appUrlOf(db, 'watch.example.com', here)).toBeNull();
   });
 
-  it('treats player hostnames as plain hostnames while the player is off', async () => {
+  it('keeps a player hostname one while the player is off', async () => {
     const db = await createTestDb();
+    setSection(db, 'requests', { applicationUrl: 'https://media.example.com' });
     setSection(db, 'player', { enabled: false, address: { paths: [], hosts: [{ hostname: 'watch.example.com', playerOnly: true }] } });
-    expect(appUrlOf(db, 'watch.example.com', here)).toBe(here);
+    // Its root redirects to the "player is off" page, so the request address would loop.
+    expect(appUrlOf(db, 'watch.example.com', here)).toBe('https://media.example.com');
+    expect(appUrlOf(db, 'nas.example.com', 'https://nas.example.com')).toBe('https://nas.example.com');
   });
 });

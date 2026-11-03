@@ -23,6 +23,22 @@ export const mediaServerTagSyncs = sqliteTable(
   (t) => [primaryKey({ columns: [t.serverId, t.remoteItemId, t.label] }), index('media_server_tag_syncs_entity_idx').on(t.serverId, t.entityType, t.entityId)],
 );
 
+/**
+ * Items whose `Tags` lock (Jellyfin/Emby LockedFields) Arclight added: the field was not locked
+ * when Arclight's write locked it. Turning sync off with Remove takes the lock off these items
+ * only; a lock that was there before (set by a user) is never touched.
+ */
+export const mediaServerTagLocks = sqliteTable(
+  'media_server_tag_locks',
+  {
+    serverId: text('server_id').notNull(),
+    remoteItemId: text('remote_item_id').notNull(),
+    /** Unix milliseconds. */
+    addedAt: integer('added_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.serverId, t.remoteItemId] })],
+);
+
 /** The last run per server (the status line). */
 export const mediaServerTagSyncState = sqliteTable('media_server_tag_sync_state', {
   serverId: text('server_id').primaryKey(),

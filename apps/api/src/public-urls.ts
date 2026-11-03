@@ -57,11 +57,12 @@ export function hasPlayerAddress(db: Db): boolean {
 /**
  * Where the rest of Arclight answers for a page on `host` ("Open Arclight"): `requestOrigin`
  * (origin plus base path) unless `host` is a player hostname, whose root is the player's. Then
- * the Application URL, unless that is a player hostname too; else null.
+ * the Application URL, unless that is a player hostname too; else null. A player hostname stays
+ * one while the player is off: its root then redirects to the "player is off" page.
  */
 export function appUrlOf(db: Db, host: string, requestOrigin: string): string | null {
   const player = getSection(db, 'player');
-  const isPlayerHost = (h: string) => player.enabled && player.address.hosts.some((p) => p.hostname === h);
+  const isPlayerHost = (h: string) => player.address.hosts.some((p) => p.hostname === h);
   if (!isPlayerHost(normalizeHostname(host))) return requestOrigin;
   const app = normaliseServerUrl(getSection(db, 'requests').applicationUrl);
   if (!app || isPlayerHost(normalizeHostname(new URL(app).host))) return null;

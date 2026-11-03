@@ -16,7 +16,7 @@ import { PlexServerClient } from './plex.js';
 import { MEDIA_SERVER_KINDS, MediaServerError, type MediaServerClient, type MediaServerClientOptions, type MediaServerKind } from './types.js';
 
 export * from './types.js';
-export { MediaBrowserServerClient, mediaBrowserAudioStream, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions, type MediaBrowserWatchItem, type MediaBrowserItemInfo, type MediaBrowserCollection, type MediaBrowserAudioPath, type MediaBrowserAudioStreamSpec, type WatchItemsOptions } from './media-browser.js';
+export { MediaBrowserServerClient, mediaBrowserAudioStream, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions, type MediaBrowserWatchItem, type MediaBrowserItemInfo, type MediaBrowserCollection, type MediaBrowserAudioPath, type MediaBrowserAudioStreamSpec, type WatchItemsOptions, type ItemTagsWriteOptions, type ItemTagsWriteResult } from './media-browser.js';
 export { PlexServerReadClient, PlexServerClient, plexProviderIds, plexLibraryKind, pathIsInside, normalisePath, parsePlexWebhook, PLEX_OWNER_ACCOUNT_ID, PLEX_TV_URL, type PlexServerOptions, type PlexAccount, type PlexAccountList, type PlexLiveItem, type PlexSession, type PlexWebhookEvent } from './plex.js';
 export { AudiobookshelfServerClient, audiobookshelfLibraryKind, audiobookshelfProviderIds, type AudiobookshelfServerOptions } from './audiobookshelf.js';
 export { normaliseBaseUrl, idsMatchQuery, mergeTags } from './http.js';

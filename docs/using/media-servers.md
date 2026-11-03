@@ -256,7 +256,7 @@ Save the server, then use **Preview** to see what a sync would change (a table o
 - A few seconds after a change: when you edit a title's tags (one at a time or in bulk), a tag rule runs or is deleted with its tags, or a tag is renamed or deleted, the change is sent after 30 seconds without further changes (at most 5 minutes later while changes keep coming).
 - About 30 seconds after you save a server with sync on: a full pass applies the new settings to every title.
 - Every night at 03:50, as the task **MediaServerTagSync** in **System > Tasks**, a full pass catches anything missed.
-- When you press **Sync now**.
+- When you press **Sync now**. Pressed while a sync is running, it runs one more pass straight after; the status line then counts the items both passes changed.
 
 Only items whose tags differ are read and written, at most 4 requests a second per server. If the server answers "too many requests" or "unavailable", Arclight waits 30 seconds and tries once more. After 5 failures in a row the run stops and the status line shows the error.
 
@@ -264,7 +264,7 @@ Only items whose tags differ are read and written, at most 4 requests a second p
 
 When you turn **Sync tags** off on a server that had it on, Arclight asks **Remove the tags Arclight added?**
 
-- **Remove** takes every tag Arclight added off the server when you save. Your own tags stay.
+- **Remove** takes every tag Arclight added off the server when you save. Your own tags stay. On Jellyfin and Emby it also unlocks the tags field on the items where Arclight locked it; an item whose tags field was already locked before Arclight wrote to it stays locked. On Plex the labels stay locked.
 - **Keep** leaves the tags on the server. Arclight forgets that it added them, so it will not remove them later.
 
 ### Plex

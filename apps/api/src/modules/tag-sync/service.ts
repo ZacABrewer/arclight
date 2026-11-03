@@ -5,7 +5,7 @@ import { MediaServerTagSync, type MediaServerConfig, type MediaServerConnectionK
 import type { Db } from '../../db/index.js';
 import { movies, series, tags } from '../../db/schema.js';
 import { buildRemoteIndex, remoteIdFor, type RemoteIndexKind } from '../media-servers/remote-index.js';
-import { mediaServerTagSyncs, mediaServerTagSyncState, type MediaServerTagSyncRow } from './schema.js';
+import { mediaServerTagLocks, mediaServerTagSyncs, mediaServerTagSyncState, type MediaServerTagSyncRow } from './schema.js';
 
 // Arclight's own tags (manual and tag-rule) copied onto the matching movies and series of a
 // Jellyfin/Emby server (item Tags) or a Plex server (labels), as `prefix + tag label`.
@@ -18,7 +18,15 @@ import { mediaServerTagSyncs, mediaServerTagSyncState, type MediaServerTagSyncRo
 // most 4 requests a second per server).
 //
 // Triggers: library/tag events (debounced), the nightly job and Sync now. Runs are single-flight
-// per server; ids that arrive during a run are taken on the next pass.
+// per server; ids that arrive during a run are taken on the next pass. Passes that run back to
+// back (Sync now pressed while a pass is running) report their changes together, so a follow-up
+// pass that finds nothing left to do does not overwrite the count with 0.
+//
+// Locks: with "Lock tags" on, a Jellyfin/Emby write puts `Tags` into the item's LockedFields.
+// When that write is what locked it (it was not locked before), the item gets a row in
+// media_server_tag_locks; turning sync off with Remove takes the lock off those items only. A
+// lock a user set is never touched. Plex labels keep their lock (Plex's write does not say
+// whether the field was locked before).
 
 export type TagSyncKind = 'jellyfin' | 'emby' | 'plex';
 
@@ -40,9 +48,23 @@ export interface TagSyncTarget {
   listItems(kind: RemoteIndexKind): Promise<MediaServerItem[]>;
   /** Current tags of items, by remote id (items gone from the server are left out). */
   readTags(ids: readonly string[]): Promise<Map<string, string[]>>;
-  writeTags(item: RemoteRef, add: readonly string[], remove: readonly string[], opts: { lock: boolean }): Promise<void>;
+  /**
+   * `lock`: lock the tags against metadata refreshes. `unlock`: take that lock off (Remove, on
+   * items Arclight locked). Resolves `lockAdded: true` when this write is what locked them.
+   */
+  writeTags(item: RemoteRef, add: readonly string[], remove: readonly string[], opts: TagWriteOptions): Promise<TagWriteResult | void>;
   /** HTTP requests one write takes (read-modify-write = 2), for the rate limit. */
   readonly requestsPerWrite: number;
+}
+
+export interface TagWriteOptions {
+  lock: boolean;
+  unlock?: boolean;
+}
+
+export interface TagWriteResult {
+  /** The write put the tag lock on (it was not locked before). */
+  lockAdded?: boolean;
 }
 
 export type TagSyncErrorCode = 'NOT_FOUND' | 'VALIDATION';
@@ -86,6 +108,8 @@ export interface ReconcileOptions {
   dryRun?: boolean;
   /** Remove every owned label (sync off, Remove), then forget the rows. */
   removeAll?: boolean;
+  /** Items changed by earlier passes of the same run, added to the recorded count. */
+  carriedChanged?: number;
 }
 
 export interface ReconcileResult {
@@ -219,9 +243,20 @@ export class TagSyncService {
     return this.db.select().from(mediaServerTagSyncs).where(eq(mediaServerTagSyncs.serverId, serverId)).all();
   }
 
-  /** Keep: forget what Arclight added (the labels stay on the server, unowned). */
+  /** Items whose tag lock Arclight added (tests and the admin view). */
+  locks(serverId: string): string[] {
+    return this.db
+      .select({ id: mediaServerTagLocks.remoteItemId })
+      .from(mediaServerTagLocks)
+      .where(eq(mediaServerTagLocks.serverId, serverId))
+      .all()
+      .map((r) => r.id);
+  }
+
+  /** Keep: forget what Arclight added (the labels and their locks stay on the server, unowned). */
   forget(serverId: string): number {
     this.server(serverId);
+    this.db.delete(mediaServerTagLocks).where(eq(mediaServerTagLocks.serverId, serverId)).run();
     return this.db.delete(mediaServerTagSyncs).where(eq(mediaServerTagSyncs.serverId, serverId)).run().changes;
   }
 
@@ -230,10 +265,12 @@ export class TagSyncService {
     const ids = this.opts.servers().map((s) => s.id);
     if (ids.length === 0) {
       this.db.delete(mediaServerTagSyncs).run();
+      this.db.delete(mediaServerTagLocks).run();
       this.db.delete(mediaServerTagSyncState).run();
       return;
     }
     this.db.delete(mediaServerTagSyncs).where(notInArray(mediaServerTagSyncs.serverId, ids)).run();
+    this.db.delete(mediaServerTagLocks).where(notInArray(mediaServerTagLocks.serverId, ids)).run();
     this.db.delete(mediaServerTagSyncState).where(notInArray(mediaServerTagSyncState.serverId, ids)).run();
   }
 
@@ -299,6 +336,8 @@ export class TagSyncService {
     try {
       // A microtask first, so `running` is set before the first pass can finish.
       await Promise.resolve();
+      // Changes of the passes so far: a follow-up pass adds to them instead of replacing them.
+      let changed = 0;
       while (q.pending) {
         const scope = q.pending;
         q.pending = null;
@@ -306,7 +345,7 @@ export class TagSyncService {
         q.removeAll = false;
         try {
           const keys = scope === 'all' ? 'all' : [...scope].map(parseKey);
-          await this.reconcile(serverId, keys, { removeAll });
+          changed += (await this.reconcile(serverId, keys, { removeAll, carriedChanged: changed })).changed;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this.opts.log?.warn({ err, serverId }, 'tag sync failed');
@@ -330,6 +369,8 @@ export class TagSyncService {
     const result: ReconcileResult = { changes: [], totalChanges: 0, unmatched: 0, changed: 0, errors: [], stopped: false };
 
     const rows = this.rowsFor(serverId, scope);
+    // Remove takes off the tag locks Arclight added (a dry run never writes, so it skips them).
+    const locked = opts.removeAll && !dryRun ? new Set(this.locks(serverId)) : new Set<string>();
     const entities = active ? this.entities(scope) : this.entities(rows.map((r) => ({ type: r.entityType, id: r.entityId })));
     const labels = new Map(this.db.select().from(tags).all().map((t) => [t.id, t.label]));
     const wantedOf = new Map<string, string[]>();
@@ -337,8 +378,8 @@ export class TagSyncService {
       const wanted = active ? wantedLabels(e.tags, labels, settings) : [];
       if (wanted.length) wantedOf.set(keyOf(e), wanted);
     }
-    if (wantedOf.size === 0 && rows.length === 0) {
-      if (!dryRun) this.finish(serverId, scope, result);
+    if (wantedOf.size === 0 && rows.length === 0 && locked.size === 0) {
+      if (!dryRun) this.finish(serverId, scope, result, opts.carriedChanged ?? 0);
       return result;
     }
 
@@ -373,6 +414,8 @@ export class TagSyncService {
       for (const label of wanted) p.wanted.set(lower(label), label);
     }
     for (const r of rows) planOf(r.remoteItemId, { type: r.entityType, id: r.entityId }).owned.push(r);
+    // A locked item with no owned labels left still needs its lock taken off.
+    const unplanned = [...locked].filter((id) => !plans.has(id));
 
     // Items whose wanted set differs from the owned set.
     const work: { plan: Plan; add: string[]; remove: MediaServerTagSyncRow[]; forget: MediaServerTagSyncRow[] }[] = [];
@@ -382,11 +425,12 @@ export class TagSyncService {
       const unwanted = plan.owned.filter((r) => !plan.wanted.has(lower(r.label)));
       const remove = unwanted.filter((r) => !r.preexisting);
       const forget = unwanted.filter((r) => r.preexisting);
-      if (add.length || remove.length || forget.length) work.push({ plan, add, remove, forget });
+      if (add.length || remove.length || forget.length || locked.has(plan.remoteId)) work.push({ plan, add, remove, forget });
     }
 
     // Current tags of the items that may need a write.
-    const toRead = work.filter((w) => w.add.length || w.remove.length).map((w) => w.plan.remoteId);
+    const needsWrite = (w: { plan: Plan; add: string[]; remove: MediaServerTagSyncRow[] }) => w.add.length > 0 || w.remove.length > 0 || locked.has(w.plan.remoteId);
+    const toRead = [...work.filter(needsWrite).map((w) => w.plan.remoteId), ...unplanned];
     const current = new Map<string, string[]>();
     const bucket = this.bucket(serverId);
     for (let i = 0; i < toRead.length; i += READ_BATCH) {
@@ -398,14 +442,17 @@ export class TagSyncService {
     for (const w of work) {
       const { plan } = w;
       const at = this.now();
-      if (!w.add.length && !w.remove.length) {
+      if (!needsWrite(w)) {
         if (!dryRun) this.deleteRows(w.forget);
         continue;
       }
       const have = current.get(plan.remoteId);
       if (have === undefined) {
         // Gone from the server: nothing to remove, nothing to add to.
-        if (!dryRun) this.deleteRows([...w.remove, ...w.forget]);
+        if (!dryRun) {
+          this.deleteRows([...w.remove, ...w.forget]);
+          this.deleteLock(serverId, plan.remoteId);
+        }
         continue;
       }
       const present = new Set(have.map(lower));
@@ -419,20 +466,24 @@ export class TagSyncService {
         }
       }
       if (dryRun || result.stopped) continue;
-      if (add.length || remove.length) {
+      const unlock = locked.has(plan.remoteId);
+      if (add.length || remove.length || unlock) {
         const item = items.get(plan.remoteId);
         const ref: RemoteRef = { id: plan.remoteId, mediaType: item?.mediaType === 'series' ? 'series' : item?.mediaType === 'movie' ? 'movie' : plan.entity.type, libraryId: item?.libraryId ?? null };
         try {
-          await this.withRetry(bucket, target.requestsPerWrite, () =>
+          const written = await this.withRetry(bucket, target.requestsPerWrite, () =>
             target.writeTags(
               ref,
               add,
               remove.map((r) => r.label),
-              { lock: settings.lockTags },
+              // Remove adds nothing, so it never locks; it unlocks only the items Arclight locked.
+              opts.removeAll ? { lock: false, ...(unlock ? { unlock: true } : {}) } : { lock: settings.lockTags },
             ),
           );
           consecutive = 0;
           result.changed++;
+          if (unlock) this.deleteLock(serverId, plan.remoteId);
+          else if (written?.lockAdded) this.insertLock(serverId, plan.remoteId, at);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           result.errors.push(`${plan.title}: ${message}`);
@@ -445,9 +496,30 @@ export class TagSyncService {
       this.deleteRows([...w.remove, ...w.forget]);
     }
 
+    // Locked items Arclight owns no labels on any more: only the lock to take off.
+    for (const remoteId of unplanned) {
+      if (result.stopped) break;
+      if (!current.has(remoteId)) {
+        this.deleteLock(serverId, remoteId);
+        continue;
+      }
+      const item = items.get(remoteId);
+      const ref: RemoteRef = { id: remoteId, mediaType: item?.mediaType === 'series' ? 'series' : 'movie', libraryId: item?.libraryId ?? null };
+      try {
+        await this.withRetry(bucket, target.requestsPerWrite, () => target.writeTags(ref, [], [], { lock: false, unlock: true }));
+        consecutive = 0;
+        result.changed++;
+        this.deleteLock(serverId, remoteId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        result.errors.push(`${item?.title ?? remoteId}: ${message}`);
+        if (++consecutive >= MAX_CONSECUTIVE_ERRORS) result.stopped = true;
+      }
+    }
+
     if (!dryRun) {
       if (opts.removeAll && result.errors.length === 0) this.forget(serverId);
-      this.finish(serverId, scope, result);
+      this.finish(serverId, scope, result, opts.carriedChanged ?? 0);
       if (result.changed || result.errors.length) {
         this.opts.log?.info({ serverId, changed: result.changed, errors: result.errors.length, unmatched: result.unmatched }, 'tag sync ran');
       }
@@ -608,11 +680,23 @@ export class TagSyncService {
     }
   }
 
-  private finish(serverId: string, scope: readonly EntityKey[] | 'all', r: ReconcileResult): void {
+  private insertLock(serverId: string, remoteItemId: string, at: number): void {
+    this.db.insert(mediaServerTagLocks).values({ serverId, remoteItemId, addedAt: at }).onConflictDoNothing().run();
+  }
+
+  private deleteLock(serverId: string, remoteItemId: string): void {
+    this.db
+      .delete(mediaServerTagLocks)
+      .where(and(eq(mediaServerTagLocks.serverId, serverId), eq(mediaServerTagLocks.remoteItemId, remoteItemId)))
+      .run();
+  }
+
+  /** `carried`: items changed by earlier passes of the same run (see `drain`). */
+  private finish(serverId: string, scope: readonly EntityKey[] | 'all', r: ReconcileResult, carried = 0): void {
     const lastError = r.stopped ? `stopped after ${MAX_CONSECUTIVE_ERRORS} errors in a row: ${r.errors.at(-1) ?? ''}` : (r.errors.at(-1) ?? null);
     this.recordState(serverId, {
       lastRunAt: new Date(this.now()).toISOString(),
-      lastChanged: r.changed,
+      lastChanged: carried + r.changed,
       // A pass over a few changed titles says nothing about the rest of the library.
       ...(scope === 'all' ? { lastUnmatched: r.unmatched } : {}),
       lastError,

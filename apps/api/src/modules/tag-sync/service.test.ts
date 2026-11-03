@@ -6,32 +6,43 @@ import { openDatabase, type Db } from '../../db/index.js';
 import { movies, series, tags } from '../../db/schema.js';
 import { setup } from '../requests/test-support.js';
 import { addMovie, addSeries } from '../watch-history/test-support.js';
-import { MAX_CONSECUTIVE_ERRORS, TagSyncService, TokenBucket, wantedLabels, type RemoteRef, type TagSyncTarget } from './service.js';
+import { MAX_CONSECUTIVE_ERRORS, TagSyncService, TokenBucket, wantedLabels, type RemoteRef, type TagSyncTarget, type TagWriteOptions } from './service.js';
 
 /** An in-memory Jellyfin as far as item tags go. */
 class FakeTarget implements TagSyncTarget {
   items: { movie: MediaServerItem[]; series: MediaServerItem[] } = { movie: [], series: [] };
   tags = new Map<string, string[]>();
   reads: string[][] = [];
-  writes: { id: string; add: string[]; remove: string[]; lock: boolean }[] = [];
+  writes: { id: string; add: string[]; remove: string[]; lock: boolean; unlock?: boolean }[] = [];
+  /** Items whose Tags field is locked (Jellyfin LockedFields). */
+  locked = new Set<string>();
   lists = 0;
   /** Errors thrown by the next writes, in order. */
   failures: Error[] = [];
   requestsPerWrite = 2;
+  /** Called (once) on the next listing, while a pass is running. */
+  onList: (() => void) | null = null;
 
   async listItems(kind: 'movie' | 'series') {
     this.lists++;
+    const hook = this.onList;
+    this.onList = null;
+    hook?.();
     return this.items[kind];
   }
   async readTags(ids: readonly string[]) {
     this.reads.push([...ids]);
     return new Map(ids.filter((id) => this.tags.has(id)).map((id) => [id, [...this.tags.get(id)!]]));
   }
-  async writeTags(item: RemoteRef, add: readonly string[], remove: readonly string[], opts: { lock: boolean }) {
+  async writeTags(item: RemoteRef, add: readonly string[], remove: readonly string[], opts: TagWriteOptions) {
     const failure = this.failures.shift();
     if (failure) throw failure;
-    this.writes.push({ id: item.id, add: [...add], remove: [...remove], lock: opts.lock });
+    this.writes.push({ id: item.id, add: [...add], remove: [...remove], lock: opts.lock, ...(opts.unlock ? { unlock: true } : {}) });
     this.tags.set(item.id, mergeTags(this.tags.get(item.id) ?? [], add, remove));
+    const lockAdded = opts.lock && !this.locked.has(item.id);
+    if (opts.lock) this.locked.add(item.id);
+    else if (opts.unlock) this.locked.delete(item.id);
+    return { lockAdded };
   }
 }
 
@@ -236,6 +247,68 @@ describe('TagSyncService', () => {
     expect(t.target.tags.get('m1')).toEqual(['Favourite', 'kids']);
   });
 
+  it('Remove takes off only the tag locks Arclight added', async () => {
+    const t = await harness({ enabled: true, lockTags: true });
+    t.setTags('movie', t.ids.arrival, [t.ids.kids]);
+    t.setTags('movie', t.ids.heat, [t.ids.kids]);
+    t.setTags('series', t.ids.harbour, [t.ids.kids]);
+    // A user locked Heat's tags on the server before Arclight wrote to it.
+    t.target.locked.add('m2');
+    await t.svc.reconcile('jf1', 'all');
+    expect([...t.target.locked].sort()).toEqual(['m1', 'm2', 's1']);
+    expect(t.svc.locks('jf1').sort()).toEqual(['m1', 's1']);
+
+    // Harbour Lights loses its tag while sync is on: the label goes, the lock stays Arclight's.
+    t.setTags('series', t.ids.harbour, []);
+    await t.svc.reconcile('jf1', 'all');
+    expect(t.target.tags.get('s1')).toEqual([]);
+    expect(t.svc.locks('jf1').sort()).toEqual(['m1', 's1']);
+
+    t.setSync({ enabled: false });
+    t.target.writes = [];
+    await t.svc.removeAll('jf1');
+    expect([...t.target.locked]).toEqual(['m2']);
+    expect(t.target.tags.get('m1')).toEqual(['Favourite']);
+    expect(t.target.tags.get('m2')).toEqual([]);
+    expect(t.target.writes.filter((w) => w.unlock).map((w) => w.id).sort()).toEqual(['m1', 's1']);
+    expect(t.target.writes.find((w) => w.id === 'm2')).toMatchObject({ lock: false });
+    expect(t.target.writes.find((w) => w.id === 'm2')?.unlock).toBeUndefined();
+    expect(t.svc.locks('jf1')).toEqual([]);
+    expect(t.svc.owned('jf1')).toEqual([]);
+  });
+
+  it('Keep forgets the locks along with the labels', async () => {
+    const t = await harness({ enabled: true, lockTags: true });
+    t.setTags('movie', t.ids.arrival, [t.ids.kids]);
+    await t.svc.reconcile('jf1', 'all');
+    expect(t.svc.locks('jf1')).toEqual(['m1']);
+    t.setSync({ enabled: false });
+    t.svc.forget('jf1');
+    expect(t.svc.locks('jf1')).toEqual([]);
+    expect(t.target.locked.has('m1')).toBe(true);
+  });
+
+  it('reports the changes of back-to-back passes together (Sync now during a pass)', async () => {
+    const t = await harness({ enabled: true });
+    t.setTags('movie', t.ids.arrival, [t.ids.kids]);
+    t.setTags('movie', t.ids.heat, [t.ids.kids]);
+    const spy = vi.spyOn(t.svc, 'reconcile');
+    // Sync now while the first pass runs: a second full pass that finds nothing left.
+    let second: Promise<void> | null = null;
+    t.target.onList = () => {
+      second = t.svc.runNow('jf1');
+    };
+    await t.svc.schedule('jf1', 'all');
+    await second;
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(t.target.writes).toHaveLength(2);
+    expect(t.svc.status('jf1').lastChanged).toBe(2);
+
+    // A later run on its own reports only its own changes.
+    await t.svc.runNow('jf1');
+    expect(t.svc.status('jf1').lastChanged).toBe(0);
+  });
+
   it('removes owned labels on the next run when sync is off, without listing a server it owns nothing on', async () => {
     const t = await harness({ enabled: true });
     t.setTags('movie', t.ids.heat, [t.ids.kids]);
@@ -378,5 +451,6 @@ describe('tag sync migration', () => {
       .map((r) => (r as { name: string }).name)
       .sort();
     expect(names).toEqual(['media_server_tag_sync_state', 'media_server_tag_syncs']);
+    expect(db.$client.prepare("select name from sqlite_master where type = 'table' and name = 'media_server_tag_locks'").all()).toHaveLength(1);
   });
 });

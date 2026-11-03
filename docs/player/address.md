@@ -38,8 +38,10 @@ pages answer as usual.
 ## Open Arclight on a player hostname
 
 The root of a player hostname is the player's, so **Open Arclight** in the account menu opens
-your Application URL (Settings > Requests) there instead. Without an Application URL the item
-is hidden on player hostnames.
+your Application URL (Settings > Requests) there instead, and so does **Back to Arclight** on
+the "player is off" page. Without an Application URL the item is hidden on player hostnames,
+and the "player is off" page there shows only its message (a portal on another address is
+still linked).
 
 ## Where Arclight uses the player address
 

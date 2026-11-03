@@ -22,7 +22,8 @@ export function tagSyncTargetFor(ctx: AppContext, config: MediaServerConfig): Ta
       listItems: (kind) => client.listItems(kind),
       readTags: (ids) => client.itemTags(ids),
       writeTags: async (item, add, remove, opts) => {
-        await client.setItemTags(item.id, add, remove, opts);
+        const { lockAdded } = await client.updateItemTags(item.id, add, remove, opts);
+        return { lockAdded };
       },
       requestsPerWrite: 2,
     };

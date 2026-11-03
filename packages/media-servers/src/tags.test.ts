@@ -85,6 +85,20 @@ describe('MediaBrowserServerClient item tags', () => {
     expect(calls.find((x) => x.method === 'POST')!.body).toMatchObject({ Tags: ['a'], LockedFields: ['Tags'], Genres: [], Studios: [], People: [], Taglines: [], ProviderIds: {} });
   });
 
+  it('says whether the write added the Tags lock', async () => {
+    const { c } = jellyfin();
+    expect(await c.updateItemTags('m1', ['a'], [], { lock: true })).toMatchObject({ lockAdded: true, unlocked: false });
+    const already = jellyfin({ Id: 'm3', Name: 'Locked', LockedFields: ['Tags'] });
+    expect(await already.c.updateItemTags('m3', ['a'], [], { lock: true })).toMatchObject({ lockAdded: false, unlocked: false });
+  });
+
+  it('takes only the Tags lock off with unlock', async () => {
+    const { c, calls } = jellyfin({ Id: 'm4', Name: 'Locked', Tags: ['arclight:Kids', 'mine'], LockedFields: ['Overview', 'Tags'] });
+    const result = await c.updateItemTags('m4', [], ['arclight:Kids'], { unlock: true });
+    expect(result).toEqual({ tags: ['mine'], lockAdded: false, unlocked: true });
+    expect(calls.find((x) => x.method === 'POST')!.body).toMatchObject({ Tags: ['mine'], LockedFields: ['Overview'] });
+  });
+
   it('reports a missing item as notFound', async () => {
     const { c } = jellyfin();
     await expect(c.setItemTags('gone', ['a'], [])).rejects.toMatchObject({ code: 'notFound' });
