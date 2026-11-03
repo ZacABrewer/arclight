@@ -2,7 +2,7 @@ import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqli
 import type { MobilePlatform } from '@arclight/shared';
 import { users } from '../auth/schema.js';
 
-// Mobile companion app devices. A row is created when the app's "Notifications on this device"
+// Arclight Admin (companion app) devices. A row is created when the app's "Notifications on this device"
 // toggle registers with the push relay and hands us the relay device id and secret. The secret
 // is a capability for that one device at the relay: it is stored as-is (the server needs it to
 // send), never returned by any route, masked in the audit trail and removed from backup
@@ -22,6 +22,8 @@ export const mobileDevices = sqliteTable(
     platform: text('platform').$type<MobilePlatform>().notNull(),
     deviceName: text('device_name').notNull().default(''),
     appVersion: text('app_version'),
+    /** Bundle ID of the app that registered (APNs topic at the relay); null for older apps. */
+    appId: text('app_id'),
     createdAt: text('created_at').notNull(),
     /** Last registration from the app (each toggle-on or app start re-registers). */
     lastSeenAt: text('last_seen_at').notNull(),

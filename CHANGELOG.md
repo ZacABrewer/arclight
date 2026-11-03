@@ -7,6 +7,20 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
+## [Unreleased]
+
+### Added
+- Arclight player app for Android and iOS (`com.moviemethat.arclight`), not in the stores yet. It plays your music and audiobooks with native audio, keeps playing in the background and on the lock screen, downloads albums and books for offline use (Wi-Fi only by default), and sends progress made offline when it reconnects. It works with Android Auto and CarPlay, casts to Chromecast and AirPlay, and signs in by scanning a QR code from the web player.
+- Server: device sign-in for the player app, a batch progress endpoint for progress saved offline, and a "Sign in a phone" QR code in the web player.
+
+### Changed
+- The companion app is now called Arclight Admin (app ID `com.moviemethat.arclight.admin`). The name Arclight and the ID `com.moviemethat.arclight` go to a separate player app. Neither app is in the stores yet.
+- Pairing QR codes now use `arclight-admin://pair?url=...`. Arclight Admin still reads older `arclight://pair` codes when you scan them inside the app.
+- Phones report which app registered them. The server stores this and sends it to the push relay, which uses it to pick the right APNs topic. The relay accepts a list of topics in `APNS_TOPICS`. Registrations without an app ID go to Arclight Admin.
+
+### Fixed
+- Browsers and apps on another address can now send PUT, PATCH and DELETE requests through CORS. Before, only GET, HEAD and POST were allowed, which blocked saving playback progress and the queue from the apps.
+
 ## [0.21.0] - 2026-11-02
 
 ### Added

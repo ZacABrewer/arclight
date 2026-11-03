@@ -12,7 +12,11 @@ import { MAX_PAYLOAD_BYTES, type Notification, type SendResult } from "./provide
 
 export const APNS_PRODUCTION = "https://api.push.apple.com";
 export const APNS_SANDBOX = "https://api.sandbox.push.apple.com";
-const DEFAULT_TOPIC = "com.moviemethat.arclight";
+/** Arclight Admin (the companion app); also the topic for registrations without an appId. */
+export const ADMIN_TOPIC = "com.moviemethat.arclight.admin";
+/** Arclight, the player app. */
+export const PLAYER_TOPIC = "com.moviemethat.arclight";
+export const DEFAULT_TOPICS = [ADMIN_TOPIC, PLAYER_TOPIC] as const;
 /** Apple accepts a provider token for up to 60 minutes and rejects refreshes more often than every 20. */
 const JWT_TTL_MS = 50 * 60 * 1000;
 
@@ -20,6 +24,30 @@ export type ApnsEnvironment = "production" | "sandbox";
 
 export function apnsConfigured(env: Env): boolean {
   return Boolean(env.APNS_KEY_P8 && env.APNS_KEY_ID && env.APNS_TEAM_ID);
+}
+
+/**
+ * The APNs topics this relay sends for, default first: APNS_TOPICS (comma-separated), else the
+ * older single APNS_TOPIC, else DEFAULT_TOPICS. One .p8 key covers every app of the team.
+ */
+export function apnsTopics(env: Env): string[] {
+  const list = (env.APNS_TOPICS ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (list.length > 0) return [...new Set(list)];
+  const single = env.APNS_TOPIC?.trim();
+  return single ? [single] : [...DEFAULT_TOPICS];
+}
+
+/**
+ * The topic for a device: its app id when that is allowed, the default topic when it has none,
+ * undefined when the app id is not in the allow-list.
+ */
+export function resolveTopic(env: Env, appId: string | null | undefined): string | undefined {
+  const topics = apnsTopics(env);
+  if (!appId) return topics[0];
+  return topics.includes(appId) ? appId : undefined;
 }
 
 interface CachedJwt {
@@ -85,6 +113,7 @@ export async function sendApns(
   env: Env,
   token: string,
   environment: ApnsEnvironment,
+  topic: string,
   n: Notification,
 ): Promise<SendResult> {
   const payload = apnsPayload(n);
@@ -99,7 +128,7 @@ export async function sendApns(
   for (let attempt = 0; attempt < 2; attempt++) {
     const headers: Record<string, string> = {
       authorization: `bearer ${await apnsJwt(env)}`,
-      "apns-topic": env.APNS_TOPIC || DEFAULT_TOPIC,
+      "apns-topic": topic,
       "apns-push-type": "alert",
       "apns-priority": "10",
       "content-type": "application/json",

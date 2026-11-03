@@ -15,6 +15,7 @@ function setup(over: Partial<PushDeps> & { responses?: Array<{ status: number; d
     kv,
     relayUrl: RELAY + '/',
     platform: 'ios',
+    appId: 'com.moviemethat.arclight.admin',
     appVersion: '1.0.0',
     pushAvailable: async () => true,
     requestPermission: async () => true,
@@ -36,15 +37,15 @@ describe('PushService.register', () => {
   it('registers with the relay and stores the device', async () => {
     const { svc, calls, kv } = setup({ responses: [{ status: 201, data: { deviceId: 'dev1', secret: 's3cret' } }] });
     const r = await svc.register('https://a.example.com');
-    expect(r).toEqual({ relayDeviceId: 'dev1', relaySecret: 's3cret', platform: 'ios', deviceName: 'iPhone' });
-    expect(calls[0]).toMatchObject({ method: 'POST', url: `${RELAY}/v1/devices`, data: { token: 'tok-1', platform: 'ios', appVersion: '1.0.0', environment: 'sandbox' } });
+    expect(r).toEqual({ relayDeviceId: 'dev1', relaySecret: 's3cret', platform: 'ios', deviceName: 'iPhone', appId: 'com.moviemethat.arclight.admin' });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: `${RELAY}/v1/devices`, data: { token: 'tok-1', platform: 'ios', appId: 'com.moviemethat.arclight.admin', appVersion: '1.0.0', environment: 'sandbox' } });
     expect(JSON.parse(kv.data.get(KEYS.push)!)).toEqual({ deviceId: 'dev1', secret: 's3cret', token: 'tok-1', servers: ['https://a.example.com'] });
   });
 
   it('does not send environment on Android', async () => {
     const { svc, calls } = setup({ platform: 'android', responses: [{ status: 200, data: { deviceId: 'd', secret: 's' } }] });
     await svc.register('https://a.example.com');
-    expect(calls[0]!.data).toEqual({ token: 'tok-1', platform: 'android', appVersion: '1.0.0' });
+    expect(calls[0]!.data).toEqual({ token: 'tok-1', platform: 'android', appId: 'com.moviemethat.arclight.admin', appVersion: '1.0.0' });
   });
 
   it('reuses the device for a second server without calling the relay', async () => {

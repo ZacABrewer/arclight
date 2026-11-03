@@ -6,6 +6,13 @@ declare const __APP_VERSION__: string;
 /** Marketing version (package.json "version"); the native build number comes from App.getInfo(). */
 export const APP_VERSION: string = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0-dev';
 
+/**
+ * Bundle ID / application ID of this app (capacitor.config.ts appId; keep the two equal). The
+ * push relay picks the APNs topic from it, so it is sent with the relay registration and handed
+ * to the server with registerPush(). The separate player app "Arclight" is com.moviemethat.arclight.
+ */
+export const APP_ID = 'com.moviemethat.arclight.admin';
+
 /** Push relay base URL. Override at build time with VITE_PUSH_RELAY_URL (forks running their own relay). */
 export const PUSH_RELAY_URL: string = (import.meta.env?.VITE_PUSH_RELAY_URL as string | undefined) || 'https://arclight-push.moviemethat.com';
 

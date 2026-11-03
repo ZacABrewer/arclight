@@ -48,7 +48,10 @@ export type AuthErrorCode =
   | 'TWO_FACTOR_REQUIRED'
   | 'CHALLENGE_EXPIRED'
   | 'TWO_FACTOR_SETUP_REQUIRED'
-  | 'LAST_SIGN_IN_METHOD';
+  | 'LAST_SIGN_IN_METHOD'
+  | 'TOTP_REQUIRED'
+  | 'TOTP_INVALID'
+  | 'PAIRING_REQUIRED';
 
 export class AuthError extends Error {
   constructor(
@@ -76,6 +79,9 @@ export const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   CHALLENGE_EXPIRED: 401,
   TWO_FACTOR_SETUP_REQUIRED: 403,
   LAST_SIGN_IN_METHOD: 409,
+  TOTP_REQUIRED: 401,
+  TOTP_INVALID: 401,
+  PAIRING_REQUIRED: 403,
 };
 
 /**
@@ -107,6 +113,8 @@ export interface RequestAuth {
   apiKeyScope?: ApiKeyScope;
   /** `via: 'session'`: how the session was opened (password, oidc:<id>, passkey, ...). */
   sessionMethod?: string;
+  /** `via: 'app'`: the app device (app_devices.id) whose token this is. */
+  appDeviceId?: number;
 }
 
 /** The credentials a request carried, extracted by the hook. */
@@ -114,6 +122,8 @@ export interface RequestCredentials {
   sessionToken?: string | undefined;
   apiKey?: string | undefined;
   basic?: { username: string; password: string } | undefined;
+  /** `Authorization: Bearer alt_…`: an Arclight player app device token. */
+  bearer?: string | undefined;
   /** Socket peer followed by every forwarded address. */
   addresses: readonly (string | undefined)[];
   /** The TCP peer alone (forward-auth trusts only this). */
@@ -127,6 +137,9 @@ export interface RequestCredentials {
  * null when forward-auth is off, the peer is not a trusted proxy or no user header was sent.
  */
 export type ForwardAuthResolver = (creds: RequestCredentials) => Promise<RequestAuth | null>;
+
+/** Resolves an app device token (registered by the app-auth module); null: unknown or revoked. */
+export type BearerResolver = (token: string, creds: RequestCredentials) => RequestAuth | null;
 
 /** What a `requests`-scoped key of an admin may do: the portal's request rights. */
 export const REQUESTS_KEY_ADMIN_PERMISSIONS =
@@ -275,6 +288,10 @@ export class AuthService {
   newUserPermissions: (() => number) | undefined;
   /** Forward-auth (set by the identity service); absent: off. */
   forwardAuth: ForwardAuthResolver | undefined;
+  /** App device tokens (set by the app-auth module); absent: Bearer tokens are ignored. */
+  bearerAuth: BearerResolver | undefined;
+  /** Ends every app device of a user (set by the app-auth module); called with revokeAllSessions. */
+  revokeAppDevices: ((userId: number) => void) | undefined;
   readonly twoFactor: TwoFactorService;
   readonly apiKeys: UserApiKeyService;
 
@@ -573,7 +590,8 @@ export class AuthService {
   // login, sessions
   // -------------------------------------------------------------------------------------
 
-  private checkRateLimit(address: string): void {
+  /** 429 RATE_LIMITED while `address` has too many failed sign-ins (shared by every sign-in path). */
+  checkRateLimit(address: string): void {
     const entry = this.failures.get(address);
     if (!entry) return;
     if (this.now().getTime() - entry.first > this.lockoutWindowMs) {
@@ -585,7 +603,8 @@ export class AuthService {
     }
   }
 
-  private recordFailure(address: string): void {
+  /** Counts a failed sign-in (wrong password, code or pair code) for `address`. */
+  recordFailure(address: string): void {
     const t = this.now().getTime();
     const entry = this.failures.get(address);
     if (!entry || t - entry.first > this.lockoutWindowMs) this.failures.set(address, { count: 1, first: t });
@@ -729,6 +748,56 @@ export class AuthService {
     return result;
   }
 
+  /**
+   * POST /app/sign-in: checks a password and, when the account has TOTP on, the code, without
+   * opening a session (the app gets a device token instead). Same rate limit, audit and local
+   * sign-in switch as POST /auth/login. Accounts whose only second factor is a passkey, and
+   * admins who still have to set up two-factor, are told to pair with a QR code instead.
+   */
+  async verifyAppSignIn(
+    input: { username: string; password: string; totp?: string | undefined; recoveryCode?: string | undefined },
+    ip?: string,
+  ): Promise<User> {
+    const address = ip ?? 'unknown';
+    this.checkRateLimit(address);
+    const row = await this.verifyCredentials(input.username, input.password);
+    if (!row) {
+      this.recordFailure(address);
+      this.log?.warn({ username: input.username, ip }, 'failed app sign-in');
+      audit(this.db).record({ action: 'login.failed', username: input.username, ip: ip ?? null, details: { method: 'app' } });
+      throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
+    }
+    if (!this.localLoginAllowed(row)) {
+      audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: ip ?? null, details: { method: 'app', reason: 'local sign-in off' } });
+      throw new AuthError('PAIRING_REQUIRED', 'signing in with an Arclight password is turned off for user accounts; pair the app with the QR code in the web player');
+    }
+    const methods = this.twoFactor.methodsFor(row.id);
+    let factor: string | undefined;
+    if (methods.length > 0) {
+      if (!methods.includes('totp')) {
+        throw new AuthError('PAIRING_REQUIRED', 'this account signs in with a passkey; pair the app with the QR code in the web player');
+      }
+      if (!input.totp && !input.recoveryCode) {
+        // The password was right: not a failure, the app asks for the code.
+        throw new AuthError('TOTP_REQUIRED', 'enter the code from your authenticator app');
+      }
+      const ok = input.totp ? this.twoFactor.checkTotp(row.id, input.totp) : this.twoFactor.useRecoveryCode(row.id, input.recoveryCode!);
+      if (!ok) {
+        this.recordFailure(address);
+        audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: ip ?? null, details: { method: 'app', factor: input.totp ? 'totp' : 'recovery' } });
+        throw new AuthError('TOTP_INVALID', 'that code is not right; check the time on your phone and try again');
+      }
+      factor = input.totp ? 'totp' : 'recovery';
+    } else if (row.role === 'admin' && this.identitySettings().requireTwoFactorForAdmins) {
+      throw new AuthError('TWO_FACTOR_SETUP_REQUIRED', 'set up two-factor sign-in on your account first (Profile → Security), then sign in again');
+    }
+    this.failures.delete(address);
+    const now = this.now().toISOString();
+    this.db.update(users).set({ lastLoginAt: now }).where(eq(users.id, row.id)).run();
+    audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: ip ?? null, details: { method: 'app', ...(factor ? { factor } : {}) } });
+    return toUser({ ...row, lastLoginAt: now });
+  }
+
   /** Admins (role admin) and accounts that may use local sign-in pass; others need `signIn.local`. */
   private localLoginAllowed(row: Pick<UserRow, 'role'>): boolean {
     return row.role === 'admin' || this.signInSettings().local;
@@ -858,7 +927,9 @@ export class AuthService {
     if (!deleted) throw new AuthError('NOT_FOUND', `session ${sessionId} not found`);
   }
 
+  /** Ends the user's sessions (but `exceptId`) and every app device of theirs. */
   revokeAllSessions(userId: number, exceptId?: number): void {
+    this.revokeAppDevices?.(userId);
     this.db
       .delete(sessions)
       .where(exceptId === undefined ? eq(sessions.userId, userId) : and(eq(sessions.userId, userId), ne(sessions.id, exceptId)))
@@ -882,10 +953,14 @@ export class AuthService {
   }
 
   /**
-   * Decides who a request is: session cookie, then Basic credentials (method basic), then
-   * the API key, then the local-address bypass. null means anonymous.
+   * Decides who a request is: an app device token (Bearer), the session cookie, then Basic
+   * credentials (method basic), then the API key, then the local-address bypass. null means
+   * anonymous.
    */
   async resolve(creds: RequestCredentials): Promise<ResolvedRequest> {
+    // An app token is decisive: a revoked one is anonymous (401), never the local bypass, so the
+    // app knows to sign in again.
+    if (creds.bearer && this.bearerAuth) return { auth: this.bearerAuth(creds.bearer, creds) };
     if (creds.sessionToken) {
       const found = this.resolveSession(creds.sessionToken);
       if (found) {

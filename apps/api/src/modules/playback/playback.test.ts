@@ -727,3 +727,136 @@ describe('browse', () => {
     expect((await get(h, `/api/v1/playback/artwork/album/${album.id}`, user.cookie)).statusCode).toBe(404);
   });
 });
+
+describe('Arclight app additions', () => {
+  /** A player user signed in through the app; returns their device token and id. */
+  async function appUser(h: Harness): Promise<{ token: string; id: number; cookie: string }> {
+    const { appAuthServiceFor } = await import('../app-auth/index.js');
+    const auth = authServiceFor(h.ctx);
+    const username = `app${Math.random().toString(36).slice(2, 8)}`;
+    const user = await auth.createUser({ username, password: 'password1', settings: { player: { allowed: true } } });
+    const signed = await appAuthServiceFor(h.ctx).signIn({ username, password: 'password1', deviceName: 'Phone', platform: 'ios', appVersion: '1.0.0' });
+    return { token: signed.token, id: user.id, cookie: `${SESSION_COOKIE}=${auth.createSession(user.id).token}` };
+  }
+
+  it('the device token works on player routes and streams without a cookie', async () => {
+    const h = await harness();
+    const { trackIds } = seed(h.db);
+    const u = await appUser(h);
+    const auth = { authorization: `Bearer ${u.token}` };
+    expect((await get(h, `/api/v1/playback/item/track:${trackIds[0]}`, undefined, auth)).statusCode).toBe(200);
+    const fileId = h.db.select().from(schema.tracks).all().find((t) => t.id === trackIds[0])!.audioFileId!;
+    const stream = await get(h, `/api/v1/stream/audio/${fileId}`, undefined, { ...auth, range: 'bytes=0-9' });
+    expect([stream.statusCode, stream.rawPayload.length]).toEqual([206, 10]);
+    const put = await h.app.inject({
+      method: 'PUT',
+      url: `/api/v1/playback/progress/track:${trackIds[0]}`,
+      headers: auth,
+      payload: { event: 'progress', positionMs: 1000, durationMs: 200_000, deviceId: 'app-1', clientTime: new Date().toISOString() },
+    });
+    expect(put.statusCode).toBe(200);
+    // Signed links made with the token keep working while only the device is signed in.
+    const links = (await h.app.inject({ method: 'POST', url: '/api/v1/playback/stream-links', headers: auth, payload: { itemKey: `track:${trackIds[0]}` } })).json().links;
+    const url = new URL(links[0].url);
+    h.db.delete(schema.sessions).run();
+    expect((await get(h, url.pathname + url.search)).statusCode).toBe(200);
+    authServiceFor(h.ctx).revokeAllSessions(u.id);
+    expect((await get(h, url.pathname + url.search)).json().code).toBe('LINK_REVOKED');
+    expect((await get(h, `/api/v1/playback/item/track:${trackIds[0]}`, undefined, auth)).statusCode).toBe(401);
+  });
+
+  it('POST /playback/items returns playable items in order, skipping missing ones', async () => {
+    const h = await harness();
+    const { trackIds, book } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const keys = [`track:${trackIds[1]}`, 'track:99999', `audiobook:${book.id}`, `track:${trackIds[1]}`];
+    const res = await h.app.inject({ method: 'POST', url: '/api/v1/playback/items', headers: { cookie: user.cookie }, payload: { itemKeys: keys } });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as PlayableItem[]).map((i) => i.itemKey)).toEqual([`track:${trackIds[1]}`, `audiobook:${book.id}`]);
+    const tooMany = Array.from({ length: 201 }, (_, i) => `track:${i + 1}`);
+    expect((await h.app.inject({ method: 'POST', url: '/api/v1/playback/items', headers: { cookie: user.cookie }, payload: { itemKeys: tooMany } })).statusCode).toBe(400);
+    const denied = await signIn(h);
+    expect((await h.app.inject({ method: 'POST', url: '/api/v1/playback/items', headers: { cookie: denied.cookie }, payload: { itemKeys: keys } })).statusCode).toBe(403);
+  });
+
+  it('?download=1 answers as an attachment with a safe file name; transcodes get their extension', async () => {
+    const h = await harness();
+    const { partIds, trackIds } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const { eq } = await import('drizzle-orm');
+    const odd = join(mkdtempSync(join(tmp, 'dl-')), 'Ünïcode; 100% part.mp3');
+    writeFileSync(odd, BYTES);
+    h.db.update(schema.audioFiles).set({ path: odd }).where(eq(schema.audioFiles.id, partIds[0]!)).run();
+    const plain = await get(h, `/api/v1/stream/audio/${partIds[0]}?download=1`, user.cookie);
+    expect(plain.statusCode).toBe(200);
+    const cd = String(plain.headers['content-disposition']);
+    expect(cd).toMatch(/^attachment; filename="Unicode_ 100_ part\.mp3"; filename\*=UTF-8''/);
+    expect(decodeURIComponent(cd.split("UTF-8''")[1]!)).toBe('Ünïcode; 100% part.mp3');
+    const { downloadDisposition } = await import('./format.js');
+    expect(downloadDisposition('C:\\music\\A\\x.flac', 'opus')).toBe(`attachment; filename="x.opus"; filename*=UTF-8''x.opus`);
+    expect(downloadDisposition('/music/Say "Hi".flac', null)).toBe(`attachment; filename="Say _Hi_.flac"; filename*=UTF-8''Say%20%22Hi%22.flac`);
+    expect((await get(h, `/api/v1/stream/audio/${partIds[0]}`, user.cookie)).headers['content-disposition']).toBeUndefined();
+    const aac = await get(h, `/api/v1/stream/audio/${partIds[0]}?download=1&format=aac&bitrateKbps=96`, user.cookie);
+    expect([aac.statusCode, aac.headers['content-type'], aac.headers['x-arclight-transcode']]).toEqual([200, 'audio/aac', 'aac/96']);
+    expect(String(aac.headers['content-disposition'])).toContain('part.aac"');
+    // Stream links can ask for downloads.
+    const links = (await h.app.inject({ method: 'POST', url: '/api/v1/playback/stream-links', headers: { cookie: user.cookie }, payload: { itemKey: `track:${trackIds[0]}`, download: true } })).json().links;
+    expect(links[0].url).toContain('download=1&');
+    const url = new URL(links[0].url);
+    expect(String((await get(h, url.pathname + url.search)).headers['content-disposition'])).toMatch(/^attachment; filename="[^"]+\.flac"/);
+  });
+
+  it('POST /playback/progress/batch applies an offline queue newest-wins and answers in request order', async () => {
+    const h = await harness();
+    const { trackIds } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const t = (s: number) => new Date(Date.now() - 600_000 + s * 1000).toISOString();
+    const r = (key: string, positionMs: number, clientTime: string) => ({ itemKey: key, event: 'progress', positionMs, durationMs: 200_000, deviceId: 'app-1', clientTime });
+    const a = `track:${trackIds[0]}`;
+    const b = `track:${trackIds[1]}`;
+    const batch = (reports: unknown[]) => h.app.inject({ method: 'POST', url: '/api/v1/playback/progress/batch', headers: { cookie: user.cookie }, payload: { reports } });
+    const res = await batch([r(a, 30_000, t(30)), r(a, 10_000, t(10)), r(b, 5_000, t(5))]);
+    expect(res.statusCode).toBe(200);
+    const results = res.json().results as Array<{ itemKey: string; accepted: boolean; progress: { positionMs: number } }>;
+    // Applied oldest first, so the t(30) report is the one that stays.
+    expect(results.map((x) => [x.itemKey, x.accepted])).toEqual([
+      [a, true],
+      [a, true],
+      [b, true],
+    ]);
+    const list = (await get(h, `/api/v1/playback/progress?itemKeys=${a},${b}`, user.cookie)).json().items as Array<{ itemKey: string; positionMs: number }>;
+    expect(list.find((p) => p.itemKey === a)!.positionMs).toBe(30_000);
+    expect(list.find((p) => p.itemKey === b)!.positionMs).toBe(5_000);
+    // A report older than what is stored is not applied.
+    const stale = await batch([r(a, 1_000, t(1))]);
+    expect(stale.json().results[0]).toMatchObject({ accepted: false, progress: { positionMs: 30_000 } });
+    expect((await batch([])).statusCode).toBe(400);
+  });
+
+  it('artwork links open artwork URLs without credentials until revoked', async () => {
+    const h = await harness();
+    const { album, trackIds } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const dir = mkdtempSync(join(tmp, 'cover-'));
+    writeFileSync(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    writeFileSync(join(dir, '01.flac'), BYTES);
+    const { eq } = await import('drizzle-orm');
+    const first = h.db.select().from(schema.tracks).all().find((t) => t.id === trackIds[0])!.audioFileId!;
+    h.db.update(schema.audioFiles).set({ path: join(dir, '01.flac') }).where(eq(schema.audioFiles.id, first)).run();
+
+    const made = await h.app.inject({ method: 'POST', url: '/api/v1/playback/artwork-link', headers: { cookie: user.cookie } });
+    expect(made.statusCode).toBe(200);
+    const { query } = made.json() as { query: string; expiresAt: string };
+    expect(query).toMatch(/^u=\d+&exp=\d+&sig=[A-Za-z0-9_-]{43}$/);
+    const url = `/api/v1/playback/artwork/album/${album.id}?${query}`;
+    expect((await get(h, url)).statusCode).toBe(200);
+    expect((await get(h, `/api/v1/playback/artwork/album/${album.id}`)).statusCode).toBe(401);
+    expect((await get(h, url.replace(/exp=\d+/, 'exp=1000'))).json().code).toBe('LINK_BAD_SIGNATURE');
+    // A stream signature is not an artwork signature.
+    const links = (await h.app.inject({ method: 'POST', url: '/api/v1/playback/stream-links', headers: { cookie: user.cookie }, payload: { itemKey: `track:${trackIds[0]}` } })).json().links;
+    const streamQuery = new URL(links[0].url).search.replace(/^\?/, '');
+    expect((await get(h, `/api/v1/playback/artwork/album/${album.id}?${streamQuery}`)).statusCode).toBe(403);
+    authServiceFor(h.ctx).revokeAllSessions(user.id);
+    expect((await get(h, url)).json().code).toBe('LINK_REVOKED');
+  });
+});

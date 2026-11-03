@@ -507,6 +507,25 @@ export class PlayerController {
     void this.loadCurrent({ autoplay: true, startMs: 0 });
   };
 
+  /** The item `next()` would load, or null at the end of the queue (repeat one still moves on). */
+  peekNext = (): ItemKey | null => {
+    const pos = nextPos(this.queue, false);
+    return pos === null ? null : currentKey(goTo(this.queue, pos));
+  };
+
+  /**
+   * The place moved without this controller (a lock-screen / car / headset seek that native
+   * audio applied itself): report it now instead of waiting for the next heartbeat.
+   */
+  reportExternalSeek = (): void => {
+    if (!this.engine.current) return;
+    if (this.seekTimer !== null) {
+      clearTimeout(this.seekTimer);
+      this.seekTimer = null;
+    }
+    this.reporter.report('seek');
+  };
+
   /** Jump to an entry of the queue (play-order position). */
   playQueueIndex = (position: number): void => {
     if (position < 0 || position >= this.queue.order.length) return;
@@ -630,6 +649,16 @@ export class PlayerController {
       speed: this.engine.playbackSpeed,
       chapters: item.chapters,
     });
+    this.set({ sleepTimer: this.sleep.state() });
+  };
+
+  /**
+   * A copy of the timer runs elsewhere (natively, so it fires while this code is suspended) and
+   * has `remainingMs` left: show that. Minutes timers only (chapter timers follow the position).
+   */
+  adjustSleepTimer = (remainingMs: number): void => {
+    if (!this.sleep || this.sleep.kind !== 'minutes') return;
+    this.sleep.setRemaining(remainingMs, this.now());
     this.set({ sleepTimer: this.sleep.state() });
   };
 

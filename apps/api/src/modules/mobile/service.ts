@@ -6,7 +6,7 @@ import { users } from '../../db/schema.js';
 import { mobileDevices } from './schema.js';
 import { RelayClient, type RelayOutcome } from './relay.js';
 
-// Mobile companion app devices and delivery through the push relay. The push module calls
+// Arclight Admin (companion app, apps/mobile) devices and delivery through the push relay. The push module calls
 // `deliver(userId, payload)` (via the sink it accepts) for every notification it sends to a
 // user's browsers, after the user's PushPreferences said yes, so the phone gets exactly what
 // the browser gets. Delivery never blocks the caller; failures are handled here:
@@ -78,6 +78,7 @@ function toResource(row: DeviceRow, userName?: string | null): MobileDeviceResou
     lastSeenAt: row.lastSeenAt,
     ...(userName ? { userName } : {}),
     ...(row.appVersion ? { appVersion: row.appVersion } : {}),
+    ...(row.appId ? { appId: row.appId } : {}),
     ...(row.lastError ? { lastError: row.lastError } : {}),
   };
 }
@@ -160,6 +161,7 @@ export class MobileService {
       platform: input.platform,
       deviceName: input.deviceName ?? '',
       appVersion: input.appVersion ?? null,
+      appId: input.appId ?? null,
       createdAt: now,
       lastSeenAt: now,
       lastError: null,
@@ -169,7 +171,7 @@ export class MobileService {
       .values(values)
       .onConflictDoUpdate({
         target: mobileDevices.relayDeviceId,
-        set: { userId, relaySecret: values.relaySecret, platform: values.platform, deviceName: values.deviceName, appVersion: values.appVersion, lastSeenAt: now, lastError: null },
+        set: { userId, relaySecret: values.relaySecret, platform: values.platform, deviceName: values.deviceName, appVersion: values.appVersion, appId: values.appId, lastSeenAt: now, lastError: null },
       })
       .returning()
       .get();
@@ -192,8 +194,11 @@ export class MobileService {
 
   // ---- sending -----------------------------------------------------------------------
 
-  /** The relay body for a push payload: same title / body as web push, deep link and server in `data`. */
-  bodyFor(deviceId: string, payload: PushPayload): RelaySendBody {
+  /**
+   * The relay body for a push payload: same title / body as web push, deep link and server in
+   * `data`. `appId` (the device's app, when it reported one) tells the relay which APNs topic to use.
+   */
+  bodyFor(deviceId: string, payload: PushPayload, appId?: string | null): RelaySendBody {
     const server = this.serverUrl();
     const data: Record<string, string> = {};
     if (payload.url) data['url'] = payload.url;
@@ -205,6 +210,7 @@ export class MobileService {
       body: clip(payload.body ?? '', MAX_BODY_CHARS),
       ...(Object.keys(data).length > 0 ? { data } : {}),
       ...(payload.tag ? { threadId: payload.tag } : {}),
+      ...(appId ? { appId } : {}),
     };
   }
 
@@ -231,7 +237,7 @@ export class MobileService {
       // new pause does not use up its one retry. Pauses only come from real sends, so this ends.
       return this.defer(row, payload, Math.max(0, attempt - 1), this.pauseReason);
     }
-    const outcome = await this.relay.send(row.relaySecret, this.bodyFor(row.relayDeviceId, payload));
+    const outcome = await this.relay.send(row.relaySecret, this.bodyFor(row.relayDeviceId, payload, row.appId));
     return this.settle(row, outcome, payload, attempt);
   }
 
@@ -291,7 +297,7 @@ export class MobileService {
     if (last !== undefined && now - last < TEST_INTERVAL_MS) throw new MobileError('RATE_LIMITED', 'wait a few seconds before sending another test');
     this.lastTest.set(row.id, now);
     if (now < this.pausedUntil) return { ok: false, outcome: 'rate_limited', message: 'the push relay asked us to slow down; try again shortly' };
-    const outcome = await this.relay.send(row.relaySecret, this.bodyFor(row.relayDeviceId, { title: 'Arclight', body: 'Notifications on this device are on.', url: '/profile', tag: 'mobile-test' }));
+    const outcome = await this.relay.send(row.relaySecret, this.bodyFor(row.relayDeviceId, { title: 'Arclight', body: 'Notifications on this device are on.', url: '/profile', tag: 'mobile-test' }, row.appId));
     const settled = this.settle(row, outcome, { title: '' }, 1);
     if (settled === 'sent') return { ok: true, outcome: 'sent' };
     if (settled === 'removed') return { ok: false, outcome: 'removed', message: 'the push relay no longer knows this device; it was removed. Turn notifications on again in the app.' };

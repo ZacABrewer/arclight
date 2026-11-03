@@ -79,6 +79,7 @@ describe("notification content is never stored or logged", () => {
     const cols = await env.DB.prepare("SELECT name FROM pragma_table_info('devices')").all<{ name: string }>();
     expect(cols.results.map((c) => c.name).sort()).toEqual(
       [
+        "app_id",
         "app_version",
         "created_at",
         "device_id",

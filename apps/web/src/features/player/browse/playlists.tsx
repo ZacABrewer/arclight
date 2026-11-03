@@ -5,6 +5,7 @@ import { Button, ButtonGroup, Field, Icon, Input, Modal } from '../../../arcligh
 import { useT } from '../../../i18n/index.js';
 import { useCreatePlaylist, useDeletePlaylist, useMovePlaylistEntry, usePlaylist, usePlaylists, useRemovePlaylistEntry, useRenamePlaylist } from './api.js';
 import { PlaylistArt, PlaylistCard } from './cards.js';
+import { DownloadButton } from './download.js';
 import { lengthLabel, shuffled } from './format.js';
 import { DetailsSkeleton, Empty, GridSkeleton, LoadError, PageTitle, ShuffleIcon, playerPaths, useNumericParam } from './kit.js';
 import { MusicNav } from './music-nav.js';
@@ -236,6 +237,7 @@ export function PlaylistPage() {
             <Button icon={<ShuffleIcon />} disabled={!keys.length} onClick={() => player.playItems(shuffled(keys), { source })}>
               {t('player.browse.shuffle')}
             </Button>
+            <DownloadButton itemKeys={keys} />
             <Button variant="ghost" icon={<Icon name="edit" />} onClick={() => setDialog('rename')}>
               {t('player.browse.playlist.rename')}
             </Button>

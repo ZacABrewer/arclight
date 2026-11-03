@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Last updated: 31 October 2026
+Last updated: 2 November 2026
 
 Effective: 31 October 2026
 
@@ -42,7 +42,7 @@ The website at `arclight.moviemethat.com` is a static site hosted on Cloudflare.
 
 ## The mobile apps
 
-The Arclight apps for iOS and Android are companion apps. You enter the address (IP or hostname) of your own server, and the app shows the interface that server provides.
+The Arclight apps for iOS and Android (Arclight Admin, and the Arclight player app when it ships) are companion apps. You enter the address (IP or hostname) of your own server, and the app shows the interface that server provides.
 
 **Stored on your device**
 
@@ -75,7 +75,7 @@ Push notifications are optional. If you turn them on:
 2. The app registers that token with **your own server** and with the **Arclight push relay**. The project runs the relay on Cloudflare.
 3. When your server has something to tell you, it sends the notification to the relay. The relay forwards it to Apple or Google, who deliver it to your device.
 
-**What the relay stores:** the push token, a random device identifier, a hash of the secret your app uses to authorize sends, and technical metadata (platform, app version, push environment, when the record was created and last used). No name, email, account or notification content. The relay sees your server's IP address when it sends a notification and uses it only for short-term rate limiting inside Cloudflare; we do not store it.
+**What the relay stores:** the push token, a random device identifier, a hash of the secret your app uses to authorize sends, and technical metadata (platform, app version, app ID, push environment, when the record was created and last used). No name, email, account or notification content. The relay sees your server's IP address when it sends a notification and uses it only for short-term rate limiting inside Cloudflare; we do not store it.
 
 **What the relay does not store:** notification content. It passes through to Apple or Google and is not kept after delivery.
 

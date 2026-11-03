@@ -5,7 +5,7 @@
 //  - Device tokens, device IDs and secrets are never logged.
 //  - The secret is stored only as a SHA-256 hash.
 
-import { apnsConfigured, sendApns, type ApnsEnvironment } from "./apns";
+import { apnsConfigured, resolveTopic, sendApns, type ApnsEnvironment } from "./apns";
 import { randomBase64url, sha256Hex, timingSafeEqualStr } from "./crypto";
 import type { Env } from "./env";
 import { fcmConfigured, sendFcm } from "./fcm";
@@ -21,7 +21,7 @@ import {
   withHeaders,
 } from "./http";
 import type { SendResult } from "./provider";
-import { DEVICE_ID_RE, isPlatform, parseSend, validToken, type Platform } from "./validate";
+import { DEVICE_ID_RE, isPlatform, parseSend, validAppId, validToken, type Platform } from "./validate";
 
 export type { Env } from "./env";
 
@@ -37,6 +37,7 @@ interface DeviceRow {
   token: string;
   secret_hash: string;
   environment: ApnsEnvironment;
+  app_id: string | null;
   send_tokens: number;
   send_refill_at: number;
 }
@@ -62,7 +63,7 @@ const tooMany = (retryAfterS: number) =>
 async function authenticate(env: Env, deviceId: string, secret: string): Promise<DeviceRow | undefined> {
   const row = DEVICE_ID_RE.test(deviceId)
     ? await env.DB.prepare(
-        "SELECT device_id, platform, token, secret_hash, environment, send_tokens, send_refill_at FROM devices WHERE device_id = ?",
+        "SELECT device_id, platform, token, secret_hash, environment, app_id, send_tokens, send_refill_at FROM devices WHERE device_id = ?",
       )
         .bind(deviceId)
         .first<DeviceRow>()
@@ -83,7 +84,7 @@ async function registerDevice(request: Request, env: Env): Promise<Response> {
   if (await rateLimited(env.REGISTER_LIMITER, `register:${clientIp(request)}`)) return tooMany(60);
 
   const body = await readJsonObject(request);
-  const { token, platform, appVersion, environment } = body;
+  const { token, platform, appVersion, environment, appId } = body;
   if (!isPlatform(platform)) return error(400, "platform must be 'ios' or 'android'");
   if (!validToken(platform, token)) return error(400, "invalid token");
   if (appVersion !== undefined && appVersion !== null) {
@@ -94,6 +95,14 @@ async function registerDevice(request: Request, env: Env): Promise<Response> {
   if (environment !== undefined && environment !== null && environment !== "production" && environment !== "sandbox") {
     return error(400, "environment must be 'production' or 'sandbox'");
   }
+  // appId picks the APNs topic, so on iOS it must be one this relay sends for (APNS_TOPICS).
+  // FCM does not use it (the Firebase project covers its apps); it is only checked for shape.
+  let appId_: string | null = null;
+  if (appId !== undefined && appId !== null) {
+    if (!validAppId(appId)) return error(400, "invalid appId");
+    if (platform === "ios" && !resolveTopic(env, appId)) return error(400, "appId not allowed");
+    appId_ = appId;
+  }
   // The APNs environment only matters for iOS; FCM has no sandbox.
   const env_: ApnsEnvironment = platform === "ios" && environment === "sandbox" ? "sandbox" : "production";
 
@@ -101,10 +110,10 @@ async function registerDevice(request: Request, env: Env): Promise<Response> {
   const secret = randomBase64url(32); // 256 bits
   const now = Date.now();
   await env.DB.prepare(
-    `INSERT INTO devices (device_id, platform, token, secret_hash, app_version, environment, created_at, last_used_at, send_tokens, send_refill_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO devices (device_id, platform, token, secret_hash, app_version, environment, app_id, created_at, last_used_at, send_tokens, send_refill_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(deviceId, platform, token, await sha256Hex(secret), (appVersion as string | undefined) ?? null, env_, now, now, SEND_BUCKET_CAPACITY, now)
+    .bind(deviceId, platform, token, await sha256Hex(secret), (appVersion as string | undefined) ?? null, env_, appId_, now, now, SEND_BUCKET_CAPACITY, now)
     .run();
   return json(201, { deviceId, secret });
 }
@@ -180,6 +189,14 @@ async function send(request: Request, env: Env): Promise<Response> {
   if (!device) return error(404, "not found");
   if (!providerConfigured(env, device.platform)) return error(503, "not configured");
 
+  // APNs topic: the app id stored at registration wins (the token belongs to that app); for
+  // devices registered without one, the server's appId for the device, else the default topic.
+  let topic: string | undefined;
+  if (device.platform === "ios") {
+    topic = resolveTopic(env, device.app_id ?? req.appId);
+    if (!topic) return error(400, "appId not allowed");
+  }
+
   const wait = await consumeSendToken(env, device, Date.now());
   if (wait > 0) return tooMany(wait);
 
@@ -187,7 +204,7 @@ async function send(request: Request, env: Env): Promise<Response> {
   try {
     result =
       device.platform === "ios"
-        ? await sendApns(env, device.token, device.environment, req)
+        ? await sendApns(env, device.token, device.environment, topic!, req)
         : await sendFcm(env, device.token, req);
   } catch (e) {
     // Network-level failure (for APNs, possibly the HTTP/2 path; see README.md).

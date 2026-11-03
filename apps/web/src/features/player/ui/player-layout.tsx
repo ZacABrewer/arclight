@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Menu, Pane, Popover, Skeleton, buttonClass, isTypingTarget, type MenuItem } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
@@ -8,6 +8,7 @@ import { t } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
 import { BOOK_SKIP_MS } from '../engine/media-session.js';
 import { PlayerProvider, usePlayer } from '../player-context.js';
+import { AppSignInDialog } from './app-sign-in.js';
 import { MiniPlayer } from './mini-player.js';
 import { BrowsePlayerContext, type BrowsePlayerActions } from '../browse/player-hooks.js';
 import '../player.css';
@@ -132,22 +133,27 @@ function DockedMiniPlayer() {
 function AccountMenu() {
   const { user, access, logout } = useAuth();
   const appHref = appHomeFor(access);
+  const [appSignIn, setAppSignIn] = useState(false);
   const items: MenuItem[] = [
     ...(appHref ? [{ id: 'app', label: t('player.account.openApp'), href: appHref }] : []),
     { id: 'portal', label: t('player.account.portal'), href: '/portal' },
+    ...(user ? [{ id: 'app-sign-in', label: t('player.account.appSignIn'), onSelect: () => setAppSignIn(true) }] : []),
     { id: 'signout', label: t('player.account.signOut'), onSelect: () => void logout(), separatorBefore: true },
   ];
   return (
-    <Popover
-      placement="bottom-end"
-      width={240}
-      label={t('player.account.menu')}
-      trigger={(props) => (
-        <Button variant="ghost" className="pl-head__btn" icon={<Icon name="user" size={20} />} aria-label={t('player.account.menu')} {...props} />
-      )}
-    >
-      {(close) => <Menu items={items} onDone={close} header={user ? <span className="pl-account__name">{user.displayName || user.username}</span> : null} />}
-    </Popover>
+    <>
+      <Popover
+        placement="bottom-end"
+        width={240}
+        label={t('player.account.menu')}
+        trigger={(props) => (
+          <Button variant="ghost" className="pl-head__btn" icon={<Icon name="user" size={20} />} aria-label={t('player.account.menu')} {...props} />
+        )}
+      >
+        {(close) => <Menu items={items} onDone={close} header={user ? <span className="pl-account__name">{user.displayName || user.username}</span> : null} />}
+      </Popover>
+      <AppSignInDialog open={appSignIn} onClose={() => setAppSignIn(false)} />
+    </>
   );
 }
 

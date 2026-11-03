@@ -1,0 +1,75 @@
+name: Player app
+
+# Builds the Arclight listening app (apps/player, Capacitor) for Android.
+# Every run: typecheck + unit tests and an Android debug APK (proves the native project and its
+# player plugin compile). The iOS simulator build is in player-app-ios.yml. The app reuses the web
+# player (apps/web/src/features/player) and the shared contracts, so changes there run it too.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/player/**'
+      - 'apps/web/src/features/player/**'
+      - 'apps/web/src/arclight/**'
+      - 'packages/shared/**'
+      - '.github/workflows/player-app.yml'
+  pull_request:
+    paths:
+      - 'apps/player/**'
+      - 'apps/web/src/features/player/**'
+      - 'apps/web/src/arclight/**'
+      - 'packages/shared/**'
+      - '.github/workflows/player-app.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: player-app-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+    defaults:
+      run:
+        working-directory: apps/player
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Typecheck and unit tests
+        run: pnpm typecheck && pnpm test
+      - name: Build web assets
+        run: pnpm build
+      - name: Capacitor sync
+        run: |
+          npx cap sync android
+          chmod +x android/gradlew
+      - name: Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        working-directory: apps/player/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arclight-player-android-debug-apk
+          path: apps/player/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+

@@ -172,6 +172,11 @@ export const StreamQuery = z.object({
   format: StreamFormat.default('original'),
   bitrateKbps: z.coerce.number().int().min(32).max(512).optional(),
   startMs: z.coerce.number().int().min(0).optional(),
+  /**
+   * `1`: answer with `Content-Disposition: attachment` and a safe file name (downloads for
+   * offline play). With a `format`, the whole file is transcoded from the start (no ranges).
+   */
+  download: z.enum(['0', '1', 'true', 'false']).optional(),
 });
 export type StreamQuery = z.infer<typeof StreamQuery>;
 
@@ -179,6 +184,8 @@ export const StreamLinksRequest = z.object({
   itemKey: ItemKey,
   format: StreamFormat.default('original'),
   bitrateKbps: z.number().int().min(32).max(512).optional(),
+  /** Links that download (`&download=1`: Content-Disposition attachment). */
+  download: z.boolean().default(false),
 });
 export const StreamLink = z.object({
   fileId: z.number().int(),
@@ -195,6 +202,18 @@ export const StreamLinksResponse = z.object({
 export type StreamLinksRequest = z.infer<typeof StreamLinksRequest>;
 export type StreamLink = z.infer<typeof StreamLink>;
 export type StreamLinksResponse = z.infer<typeof StreamLinksResponse>;
+
+/** POST /playback/items: several playable items at once (queues, offline downloads). */
+export const PLAYBACK_ITEMS_MAX = 200;
+export const PlaybackItemsRequest = z.object({ itemKeys: z.array(ItemKey).min(1).max(PLAYBACK_ITEMS_MAX) });
+export type PlaybackItemsRequest = z.infer<typeof PlaybackItemsRequest>;
+
+/**
+ * POST /playback/artwork-link: a query string (`u=&exp=&sig=`) that lets image loaders without
+ * credentials (an <img> in the app, a cast receiver) fetch any GET /playback/artwork/:kind/:id.
+ */
+export const ArtworkLinkResponse = z.object({ query: z.string(), expiresAt: z.string() });
+export type ArtworkLinkResponse = z.infer<typeof ArtworkLinkResponse>;
 
 // ---------------------------------------------------------------------------------------
 // Progress (playback_progress, keyed on Arclight user + item key)
@@ -246,6 +265,19 @@ export const ProgressReport = z.object({
 export type ProgressReport = z.infer<typeof ProgressReport>;
 export const ProgressBeacon = ProgressReport.extend({ itemKey: ItemKey });
 export type ProgressBeacon = z.infer<typeof ProgressBeacon>;
+
+/**
+ * POST /playback/progress/batch: reports queued while offline. Applied oldest `clientTime` first
+ * with the single-report rules (a report older than the stored row is ignored).
+ */
+export const PROGRESS_BATCH_MAX = 500;
+export const ProgressBatchRequest = z.object({ reports: z.array(ProgressBeacon).min(1).max(PROGRESS_BATCH_MAX) });
+export type ProgressBatchRequest = z.infer<typeof ProgressBatchRequest>;
+/** One result per report, in request order; `progress` is the stored row afterwards. */
+export const ProgressBatchResponse = z.object({
+  results: z.array(z.object({ itemKey: ItemKey, accepted: z.boolean(), progress: PlaybackProgress })),
+});
+export type ProgressBatchResponse = z.infer<typeof ProgressBatchResponse>;
 
 /** PATCH /playback/progress/:itemKey: mark played/unplayed, favourite, per-item prefs. */
 export const ProgressUpdate = z.object({

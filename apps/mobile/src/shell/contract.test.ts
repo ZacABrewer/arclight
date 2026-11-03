@@ -9,6 +9,7 @@ function make(over: Partial<ShellDeps> = {}, http = vi.fn(async () => ({ status:
     http,
     relayUrl: 'https://arclight-push.moviemethat.com',
     platform: 'android',
+    appId: 'com.moviemethat.arclight.admin',
     appVersion: '1.0.0',
     pushAvailable: async () => true,
     requestPermission: async () => true,
@@ -44,7 +45,7 @@ describe('ArclightShell contract', () => {
 
   it('registerPush() resolves the agreed shape and records the calling server', async () => {
     const { shell, push } = make();
-    expect(await shell.registerPush()).toEqual({ relayDeviceId: 'dev1', relaySecret: 's', platform: 'android', deviceName: 'Pixel 9' });
+    expect(await shell.registerPush()).toEqual({ relayDeviceId: 'dev1', relaySecret: 's', platform: 'android', deviceName: 'Pixel 9', appId: 'com.moviemethat.arclight.admin' });
     expect((await push.state())?.servers).toEqual(['https://a.example.com']);
   });
 

@@ -75,6 +75,38 @@ describe('PlayerController', () => {
     expect(h.deps.sendProgress).toHaveBeenLastCalledWith('audiobook:7', expect.objectContaining({ event: 'pause' }));
   });
 
+  it('peeks at what next() would play', async () => {
+    const h = makeController([track(1), track(2)]);
+    await h.controller.playItems(['track:1', 'track:2']);
+    expect(h.controller.peekNext()).toBe('track:2');
+    h.controller.setRepeat('one');
+    expect(h.controller.peekNext()).toBe('track:2');
+    h.controller.playQueueIndex(1);
+    expect(h.controller.peekNext()).toBeNull();
+    h.controller.setRepeat('all');
+    expect(h.controller.peekNext()).toBe('track:1');
+  });
+
+  it('reports a seek made outside the player at once', async () => {
+    const h = makeController([book()]);
+    await h.controller.playItem('audiobook:7', { startMs: 0 });
+    h.active().at(120);
+    h.controller.reportExternalSeek();
+    expect(h.deps.sendProgress).toHaveBeenLastCalledWith('audiobook:7', expect.objectContaining({ event: 'seek', positionMs: 120_000 }));
+  });
+
+  it('takes the remaining time of a native copy of a minutes sleep timer', async () => {
+    const h = makeController([book()]);
+    await h.controller.playItem('audiobook:7', { startMs: 0 });
+    h.controller.setSleepTimer({ kind: 'minutes', minutes: 30 });
+    h.controller.adjustSleepTimer(90_000);
+    expect(h.controller.getState().sleepTimer).toMatchObject({ kind: 'minutes', remainingMs: 90_000 });
+    h.controller.setSleepTimer({ kind: 'chapter' });
+    const before = h.controller.getState().sleepTimer?.remainingMs;
+    h.controller.adjustSleepTimer(1);
+    expect(h.controller.getState().sleepTimer?.remainingMs).toBe(before);
+  });
+
   it('pauses at the end of the chapter', async () => {
     const h = makeController([book()]);
     await h.controller.playItem('audiobook:7', { startMs: 1_100_000 });

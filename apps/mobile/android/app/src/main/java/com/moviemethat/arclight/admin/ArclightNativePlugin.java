@@ -1,4 +1,4 @@
-package com.moviemethat.arclight;
+package com.moviemethat.arclight.admin;
 
 import android.content.Context;
 import android.content.SharedPreferences;

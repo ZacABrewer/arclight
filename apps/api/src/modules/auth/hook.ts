@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Permission, type AppArea } from '@arclight/shared';
+import { APP_TOKEN_PREFIX, Permission, type AppArea } from '@arclight/shared';
 import { AuthError, type AuthService, type RequestAuth, type RequestCredentials } from './service.js';
 import { readCookie, SESSION_COOKIE, setSessionCookie } from './cookies.js';
 
@@ -62,6 +62,9 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/theme',
   '/theme/:id/theme.css',
   '/theme/:id/fonts/:file',
+  // The Arclight player app's sign-in and QR pairing (rate-limited by the auth service).
+  '/app/sign-in',
+  '/app/pair',
 ]);
 /** Route prefixes that answer without credentials; the setup routes guard themselves. */
 export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
@@ -137,10 +140,21 @@ export const SESSION_ONLY_PREFIXES: readonly string[] = [
   `${API_PREFIX}/user/me/password`,
   `${API_PREFIX}/auth/oidc/`,
   `${API_PREFIX}/auth/sessions`,
+  // A pairing code signs in another device: only from a browser session.
+  `${API_PREFIX}/app/pair-codes`,
 ];
 
-/** Whether a per-user key (`via: 'userkey'`) may call this route on this method. */
+/**
+ * Whether a per-user key (`via: 'userkey'`) or an app device token (`via: 'app'`) may call this
+ * route on this method. App tokens act as their user everywhere except the session-only routes
+ * (own credentials, pairing codes) and the install-wide secrets, so a lost phone cannot mint
+ * keys, turn off two-factor or read the API key.
+ */
 export function apiKeyScopeAllows(auth: RequestAuth, method: string, routeUrl: string | undefined): boolean {
+  if (auth.via === 'app') {
+    if (!routeUrl) return false;
+    return !SESSION_ONLY_PREFIXES.some((p) => routeUrl.startsWith(p)) && !SECRET_ROUTES.has(routeUrl);
+  }
   if (auth.via !== 'userkey') return true;
   if (!routeUrl) return false;
   if (SESSION_ONLY_PREFIXES.some((p) => routeUrl.startsWith(p))) return false;
@@ -179,6 +193,13 @@ function parseBasic(header: string | undefined): RequestCredentials['basic'] {
   return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
 }
 
+/** `Authorization: Bearer alt_…` (other bearer tokens are not Arclight's and are ignored). */
+function parseBearer(header: string | undefined): string | undefined {
+  if (!header?.toLowerCase().startsWith('bearer ')) return undefined;
+  const token = header.slice(7).trim();
+  return token.startsWith(APP_TOKEN_PREFIX) ? token : undefined;
+}
+
 function firstString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.length > 0) return value;
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
@@ -192,6 +213,7 @@ export function credentialsOf(req: FastifyRequest): RequestCredentials {
     sessionToken: readCookie(req.headers.cookie, SESSION_COOKIE),
     apiKey: firstString(req.headers['x-api-key']) ?? firstString(query['apikey']),
     basic: parseBasic(req.headers.authorization),
+    bearer: parseBearer(req.headers.authorization),
     // The socket peer plus every forwarded address; all must be local for the bypass.
     addresses: addressesOf(req),
     // Forward-auth trusts the TCP peer only: X-Forwarded-For is whatever the client sent.
@@ -229,8 +251,9 @@ export interface AuthHookOptions {
 /**
  * The onRequest hook for every API route, in this order:
  * 1. no admin account yet: 403 SETUP_REQUIRED, except the setup bootstrap routes;
- * 2. resolve `req.auth` (session cookie, Basic, API keys, plugin key, forward-auth, local bypass);
- * 3. a per-user key outside its scope gets 403; an admin who must set up two-factor gets 403
+ * 2. resolve `req.auth` (app token, session cookie, Basic, API keys, plugin key, forward-auth,
+ *    local bypass);
+ * 3. a per-user key or app token outside its scope gets 403; an admin who must set up two-factor gets 403
  *    TWO_FACTOR_SETUP_REQUIRED outside the setup routes;
  * 4. public routes answer; anonymous callers elsewhere get 401;
  * 5. a Jellyfin plugin key passes on /api/v1/jellyfin/* and gets 403 anywhere else;
@@ -262,7 +285,8 @@ export function requireAuth(service: AuthService, options: AuthHookOptions | Pub
       if (token) setSessionCookie(req, reply, token, resolved.renewed.maxAgeSeconds);
     }
     if (req.auth && !apiKeyScopeAllows(req.auth, req.method, routeUrl)) {
-      return reply.code(403).send({ error: `this API key (${req.auth.apiKeyScope ?? 'read'} scope) may not call this`, code: 'FORBIDDEN' });
+      const error = req.auth.via === 'app' ? 'the Arclight app may not call this; use the web app' : `this API key (${req.auth.apiKeyScope ?? 'read'} scope) may not call this`;
+      return reply.code(403).send({ error, code: 'FORBIDDEN' });
     }
     if (req.auth && !isPublic(routeUrl) && !allowedDuringTwoFactorSetup(req.method, routeUrl) && service.twoFactorSetupRequired(req.auth)) {
       return reply.code(403).send({ error: 'set up two-factor sign-in on your account first', code: 'TWO_FACTOR_SETUP_REQUIRED' });

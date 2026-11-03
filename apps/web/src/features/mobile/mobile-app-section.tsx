@@ -12,7 +12,7 @@ import { encodeQr, qrPath } from '../../lib/qr.js';
 import { t } from '../../i18n/index.js';
 import './mobile.css';
 
-// "Mobile app": pair the Arclight companion app with this server by QR code, and manage the
+// "Mobile app": pair the Arclight Admin app with this server by QR code, and manage the
 // phones that receive notifications. On Profile for everyone (request-portal users too), and
 // under Settings → Notifications for admins, who see every user's devices.
 

@@ -4,7 +4,8 @@ import { readJson, writeJson, type KeyValueStore } from './kv.js';
 
 // Push registration with the Arclight push relay.
 //
-//   POST   {relay}/v1/devices            { token, platform, appVersion, environment? } -> { deviceId, secret }
+//   POST   {relay}/v1/devices            { token, platform, appId, appVersion, environment? } -> { deviceId, secret }
+//          appId: this app's bundle ID; the relay uses it as the APNs topic.
 //          environment (iOS only): 'sandbox' for development-signed builds, 'production' otherwise.
 //   PUT    {relay}/v1/devices/{id}       { token }   Authorization: Bearer {secret}  (token rotated)
 //   DELETE {relay}/v1/devices/{id}                   Authorization: Bearer {secret}
@@ -40,6 +41,8 @@ export interface PushDeps {
   http: HttpClient;
   relayUrl: string;
   platform: Platform;
+  /** Bundle ID / application ID (config APP_ID). */
+  appId: string;
   appVersion: string;
   /** Whether the build can receive push at all (Android: google-services.json was present). */
   pushAvailable: () => Promise<boolean>;
@@ -57,6 +60,8 @@ export interface PushRegistration {
   relaySecret: string;
   platform: Platform;
   deviceName: string;
+  /** Bundle ID of the app that registered; the server stores it and sends it to the relay. */
+  appId: string;
 }
 
 const RELAY_TIMEOUT_MS = 15000;
@@ -90,7 +95,7 @@ export class PushService {
   /** registerPush() for the server page at `serverOrigin`. */
   async register(serverOrigin: string): Promise<PushRegistration> {
     if (!(await this.d.pushAvailable())) throw new PushError('unavailable', 'Push notifications are not available in this build of the app.');
-    if (!(await this.d.requestPermission())) throw new PushError('denied', 'Notifications are turned off for Arclight. Allow them in the system settings.');
+    if (!(await this.d.requestPermission())) throw new PushError('denied', 'Notifications are turned off for Arclight Admin. Allow them in the system settings.');
 
     let token: string;
     try {
@@ -108,7 +113,7 @@ export class PushService {
     if (!state) {
       let res;
       try {
-        res = await this.d.http({ method: 'POST', url: this.relay('/v1/devices'), headers: { 'content-type': 'application/json' }, data: { token, platform: this.d.platform, appVersion: this.d.appVersion, ...(this.d.platform === 'ios' ? { environment: await this.d.environment().catch(() => 'production' as const) } : {}) }, timeoutMs: RELAY_TIMEOUT_MS });
+        res = await this.d.http({ method: 'POST', url: this.relay('/v1/devices'), headers: { 'content-type': 'application/json' }, data: { token, platform: this.d.platform, appId: this.d.appId, appVersion: this.d.appVersion, ...(this.d.platform === 'ios' ? { environment: await this.d.environment().catch(() => 'production' as const) } : {}) }, timeoutMs: RELAY_TIMEOUT_MS });
       } catch (err) {
         throw new PushError('relay', `Could not reach the push relay: ${(err as Error)?.message ?? err}`);
       }
@@ -120,7 +125,7 @@ export class PushService {
     }
     if (!state.servers.includes(serverOrigin)) state.servers.push(serverOrigin);
     await this.save(state);
-    return { relayDeviceId: state.deviceId, relaySecret: state.secret, platform: this.d.platform, deviceName: await this.d.deviceName().catch(() => (this.d.platform === 'ios' ? 'iPhone' : 'Android')) };
+    return { relayDeviceId: state.deviceId, relaySecret: state.secret, platform: this.d.platform, deviceName: await this.d.deviceName().catch(() => (this.d.platform === 'ios' ? 'iPhone' : 'Android')), appId: this.d.appId };
   }
 
   /** PUT the new token. Resolves false when the relay no longer knows the device. */

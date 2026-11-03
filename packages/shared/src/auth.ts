@@ -159,9 +159,10 @@ export type LoginRequest = z.input<typeof LoginRequest>;
 /**
  * How the current request was authenticated. `plugin`: a Jellyfin plugin key, which may only
  * call /api/v1/jellyfin/* (never admin, never another route). `userkey`: a per-user API key
- * (alu_…, limited by its scope). `forward`: a trusted reverse proxy's user header.
+ * (alu_…, limited by its scope). `forward`: a trusted reverse proxy's user header. `app`: a
+ * device token of the Arclight player app (`Authorization: Bearer alt_…`, see app-auth.ts).
  */
-export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass', 'plugin', 'userkey', 'forward']);
+export const AuthVia = z.enum(['session', 'apikey', 'basic', 'bypass', 'plugin', 'userkey', 'forward', 'app']);
 export type AuthVia = z.infer<typeof AuthVia>;
 
 /** Response of POST /auth/login and GET /auth/me. `user` is null for API-key and bypass callers. */

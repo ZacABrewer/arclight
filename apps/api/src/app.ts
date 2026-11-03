@@ -49,6 +49,7 @@ import { bulkModule } from './modules/bulk/index.js';
 import { tagRulesModule } from './modules/tag-rules/index.js';
 import { requestsModule } from './modules/requests/index.js';
 import { authModule, installAuth } from './modules/auth/index.js';
+import { appAuthModule } from './modules/app-auth/index.js';
 import { guidesModule } from './modules/guides/index.js';
 import { mediaServersModule } from './modules/media-servers/index.js';
 import { retentionModule } from './modules/retention/index.js';
@@ -137,7 +138,18 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // Metrics first: its request hooks must see every route registered after it.
   // (Cast: the root instance carries the pino Logger and Zod provider types; the plugin only adds hooks and one route.)
   await installMetrics(app as unknown as FastifyInstance, ctx);
-  await app.register(cors, { origin: true, credentials: true });
+  // Any origin may call the API (credentials: the session cookie is SameSite=Lax, so other sites'
+  // pages never send it). The Arclight player app runs at capacitor://localhost (iOS) and
+  // https://localhost / http://localhost (Android) and authenticates with `Authorization: Bearer`;
+  // it reads the download file name and the stream headers, so those are exposed. The methods are
+  // listed because @fastify/cors only allows GET/HEAD/POST by default, which blocks the app's
+  // progress and queue PUTs and its DELETEs.
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    exposedHeaders: ['content-disposition', 'content-length', 'content-range', 'accept-ranges', 'retry-after', 'x-arclight-backend', 'x-arclight-transcode'],
+  });
   await app.register(websocket);
 
   // Dependency-safe order: providers before the pipeline modules that consume them.
@@ -193,7 +205,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     updatesModule,
     // Requests do not send their own pushes yet, so the bus listener stays on.
     pushModule,
-    // Mobile companion app devices; adds the push relay as a second channel of the push module's notify().
+    // Arclight Admin (companion app) devices; adds the push relay as a second channel of the push module's notify().
     mobileModule,
     subtitlesModule,
     // Bulk search / rename / subtitle search over many selected items (library and Wanted lists).
@@ -226,6 +238,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // Serves the built-in engine to other Arclight instances.
     engineAgentModule,
     authModule,
+    // The Arclight player app: device tokens (Bearer), QR pairing, /app/devices.
+    appAuthModule,
     auditModule,
     // POST /bulk: one action over many rows of a settings / activity / system list.
     bulkActionsModule,

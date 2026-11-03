@@ -33,7 +33,7 @@ describe('QR encoder', () => {
   });
 
   it('lays out finder, timing and format patterns for a pairing URI', () => {
-    const uri = `arclight://pair?url=${encodeURIComponent('https://arclight.example.com:7878')}`;
+    const uri = `arclight-admin://pair?url=${encodeURIComponent('https://arclight.example.com:7878')}`;
     const m = encodeQr(uri);
     expect(m.size).toBe(m.version * 4 + 17);
     expect(m.version).toBe(versionFor(new TextEncoder().encode(uri).length, 'M'));
@@ -66,8 +66,8 @@ describe('QR encoder', () => {
   });
 
   it('is deterministic and renders an SVG path with a quiet zone', () => {
-    const a = encodeQr('arclight://pair?url=x');
-    expect(encodeQr('arclight://pair?url=x')).toEqual(a);
+    const a = encodeQr('arclight-admin://pair?url=x');
+    expect(encodeQr('arclight-admin://pair?url=x')).toEqual(a);
     const path = qrPath(a, 4);
     expect(path.startsWith('M4 4h1v1h-1z')).toBe(true);
     expect(path.split('z').length - 1).toBe(a.modules.flat().filter(Boolean).length);

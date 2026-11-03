@@ -4,7 +4,7 @@ import { Capacitor, CapacitorHttp, WebPlugin, registerPlugin } from '@capacitor/
 import { Device } from '@capacitor/device';
 import { Preferences } from '@capacitor/preferences';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { APP_VERSION, PUSH_RELAY_URL } from '../config.js';
+import { APP_ID, APP_VERSION, PUSH_RELAY_URL } from '../config.js';
 import { originOf } from '../core/address.js';
 import type { HttpClient } from '../core/http.js';
 import type { KeyValueStore } from '../core/kv.js';
@@ -122,6 +122,7 @@ export function createRuntime(): Runtime {
     http: nativeHttp,
     relayUrl: PUSH_RELAY_URL,
     platform: platform(),
+    appId: APP_ID,
     appVersion: APP_VERSION,
     pushAvailable: async () => isNative() && (await getNativeInfo()).pushAvailable,
     requestPermission: requestNotificationPermission,

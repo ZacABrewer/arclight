@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.moviemethat.arclight"
+    namespace = "com.moviemethat.arclight.admin"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.moviemethat.arclight"
+        applicationId "com.moviemethat.arclight.admin"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI passes a growing number for store uploads; local and default builds are 1.

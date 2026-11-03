@@ -127,6 +127,19 @@ The **format badge** on Now playing shows how the file reaches you:
 
 Converting costs server power, so Arclight only does it when it has to. A converted stream cannot be fetched in ranges, so a seek starts a new conversion from that point. This can take a moment.
 
+## Sign in to the Arclight app
+
+The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
+
+1. In the player, open the account menu (top right) and choose **Sign in to the Arclight app**.
+2. In the app, choose to scan a code and point the camera at the QR code. Or type the **server address** and the **code** shown under it.
+
+The code works once and expires after five minutes. Press **New code** for another one. You can also sign in in the app with your Arclight username and password (and your authenticator code, if you use two-factor sign-in). Accounts that sign in through a media server or only with a passkey use the code.
+
+**Your devices**, under the code, lists every phone or tablet signed in with your account. **Remove** signs that device out at once. Changing your password, or an admin resetting it, signs every device out too.
+
+The app needs the same player access as the browser. If the player is off, or your account may not use it, the app cannot sign in.
+
 ## Continue listening
 
 Arclight saves your place about every 10 to 15 seconds, and when you pause, seek or close the page. The home page and the **Books** page show what is in progress. Anything with less than 2% played has nothing to resume. Anything past 90% counts as played.
