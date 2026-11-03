@@ -9,6 +9,26 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-03
+
+### Added
+- Households and profiles: up to 12 profiles under one login, with a "Who's watching?" picker on the web, phones and TVs, profiles you can add from the TV, optional 4-digit PINs (a lockout after 5 wrong tries that gets longer each time), and Kids limits (the stricter of the account's and the profile's applies). Progress, Continue Watching, My List, playlists and player settings are kept per profile. The account owner keeps requests and admin features. Manage profiles under Settings > Users > Manage > Profiles.
+- My List in the player, separate from the request watchlist.
+- A redesigned player on the web, phones and TVs: the new Cinema theme, a top navigation bar on TV, a vertical touch layout on phones (with a landscape version and a mini player), a rotating featured hero, and quality, audio and TMDB rating chips in the info line (never over posters).
+- Video player: a pause screen with the overview and "Ends at" time, scrub thumbnails with chapter marks, an episodes panel and an up-next countdown, and skip intro, recap and credits buttons. Title pages have a menu with Mark watched and Versions.
+- Server: intro and credits detection by comparing audio across a season (nightly and after imports), with times you can edit per season, and scrub thumbnails made on first play or nightly. New Settings > Player > Scrub thumbnails and intros.
+- Arclight app: the Arclight intro plays once when the app opens, never again in that run and never before videos (turn it off in Settings).
+
+### Changed
+- The Android app shows its real version, and its version code follows the release (2300 for 0.23.0).
+- Episodes in the player show the series name, with the season, episode and episode title below it.
+- Continue Watching shows one card per show.
+
+### Fixed
+- The app reports an unreachable server after about 9 seconds instead of 45.
+- Remote presses in the first seconds of a video no longer pause it.
+- Signed links are removed from app logs.
+
 ## [0.22.0] - 2026-11-02
 
 ### Added
@@ -464,6 +484,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.23.0]: https://github.com/ZacABrewer/arclight/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/ZacABrewer/arclight/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/ZacABrewer/arclight/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/ZacABrewer/arclight/compare/v0.20.0...v0.20.1
