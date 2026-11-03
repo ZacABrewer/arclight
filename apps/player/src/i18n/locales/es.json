@@ -72,6 +72,7 @@
   "app.tv.pin.entered": "{n} de 4 dígitos introducidos",
   "app.tv.pin.failed": "No ha funcionado. Inténtalo de nuevo.",
   "app.tv.pin.locked": "Demasiados intentos fallidos. Vuelve a intentarlo en {count, plural, one {# minuto} other {# minutos}}.",
+  "app.tv.pin.passwordRequired": "{name} no tiene PIN, así que para cambiar hace falta la contraseña de la cuenta. Vuelve a iniciar sesión en este dispositivo o ponle un PIN a {name}.",
   "app.tv.pin.wrong": "PIN incorrecto. Inténtalo de nuevo.",
   "app.tv.play": "Reproducir",
   "app.tv.playEpisode": "Reproducir T{s} E{e}",

@@ -18,6 +18,8 @@ import { AuthError, type AuthService, type RequestAuth } from './service.js';
 // each later step through the normal endpoints, then calls complete. POST /setup/complete
 // also accepts everything in one body for headless installs.
 
+type ParsedSetup = ReturnType<typeof SetupRequest.parse>;
+
 export class SetupService {
   private creatingAdmin = false;
 
@@ -56,14 +58,24 @@ export class SetupService {
     if (!caller.isAdmin) throw new AuthError('FORBIDDEN', 'admin only');
   }
 
-  /** The first admin: a local account (username + password), only while no admin exists. */
+  /**
+   * The first admin: a local account (username + password), only while no admin exists. Shares
+   * the setup lock with complete(): hashing the password yields, so two first-launch requests
+   * could otherwise both pass the "no admin yet" check (AUTH-08).
+   */
   async createAdmin(input: SetupAdminRequest): Promise<User> {
-    // One at a time: hashing the password yields, so two first-launch requests could otherwise
-    // both pass the "no admin yet" check and create two admins.
-    if (this.creatingAdmin || this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
+    return this.exclusive(async () => {
+      if (this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
+      return this.auth.createUser({ ...input, role: 'admin' });
+    });
+  }
+
+  /** Runs `fn` while no other admin-creating setup call runs; a concurrent one gets USER_EXISTS. */
+  private async exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.creatingAdmin) throw new AuthError('USER_EXISTS', 'an admin account already exists');
     this.creatingAdmin = true;
     try {
-      return await this.auth.createUser({ ...input, role: 'admin' });
+      return await fn();
     } finally {
       this.creatingAdmin = false;
     }
@@ -91,31 +103,53 @@ export class SetupService {
   }
 
   /**
-   * Finishes setup. Root folders and the TMDB key are applied before the admin is created,
-   * so a failure can be retried with the same body. A second call after success is 409.
+   * Finishes setup. Without an admin yet, the body's username and password create it first and
+   * only then is anything written (root folders are created on disk), all under the setup lock, so
+   * an anonymous caller cannot create folders and two racing calls cannot both create an admin
+   * (AUTH-08). A failed step can be retried with the same body: the admin it created signs the
+   * retry in (rate-limited like a sign-in). A second call after success is 409.
    */
-  async complete(body: SetupRequest, caller: RequestAuth | null): Promise<SetupStatus> {
+  async complete(body: SetupRequest, caller: RequestAuth | null, address = 'unknown'): Promise<SetupStatus> {
     const input = SetupRequest.parse(body);
-    const creatingAdmin = !this.auth.hasAdmin();
-    if (creatingAdmin) {
+    if (!this.auth.hasAdmin()) {
       if (!input.username || !input.password) {
         throw new AuthError('VALIDATION', 'username and password are required to create the admin');
       }
-    } else {
-      this.assertCanWrite(caller);
+      for (const folder of input.rootFolders ?? []) {
+        const path = folder.path.trim();
+        if (!isAbsolute(path)) throw new AuthError('VALIDATION', `root folder path must be absolute: ${path}`);
+      }
+      const { username, password } = input;
+      return this.exclusive(async () => {
+        if (this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
+        await this.auth.createUser({ username, password, ...(input.email ? { email: input.email } : {}), role: 'admin' });
+        return this.finish(input);
+      });
     }
+    await this.assertCompleteCaller(input, caller, address);
+    return this.finish(input);
+  }
+
+  /** After the admin exists: the signed-in admin, or (a headless retry) the body's admin credentials. */
+  private async assertCompleteCaller(input: ParsedSetup, caller: RequestAuth | null, address: string): Promise<void> {
+    if (caller || !input.username || !input.password || !this.auth.needsSetup()) {
+      this.assertCanWrite(caller);
+      return;
+    }
+    this.auth.checkRateLimit(address, input.username);
+    const row = await this.auth.verifyCredentials(input.username, input.password);
+    if (!row || row.role !== 'admin') {
+      this.auth.recordFailure(address, input.username);
+      throw new AuthError('UNAUTHORIZED', 'sign in as the admin to continue setup');
+    }
+    this.auth.recordSuccess(address, input.username);
+  }
+
+  private async finish(input: ParsedSetup): Promise<SetupStatus> {
     for (const folder of input.rootFolders ?? []) {
       await this.addRootFolder({ ...folder, createIfMissing: true });
     }
     if (input.tmdbApiKey) updateMetadataSettings(this.db, { tmdbApiKey: input.tmdbApiKey });
-    if (creatingAdmin && input.username && input.password) {
-      await this.auth.createUser({
-        username: input.username,
-        password: input.password,
-        ...(input.email ? { email: input.email } : {}),
-        role: 'admin',
-      });
-    }
     if (input.signIn) this.auth.updateSignInSettings(input.signIn);
     this.auth.updateAuthSettings({ ...this.auth.authSettings(), method: input.authMethod });
     this.auth.markSetupComplete();

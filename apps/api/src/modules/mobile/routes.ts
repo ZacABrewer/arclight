@@ -11,7 +11,7 @@ import { MobileError, type MobileService } from './service.js';
 
 const user = { access: { portal: true } } as const;
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
-const errors = { 400: ErrorBody, 403: ErrorBody, 404: ErrorBody, 429: ErrorBody };
+const errors = { 400: ErrorBody, 403: ErrorBody, 404: ErrorBody, 409: ErrorBody, 429: ErrorBody };
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
 
 function userIdOf(req: FastifyRequest): number {
@@ -23,7 +23,7 @@ function userIdOf(req: FastifyRequest): number {
 const isAdmin = (req: FastifyRequest) => req.auth?.isAdmin === true;
 const callerId = (req: FastifyRequest) => req.auth?.user?.id ?? null;
 
-const STATUS: Record<MobileError['code'], number> = { NO_USER: 400, NOT_FOUND: 404, FORBIDDEN: 403, RATE_LIMITED: 429 };
+const STATUS: Record<MobileError['code'], number> = { NO_USER: 400, NOT_FOUND: 404, FORBIDDEN: 403, RATE_LIMITED: 429, CONFLICT: 409 };
 
 export function mobileRoutes(service: MobileService): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
@@ -48,7 +48,7 @@ export function mobileRoutes(service: MobileService): FastifyPluginAsync<Record<
     });
 
     app.post('/mobile/devices', { config: user, schema: { body: MobileDeviceInput, response: { 201: MobileDeviceResource, ...errors } } }, async (req, reply) =>
-      reply.code(201).send(service.register(userIdOf(req), req.body)),
+      reply.code(201).send(service.register(userIdOf(req), req.body, { isAdmin: isAdmin(req) })),
     );
 
     app.delete('/mobile/devices/:id', { config: user, schema: { params: IdParams, response: { 204: z.null(), ...errors } } }, async (req, reply) => {

@@ -198,7 +198,14 @@ export class TwoFactorService {
     const hash = hashRecoveryCode(code);
     if (!row.recoveryCodes.includes(hash)) return false;
     const left = row.recoveryCodes.filter((h) => h !== hash);
-    this.db.update(userTwoFactor).set({ recoveryCodes: left, updatedAt: this.now().toISOString() }).where(eq(userTwoFactor.userId, userId)).run();
+    // Conditional on the list just read: of two requests racing with the same code (another
+    // process on the same database), only the one whose update still sees the old list passes.
+    const updated = this.db
+      .update(userTwoFactor)
+      .set({ recoveryCodes: left, updatedAt: this.now().toISOString() })
+      .where(and(eq(userTwoFactor.userId, userId), sql`${userTwoFactor.recoveryCodes} = ${JSON.stringify(row.recoveryCodes)}`))
+      .run();
+    if (updated.changes !== 1) return false;
     this.log?.info({ userId, left: left.length }, 'recovery code used');
     return true;
   }
@@ -253,6 +260,12 @@ export class TwoFactorService {
    * Completes a challenge with a TOTP or recovery code. The challenge is single-use: it is gone
    * after success and after CHALLENGE_MAX_ATTEMPTS wrong codes.
    */
+  /** The account a live sign-in challenge belongs to (the per-account failure limit); null when unknown or expired. */
+  challengeUserId(challenge: string): number | null {
+    const entry = this.pending.get(challenge);
+    return entry && entry.expires > this.now().getTime() ? entry.userId : null;
+  }
+
   completeChallenge(challenge: string, proof: { code?: string | undefined; recoveryCode?: string | undefined }): PendingLogin {
     const entry = this.liveChallenge(challenge);
     const ok = proof.code !== undefined ? this.checkTotp(entry.userId, proof.code) : proof.recoveryCode !== undefined && this.useRecoveryCode(entry.userId, proof.recoveryCode);

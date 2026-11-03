@@ -308,7 +308,7 @@ describe('definition indexers', () => {
       protocol: 'torrent',
       definitionName: 'TestSite',
       privacy: 'private',
-      settings: { baseUrl: 'https://testsite.example/', apiPath: '', definitionId: 'testsite', fields: { cookie: 'uid=1; pass=abc' } },
+      settings: { baseUrl: 'https://testsite.example/', apiPath: '', definitionId: 'testsite', fields: { cookie: '********' } },
     });
   });
 

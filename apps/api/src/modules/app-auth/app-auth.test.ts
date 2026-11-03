@@ -10,6 +10,7 @@ import { authServiceFor, SESSION_COOKIE } from '../auth/index.js';
 import { totpCode } from '../auth/totp.js';
 import { setSection } from '../settings/service.js';
 import { appAuthServiceFor, APP_DEVICE_TOUCH_MS, PAIR_CODES_PER_WINDOW } from './index.js';
+import { APP_DEVICE_IDLE_MS, MAX_PENDING_DEVICE_CODES } from './service.js';
 
 // The Arclight player app's sign-in over HTTP: password sign-in (with two-factor), QR pairing,
 // the Bearer token on portal and player routes, device management, revocation and CORS for the
@@ -396,5 +397,49 @@ describe('TV sign-in (device codes)', () => {
     expect((await create(h, { ...TV, platform: 'tizen' })).statusCode).toBe(400);
     // Still pending after the failed attempts.
     expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'pending' });
+  });
+});
+
+describe('0.24 hardening', () => {
+  it('a device token unused for 90 days stops working and is removed (AUTH-21)', async () => {
+    const h = await harness();
+    const u = await makeUser(h, { player: true });
+    const token = (await signInApp(h, u.username)).json().token;
+    h.clock.t += APP_DEVICE_IDLE_MS - 60_000;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(200);
+    // Used just now: the idle clock restarts.
+    h.clock.t += APP_DEVICE_IDLE_MS - 60_000;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(200);
+    h.clock.t += APP_DEVICE_IDLE_MS + 1;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(401);
+    expect(h.db.select().from(schema.appDevices).all()).toEqual([]);
+    expect(h.db.select().from(schema.auditEvents).all().map((r) => r.action)).toContain('app.device.expired');
+  });
+
+  it('a full device-code table drops the oldest code instead of refusing new TVs (AUTH-13)', async () => {
+    const h = await harness();
+    const TV = { deviceName: 'TV', platform: 'android-tv', appVersion: '2.0.0' };
+    const create = (ip: string) => post(h, '/api/v1/app/device-codes', TV, {}, ip);
+    const first = (await create('198.51.100.1')).json();
+    for (let i = 1; i < MAX_PENDING_DEVICE_CODES; i++) {
+      const res = await create(`198.51.${100 + Math.floor(i / 10)}.${(i % 10) + 1}`);
+      expect(res.statusCode).toBe(201);
+    }
+    // The table is full: a new TV still gets a code, the oldest one goes.
+    expect((await create('203.0.113.9')).statusCode).toBe(201);
+    expect((await post(h, '/api/v1/app/device-codes/poll', { pollToken: first.pollToken })).json()).toEqual({ status: 'expired' });
+  });
+
+  it('an app token may not import a configuration or restore a backup (DATA-13)', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const token = (await signInApp(h, admin.username)).json().token;
+    const imported = await post(h, '/api/v1/config/import', { settings: { security: { apiKey: 'a'.repeat(32) } } }, bearer(token));
+    expect(imported.statusCode).toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/1', {}, bearer(token))).statusCode).toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/upload', undefined, bearer(token))).statusCode).toBe(403);
+    expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(token), payload: {} })).statusCode).toBe(403);
+    // Reading stays open to the admin's app.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/settings/vpn', headers: bearer(token) })).statusCode).toBe(200);
   });
 });

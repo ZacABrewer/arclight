@@ -29,6 +29,13 @@ export interface AppConfig {
    * (tests) may leave it out, which means the root. See base-path.ts.
    */
   basePath?: string;
+  /**
+   * ARCLIGHT_TRUSTED_PROXIES as written (trust-proxy.ts parses it): which peers may set the
+   * X-Forwarded-* headers. Unset (and configs built by hand) means loopback and private networks.
+   */
+  trustedProxies?: string;
+  /** ARCLIGHT_CORS_ORIGINS as written (origin-policy.ts): extra browser origins allowed with cookies. */
+  corsOrigins?: string;
 }
 
 /**
@@ -68,5 +75,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webDist,
     torrentEngine: readEnv(env, 'TORRENT_ENGINE') !== '0',
     basePath: normalizeBasePath(readEnv(env, 'BASE_PATH')),
+    ...(readEnv(env, 'TRUSTED_PROXIES') !== undefined ? { trustedProxies: readEnv(env, 'TRUSTED_PROXIES')! } : {}),
+    ...(readEnv(env, 'CORS_ORIGINS') !== undefined ? { corsOrigins: readEnv(env, 'CORS_ORIGINS')! } : {}),
   };
 }

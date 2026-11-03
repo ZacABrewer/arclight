@@ -153,6 +153,13 @@ export const IndexerCreate = z.object({
 export type IndexerCreate = z.input<typeof IndexerCreate>;
 export type IndexerCreateParsed = z.output<typeof IndexerCreate>;
 
+/**
+ * POST /indexer/test. With `id` (a saved indexer), secrets sent back as the mask are tested
+ * with the stored values.
+ */
+export const IndexerTestRequest = IndexerCreate.extend({ id: z.number().int().min(1).optional() });
+export type IndexerTestRequest = z.input<typeof IndexerTestRequest>;
+
 /** Partial update; `settings` is merged field by field, `downloadClientId: null` clears it. */
 export const IndexerUpdate = z.object({
   name: z.string().trim().min(1).optional(),

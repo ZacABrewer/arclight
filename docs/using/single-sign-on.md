@@ -72,11 +72,13 @@ Arclight authenticates to the provider with HTTP Basic client credentials, or in
 Arclight tries these in order and stops at the first that applies:
 
 1. An existing link between this provider and this person (the provider's subject).
-2. With `matchBy` set to `email`: a **verified** email that matches exactly one **non-admin** account. The account is linked for next time.
+2. With `matchBy` set to `email`: a **verified** email that matches exactly one **non-admin** account whose own email is verified too. The account is linked for next time.
 3. With `autoCreate` on: a new account.
 4. Otherwise the sign-in is refused (`no_account`).
 
 Admin accounts are never matched by email, because a provider that lets people change their email would otherwise be a way to become admin. An admin links their provider account on purpose: Profile > Linked sign-ins > Link.
+
+An account's email counts as verified when an admin set it (Settings > Users), when a provider that verified that address signed the account in or was linked to it, or when the account existed before 0.24. When people change their own email on their Profile, it stops counting as verified, so typing someone else's address into a profile cannot capture their first provider sign-in. Arclight also refuses a self-set email that another account already uses. To make a changed email match again, an admin saves it on the user's page, or the person links the provider from their Profile once.
 
 Accounts that a provider created have no usable password. They sign in through the provider (or add a passkey).
 
@@ -101,6 +103,7 @@ A failed sign-in returns to the login page with a message. The codes (`ssoError`
 | `forbidden` | The person is not in `allowedGroups`, or an admin account matched by email (admins must link from their profile). |
 | `disabled` | The account is disabled. |
 | `link_conflict` | That provider account is already linked to a different Arclight account. |
+| `rate_limited` | Too many sign-ins were started from this address, or too many are unfinished. Wait a few minutes. Each address may start about 20 in a burst, then one every 10 seconds, and hold at most 20 unfinished ones. |
 
 ### Two-factor and sessions
 
@@ -191,6 +194,7 @@ Prefer OpenID Connect when your provider supports it: it does not depend on netw
 | autoCreate | off | Create an account for someone Arclight does not know yet. |
 | defaultRole | `user` | Role of created accounts. |
 | adminGroups, allowedGroups | empty | Same rules as for [OpenID Connect](#roles-from-groups). |
+| allowAdmins | on | The header may sign in admin accounts (by username, link or an admin group). Off: a header that names an admin, or would make someone admin, is ignored, and admins sign in with their password or OpenID Connect. |
 
 ### How Arclight decides to trust a request
 
@@ -198,12 +202,12 @@ Arclight looks only at the address of the TCP connection itself, the machine tha
 
 That makes two things your job:
 
-- **Your proxy must remove these headers from client requests** and set them only from its own login result. Most forward-auth setups do this when told which headers to copy, but check.
+- **Your proxy must remove these headers from client requests** and set them only from its own login result. Most forward-auth setups do this when told which headers to copy, but check. If a client's own `Remote-User: admin` ever reaches Arclight through the proxy, that client is the admin. Turning `allowAdmins` off limits such a mistake to user accounts.
 - **Arclight's port must not be reachable except through the proxy**, or the trusted range must be just the proxy. If other containers or machines are inside the trusted range, anything there can pretend to be anyone. Use a dedicated Docker network for the proxy and Arclight.
 
 ### Which account do you get
 
-In order: an earlier forward-auth link, then an account with the same username, then a unique **non-admin** account with the same email, then a new account if `autoCreate` is on. Admins are not matched by email, as with OpenID Connect. Group rules work as described under [Roles from groups](#roles-from-groups).
+In order: an earlier forward-auth link, then an account with the same username, then a unique **non-admin** account with the same verified email, then a new account if `autoCreate` is on. Admins are not matched by email, as with OpenID Connect. Group rules work as described under [Roles from groups](#roles-from-groups).
 
 ### Example: Authelia
 
@@ -239,6 +243,14 @@ With forward-auth, the API (`/api/v1` and `/api/v3`) is behind the proxy too. Th
 ## Two-factor for local accounts
 
 Two-factor applies to accounts that sign in with a username and password. Set it up on your Profile page, under Security.
+
+### Confirming it's you
+
+Adding an authenticator app, a passkey or a personal API key gives lasting access, so Arclight checks that it is really you. If you signed in within the last 10 minutes, nothing extra happens. Otherwise Arclight asks for your current password first. A wrong password counts as a failed sign-in and is rate-limited like the login page.
+
+Accounts without an Arclight password (created by a media server or an identity provider) cannot type one: sign out, sign in again, and add it within 10 minutes. Behind [forward-auth](#forward-auth-trusted-header-sign-in), an account without a password is not asked, since the proxy signs in every request. Each new authenticator, passkey and API key is recorded in the audit log (`user.2fa.enable`, `user.passkey.add`, `user.apikey.create`).
+
+API: `POST /user/me/2fa/totp/setup`, `POST /user/me/passkeys/options` and `POST /user/me/apikeys` answer `401 REAUTH_REQUIRED` for an older session; send the password as `currentPassword` in the body to continue. A wrong one answers `401 INVALID_CREDENTIALS`, too many `429 RATE_LIMITED`.
 
 ### Authenticator app (TOTP)
 

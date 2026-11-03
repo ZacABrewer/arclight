@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouterState } from '@tanstack/react-router';
-import type { ApiKeyScope, LinkedIdentity, PasskeyRecord, TotpSetup, TwoFactorProof, UserApiKey, UserApiKeyCreated } from '@arclight/shared';
+import type { ApiKeyScope, LinkedIdentity, PasskeyRecord, TotpSetup, TwoFactorProof, UserApiKey, UserApiKeyCreate, UserApiKeyCreated } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { myIdentityApi } from '../../api/identity.js';
 import { Banner, Button, Chip, ErrorBlock, Field, Input, KeyValue, Modal, Select, Skeleton, Table, type Column } from '../../arclight/index.js';
@@ -14,6 +14,7 @@ import { copyText, downloadText } from '../../lib/clipboard.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { QrCode } from '../mobile/mobile-app-section.js';
 import { passkeyAttestation, passkeyErrorMessage, passkeysSupported } from './webauthn.js';
+import { ReauthCancelled, useReauth } from './reauth.js';
 import { t } from '../../i18n/index.js';
 import './identity.css';
 
@@ -233,7 +234,14 @@ export function TwoFactorPanel() {
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [proof, setProof] = useState<'disable' | 'regenerate' | null>(null);
-  const start = useMutation({ mutationFn: myIdentityApi.totpSetup, meta: { errorTitle: t('identity.totp.couldNotStart') } });
+  const reauth = useReauth();
+  const start = useMutation({
+    mutationFn: () => reauth.withReauth((pw) => myIdentityApi.totpSetup(pw)),
+    meta: { silent: true },
+    onError: (err) => {
+      if (!(err instanceof ReauthCancelled)) toast.error(t('identity.totp.couldNotStart'), errorMessage(err));
+    },
+  });
   // The setup requirement (and the session's twoFactorSetupRequired) change with these.
   const refresh = () => qc.invalidateQueries({ queryKey: authKeys.all });
 
@@ -302,6 +310,7 @@ export function TwoFactorPanel() {
         }}
       />
       <RecoveryCodesModal codes={codes} onClose={() => setCodes(null)} />
+      {reauth.dialog}
     </div>
   );
 }
@@ -318,6 +327,7 @@ export function PasskeysPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameId = useId();
+  const reauth = useReauth();
   const refresh = () => qc.invalidateQueries({ queryKey: authKeys.all });
 
   const openAdd = () => {
@@ -329,14 +339,14 @@ export function PasskeysPanel() {
     setBusy(true);
     setError(null);
     try {
-      const { ceremony, options } = await myIdentityApi.passkeyOptions();
+      const { ceremony, options } = await reauth.withReauth((pw) => myIdentityApi.passkeyOptions(pw));
       const response = await passkeyAttestation(options);
       await myIdentityApi.addPasskey({ ceremony, name: name.trim() || t('identity.passkeys.defaultName'), response: response as unknown as Record<string, unknown> });
       setAdding(false);
       toast.push({ tone: 'ok', title: t('identity.passkeys.added') });
       await refresh();
     } catch (err) {
-      setError(passkeyErrorMessage(err));
+      if (!(err instanceof ReauthCancelled)) setError(passkeyErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -448,6 +458,7 @@ export function PasskeysPanel() {
       >
         {t('identity.passkeys.removeHelp')}
       </ConfirmDialog>
+      {reauth.dialog}
     </div>
   );
 }
@@ -605,7 +616,11 @@ export function ApiKeysPanel() {
   const [expires, setExpires] = useState('0');
   const [error, setError] = useState<string | null>(null);
   const ids = { name: useId(), scope: useId(), expires: useId() };
-  const create = useMutation({ mutationFn: myIdentityApi.createApiKey, meta: { silent: true } });
+  const reauth = useReauth();
+  const create = useMutation({
+    mutationFn: (body: UserApiKeyCreate) => reauth.withReauth((currentPassword) => myIdentityApi.createApiKey(currentPassword ? { ...body, currentPassword } : body)),
+    meta: { silent: true },
+  });
   const scopes: ApiKeyScope[] = isAdmin ? ['read', 'requests', 'admin'] : ['read', 'requests'];
 
   const submit = (e?: FormEvent) => {
@@ -621,7 +636,9 @@ export function ApiKeysPanel() {
           setCreated(key);
           void qc.invalidateQueries({ queryKey: identityKeys.apiKeys });
         },
-        onError: (err) => setError(errorMessage(err)),
+        onError: (err) => {
+          if (!(err instanceof ReauthCancelled)) setError(errorMessage(err));
+        },
       },
     );
   };
@@ -706,6 +723,7 @@ export function ApiKeysPanel() {
         </form>
       </Modal>
       <NewKeyModal created={created} onClose={() => setCreated(null)} />
+      {reauth.dialog}
       <ConfirmDialog
         open={revoking !== null}
         title={t('identity.apiKeys.revokeTitle', { name: revoking?.name ?? '' })}

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Logger } from 'pino';
@@ -32,9 +33,16 @@ export type PushSection = z.infer<typeof PushSection>;
 
 export type PushKind = keyof PushPreferences;
 
+/** Constant-time string comparison. */
+function sameSecret(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
 export class PushError extends Error {
   constructor(
-    readonly code: 'NO_USER' | 'NOT_FOUND' | 'VALIDATION',
+    readonly code: 'NO_USER' | 'NOT_FOUND' | 'VALIDATION' | 'CONFLICT',
     message: string,
   ) {
     super(message);
@@ -121,9 +129,17 @@ export class PushService {
     return this.opts.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).orderBy(pushSubscriptions.id).all().map(toResource);
   }
 
-  /** Upsert by endpoint: a browser that re-subscribes (or changes user) keeps one row. */
-  subscribe(userId: number, input: PushSubscriptionInput): PushSubscriptionResource {
+  /**
+   * Upsert by endpoint: a browser that re-subscribes (or changes user) keeps one row. Moving a row
+   * to another user needs the browser's own keys (the same subscription re-sent after a sign-in
+   * as someone else) or an admin; knowing only the endpoint gets CONFLICT.
+   */
+  subscribe(userId: number, input: PushSubscriptionInput, opts: { isAdmin?: boolean } = {}): PushSubscriptionResource {
     const { db } = this.opts;
+    const existing = db.select({ userId: pushSubscriptions.userId, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth }).from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, input.endpoint)).get();
+    if (existing && existing.userId !== userId && !opts.isAdmin && !(sameSecret(existing.p256dh, input.keys.p256dh) && sameSecret(existing.auth, input.keys.auth))) {
+      throw new PushError('CONFLICT', 'this push subscription belongs to another account');
+    }
     const values = {
       userId,
       endpoint: input.endpoint,

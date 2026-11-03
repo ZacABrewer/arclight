@@ -3,9 +3,11 @@
  * HTTP status mapping, JSON validation, base64 and the shared settings fields.
  */
 import { z } from 'zod';
+import { safeUrl, scrubError, scrubUrl } from './redact.js';
 import { DownloadClientError, type ClientRuntime } from './types.js';
 
 export { buildBaseUrl } from './qbittorrent/session.js';
+export { safeUrl, scrubError, scrubUrl } from './redact.js';
 
 export function describeNetworkError(error: unknown): string {
   if (error instanceof Error) {
@@ -19,7 +21,8 @@ export function describeNetworkError(error: unknown): string {
 
 /**
  * Sends one request with the runtime's timeout. Network failures become
- * `DownloadClientError('unreachable')`; HTTP statuses are left to the caller.
+ * `DownloadClientError('unreachable')`; HTTP statuses are left to the caller. The message names
+ * the URL without its query or userinfo, and so does the kept cause.
  */
 export async function sendHttp(
   runtime: ClientRuntime,
@@ -30,9 +33,8 @@ export async function sendHttp(
   try {
     return await runtime.fetch(url, { ...init, signal: AbortSignal.timeout(runtime.requestTimeoutMs) });
   } catch (error) {
-    const origin = typeof url === 'string' ? url : url.toString();
-    throw new DownloadClientError('unreachable', `Unable to reach ${clientName} at ${origin}: ${describeNetworkError(error)}`, {
-      cause: error,
+    throw new DownloadClientError('unreachable', `Unable to reach ${clientName} at ${safeUrl(url)}: ${scrubUrl(describeNetworkError(error), url)}`, {
+      cause: scrubError(error, url),
     });
   }
 }

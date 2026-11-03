@@ -46,13 +46,20 @@ export const householdsApi = {
 };
 
 /** What a refused select means for the PIN pad. */
-export type SelectFailure = { kind: 'pin-required' } | { kind: 'pin-wrong' } | { kind: 'pin-locked'; retryAfterSeconds: number } | { kind: 'other'; message: string };
+export type SelectFailure =
+  | { kind: 'pin-required' }
+  | { kind: 'pin-wrong' }
+  | { kind: 'pin-locked'; retryAfterSeconds: number }
+  // Back to an owner profile without a PIN on an older sign-in: the server wants the account password.
+  | { kind: 'password-required' }
+  | { kind: 'other'; message: string };
 
 export function selectFailure(err: unknown): SelectFailure {
   const body = HouseholdError.safeParse(apiErrorBody(err));
   const code = body.success ? body.data.error : err instanceof ApiError ? err.message : null;
   if (code === 'pin-required') return { kind: 'pin-required' };
   if (code === 'pin-wrong') return { kind: 'pin-wrong' };
+  if (code === 'password-required' || code === 'password-wrong' || code === 'reauth-required') return { kind: 'password-required' };
   if (code === 'pin-locked') return { kind: 'pin-locked', retryAfterSeconds: (body.success ? body.data.retryAfterSeconds : undefined) ?? 15 * 60 };
   return { kind: 'other', message: err instanceof Error ? err.message : String(err) };
 }

@@ -77,6 +77,16 @@ describe('401 handling', () => {
     expect((err as ApiError).code).toBe('pin-wrong');
     expect(handler).not.toHaveBeenCalled();
   });
+
+  it('treats "confirm your password" and a wrong one as form errors, not a lost session', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    mockFetch(401, { error: 'confirm your current password to continue', code: 'REAUTH_REQUIRED' });
+    expect(((await request('/user/me/apikeys', null, { method: 'POST', json: {} }).catch((e: unknown) => e)) as ApiError).code).toBe('REAUTH_REQUIRED');
+    mockFetch(401, { error: 'current password is incorrect', code: 'INVALID_CREDENTIALS' });
+    await request('/user/me/passkeys/options', null, { method: 'POST', json: {} }).catch(() => undefined);
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 describe('backoffDelay', () => {

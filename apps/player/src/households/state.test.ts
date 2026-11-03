@@ -56,4 +56,10 @@ describe('selectFailure', () => {
     expect(selectFailure(new ApiError(429, 'pin-locked', '/x'))).toEqual({ kind: 'pin-locked', retryAfterSeconds: 900 });
     expect(selectFailure(new Error('boom'))).toEqual({ kind: 'other', message: 'boom' });
   });
+
+  it('reads the owner-profile password codes as password-required (the pad cannot take a password)', () => {
+    for (const code of ['password-required', 'password-wrong', 'reauth-required']) {
+      expect(selectFailure(new ApiError(code === 'reauth-required' ? 403 : 401, code, '/x'))).toEqual({ kind: 'password-required' });
+    }
+  });
 });

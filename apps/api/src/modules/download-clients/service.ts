@@ -27,6 +27,7 @@ import {
   downloadClientHost,
   PASSWORD_MASK,
   QueueQuery,
+  redactText,
   RemotePathMappingInput,
   TERMINAL_TRACKED_STATES,
   type DownloadClientTestAllResult,
@@ -540,7 +541,7 @@ export class DownloadClientsService {
         await client.setListenPort(port);
         results.push({ id: config.id, name: config.name, ok: true });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         this.log?.warn({ err, client: config.name, port }, 'could not set listen port');
         results.push({ id: config.id, name: config.name, ok: false, message });
       }
@@ -2728,8 +2729,9 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
 }
 
+/** An error as status lines, test results and API errors show it: credentials masked. */
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return redactText(err instanceof Error ? err.message : String(err));
 }
 
 function notFound(what: string, id: number): DownloadClientsError {

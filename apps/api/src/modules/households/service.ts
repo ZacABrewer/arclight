@@ -15,7 +15,7 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
-import { sessions } from '../auth/schema.js';
+import { sessions, users } from '../auth/schema.js';
 import { appDevices } from '../app-auth/schema.js';
 import { audit } from '../audit/recorder.js';
 import { playbackBookmarks, playbackPlays, playbackProgress, userPlaylists } from '../playback/schema.js';
@@ -52,6 +52,9 @@ export const HOUSEHOLD_ERROR_STATUS: Record<HouseholdErrorCode, number> = {
   'owner-immutable': 400,
   'pin-required': 401,
   'pin-wrong': 401,
+  'password-required': 401,
+  'password-wrong': 401,
+  'reauth-required': 403,
   'pin-locked': 429,
   'manage-forbidden': 403,
   'profile-forbidden': 403,
@@ -355,16 +358,24 @@ export class HouseholdService {
    * lock the profile for fifteen minutes, doubling with every further lockout up to a day; the
    * counters live on the profile row, so signing in again or a restart does not reset them. A
    * right PIN, or the owner setting or clearing the PIN, resets them.
+   *
+   * Going back to the owner profile from another one is the way out of a profile's limits, so an
+   * owner profile without a PIN needs the account password instead (same counters and lockout),
+   * except for a credential younger than ten minutes. An account without a password of its own
+   * (media-server sign-in, import) has to sign in again.
    */
-  async select(cred: ProfileCredential, targetId: number, pin: string | undefined): Promise<HouseholdProfile> {
+  async select(cred: ProfileCredential, targetId: number, pin: string | undefined, password?: string | undefined): Promise<HouseholdProfile> {
     const credentialKey = cred.via === 'session' && cred.sessionId !== undefined ? `s${cred.sessionId}` : cred.via === 'app' && cred.appDeviceId !== undefined ? `a${cred.appDeviceId}` : null;
     if (credentialKey === null) throw new HouseholdError('unsupported-credential');
     const row = this.mustFind(cred.userId, targetId);
+    const t = this.now().getTime();
+    const created = cred.createdAt ? Date.parse(cred.createdAt) : NaN;
+    const young = Number.isFinite(created) && t - created >= 0 && t - created < FRESH_CREDENTIAL_MS;
     if (row.pinHash !== null) {
-      const t = this.now().getTime();
-      const created = cred.createdAt ? Date.parse(cred.createdAt) : NaN;
-      const fresh = Number.isFinite(created) && t - created >= 0 && t - created < FRESH_CREDENTIAL_MS && cred.activeProfileId === targetId;
+      const fresh = young && cred.activeProfileId === targetId;
       if (!fresh) await this.checkPin(cred, row.id, pin, t);
+    } else if (row.isOwner && cred.activeProfileId !== row.id && !young) {
+      await this.checkPassword(cred, row.id, password, t);
     }
     if (cred.via === 'session') {
       this.db.update(sessions).set({ profileId: row.isOwner ? null : row.id }).where(and(eq(sessions.id, cred.sessionId!), eq(sessions.userId, cred.userId))).run();
@@ -387,6 +398,20 @@ export class HouseholdService {
     const state = this.pinState(profileId);
     if (!state) throw new HouseholdError('not-found');
     if (state.pinHash === null) return;
+    await this.checkSecret(cred, profileId, pin, state.pinHash, t, 'pin');
+  }
+
+  /** The account password for an owner profile without a PIN; counted on the owner profile's row. */
+  private async checkPassword(cred: ProfileCredential, profileId: number, password: string | undefined, t: number): Promise<void> {
+    const user = this.db.select({ passwordHash: users.passwordHash, localPassword: users.localPassword }).from(users).where(eq(users.id, cred.userId)).get();
+    if (!user) throw new HouseholdError('not-found');
+    if (!user.localPassword) throw new HouseholdError('reauth-required');
+    await this.checkSecret(cred, profileId, password, user.passwordHash, t, 'password');
+  }
+
+  private async checkSecret(cred: ProfileCredential, profileId: number, given: string | undefined, hash: string, t: number, kind: 'pin' | 'password'): Promise<void> {
+    const state = this.pinState(profileId);
+    if (!state) throw new HouseholdError('not-found');
     const inflight = this.pinInflight.get(profileId) ?? 0;
     const lockedUntil = state.lockedUntil ?? 0;
     if (lockedUntil > t || state.failed + inflight >= PIN_MAX_FAILURES) {
@@ -394,11 +419,11 @@ export class HouseholdService {
       this.auditPin(cred, 'household.profile.pin-locked', profileId);
       throw new HouseholdError('pin-locked', Math.max(1, Math.ceil((until - t) / 1000)));
     }
-    if (pin === undefined) throw new HouseholdError('pin-required');
+    if (given === undefined) throw new HouseholdError(kind === 'pin' ? 'pin-required' : 'password-required');
     this.pinInflight.set(profileId, inflight + 1);
     let ok = false;
     try {
-      ok = await verifyPassword(pin, state.pinHash);
+      ok = await verifyPassword(given, hash);
     } finally {
       const left = (this.pinInflight.get(profileId) ?? 1) - 1;
       if (left > 0) this.pinInflight.set(profileId, left);
@@ -414,9 +439,10 @@ export class HouseholdService {
     // Read-modify-write in one synchronous step (better-sqlite3), so concurrent failures all count.
     const at = this.now().getTime();
     const now = this.pinState(profileId);
-    if (!now) throw new HouseholdError('pin-wrong');
+    const wrong = kind === 'pin' ? 'pin-wrong' : 'password-wrong';
+    if (!now) throw new HouseholdError(wrong);
     const failures = now.failed + 1;
-    this.auditPin(cred, 'household.profile.pin-wrong', profileId, { failures });
+    this.auditPin(cred, `household.profile.${wrong}`, profileId, { failures });
     if (failures >= PIN_MAX_FAILURES) {
       const lockMs = pinLockMs(now.lockouts);
       this.db.update(householdProfiles).set({ failedPinAttempts: 0, pinLockedUntil: at + lockMs, pinLockouts: now.lockouts + 1 }).where(eq(householdProfiles.id, profileId)).run();
@@ -425,7 +451,7 @@ export class HouseholdService {
       this.db.update(householdProfiles).set({ failedPinAttempts: failures }).where(eq(householdProfiles.id, profileId)).run();
     }
     this.invalidate(profileId);
-    throw new HouseholdError('pin-wrong');
+    throw new HouseholdError(wrong);
   }
 
   // ------------------------------------------------------------------------- settings

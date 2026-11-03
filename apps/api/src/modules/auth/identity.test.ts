@@ -530,7 +530,9 @@ describe('OpenID Connect sign-in', () => {
   it('matches a verified email to a user account, never to an admin', async () => {
     const r = await readyApp();
     await createUser(r, 'dave', { email: 'dave@example.com' });
-    await r.app.inject({ method: 'PUT', url: '/api/v1/user/me', headers: { cookie: r.cookie }, payload: { email: 'admin@example.com' } });
+    // Set by an admin, so the email counts as verified (a self-set one never matches at all).
+    const adminId = r.db.select().from(users).where(eq(users.usernameKey, 'admin')).get()!.id;
+    await r.app.inject({ method: 'PUT', url: `/api/v1/user/${adminId}`, headers: { cookie: r.cookie }, payload: { email: 'admin@example.com' } });
     await withProvider(r);
     const unverified = await signIn(r, { sub: 'sub-dave', email: 'dave@example.com', email_verified: false });
     expect(String(unverified.cb.headers.location)).toContain('ssoError=no_account');

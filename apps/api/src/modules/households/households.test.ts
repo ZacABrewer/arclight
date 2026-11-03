@@ -224,6 +224,8 @@ describe('selecting a profile', () => {
     const h = await harness();
     const a = await account(h);
     const kid = await addProfile(h, a.cookie, { name: 'Kids', contentRestrictions: KIDS });
+    // A fresh session: back to the owner profile without the password.
+    h.clock.t = Date.now() + 1000;
     const res = await select(h, a.cookie, kid.id);
     expect(res.statusCode).toBe(200);
     expect(res.json().activeProfile).toMatchObject({ id: kid.id });
@@ -327,8 +329,71 @@ describe('selecting a profile', () => {
     // The exception is only for the profile it is on.
     const other = await addProfile(h, a.session(), { name: 'Other', pin: '9999' });
     expect((await select(h, cookie, other.id)).json()).toEqual({ error: 'pin-required' });
-    h.clock.t += FRESH_CREDENTIAL_MS + 1000;
+    h.clock.t = Date.now() + FRESH_CREDENTIAL_MS + 60_000;
     expect((await select(h, cookie, kid.id)).json()).toEqual({ error: 'pin-required' });
+  });
+
+  it('going back to an owner profile without a PIN needs the account password once the credential is older than ten minutes', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Kids', contentRestrictions: KIDS });
+    const owner = h.db.select().from(schema.householdProfiles).where(eq(schema.householdProfiles.userId, a.id)).all().find((p) => p.isOwner)!;
+    const cookie = a.session();
+    h.clock.t = Date.now() + 1000;
+    expect((await select(h, cookie, kid.id)).statusCode).toBe(200);
+    // Inside the ten minutes the password was just proven: straight back.
+    expect((await select(h, cookie, owner.id)).statusCode).toBe(200);
+    expect((await select(h, cookie, kid.id)).statusCode).toBe(200);
+    h.clock.t = Date.now() + FRESH_CREDENTIAL_MS + 60_000;
+    // Kids may still re-select itself (no PIN) and the owner profile is not reachable without the password.
+    expect((await select(h, cookie, kid.id)).statusCode).toBe(200);
+    const missing = await select(h, cookie, owner.id);
+    expect(missing.statusCode).toBe(401);
+    expect(missing.json()).toEqual({ error: 'password-required' });
+    const wrong = await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: 'nope' });
+    expect(wrong.json()).toEqual({ error: 'password-wrong' });
+    expect((await call(h, 'GET', '/api/v1/auth/me', cookie)).json().activeProfile.id).toBe(kid.id);
+    const ok = await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: 'password1' });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect((await call(h, 'GET', '/api/v1/auth/me', cookie)).json().activeProfile.isOwner).toBe(true);
+    // Already on the owner profile: re-selecting it needs nothing.
+    expect((await select(h, cookie, owner.id)).statusCode).toBe(200);
+    // The password never reaches the audit log.
+    expect(JSON.stringify(h.db.select().from(schema.auditEvents).all())).not.toContain('password1');
+  });
+
+  it('wrong passwords lock the owner profile like wrong PINs; an owner PIN is asked for instead of the password', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Kids' });
+    const owner = h.db.select().from(schema.householdProfiles).where(eq(schema.householdProfiles.userId, a.id)).all().find((p) => p.isOwner)!;
+    const cookie = a.session();
+    expect((await select(h, cookie, kid.id)).statusCode).toBe(200);
+    h.clock.t = Date.now() + FRESH_CREDENTIAL_MS + 60_000;
+    for (let i = 0; i < PIN_MAX_FAILURES; i++) {
+      expect((await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: `wrong${i}` })).statusCode).toBe(401);
+    }
+    const locked = await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: 'password1' });
+    expect(locked.statusCode).toBe(429);
+    expect(locked.json().error).toBe('pin-locked');
+    // The owner gives the owner profile a PIN (from another device): that lifts the lock and replaces the password.
+    expect((await call(h, 'PATCH', `/api/v1/households/profiles/${owner.id}`, a.cookie, { pin: '4321' })).statusCode).toBe(200);
+    expect((await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: 'password1' })).json()).toEqual({ error: 'pin-required' });
+    expect((await select(h, cookie, owner.id, '4321')).statusCode).toBe(200);
+  });
+
+  it('an account without a password of its own must sign in again to leave a profile for the owner profile', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Kids' });
+    const owner = h.db.select().from(schema.householdProfiles).where(eq(schema.householdProfiles.userId, a.id)).all().find((p) => p.isOwner)!;
+    const cookie = a.session();
+    expect((await select(h, cookie, kid.id)).statusCode).toBe(200);
+    h.db.update(schema.users).set({ localPassword: false }).where(eq(schema.users.id, a.id)).run();
+    h.clock.t = Date.now() + FRESH_CREDENTIAL_MS + 60_000;
+    const res = await call(h, 'POST', `/api/v1/households/profiles/${owner.id}/select`, cookie, { password: 'password1' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'reauth-required' });
   });
 
   it('only sessions and app devices can select: Basic and API keys get 409 unsupported-credential', async () => {

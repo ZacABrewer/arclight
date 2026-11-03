@@ -22,9 +22,9 @@ import { HouseholdError, type HouseholdService } from './service.js';
 // (admins, from the Users page). See spec §1.1 / §2.3:
 //   GET  /households/profiles                  any credential with a user, any active profile
 //   POST /households/profiles, PATCH|DELETE /households/profiles/:id   owner profile active
-//   POST /households/profiles/:id/select       sessions and app devices only (PIN rule)
+//   POST /households/profiles/:id/select       sessions and app devices only (PIN / password rule)
 //   GET|PUT /households/profiles/active/settings   the active profile's own settings
-// Bodies carry PINs: these routes keep out of the request audit and record their own entries
+// Bodies carry PINs and passwords: these routes keep out of the request audit and record their own entries
 // (profile ids only, never a PIN).
 
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
@@ -138,6 +138,7 @@ export function householdRoutes(service: HouseholdService, db: Db): Plugin {
           },
           req.params.id,
           req.body?.pin,
+          req.body?.password,
         );
         log(req, 'household.profile.select', selected.id, { profileId: selected.id, via: a.auth.via });
         return { activeProfile: selected };

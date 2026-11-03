@@ -428,7 +428,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     );
 
     // ------------------------------------------------------------------------- settings
-    app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async () => requests.settings());
+    app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async (req) => requests.settingsFor(actorOf(req)));
     app.put('/settings/requests', { schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors } } }, async (req) =>
       requests.updateSettings(actorOf(req), req.body),
     );

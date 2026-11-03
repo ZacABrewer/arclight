@@ -209,6 +209,7 @@
   "app.tv.pin.entered": "{n} of 4 digits entered",
   "app.tv.pin.failed": "That didn’t work. Try again.",
   "app.tv.pin.locked": "Too many wrong tries. Try again in {count, plural, one {# minute} other {# minutes}}.",
+  "app.tv.pin.passwordRequired": "{name} has no PIN, so switching to it needs the account password. Sign in again on this device, or give {name} a PIN.",
   "app.tv.pin.wrong": "Wrong PIN. Try again.",
   "app.tv.play": "Play",
   "app.tv.playEpisode": "Play S{s} E{e}",

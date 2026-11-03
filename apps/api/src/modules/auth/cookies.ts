@@ -27,8 +27,21 @@ export function sessionCookie(token: string, opts: { maxAgeSeconds: number | nul
   return parts.join('; ');
 }
 
+/**
+ * Per request: whether the page is known to be served over https although the request arrived as
+ * http (a TLS proxy that does not send X-Forwarded-Proto). Set by installAuth from the Application
+ * URL: an https Application URL on the request's own host.
+ */
+const httpsHints = new WeakMap<FastifyRequest, () => boolean>();
+
+export function bindHttpsHint(req: FastifyRequest, hint: () => boolean): void {
+  httpsHints.set(req, hint);
+}
+
+/** Whether cookies set on this request get `Secure`. */
 export function isHttps(req: FastifyRequest): boolean {
-  return req.protocol === 'https';
+  if (req.protocol === 'https') return true;
+  return httpsHints.get(req)?.() ?? false;
 }
 
 export function setSessionCookie(req: FastifyRequest, reply: FastifyReply, token: string, maxAgeSeconds: number | null): void {

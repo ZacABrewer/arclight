@@ -239,10 +239,14 @@ export const SecuritySettings = AuthSettings.extend({
 });
 export type SecuritySettings = z.infer<typeof SecuritySettings>;
 
-/** GET /settings/security and POST /settings/security/apikey. */
+/** POST /settings/security/apikey (regenerate) and POST /settings/security/apikey/reveal. */
 export const ApiKeyResponse = z.object({ apiKey: z.string() });
 export type ApiKeyResponse = z.infer<typeof ApiKeyResponse>;
 
+/**
+ * GET/PUT /settings/security. `apiKey` is masked (`********` and the last four characters);
+ * POST /settings/security/apikey/reveal (ApiKeyResponse) returns the full key.
+ */
 export const SecuritySettingsResponse = AuthSettings.extend({ apiKey: z.string() });
 export type SecuritySettingsResponse = z.infer<typeof SecuritySettingsResponse>;
 

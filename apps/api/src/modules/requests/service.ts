@@ -168,6 +168,22 @@ export interface TitleStatus {
   activeRequests: RequestRow[];
 }
 
+/**
+ * The requests settings a portal user gets: the switches the request form reads (4K on, partial
+ * series requests, specials, the hide filters). Root folders, quality profiles, tags, quotas,
+ * approval rules, the application URL and the public portal setup come back as the defaults.
+ */
+export function portalRequestsSettings(s: RequestsSettings): RequestsSettings {
+  return RequestsSettings.parse({
+    movie4k: { enabled: s.movie4k.enabled },
+    series4k: { enabled: s.series4k.enabled },
+    partialRequestsEnabled: s.partialRequestsEnabled,
+    enableSpecialEpisodes: s.enableSpecialEpisodes,
+    hideAvailable: s.hideAvailable,
+    hideRequested: s.hideRequested,
+  });
+}
+
 export class RequestsService {
   readonly db: Db;
   private readonly bus: EventBus;
@@ -209,6 +225,15 @@ export class RequestsService {
 
   settings(): RequestsSettings {
     return getSection(this.db, 'requests');
+  }
+
+  /**
+   * GET /settings/requests: the whole section for settings and user managers (the users editor
+   * pre-fills from it), else only what the request portal reads (see portalRequestsSettings).
+   */
+  settingsFor(actor: Actor): RequestsSettings {
+    const s = this.settings();
+    return canManageSettings(actor.permissions) || canManageUsers(actor.permissions) ? s : portalRequestsSettings(s);
   }
 
   updateSettings(actor: Actor, value: RequestsSettings): RequestsSettings {

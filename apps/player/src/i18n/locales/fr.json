@@ -72,6 +72,7 @@
   "app.tv.pin.entered": "{n} chiffres sur 4 saisis",
   "app.tv.pin.failed": "Cela n’a pas fonctionné. Réessayez.",
   "app.tv.pin.locked": "Trop d’essais incorrects. Réessayez dans {count, plural, one {# minute} other {# minutes}}.",
+  "app.tv.pin.passwordRequired": "{name} n’a pas de code PIN : y passer demande le mot de passe du compte. Reconnectez-vous sur cet appareil ou ajoutez un code PIN à {name}.",
   "app.tv.pin.wrong": "Code PIN incorrect. Réessayez.",
   "app.tv.play": "Lecture",
   "app.tv.playEpisode": "Lire S{s} É{e}",

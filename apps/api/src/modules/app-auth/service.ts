@@ -73,6 +73,8 @@ export class AppAuthError extends Error {
 
 /** lastSeenAt / lastIp are written at most this often per device. */
 export const APP_DEVICE_TOUCH_MS = 60_000;
+/** An app device token unused for this long stops working and its device row is removed. */
+export const APP_DEVICE_IDLE_MS = 90 * 24 * 60 * 60_000;
 /** Pair codes one user may create per window (each new one replaces the previous). */
 export const PAIR_CODES_PER_WINDOW = 10;
 export const PAIR_CODE_WINDOW_MS = 10 * 60_000;
@@ -220,7 +222,14 @@ export class AppAuthService {
     this.purgeDeviceCodes(t);
     const address = ip ?? 'unknown';
     const recent = (this.deviceCodeRequests.get(address) ?? []).filter((at) => t - at < DEVICE_CODE_WINDOW_MS);
-    if (recent.length >= DEVICE_CODES_PER_WINDOW || this.deviceCodes.size >= MAX_PENDING_DEVICE_CODES) throw new AppAuthError('RATE_LIMITED', 'too many sign-in codes; wait a few minutes');
+    if (recent.length >= DEVICE_CODES_PER_WINDOW) throw new AppAuthError('RATE_LIMITED', 'too many sign-in codes; wait a few minutes');
+    // Full: the oldest code nobody approved yet makes room, so a flood cannot block every TV's
+    // sign-in until the codes expire; approved codes wait for their device's next poll.
+    if (this.deviceCodes.size >= MAX_PENDING_DEVICE_CODES) {
+      const oldest = [...this.deviceCodes.values()].find((p) => p.approvedUserId === null);
+      if (!oldest) throw new AppAuthError('RATE_LIMITED', 'too many sign-in codes; wait a few minutes');
+      this.dropDeviceCode(oldest);
+    }
     recent.push(t);
     this.deviceCodeRequests.set(address, recent);
     let userCode = generatePairCode();
@@ -304,6 +313,12 @@ export class AppAuthService {
       .get();
     if (!found) return null;
     const t = this.now();
+    // Idle too long: the device is signed out (a forgotten phone or TV does not stay a way in).
+    if (t - Date.parse(found.device.lastSeenAt) > APP_DEVICE_IDLE_MS) {
+      this.db.delete(appDevices).where(eq(appDevices.id, found.device.id)).run();
+      audit(this.db).record({ action: 'app.device.expired', userId: found.user.id, username: found.user.username, details: { name: found.device.name, lastSeenAt: found.device.lastSeenAt } });
+      return null;
+    }
     if (t - Date.parse(found.device.lastSeenAt) > APP_DEVICE_TOUCH_MS) {
       const ip = creds.addresses.at(-1) ?? creds.peer ?? null;
       this.db.update(appDevices).set({ lastSeenAt: new Date(t).toISOString(), lastIp: ip }).where(eq(appDevices.id, found.device.id)).run();

@@ -111,7 +111,7 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
             onSave={submit}
             saving={create.isPending || update.isPending}
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
-            extra={<TestButton beforeTest={form.validate} onTest={async () => indexerTestOutcome(await indexersApi.test(toIndexerBody(form.values)))} />}
+            extra={<TestButton beforeTest={form.validate} onTest={async () => indexerTestOutcome(await indexersApi.test({ ...toIndexerBody(form.values), ...(existing ? { id: existing.id } : {}) }))} />}
           />
         }
       >
@@ -224,7 +224,7 @@ export function IndexerCard({
       }
       actions={
         <>
-          <TestButton size="sm" onTest={async () => indexerTestOutcome(await indexersApi.test(toIndexerBody(indexer as unknown as Record<string, unknown>)))} />
+          <TestButton size="sm" onTest={async () => indexerTestOutcome(await indexersApi.test({ ...toIndexerBody(indexer as unknown as Record<string, unknown>), id: indexer.id }))} />
           <Button size="sm" variant="ghost" onClick={onEdit} aria-label={t('settings.indexers.editName', { name: indexer.name })}>
             {t('common.edit')}
           </Button>

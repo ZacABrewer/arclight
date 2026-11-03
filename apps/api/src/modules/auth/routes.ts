@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ApiKeyResponse,
+  SECRET_MASK,
   AuthErrorResponse,
   AuthSettings,
   AuthStatus,
@@ -29,6 +30,7 @@ import { AUTH_ERROR_STATUS, AuthError, TwoFactorRequiredError, type AuthService,
 import type { IdentityService } from './identity.js';
 import { registerIdentityRoutes, type IdentityRouteOptions } from './routes-identity.js';
 import type { SetupService } from './setup.js';
+import { audit } from '../audit/recorder.js';
 
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
 
@@ -44,6 +46,11 @@ const errors = {
   409: AuthErrorResponse,
   429: AuthErrorResponse,
 };
+
+/** `********` plus the last four characters: enough to tell keys apart, useless to call with. */
+export function maskApiKey(key: string): string {
+  return `${SECRET_MASK}${key.slice(-4)}`;
+}
 
 function sessionOf(auth: RequestAuth, service: AuthService): Session {
   return {
@@ -71,7 +78,10 @@ function meta(req: FastifyRequest) {
 export function authRoutes(auth: AuthService, setup: SetupService, identity?: IdentityService, identityOptions: IdentityRouteOptions = {}): Plugin {
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
-      if (err instanceof AuthError) return reply.code(AUTH_ERROR_STATUS[err.code]).send({ error: err.message, code: err.code });
+      if (err instanceof AuthError) {
+        if (err.retryAfter !== undefined) reply.header('retry-after', String(err.retryAfter));
+        return reply.code(AUTH_ERROR_STATUS[err.code]).send({ error: err.message, code: err.code });
+      }
       if (err instanceof Error && 'validation' in err && err.validation) {
         return reply.code(400).send({ error: err.message, code: 'VALIDATION' });
       }
@@ -140,7 +150,7 @@ export function authRoutes(auth: AuthService, setup: SetupService, identity?: Id
       { config: portal, schema: { body: PasswordChange, response: { 204: Empty, ...errors } } },
       async (req, reply) => {
         const self = selfOf(req);
-        await auth.changePassword(self.id, req.body.currentPassword, req.body.newPassword, self.sessionId);
+        await auth.changePassword(self.id, req.body.currentPassword, req.body.newPassword, self.sessionId, req.ip);
         return reply.code(204).send(null);
       },
     );
@@ -174,7 +184,9 @@ export function authRoutes(auth: AuthService, setup: SetupService, identity?: Id
     );
 
     // ----------------------------------------------------------------------------- security settings (admin)
-    const securityResponse = () => ({ ...auth.authSettings(), apiKey: auth.apiKey() });
+    // The API key is masked (last four characters kept, to tell keys apart); the reveal route below
+    // hands out the full key, audited. PUT takes no key, so a mask sent back changes nothing.
+    const securityResponse = () => ({ ...auth.authSettings(), apiKey: maskApiKey(auth.apiKey()) });
 
     app.get(
       '/settings/security',
@@ -207,6 +219,17 @@ export function authRoutes(auth: AuthService, setup: SetupService, identity?: Id
       async () => ({ apiKey: auth.regenerateApiKey() }),
     );
 
+    app.post(
+      '/settings/security/apikey/reveal',
+      { preHandler: requireAdmin, config: { audit: false }, schema: { response: { 200: ApiKeyResponse, ...errors } } },
+      async (req) => {
+        // Install-wide secret: a signed-in admin, never a personal key (even an admin-scoped one).
+        if (req.auth?.via === 'userkey' || req.auth?.via === 'app') throw new AuthError('FORBIDDEN', 'show the API key from a signed-in browser session');
+        audit(auth.db).record({ action: 'apikey.reveal', userId: req.auth?.user?.id ?? null, username: req.auth?.user?.username ?? null, ip: req.ip });
+        return { apiKey: auth.apiKey() };
+      },
+    );
+
     // ----------------------------------------------------------------------------- setup (public; self-guarded)
     app.get('/setup/status', { schema: { response: { 200: SetupStatus } } }, async () => setup.status());
 
@@ -227,7 +250,7 @@ export function authRoutes(auth: AuthService, setup: SetupService, identity?: Id
     );
 
     app.post('/setup/complete', { schema: { body: SetupRequest, response: { 200: SetupStatus, ...errors } } }, async (req) =>
-      setup.complete(req.body, req.auth),
+      setup.complete(req.body, req.auth, req.ip),
     );
   };
 }
