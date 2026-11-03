@@ -16,7 +16,7 @@ import { parseFfprobeOutput } from '../media-analysis/parse.js';
 import { locateFfprobe } from '../media-analysis/runner.js';
 import { setSection } from '../settings/service.js';
 import { locateFfmpeg } from '../transcode/runner.js';
-import { videoPartsFor, videoTranscoderFor } from './index.js';
+import { backgroundServicesFor, videoPartsFor, videoTranscoderFor } from './index.js';
 import type { RunningTranscode } from './transcode.js';
 import { ChapterReader } from './video-items.js';
 import { isUtf8, Limiter, LimiterBusy, MediaCache } from './video-stream.js';
@@ -104,6 +104,8 @@ async function harness(opts: { real?: boolean; hold?: boolean; silent?: boolean;
     probe: false,
     onContext: (c) => {
       ctx = c;
+      // Scrub thumbnails asked for by sessions go to the test's own cache (real runs make them).
+      backgroundServicesFor(c, { trickplay: { dir: join(cacheDir, 'trickplay') } });
       if (opts.real) {
         videoPartsFor(c, { cache: { dir: cacheDir }, encoders: { detect: async () => ({ hwaccel: 'none', zscale: false }) } });
         return;
@@ -277,8 +279,8 @@ describe('items', () => {
     expect(item.versions[0].label).toBe('4K HDR');
     expect(item.chapters.length).toBe(3);
     expect(item.segments).toEqual([
-      { type: 'intro', startMs: 0, endMs: 30_000 },
-      { type: 'credits', startMs: 1_400_000, endMs: 1_500_000 },
+      { type: 'intro', startMs: 0, endMs: 30_000, source: 'chapter' },
+      { type: 'credits', startMs: 1_400_000, endMs: 1_500_000, source: 'chapter' },
     ]);
     expect(h.probes).toHaveLength(1);
     // The batch route uses cached chapters only.

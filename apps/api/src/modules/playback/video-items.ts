@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
-import { itemKey, type ContentRestrictions, type MediaImage, type PlayableChapter, type PlayableItem, type VideoArtworkType, type VideoInfo, type VideoVersion } from '@arclight/shared';
+import { itemKey, type ContentRestrictions, type MediaImage, type PlayableChapter, type PlayableItem, type VideoArtworkType, type VideoInfo, type VideoPauseInfo, type VideoVersion } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, episodeVersionFiles, mediaFiles, movies, series } from '../library/schema.js';
 import { locateFfprobe } from '../media-analysis/runner.js';
 import { isUnrestricted, restrictionReason } from '../requests/certification.js';
 import { subtitleFiles } from '../subtitles/schema.js';
+import { mediaChipsOf, tmdbScoreOf } from './media-chips.js';
+import { effectiveSegments } from './segments.js';
 import { Limiter, LimiterBusy } from './video-stream.js';
 import { baseRangeOf, compareVersions, durationOf, segmentsFromChapters, parseProbeChapters, videoInfoOf, versionLabel, type ExternalSubtitle, type VideoFileFacts } from './video-info.js';
 
@@ -221,7 +223,48 @@ export async function movieItem(ctx: VideoItemContext, id: number, opts: VideoIt
     logoUrl: imageUrl(ctx.basePath, 'movie', id, movie.images, 'logo', '780'),
     video: best.info,
     versions: versions.map(toVersion),
-    segments: segmentsFromChapters(chapters),
+    segments: await effectiveSegments(ctx.db, best.file, segmentsFromChapters(chapters)),
+    pause: pauseInfo({
+      title: movie.title,
+      episode: null,
+      year: movie.year || null,
+      certification: movie.certification,
+      ratings: movie.ratings,
+      genres: movie.genres,
+      overview: movie.overview || null,
+      logoUrl: imageUrl(ctx.basePath, 'movie', id, movie.images, 'logo', '780'),
+      backdropUrl: imageUrl(ctx.basePath, 'movie', id, movie.images, 'fanart', '1280'),
+      file: best.file,
+    }),
+  };
+}
+
+/** The pause screen's facts (§3.5): chips from the file that plays, the title's score and rating. */
+function pauseInfo(p: {
+  title: string;
+  episode: { title: string | null; seasonNumber: number; episodeNumber: number } | null;
+  year: number | null;
+  certification: string | null;
+  ratings: MovieRow['ratings'];
+  genres: readonly string[];
+  overview: string | null;
+  logoUrl: string | null;
+  backdropUrl: string | null;
+  file: MediaFileRow;
+}): VideoPauseInfo {
+  return {
+    title: p.title,
+    episodeTitle: p.episode?.title ?? null,
+    seasonNumber: p.episode?.seasonNumber ?? null,
+    episodeNumber: p.episode?.episodeNumber ?? null,
+    year: p.year,
+    certification: p.certification,
+    tmdbScore: tmdbScoreOf(p.ratings),
+    genres: [...p.genres],
+    overview: p.overview,
+    logoUrl: p.logoUrl,
+    backdropUrl: p.backdropUrl,
+    chips: mediaChipsOf({ file: { sizeBytes: p.file.sizeBytes, mediaInfo: p.file.mediaInfo ?? null }, ratings: p.ratings, certification: p.certification }),
   };
 }
 
@@ -277,7 +320,19 @@ export async function episodeItem(ctx: VideoItemContext, id: number, opts: Video
     logoUrl: imageUrl(ctx.basePath, 'series', show.id, show.images, 'logo', '780'),
     video: best.info,
     versions: versions.map(toVersion),
-    segments: segmentsFromChapters(chapters),
+    segments: await effectiveSegments(ctx.db, best.file, segmentsFromChapters(chapters)),
+    pause: pauseInfo({
+      title: show.title,
+      episode: { title: episode.title && episode.title !== 'TBA' ? episode.title : null, seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber },
+      year: show.year || null,
+      certification: show.certification,
+      ratings: show.ratings,
+      genres: show.genres,
+      overview: episode.overview || show.overview || null,
+      logoUrl: imageUrl(ctx.basePath, 'series', show.id, show.images, 'logo', '780'),
+      backdropUrl: imageUrl(ctx.basePath, 'series', show.id, show.images, 'fanart', '1280'),
+      file: best.file,
+    }),
     ...(next ? { next: itemKey('episode', next.id) } : {}),
     ...(previous ? { previous: itemKey('episode', previous.id) } : {}),
   };

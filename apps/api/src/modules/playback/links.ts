@@ -18,8 +18,11 @@ export function linkKey(apiKey: string): Buffer {
   return createHmac('sha256', apiKey).update('arclight stream links v1').digest();
 }
 
-/** Audio files sign as `audio:`, video files (media_files ids) as `video:`: one never opens the other. */
-export type LinkDomain = 'audio' | 'video';
+/**
+ * Audio files sign as `audio:`, video files (media_files ids) as `video:`, scrub-thumbnail sheets
+ * of a video file as `trickplay:`: one never opens another.
+ */
+export type LinkDomain = 'audio' | 'video' | 'trickplay';
 
 function mac(key: Buffer, link: SignedLink, domain: LinkDomain = 'audio'): string {
   return createHmac('sha256', key).update(`${domain}:${link.userId}:${link.fileId}:${link.exp}`).digest('base64url');

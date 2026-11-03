@@ -13,6 +13,8 @@ import {
   PlayerSeriesPage,
   VideoArtworkType,
   VideoBrowseQuery,
+  VideoFeatured,
+  VideoFeaturedQuery,
   VideoHome,
   VideoSession,
   VideoSessionRequest,
@@ -36,6 +38,9 @@ import { hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from
 import type { ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
 import { FfmpegMissing, TranscodeBusy, type AudioTranscoder, type RunningTranscode } from './transcode.js';
+import { videoFeatured, withHomeRows, withMovieExtras, withSeriesExtras, type FeaturedContext, type TrendingSource } from './featured.js';
+import { signedTrickplay } from './trickplay-routes.js';
+import type { TrickplayService } from './trickplay.js';
 import { markWatched, movieDetails, moviePage, seriesDetails, seriesPage, videoHome, type VideoBrowseContext } from './video-browse.js';
 import { buildVideoStreamArgs, decideVideo, defaultVideoKbps, durationOf, externalSubtitleCodec, isTextSubtitle, videoContainerOf, videoMimeOf, type LiveVideoSpec, type VideoPlan } from './video-info.js';
 import { episodeFiles, mediaFileAllowed, playableFilesOf, videoInfoForFile, withinRestrictions, type MediaFileRow } from './video-items.js';
@@ -56,6 +61,10 @@ export interface VideoDeps {
   transcoder: AudioTranscoder;
   encoders: EncoderDetector;
   cache: MediaCache;
+  /** Scrub thumbnails for the session (absent: none). */
+  trickplay?: TrickplayService;
+  /** Trending source of the hero and home (tests); TMDB through the metadata cache by default. */
+  trending?: TrendingSource;
   now?: () => number;
 }
 
@@ -131,7 +140,7 @@ export function subtitleLabel(t: VideoSubtitleTrack, index: number): string {
 export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   const { db } = deps;
   const now = deps.now ?? Date.now;
-  const browse: VideoBrowseContext = { db, basePath: deps.basePath, progress: deps.progress, now };
+  const browse: VideoBrowseContext & FeaturedContext = { db, basePath: deps.basePath, progress: deps.progress, now, ...(deps.trending ? { trending: deps.trending } : {}) };
   const guard = requirePlayer(db);
   const guardUser = requirePlayer(db, { needsUser: true });
 
@@ -328,6 +337,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         subtitles,
         burnedSubtitle: plan.burn,
         expiresAt: new Date(exp * 1000).toISOString(),
+        trickplay: deps.trickplay ? await signedTrickplay({ db, apiKey: deps.apiKey, service: deps.trickplay, now }, fileId, userId, origin) : null,
       };
     });
 
@@ -496,18 +506,21 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     });
 
     // ---- browse ----------------------------------------------------------------------------------
-    app.get('/playback/video/home', { ...video, schema: { response: { 200: VideoHome, ...errors } } }, async (req) => videoHome(browse, browseUser(req)));
+    app.get('/playback/video/home', { ...video, schema: { response: { 200: VideoHome, ...errors } } }, async (req) => withHomeRows(browse, browseUser(req), videoHome(browse, browseUser(req))));
+    app.get('/playback/video/featured', { ...video, schema: { querystring: VideoFeaturedQuery, response: { 200: VideoFeatured, ...errors } } }, async (req) =>
+      videoFeatured(browse, browseUser(req), req.query.limit),
+    );
     app.get('/playback/movies', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerMoviePage, ...errors } } }, async (req) => moviePage(browse, browseUser(req), req.query));
     app.get('/playback/movies/:id', { ...video, schema: { params: IdParams, response: { 200: PlayerMovieDetails, ...errors } } }, async (req) => {
       const movie = movieDetails(browse, browseUser(req), req.params.id);
       if (!movie) throw new VideoHttpError(404, 'NOT_FOUND', `movie ${req.params.id} not found or has no file`);
-      return movie;
+      return withMovieExtras(browse, browseUser(req), movie);
     });
     app.get('/playback/series', { ...video, schema: { querystring: VideoBrowseQuery, response: { 200: PlayerSeriesPage, ...errors } } }, async (req) => seriesPage(browse, browseUser(req), req.query));
     app.get('/playback/series/:id', { ...video, schema: { params: IdParams, response: { 200: PlayerSeriesDetails, ...errors } } }, async (req) => {
       const show = seriesDetails(browse, browseUser(req), req.params.id);
       if (!show) throw new VideoHttpError(404, 'NOT_FOUND', `series ${req.params.id} not found or has no episodes with files`);
-      return show;
+      return withSeriesExtras(browse, browseUser(req), show);
     });
 
     app.post('/playback/watched', { ...videoUser, schema: { body: VideoWatchedRequest, response: { 200: VideoWatchedResponse, ...errors } } }, async (req) => ({

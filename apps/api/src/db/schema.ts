@@ -78,3 +78,4 @@ export * from '../modules/tag-rules/schema.js';
 export * from '../modules/watch-stats/schema.js';
 export * from '../modules/collections/schema.js';
 export * from '../modules/playback/schema.js';
+export * from '../modules/playback/segments-schema.js';
