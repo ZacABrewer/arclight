@@ -9,6 +9,8 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-02
+
 ### Added
 - Arclight player app for Android and iOS (`com.moviemethat.arclight`), not in the stores yet. It plays your music and audiobooks with native audio, keeps playing in the background and on the lock screen, downloads albums and books for offline use (Wi-Fi only by default), and sends progress made offline when it reconnects. It works with Android Auto and CarPlay, casts to Chromecast and AirPlay, and signs in by scanning a QR code from the web player.
 - Server: device sign-in for the player app, a batch progress endpoint for progress saved offline, and a "Sign in a phone" QR code in the web player.
@@ -462,6 +464,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.22.0]: https://github.com/ZacABrewer/arclight/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/ZacABrewer/arclight/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/ZacABrewer/arclight/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/ZacABrewer/arclight/compare/v0.19.0...v0.20.0
