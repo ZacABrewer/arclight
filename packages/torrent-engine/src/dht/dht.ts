@@ -46,6 +46,12 @@ export interface DhtOptions {
   uploadRateLimit?: number;
   /** 4 (BEP 5) or 6 (BEP 32: `nodes6`, 18-byte peers). One routing table per family. */
   family?: 4 | 6;
+  /**
+   * Whether queries may go to (and peers be taken from) this address. Lets the session drop
+   * loopback / LAN addresses that other nodes hand out. Default: every address. Bootstrap
+   * endpoints and saved nodes are not checked (the admin configured them).
+   */
+  allowAddress?: (host: string) => boolean;
   now?: () => number;
 }
 
@@ -76,6 +82,15 @@ export interface LookupResult {
 }
 
 const MAX_DIST = 1n << 161n;
+/**
+ * Candidates one lookup keeps, closest first. Every response may add a few dozen nodes, so a
+ * lookup through hostile nodes would otherwise grow without bound; only the k closest matter.
+ */
+const MAX_LOOKUP_CANDIDATES = 256;
+/** Addresses one lookup remembers having seen (so evicted far nodes are not re-added). */
+const MAX_LOOKUP_SEEN = 4096;
+/** Peers one get_peers lookup collects. */
+const MAX_LOOKUP_PEERS = 5000;
 /** Info-hashes whose announced peers are kept (each up to 1000 peers). */
 const MAX_STORED_INFOHASHES = 5000;
 
@@ -179,6 +194,7 @@ export class DHT extends EventEmitter<DhtEvents> {
 
   /** Adds a node learned out of band (e.g. a peer's PORT message) by pinging it. */
   addNode(addr: PeerAddress): void {
+    if (!this.allowed(addr.host)) return;
     void this.ping(addr).catch(() => {});
   }
 
@@ -350,8 +366,12 @@ export class DHT extends EventEmitter<DhtEvents> {
     if (id && id.length === 20) this.considerNode({ id, ...from });
   }
 
+  private allowed(host: string): boolean {
+    return this.opts.allowAddress?.(host) ?? true;
+  }
+
   private considerNode(node: CompactNode): void {
-    if (this.destroyed || node.id.equals(this.nodeId) || !this.ownFamily(node.host)) return;
+    if (this.destroyed || node.id.equals(this.nodeId) || !this.ownFamily(node.host) || !this.allowed(node.host)) return;
     const res = this.table.insert(node);
     if (res.status === 'full') {
       const oldest = res.oldest;
@@ -379,9 +399,28 @@ export class DHT extends EventEmitter<DhtEvents> {
 
   private iterate(target: Buffer, method: 'find_node' | 'get_peers', seeds: PeerAddress[]): Promise<LookupResult> {
     const candidates = new Map<string, Candidate>();
+    // Live candidates ordered by distance (closest first), kept sorted on insert.
+    const ordered: Candidate[] = [];
+    const seen = new Set<string>();
     const peers = new Map<string, PeerAddress>();
-    const add = (id: Buffer | null, addr: PeerAddress): void => {
+    const byDist = (a: Candidate, b: Candidate): number => (a.dist < b.dist ? -1 : a.dist > b.dist ? 1 : 0);
+    const place = (c: Candidate): void => {
+      let lo = 0;
+      let hi = ordered.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (byDist(ordered[mid] as Candidate, c) <= 0) lo = mid + 1;
+        else hi = mid;
+      }
+      ordered.splice(lo, 0, c);
+    };
+    const unplace = (c: Candidate): void => {
+      const i = ordered.indexOf(c);
+      if (i >= 0) ordered.splice(i, 1);
+    };
+    const add = (id: Buffer | null, addr: PeerAddress, trusted = false): void => {
       if (!this.ownFamily(addr.host) || addr.port <= 0) return;
+      if (!trusted && !this.allowed(addr.host)) return;
       if (id && id.equals(this.nodeId)) return;
       const key = addressKey(addr);
       const existing = candidates.get(key);
@@ -389,10 +428,15 @@ export class DHT extends EventEmitter<DhtEvents> {
         if (!existing.id && id) {
           existing.id = id;
           existing.dist = distance(id, target);
+          if (!existing.failed) {
+            unplace(existing);
+            place(existing);
+          }
         }
         return;
       }
-      candidates.set(key, {
+      if (seen.has(key)) return;
+      const c: Candidate = {
         key,
         id,
         addr,
@@ -400,16 +444,34 @@ export class DHT extends EventEmitter<DhtEvents> {
         queried: false,
         responded: false,
         failed: false,
-      });
+      };
+      // Full: only a closer node gets in, and it pushes out the farthest one not in flight.
+      if (ordered.length >= MAX_LOOKUP_CANDIDATES) {
+        const last = ordered[ordered.length - 1] as Candidate;
+        if (byDist(c, last) >= 0) return;
+        let drop = -1;
+        for (let i = ordered.length - 1; i >= this.k; i--) {
+          const o = ordered[i] as Candidate;
+          if (!o.queried || o.responded) {
+            drop = i;
+            break;
+          }
+        }
+        if (drop < 0) return;
+        const [gone] = ordered.splice(drop, 1);
+        if (gone) candidates.delete(gone.key);
+      }
+      if (seen.size < MAX_LOOKUP_SEEN) seen.add(key);
+      candidates.set(key, c);
+      place(c);
     };
     for (const n of this.table.closest(target, this.k * 2)) add(n.id, { host: n.host, port: n.port });
-    for (const s of seeds) add(null, s);
+    for (const s of seeds) add(null, s, true);
 
     return new Promise((resolve) => {
       let inflight = 0;
       let finished = false;
-      const sorted = (): Candidate[] =>
-        [...candidates.values()].filter((c) => !c.failed).sort((a, b) => (a.dist < b.dist ? -1 : a.dist > b.dist ? 1 : 0));
+      const sorted = (): Candidate[] => ordered;
       const finish = (): void => {
         if (finished) return;
         finished = true;
@@ -443,6 +505,10 @@ export class DHT extends EventEmitter<DhtEvents> {
               if (rid && rid.length === 20) {
                 c.id = rid;
                 c.dist = distance(rid, target);
+                if (candidates.get(c.key) === c) {
+                  unplace(c);
+                  place(c);
+                }
               }
               const tok = getBytes(r, 'token');
               if (tok) c.token = tok;
@@ -453,8 +519,9 @@ export class DHT extends EventEmitter<DhtEvents> {
               for (const v of [...(getList(r, 'values') ?? []), ...(getList(r, 'values6') ?? [])]) {
                 if (!Buffer.isBuffer(v)) continue;
                 for (const p of v.length === 18 ? decodeCompactPeers6(v) : decodeCompactPeers(v)) {
+                  if (!this.allowed(p.host)) continue;
                   const key = addressKey(p);
-                  if (!peers.has(key)) {
+                  if (!peers.has(key) && peers.size < MAX_LOOKUP_PEERS) {
                     peers.set(key, p);
                     this.emit('peer', p, target);
                   }
@@ -463,6 +530,7 @@ export class DHT extends EventEmitter<DhtEvents> {
             })
             .catch(() => {
               c.failed = true;
+              unplace(c);
               if (c.id) this.table.markFailed(c.id);
             })
             .finally(() => {

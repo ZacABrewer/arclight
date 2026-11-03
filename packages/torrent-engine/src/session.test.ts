@@ -38,6 +38,8 @@ const FAST: Partial<SessionSettings> = {
   dhtAnnounceIntervalMs: 300,
   connectTimeoutMs: 2000,
   dhtBootstrapNodes: [],
+  allowLocalPeers: true,
+  allowLocalTrackers: true,
 };
 
 async function session(settings: Partial<SessionSettings> = {}, opts: Omit<SessionOptions, 'settings'> = {}): Promise<Session> {

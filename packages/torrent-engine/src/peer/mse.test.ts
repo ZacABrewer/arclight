@@ -211,3 +211,13 @@ describe('Session encryption', () => {
     expect(lt.getPeers().every((x) => !x.encrypted && x.transport === 'tcp')).toBe(true);
   }, 30_000);
 });
+
+describe('MSE limits (DATA-26)', () => {
+  it('drops a handshake that buffers more than the cap', async () => {
+    const [a, b] = duplexPair();
+    const res = mseRespond(b, Buffer.alloc(0), { findInfoHash: () => null, allowPlaintext: true, timeoutMs: 2000 });
+    a.write(randomBytes(200 * 1024));
+    await expect(res).rejects.toThrow('handshake too large');
+    a.destroy();
+  });
+});

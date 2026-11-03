@@ -10,11 +10,18 @@ import { UtpSocket, type UtpSocketInit, type UtpSocketOptions } from './socket.j
 export interface UtpManagerOptions extends UtpSocketOptions {
   /** Accept incoming connections (checked per SYN). Default true. */
   accept?: () => boolean;
+  /** Incoming connections open at once (all addresses). Default 512. */
+  maxIncoming?: number;
+  /** Incoming connections open at once from one IP. Default 16. */
+  maxIncomingPerIp?: number;
   /** Timer granularity for retransmissions. */
   tickMs?: number;
   /** Test hook: return true to drop a datagram (`in` before decoding, `out` before sending). */
   dropPacket?: (direction: 'in' | 'out', packet: Buffer) => boolean;
 }
+
+export const DEFAULT_MAX_INCOMING = 512;
+export const DEFAULT_MAX_INCOMING_PER_IP = 16;
 
 export interface UtpManagerEvents {
   connection: [socket: UtpSocket, address: PeerAddress];
@@ -30,6 +37,9 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
   private readonly sockets = new Map<dgram.Socket, (msg: Buffer, rinfo: dgram.RemoteInfo) => void>();
   private readonly conns = new Map<string, UtpSocket>();
   private timer: NodeJS.Timeout | undefined;
+  /** Accepted (incoming) connections, in total and per remote IP. */
+  private readonly incoming = new Set<UtpSocket>();
+  private readonly incomingByIp = new Map<string, number>();
 
   constructor(private readonly opts: UtpManagerOptions = {}) {
     super();
@@ -41,6 +51,11 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
 
   get connectionCount(): number {
     return this.conns.size;
+  }
+
+  /** Incoming connections currently open. */
+  get incomingCount(): number {
+    return this.incoming.size;
   }
 
   /** Starts handling uTP datagrams arriving on `sock`. */
@@ -64,6 +79,8 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
     for (const s of [...this.sockets.keys()]) this.detach(s);
     for (const c of [...this.conns.values()]) c.destroy();
     this.conns.clear();
+    this.incoming.clear();
+    this.incomingByIp.clear();
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
   }
@@ -116,6 +133,11 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
   private remove(addr: PeerAddress, sock: UtpSocket): void {
     const k = this.key(addr, sock.recvId);
     if (this.conns.get(k) === sock) this.conns.delete(k);
+    if (this.incoming.delete(sock)) {
+      const left = (this.incomingByIp.get(addr.host) ?? 1) - 1;
+      if (left > 0) this.incomingByIp.set(addr.host, left);
+      else this.incomingByIp.delete(addr.host);
+    }
   }
 
   private socketInit(addr: PeerAddress): Omit<UtpSocketInit, 'recvId' | 'sendId'> {
@@ -174,12 +196,19 @@ export class UtpManager extends EventEmitter<UtpManagerEvents> {
         existing.onPacket(p);
         return;
       }
-      if (this.opts.accept && !this.opts.accept()) {
+      const perIp = this.incomingByIp.get(addr.host) ?? 0;
+      if (
+        (this.opts.accept && !this.opts.accept()) ||
+        this.incoming.size >= (this.opts.maxIncoming ?? DEFAULT_MAX_INCOMING) ||
+        perIp >= (this.opts.maxIncomingPerIp ?? DEFAULT_MAX_INCOMING_PER_IP)
+      ) {
         this.reset(addr, p);
         return;
       }
       const sock = UtpSocket.accept(this.socketInit(addr), p);
       sock.on('error', () => {});
+      this.incoming.add(sock);
+      this.incomingByIp.set(addr.host, perIp + 1);
       this.register(addr, sock);
       this.emit('connection', sock, addr);
       return;

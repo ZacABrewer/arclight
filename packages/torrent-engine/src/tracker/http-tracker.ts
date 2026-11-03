@@ -3,6 +3,7 @@ import https from 'node:https';
 import { type BDict, decode, getBytes, getInt, getList, getString, isDict } from '../bencode.js';
 import { decodeCompactPeers, decodeCompactPeers6, normalizeHost, type PeerAddress } from '../compact.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
+import { guardHop } from '../net-guard.js';
 import { trackerRequests } from './limiter.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
@@ -12,6 +13,11 @@ export interface HttpRequestOptions {
   localAddress?: string;
   headers: Record<string, string>;
   signal?: AbortSignal;
+  /**
+   * Allow loopback / LAN / other non-public targets (a LAN tracker the admin allowed). Without
+   * it every hop, redirects included, must resolve to public addresses only.
+   */
+  allowPrivate?: boolean;
 }
 
 export interface HttpResponse {
@@ -28,41 +34,58 @@ const MAX_BODY = 4 * 1024 * 1024;
 export const nodeHttpRequester: HttpRequester = (url, opts) => request(url, opts, 3);
 
 function request(url: string, opts: HttpRequestOptions, redirects: number): Promise<HttpResponse> {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const mod = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
-    if (!mod) {
-      reject(new TorrentEngineError('tracker', `unsupported protocol ${u.protocol}`));
-      return;
-    }
-    const reqOpts: http.RequestOptions = { method: 'GET', headers: opts.headers, timeout: opts.timeoutMs };
-    if (opts.localAddress) reqOpts.localAddress = opts.localAddress;
-    if (opts.signal) reqOpts.signal = opts.signal;
-    const req = mod.request(u, reqOpts, (res) => {
-      const status = res.statusCode ?? 0;
-      const location = res.headers.location;
-      if (status >= 300 && status < 400 && location && redirects > 0) {
-        res.resume();
-        request(new URL(location, u).toString(), opts, redirects - 1).then(resolve, reject);
-        return;
-      }
-      const chunks: Buffer[] = [];
-      let size = 0;
-      res.on('data', (c: Buffer) => {
-        size += c.length;
-        if (size > MAX_BODY) {
-          req.destroy(new TorrentEngineError('tracker', 'tracker response too large'));
-          return;
-        }
-        chunks.push(c);
-      });
-      res.on('end', () => resolve({ status, body: Buffer.concat(chunks) }));
-      res.on('error', reject);
-    });
-    req.on('timeout', () => req.destroy(new TorrentEngineError('timeout', `tracker request timed out`)));
-    req.on('error', reject);
-    req.end();
-  });
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return Promise.reject(new TorrentEngineError('tracker', 'invalid tracker url'));
+  }
+  const mod = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
+  if (!mod) return Promise.reject(new TorrentEngineError('tracker', `unsupported protocol ${u.protocol}`));
+  // Every hop is vetted on its own: a public tracker may not redirect into the LAN.
+  return guardHop(u, opts.allowPrivate === true).then(
+    (guard) =>
+      new Promise<HttpResponse>((resolve, reject) => {
+        const reqOpts: http.RequestOptions = { method: 'GET', headers: opts.headers, timeout: opts.timeoutMs };
+        if (guard.lookup) reqOpts.lookup = guard.lookup;
+        if (opts.localAddress) reqOpts.localAddress = opts.localAddress;
+        if (opts.signal) reqOpts.signal = opts.signal;
+        const req = mod.request(u, reqOpts, (res) => {
+          const status = res.statusCode ?? 0;
+          const location = res.headers.location;
+          if (status >= 300 && status < 400 && location && redirects > 0) {
+            res.resume();
+            let next: string;
+            try {
+              next = new URL(location, u).toString();
+            } catch {
+              reject(new TorrentEngineError('tracker', 'tracker sent an invalid redirect'));
+              return;
+            }
+            request(next, opts, redirects - 1).then(resolve, reject);
+            return;
+          }
+          const chunks: Buffer[] = [];
+          let size = 0;
+          res.on('data', (c: Buffer) => {
+            size += c.length;
+            if (size > MAX_BODY) {
+              req.destroy(new TorrentEngineError('tracker', 'tracker response too large'));
+              return;
+            }
+            chunks.push(c);
+          });
+          res.on('end', () => resolve({ status, body: Buffer.concat(chunks) }));
+          res.on('error', reject);
+        });
+        req.on('timeout', () => req.destroy(new TorrentEngineError('timeout', `tracker request timed out`)));
+        req.on('error', reject);
+        req.end();
+      }),
+    (err: unknown) => {
+      throw new TorrentEngineError('tracker', `tracker refused: ${errorMessage(err)}`, { cause: err });
+    },
+  );
 }
 
 /** Percent-encodes raw bytes the way trackers expect for info_hash and peer_id. */
@@ -97,6 +120,8 @@ export interface HttpTrackerOptions {
   timeoutMs?: number;
   localAddress?: string;
   userAgent?: string;
+  /** Allow trackers on loopback / LAN addresses (see `HttpRequestOptions.allowPrivate`). */
+  allowPrivate?: boolean;
 }
 
 /** HTTP(S) tracker client (BEP 3 + BEP 23 compact peers). */
@@ -117,6 +142,7 @@ export class HttpTracker implements TrackerClient {
       headers: { 'user-agent': this.opts.userAgent ?? 'Arclight/0.1', 'accept-encoding': 'identity' },
     };
     if (this.opts.localAddress) reqOpts.localAddress = this.opts.localAddress;
+    if (this.opts.allowPrivate) reqOpts.allowPrivate = true;
     if (signal) reqOpts.signal = signal;
     let res: HttpResponse;
     try {

@@ -31,6 +31,20 @@ const MAX_WINDOW = 4 * 1024 * 1024;
 const RECV_WINDOW = 1024 * 1024;
 const WRITE_HIGH_WATER = 64 * 1024;
 const MAX_OUT_OF_ORDER = 2048;
+/**
+ * Largest payload accepted from a peer. We send at most MAX_PAYLOAD, but other clients probe
+ * the path MTU and send up to ~1450 bytes (more on jumbo-frame LANs); anything bigger than a
+ * jumbo frame is not a real uTP packet and is dropped before it is buffered.
+ */
+export const MAX_RECV_PAYLOAD = 9000;
+/**
+ * Bytes the readable side may hold beyond RECV_WINDOW before new data is dropped (the peer
+ * retransmits it once the reader catches up). The advertised window already tells a well-
+ * behaved peer to stop at RECV_WINDOW; this is the hard stop for one that ignores it.
+ */
+const RECV_SLACK = 256 * 1024;
+/** A connection we answered (SYN received) that never sent its first packet is dropped after this. */
+export const SYN_RECV_TIMEOUT_MS = 10_000;
 const SYN_ATTEMPTS = 4;
 const MAX_TIMEOUTS = 8;
 const KEEPALIVE_MS = 29_000;
@@ -130,6 +144,7 @@ export class UtpSocket extends Duplex {
   lastDelayUs = 0;
   private flushScheduled = false;
   private readonly now: () => number;
+  private readonly createdAt: number;
   private readonly minRto: number;
   private readonly targetDelay: number;
   private readonly sendPacket: (p: UtpPacket) => void;
@@ -151,6 +166,7 @@ export class UtpSocket extends Duplex {
     this.targetDelay = init.opts?.targetDelayUs ?? TARGET_DELAY_US;
     this.state = state;
     this.seqNr = seq;
+    this.createdAt = this.now();
   }
 
   /** Initiator side: sends SYN. Resolve via the `connect` event. */
@@ -202,6 +218,7 @@ export class UtpSocket extends Duplex {
       peerWnd: this.peerWnd,
       sendBufBytes: this.sendBufBytes,
       ooo: [...this.ooo.keys()].slice(0, 10),
+      oooBytes: this.oooBytes,
       rto: this.rto,
       rtt: this.rtt,
       delayUs: this.lastDelayUs,
@@ -413,6 +430,7 @@ export class UtpSocket extends Duplex {
   }
 
   private onData(p: UtpPacket): void {
+    if (p.payload.length > MAX_RECV_PAYLOAD) return;
     const expected = (this.ackNr + 1) & 0xffff;
     const d = seqDiff(p.seq, expected);
     if (d >= 0x8000) {
@@ -421,6 +439,8 @@ export class UtpSocket extends Duplex {
     }
     if (this.readEnded) return;
     if (d === 0) {
+      // The reader is not keeping up and the peer ignores our window: drop, it will resend.
+      if (p.payload.length > 0 && this.readableLength + this.oooBytes + p.payload.length > RECV_WINDOW + RECV_SLACK) return;
       this.deliver(p.seq, p.type, p.payload);
       for (;;) {
         const next = (this.ackNr + 1) & 0xffff;
@@ -430,7 +450,7 @@ export class UtpSocket extends Duplex {
         this.oooBytes -= q.payload.length;
         this.deliver(next, q.type, q.payload);
       }
-    } else if (d < MAX_OUT_OF_ORDER && !this.ooo.has(p.seq)) {
+    } else if (d < MAX_OUT_OF_ORDER && !this.ooo.has(p.seq) && this.oooBytes + p.payload.length <= RECV_WINDOW) {
       this.ooo.set(p.seq, { type: p.type, payload: copyExact(p.payload) });
       this.oooBytes += p.payload.length;
     }
@@ -583,6 +603,10 @@ export class UtpSocket extends Duplex {
   tick(): void {
     if (this.state === 'closed') return;
     const now = this.now();
+    if (this.state === 'syn-recv' && now - this.createdAt > SYN_RECV_TIMEOUT_MS) {
+      this.destroy(Object.assign(new TorrentEngineError('timeout', 'utp connection timed out'), { errno: 'ETIMEDOUT' }));
+      return;
+    }
     const first = this.inflight.find((pk) => !pk.needResend);
     if (first && now - first.sentAt > this.rto) {
       this.timeouts++;

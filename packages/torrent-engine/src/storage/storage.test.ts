@@ -144,6 +144,19 @@ describe('Storage', () => {
     await s.close();
   });
 
+  it('does not cache a piece larger than the cache budget (DATA-12)', async () => {
+    const data = randomBytes(256 * 1024);
+    const { metainfo } = createTorrent({ name: 'big.bin', files: [{ path: ['big.bin'], data }], pieceLength: 256 * 1024 });
+    const s = new Storage(metainfo, { savePath: await tmp(), cacheBytes: 64 * 1024 });
+    for (let off = 0; off < data.length; off += BLOCK_SIZE) {
+      await s.writeBlock(0, off, data.subarray(off, off + BLOCK_SIZE));
+      expect(s.cachedBytes).toBeLessThanOrEqual(64 * 1024);
+    }
+    // Hashed from disk instead.
+    expect(await s.verifyPiece(0)).toBe(true);
+    await s.close();
+  });
+
   it('rejects corrupt pieces and drops them from the cache', async () => {
     const dir = await tmp();
     const { meta } = fixture();
