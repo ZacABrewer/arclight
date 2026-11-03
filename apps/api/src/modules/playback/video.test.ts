@@ -522,11 +522,12 @@ describe('helper process limits', () => {
     // the second waits, so the third (not the second, under a loaded suite) is the one refused.
     await waitFor(() => pending.length === 1 && cache.limiter.waiting === 1);
     await expect(cache.thumbnail(3, files[2]!, 60_000)).rejects.toMatchObject({ code: 'BUSY' });
+    // Either of the first two may have got the slot (whichever finished its file work first):
+    // finish the running one, then the one that queued behind it.
     pending.shift()!();
-    await a;
     await waitFor(() => pending.length === 1);
     pending.shift()!();
-    await b;
+    await Promise.all([a, b]);
     expect(peak).toBe(1);
   });
 

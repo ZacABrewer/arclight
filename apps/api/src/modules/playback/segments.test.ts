@@ -44,10 +44,19 @@ const CREDITS_SECONDS = 25;
 const intro = theme(40, 7);
 const credits = theme(CREDITS_SECONDS, 99);
 
-/** Full PCM of fake episode i: the intro theme at its start, the credits theme at the very end. */
+const episodes = new Map<number, Int16Array>();
+
+/**
+ * Full PCM of fake episode i: the intro theme at its start, the credits theme at the very end.
+ * Made once per file (4 minutes of synthetic audio each; nothing writes to it).
+ */
 function episodePcm(i: number): Int16Array {
-  const pcm = episode(EP_SECONDS, 1000 + i, intro, Math.round(INTRO_STARTS[i]! * SAMPLE_RATE));
-  pcm.set(credits, (EP_SECONDS - CREDITS_SECONDS) * SAMPLE_RATE);
+  let pcm = episodes.get(i);
+  if (!pcm) {
+    pcm = episode(EP_SECONDS, 1000 + i, intro, Math.round(INTRO_STARTS[i]! * SAMPLE_RATE));
+    pcm.set(credits, (EP_SECONDS - CREDITS_SECONDS) * SAMPLE_RATE);
+    episodes.set(i, pcm);
+  }
   return pcm;
 }
 
