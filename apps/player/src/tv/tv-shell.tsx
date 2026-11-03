@@ -40,7 +40,8 @@ export function activeTab(pathname: string): string | null {
 
 function HeaderTab({ tab, active, className }: { tab: TabDef; active: boolean; className?: string }) {
   return (
-    <Link to={tab.to} className={`tv-tab${className ? ` ${className}` : ''}`} data-tv-key={`tab-${tab.id}`} data-tv-r="8" aria-current={active ? 'page' : undefined}>
+    // exact: otherwise the router marks Home (/player) current on every page.
+    <Link to={tab.to} activeOptions={{ exact: true }} className={`tv-tab${className ? ` ${className}` : ''}`} data-tv-key={`tab-${tab.id}`} data-tv-r="8" aria-current={active ? 'page' : undefined}>
       {tab.label}
       {active ? <span className="tv-tab__dot" aria-hidden="true" /> : null}
     </Link>
