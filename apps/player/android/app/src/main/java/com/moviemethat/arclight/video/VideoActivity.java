@@ -64,6 +64,7 @@ import androidx.media3.session.MediaSession;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
+import com.moviemethat.arclight.ArclightWebView;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackMapping;
@@ -338,8 +339,16 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        // The app's page stays running behind this screen (events and progress reach JS).
+        ArclightWebView.holdVisible(true);
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
+        ArclightWebView.holdVisible(false);
         if (closed || isInPip()) return;
         // Home on a TV / app switch on a phone without PiP: pause and report.
         if (player != null && player.getPlayWhenReady()) {
