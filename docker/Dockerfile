@@ -75,7 +75,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu tini ca-ce
 # (docs/using/hardware-transcoding.md). Debian's own ffmpeg package drags ~470 MB of libraries.
 # The signing key is checksum-pinned like 7zz: a changed key file fails the build instead of
 # silently trusting new packages (update the sha256 after checking Jellyfin's announcement).
-ADD --checksum=sha256:a0cde241ae297fa6f0265c0bf15ce9eb9ee97c008904a59ab367a67d59532839 \n    https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
+ADD --checksum=sha256:a0cde241ae297fa6f0265c0bf15ce9eb9ee97c008904a59ab367a67d59532839 \
+    https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
 RUN chmod 644 /etc/apt/keyrings/jellyfin.asc \
  && printf '%s\n' 'Types: deb' 'URIs: https://repo.jellyfin.org/debian' 'Suites: bookworm' 'Components: main' \
       'Architectures: amd64 arm64' 'Signed-By: /etc/apt/keyrings/jellyfin.asc' > /etc/apt/sources.list.d/jellyfin.sources \
