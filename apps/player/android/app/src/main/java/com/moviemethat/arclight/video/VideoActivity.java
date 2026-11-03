@@ -1522,6 +1522,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         } else if (down) {
             scheduleHide();
             if ((code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) && staysInRow(code)) return true;
+            // Down from the bar lands on Play, not on whichever pill sits nearest the knob.
+            if (code == KeyEvent.KEYCODE_DPAD_DOWN && controls.bar.isFocused() && !controls.bar.isScrubbing()) {
+                controls.toggle.requestFocus(View.FOCUS_DOWN);
+                return true;
+            }
         }
         return super.dispatchKeyEvent(event);
     }
