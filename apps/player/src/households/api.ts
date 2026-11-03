@@ -110,6 +110,10 @@ export async function selectProfile(qc: QueryClient, profile: HouseholdProfile, 
   setActiveProfileId(res.activeProfile.id);
   rememberReduceMotion(res.activeProfile.settings.reduceMotion);
   qc.setQueryData(householdKeys.settings(), res.activeProfile.settings);
-  await qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'households' || q.queryKey[1] === 'profiles' });
+  // Everything cached belonged to the profile that left: drop it, so the next page never shows its
+  // rows (a Kids profile would briefly see the owner's Continue Watching). Who is signed in and the
+  // profile list are re-read; the new settings are already in.
+  qc.removeQueries({ predicate: (q) => q.queryKey[0] !== householdKeys.all[0] && q.queryKey[0] !== 'auth' });
+  await qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'auth' || (q.queryKey[0] === householdKeys.all[0] && q.queryKey[1] === 'profiles') });
   return res.activeProfile;
 }
