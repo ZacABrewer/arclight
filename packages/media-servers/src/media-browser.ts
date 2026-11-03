@@ -606,18 +606,30 @@ export class MediaBrowserServerClient implements MediaServerClient {
    * `setCollectionOverview`: the item is read, `Tags = (current - remove) + add` is computed
    * case-insensitively (a tag already there keeps its casing, nothing is duplicated) and the
    * whole item is sent back. With `lock`, `Tags` joins LockedFields so a metadata refresh keeps
-   * them; without it LockedFields is sent back unchanged. Returns the tags now on the item.
+   * them; with `unlock`, `Tags` leaves LockedFields; with neither, LockedFields is sent back
+   * unchanged. Returns the tags now on the item.
    */
-  async setItemTags(itemId: string, add: readonly string[], remove: readonly string[], opts: { lock?: boolean } = {}): Promise<string[]> {
+  async setItemTags(itemId: string, add: readonly string[], remove: readonly string[], opts: ItemTagsWriteOptions = {}): Promise<string[]> {
+    return (await this.updateItemTags(itemId, add, remove, opts)).tags;
+  }
+
+  /**
+   * `setItemTags`, also saying whether this write put `Tags` into LockedFields (`lockAdded`: it
+   * was not locked before) and whether it took the lock off (`unlocked`), so a caller can record
+   * which locks are its own.
+   */
+  async updateItemTags(itemId: string, add: readonly string[], remove: readonly string[], opts: ItemTagsWriteOptions = {}): Promise<ItemTagsWriteResult> {
     const body = rec(await this.get('Items', { Ids: itemId, Fields: UPDATE_FIELDS }));
     const item = list(body['Items']).map(rec)[0];
     if (!item) throw new MediaServerError(this.kind, 'notFound', `item ${itemId} not found`);
     const tags = mergeTags(stringsOf(item['Tags']), add, remove);
     const locked = stringsOf(item['LockedFields']);
+    const wasLocked = locked.includes('Tags');
+    const lockedFields = opts.lock ? [...new Set([...locked, 'Tags'])] : opts.unlock ? locked.filter((f) => f !== 'Tags') : locked;
     await this.send('POST', `Items/${encodeURIComponent(itemId)}`, {}, {
       ...item,
       Tags: tags,
-      LockedFields: opts.lock ? [...new Set([...locked, 'Tags'])] : locked,
+      LockedFields: lockedFields,
       // Fields the update endpoint iterates over; absent ones would be read as null.
       Genres: list(item['Genres']),
       Studios: list(item['Studios']),
@@ -625,7 +637,7 @@ export class MediaBrowserServerClient implements MediaServerClient {
       ProviderIds: rec(item['ProviderIds']),
       Taglines: list(item['Taglines']),
     });
-    return tags;
+    return { tags, lockAdded: opts.lock === true && !wasLocked, unlocked: opts.lock !== true && opts.unlock === true && wasLocked };
   }
 
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {
@@ -635,6 +647,21 @@ export class MediaBrowserServerClient implements MediaServerClient {
       await this.post('Library/Refresh');
     }
   }
+}
+
+/** `lock`: put `Tags` into LockedFields. `unlock`: take it out (ignored with `lock`). */
+export interface ItemTagsWriteOptions {
+  lock?: boolean;
+  unlock?: boolean;
+}
+
+export interface ItemTagsWriteResult {
+  /** The tags now on the item. */
+  tags: string[];
+  /** This write locked `Tags` (it was not locked before). */
+  lockAdded: boolean;
+  /** This write took the `Tags` lock off. */
+  unlocked: boolean;
 }
 
 function stringsOf(value: unknown): string[] {

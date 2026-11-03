@@ -1625,7 +1625,9 @@ rescans the `podcast` libraries containing a podcast folder after podcast downlo
 on `MediaServerInput` (`MediaServerTagSync` `{enabled, mode: all|selected, tagIds, prefix, lockTags}`) writes Arclight's
 movie and series tags to the matching items (Jellyfin/Emby item `Tags`, Plex labels, best-effort) as `prefix + label`.
 Ownership is kept in `media_server_tag_syncs`; only labels Arclight wrote are ever removed, and labels the item already
-had are recorded as `preexisting` and never removed. Runs after tag changes (30 s debounce, at most 5 min), nightly
+had are recorded as `preexisting` and never removed. Jellyfin/Emby items whose `Tags` lock Arclight added (it was not in
+`LockedFields` before) are kept in `media_server_tag_locks`; remove-all unlocks only those. Passes that run back to back
+(Sync now during a run) record their changed items together in `lastChanged`. Runs after tag changes (30 s debounce, at most 5 min), nightly
 (`MediaServerTagSync`, `50 3 * * *`) and on demand; 4 requests a second per server, reads in batches of 50.
 
 | Method | Path | Notes |
@@ -1633,8 +1635,8 @@ had are recorded as `preexisting` and never removed. Runs after tag changes (30 
 | GET | `/mediaserver/:id/tag-sync` | `TagSyncStatus` `{running, lastRunAt, lastChanged, lastUnmatched, lastError}`; 404 unknown server, 400 Audiobookshelf |
 | POST | `/mediaserver/:id/tag-sync/preview` | Full dry run of the saved settings → `TagSyncPreview` `{changes[] (max 500: entityType, entityId, title, remoteItemId, add[], remove[]), totalChanges, unmatched, truncated}`; 400 disabled server, 502 when the server fails |
 | POST | `/mediaserver/:id/tag-sync/run` | 202; starts a full sync (single-flight per server) |
-| POST | `/mediaserver/:id/tag-sync/forget` | 204; sync turned off, Keep: deletes the ownership rows, the labels stay |
-| POST | `/mediaserver/:id/tag-sync/remove-all` | 202; sync turned off, Remove: removes the owned labels, then deletes the rows |
+| POST | `/mediaserver/:id/tag-sync/forget` | 204; sync turned off, Keep: deletes the ownership and lock rows, the labels and locks stay |
+| POST | `/mediaserver/:id/tag-sync/remove-all` | 202; sync turned off, Remove: removes the owned labels and the tag locks Arclight added, then deletes the rows |
 
 **Clients** (`@arclight/media-servers`, native fetch, no db): `createMediaServerClient({kind,
 url, apiKey, fetch?, timeoutMs?})` → `info()`, `libraries()`, `users()`, `listItems(mediaType)`,

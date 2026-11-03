@@ -253,6 +253,13 @@
       "when": 1793732511381,
       "tag": "0035_tag_sync_chroma_share_hash_email_verified",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1793738032899,
+      "tag": "0036_tag_sync_locks",
+      "breakpoints": true
     }
   ]
 }
