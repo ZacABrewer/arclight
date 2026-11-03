@@ -58,6 +58,8 @@ Every row shows the protocol, privacy, language, categories and where the entry 
 
 Definition indexers also show the definition's own fields: username and password, API key, passkey, cookie, and so on, depending on the site. An "Untested definition" badge means nobody has verified that definition against the live site yet; it may need small fixes.
 
+Login cookies and credentials for a definition indexer are only sent to that site's own addresses (its mirrors and their subdomains). If the site redirects to, or links to, another host, that request goes out without them, and Arclight refuses it outright when the other host is on a local or private address. Very large answers are cut off: 8 MB for a page, 10 MB for a .torrent and 50 MB for an .nzb.
+
 ### Health, failures and backoff
 
 If an indexer fails repeatedly, Arclight backs off: the row shows "Failed" with the number of recent failures, then "Skipped until" a time, and RSS and searches skip it until then. A successful test or request clears the state. Common causes: wrong API key, site down, Cloudflare challenge, rate limiting or IP ban. See [Nothing found](../TROUBLESHOOTING.md#nothing-found) and [Cloudflare challenge](../TROUBLESHOOTING.md#cloudflare-challenge).

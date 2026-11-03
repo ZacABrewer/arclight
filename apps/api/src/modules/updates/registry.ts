@@ -2,6 +2,8 @@
 // with the anonymous bearer-token flow: request the manifest, follow the 401's
 // WWW-Authenticate challenge to the realm for a pull token, retry.
 
+import { readLimitedText, SafeFetchError } from '@arclight/net';
+
 export interface ImageRef {
   /** Registry host, `registry-1.docker.io` for Docker Hub. */
   registry: string;
@@ -76,6 +78,50 @@ export function parseChallenge(header: string | null): { realm: string; params: 
   return { realm, params };
 }
 
+/** Largest token answer read from a realm (a JWT is a few KB). */
+export const MAX_TOKEN_BYTES = 64 * 1024;
+
+/**
+ * Registries whose token service lives on another registry's domain. lscr.io fronts GHCR and
+ * its challenges name ghcr.io as the realm.
+ */
+const REALM_ALIASES: Record<string, string[]> = { 'lscr.io': ['ghcr.io'] };
+
+/** Last two labels of a host name (`auth.docker.io` -> `docker.io`); IP literals stay whole. */
+function siteOf(host: string): string {
+  if (/^[\d.]+$/.test(host) || host.includes(':') || host.startsWith('[')) return host;
+  return host.split('.').slice(-2).join('.');
+}
+
+/**
+ * The realm in a 401 challenge is chosen by whoever answered, so it is only followed when it is
+ * on the registry's own domain (Docker Hub: registry-1.docker.io -> auth.docker.io) or a known
+ * alias, and over https unless the registry itself was reached over plain http.
+ */
+export function realmAllowed(realm: URL, base: URL, registry: string): boolean {
+  if (realm.protocol !== 'https:' && !(realm.protocol === 'http:' && base.protocol === 'http:')) return false;
+  if (realm.username || realm.password) return false;
+  const host = realm.hostname.toLowerCase();
+  const baseHost = base.hostname.toLowerCase();
+  if (host === baseHost || siteOf(host) === siteOf(baseHost)) return true;
+  return (REALM_ALIASES[registry.toLowerCase()] ?? []).some((alias) => host === alias || host.endsWith(`.${alias}`));
+}
+
+async function readToken(res: Response, registry: string): Promise<{ token?: string; access_token?: string }> {
+  let text: string;
+  try {
+    text = await readLimitedText(res, MAX_TOKEN_BYTES);
+  } catch (err) {
+    if (err instanceof SafeFetchError && err.code === 'tooLarge') throw new RegistryError(`${registry} sent an oversized token answer`);
+    throw err;
+  }
+  try {
+    return JSON.parse(text) as { token?: string; access_token?: string };
+  } catch {
+    throw new RegistryError(`${registry} sent a token answer that is not JSON`);
+  }
+}
+
 /** Digest of the manifest (or index) `ref` currently points to. */
 export async function remoteDigest(ref: ImageRef, opts: RegistryOptions = {}): Promise<string> {
   const doFetch = opts.fetchImpl ?? fetch;
@@ -91,12 +137,20 @@ export async function remoteDigest(ref: ImageRef, opts: RegistryOptions = {}): P
     if (res.status === 401) {
       const challenge = parseChallenge(res.headers.get('www-authenticate'));
       if (!challenge) throw new RegistryError(`${ref.registry} wants credentials this check does not have`);
-      const tokenUrl = new URL(challenge.realm);
+      let tokenUrl: URL;
+      try {
+        tokenUrl = new URL(challenge.realm);
+      } catch {
+        throw new RegistryError(`${ref.registry} sent an unreadable token realm`);
+      }
+      if (!realmAllowed(tokenUrl, new URL(base), ref.registry)) {
+        throw new RegistryError(`${ref.registry} pointed its token request at ${tokenUrl.host}, which is not part of that registry`);
+      }
       for (const [k, v] of Object.entries(challenge.params)) tokenUrl.searchParams.set(k, v);
       if (!challenge.params['scope']) tokenUrl.searchParams.set('scope', `repository:${ref.repository}:pull`);
       const tokenRes = await doFetch(tokenUrl.toString(), { headers: { accept: 'application/json' }, signal: timeout() });
       if (!tokenRes.ok) throw new RegistryError(`${ref.registry} refused an anonymous token (${tokenRes.status})`);
-      const body = (await tokenRes.json()) as { token?: string; access_token?: string };
+      const body = await readToken(tokenRes, ref.registry);
       const token = body.token ?? body.access_token;
       if (!token) throw new RegistryError(`${ref.registry} returned no token`);
       res = await head(token);

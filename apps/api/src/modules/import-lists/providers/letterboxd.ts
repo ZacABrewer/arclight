@@ -31,11 +31,10 @@ export function parseLetterboxdPage(html: string): { posters: LetterboxdPoster[]
   const posters: LetterboxdPoster[] = [];
   const seen = new Set<string>();
   // One poster element per film; attribute order varies between page versions.
-  for (const m of html.matchAll(/<(?:div|li)\b[^>]*\bdata-(?:item|film)-slug="([^"]+)"[^>]*>/g)) {
-    const slug = m[1]!;
-    if (seen.has(slug)) continue;
+  for (const tag of openTags(html, /^<(?:div|li)\b/)) {
+    const slug = /\bdata-(?:item|film)-slug="([^"]+)"/.exec(tag)?.[1];
+    if (!slug || seen.has(slug)) continue;
     seen.add(slug);
-    const tag = m[0];
     const name = decode(/\bdata-item-name="([^"]*)"/.exec(tag)?.[1] ?? /\bdata-film-name="([^"]*)"/.exec(tag)?.[1] ?? '');
     const yearMatch = /\((\d{4})\)\s*$/.exec(name);
     posters.push({
@@ -52,9 +51,54 @@ export function parseLetterboxdPage(html: string): { posters: LetterboxdPoster[]
       posters.push({ slug: m[1]!, title: m[1]!, year: null });
     }
   }
-  const next = /<a\b[^>]*class="next"[^>]*href="([^"]+)"|<a\b[^>]*href="([^"]+)"[^>]*class="next"/.exec(html);
-  const href = next?.[1] ?? next?.[2] ?? null;
+  const nextTag = openTags(html, /^<a\b/).find((tag) => /\bclass="next"/.test(tag));
+  const href = (nextTag && /\bhref="([^"]+)"/.exec(nextTag)?.[1]) ?? null;
   return { posters, next: href ? new URL(decode(href), LETTERBOXD_BASE).toString() : null };
+}
+
+/**
+ * Opening tags (`<name ...>`) whose start matches `head`, found with a linear indexOf scan so
+ * an unclosed tag in hostile HTML cannot make the parse quadratic.
+ */
+function openTags(html: string, head: RegExp): string[] {
+  const out: string[] = [];
+  let pos = 0;
+  let end = -1;
+  for (;;) {
+    const start = html.indexOf('<', pos);
+    if (start < 0) break;
+    // The '>' found for an earlier stray '<' still bounds this one: never rescan for it.
+    if (end <= start) end = html.indexOf('>', start + 1);
+    if (end < 0) break;
+    const next = html.indexOf('<', start + 1);
+    if (next >= 0 && next < end) {
+      pos = next; // a stray '<' inside text: restart from the next one
+      continue;
+    }
+    const tag = html.slice(start, end + 1);
+    if (head.test(tag)) out.push(tag);
+    pos = end + 1;
+  }
+  return out;
+}
+
+/**
+ * The `<item>...</item>` blocks of an RSS document, found with a linear indexOf scan: a regex
+ * like /<item>[\s\S]*?<\/item>/g rescans to the end of the input for every unclosed `<item>`,
+ * which is quadratic on hostile input. An unclosed item ends the scan.
+ */
+function itemBlocks(xml: string): string[] {
+  const out: string[] = [];
+  let pos = 0;
+  for (;;) {
+    const start = xml.indexOf('<item>', pos);
+    if (start < 0) break;
+    const end = xml.indexOf('</item>', start + 6);
+    if (end < 0) break;
+    out.push(xml.slice(start, end + 7));
+    pos = end + 7;
+  }
+  return out;
 }
 
 /** TMDB (and IMDb) ids from a film page. */
@@ -68,7 +112,7 @@ export function parseLetterboxdFilm(html: string): { mediaType: 'series' | 'movi
 /** Diary RSS: items carry `<tmdb:movieId>` (or `<tmdb:tvId>`) and the film title/year. */
 export function parseLetterboxdRss(xml: string): FetchedItem[] {
   const out: FetchedItem[] = [];
-  for (const block of xml.match(/<item>[\s\S]*?<\/item>/g) ?? []) {
+  for (const block of itemBlocks(xml)) {
     const movieId = int(/<tmdb:movieId>(\d+)<\/tmdb:movieId>/.exec(block)?.[1]);
     const tvId = int(/<tmdb:tvId>(\d+)<\/tmdb:tvId>/.exec(block)?.[1]);
     const title = /<letterboxd:filmTitle>([\s\S]*?)<\/letterboxd:filmTitle>/.exec(block)?.[1];

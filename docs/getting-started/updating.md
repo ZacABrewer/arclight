@@ -102,7 +102,7 @@ A container is not updatable when:
 
 ### How an automatic update runs
 
-1. Arclight checks labelled containers once a day (hourly job that skips if the last check is under 20 hours old) and only inside the update window. It compares the registry digest of each image.
+1. Arclight checks labelled containers once a day (hourly job that skips if the last check is under 20 hours old) and only inside the update window. It compares the registry digest of each image. To read a digest it asks the registry for an anonymous pull token; it only follows the registry's token address when that address belongs to the same registry (for example auth.docker.io for Docker Hub, ghcr.io for lscr.io). Otherwise the container shows "Check failed".
 2. For each container with a newer image it pulls the image, creates the new container next to the old one, stops the old one, swaps the names, starts the new one and removes the old one. If something fails, it rolls back to the old container.
 3. Containers that share another container's network (the VPN setup, where Arclight uses the Gluetun network) are recreated after the container they depend on.
 4. When Arclight updates itself, a short-lived helper container named `arclight-updater-<number>` does the swap. Expect Arclight to be unreachable for a few seconds.

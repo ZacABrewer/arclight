@@ -1,4 +1,11 @@
+import { readLimited, SafeFetchError } from '@arclight/net';
 import { MigrateError } from './errors.js';
+
+/**
+ * Largest single answer read from the source app. A big library's /movie or /series list runs
+ * to tens of MB, so this is generous; it only stops an endless or runaway body.
+ */
+export const MAX_MIGRATE_BODY_BYTES = 256 * 1024 * 1024;
 
 // HTTP access to a running source app (API mode). One `SourceHttp` per source: base URL, the
 // auth header the app expects, a timeout, a small concurrency limit (an old Sonarr with a few
@@ -115,9 +122,21 @@ export class SourceHttp {
     });
   }
 
+  /** Capped body read (the request timeout keeps running while it streams). */
+  private async readBody(res: Response, path: string): Promise<Buffer> {
+    try {
+      return await readLimited(res, MAX_MIGRATE_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'tooLarge') {
+        throw new MigrateError('SOURCE_UNREADABLE', `${this.appName} sent more than ${MAX_MIGRATE_BODY_BYTES / 1024 / 1024} MB for ${path}`);
+      }
+      throw new MigrateError('UNREACHABLE', `${this.appName} stopped answering while sending ${path}: ${describe(err)}`);
+    }
+  }
+
   async json<T = unknown>(path: string, init: RequestInitLite = {}): Promise<T> {
     const res = await this.request(path, init);
-    const text = await res.text();
+    const text = (await this.readBody(res, path)).toString('utf8');
     if (init.allow?.includes(res.status) && !res.ok) return null as T;
     try {
       return JSON.parse(text) as T;
@@ -133,7 +152,7 @@ export class SourceHttp {
       await res.body?.cancel().catch(() => undefined);
       return fallback;
     }
-    const text = await res.text();
+    const text = (await this.readBody(res, path)).toString('utf8');
     try {
       return JSON.parse(text) as T;
     } catch {
@@ -142,11 +161,11 @@ export class SourceHttp {
   }
 
   async text(path: string, init: RequestInitLite = {}): Promise<string> {
-    return (await this.request(path, init)).text();
+    return (await this.readBody(await this.request(path, init), path)).toString('utf8');
   }
 
   async bytes(path: string, init: RequestInitLite = {}): Promise<Buffer> {
-    return Buffer.from(await (await this.request(path, init)).arrayBuffer());
+    return this.readBody(await this.request(path, init), path);
   }
 
   /** Maps over items with this client's concurrency (each callback usually makes one request). */
