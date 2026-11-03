@@ -3,6 +3,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { QUALITIES, type QualityDefinition, type QualityName } from '@arclight/shared';
 import type { Probe, ProbeResult } from './deps.js';
+import { ffprobeArgs } from '../transcode/input-protocols.js';
 
 // Enumerating candidate files in a completed download or a library folder (spec 4.4-4.8),
 // sample detection (spec 8) and unpack detection. Filesystem reads only; no database.
@@ -336,7 +337,7 @@ export function createFfprobeProbe(binary = 'ffprobe', timeoutMs = 15_000): Prob
     new Promise<ProbeResult | null>((resolvePromise) => {
       execFile(
         binary,
-        ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path],
+        ffprobeArgs(['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams'], path),
         { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 },
         (err, stdout) => {
           if (err) return resolvePromise(null);

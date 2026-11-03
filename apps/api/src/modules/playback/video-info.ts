@@ -14,6 +14,7 @@ import type {
   VideoSubtitleTrack,
 } from '@arclight/shared';
 import { hwInputArgs, presetArgs, videoEncoder } from '../transcode/ffmpeg.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // The pure half of video playback: media info -> VideoInfo, version labels and badges, segments
 // from chapter names, the direct/remux/transcode decision and the ffmpeg argv of a live stream.
@@ -519,9 +520,9 @@ export function buildVideoStreamArgs(input: string, spec: LiveVideoSpec): string
   const hw = spec.method === 'transcode' ? (spec.hwaccel ?? 'none') : 'none';
   if (spec.method === 'transcode') args.push(...hwInputArgs(hw));
   const ss = spec.startMs > 0 ? ['-ss', (spec.startMs / 1000).toFixed(3)] : [];
-  args.push(...ss, '-i', input);
+  args.push(...ss, ...fileInput(input));
   const burn = spec.method === 'transcode' ? (spec.burn ?? null) : null;
-  if (burn && 'path' in burn) args.push(...ss, '-i', burn.path);
+  if (burn && 'path' in burn) args.push(...ss, ...fileInput(burn.path));
   const audioMap = spec.audioTrack === null ? [] : ['-map', `0:a:${spec.audioTrack}?`];
 
   if (spec.method === 'remux') {
@@ -559,10 +560,10 @@ export function buildVideoStreamArgs(input: string, spec: LiveVideoSpec): string
 
 /** The argv converting one subtitle stream (embedded ordinal, or a whole external file) to WebVTT at `out`. */
 export function buildSubtitleArgs(input: string, ordinal: number | null, out: string, charset?: string): string[] {
-  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...(charset ? ['-sub_charenc', charset] : []), '-i', input, '-map', ordinal === null ? '0:s:0' : `0:s:${ordinal}`, '-c:s', 'webvtt', '-f', 'webvtt', out];
+  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...(charset ? ['-sub_charenc', charset] : []), ...fileInput(input), '-map', ordinal === null ? '0:s:0' : `0:s:${ordinal}`, '-c:s', 'webvtt', '-f', 'webvtt', out];
 }
 
 /** The argv of a 16:9 frame thumbnail at `atMs`, `width` pixels wide, written as JPEG to `out`. */
 export function buildThumbnailArgs(input: string, atMs: number, out: string, width = 480): string[] {
-  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-ss', (atMs / 1000).toFixed(3), '-i', input, '-map', '0:v:0', '-frames:v', '1', '-vf', `scale=${width}:-2`, '-q:v', '4', '-f', 'image2', out];
+  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-ss', (atMs / 1000).toFixed(3), ...fileInput(input), '-map', '0:v:0', '-frames:v', '1', '-vf', `scale=${width}:-2`, '-q:v', '4', '-f', 'image2', out];
 }

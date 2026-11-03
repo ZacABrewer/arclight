@@ -224,7 +224,7 @@ describe('format labels', () => {
 describe('ffmpeg arguments and the transcode limiter', () => {
   it('builds the argv per format', () => {
     expect(buildAudioTranscodeArgs('/m/a.flac', { format: 'opus', bitrateKbps: 128, startMs: 61_500, channels: 6 })).toEqual([
-      ...['-hide_banner', '-loglevel', 'error', '-nostdin', '-ss', '61.500', '-i', '/m/a.flac'],
+      ...['-hide_banner', '-loglevel', 'error', '-nostdin', '-ss', '61.500', '-protocol_whitelist', 'file,pipe', '-i', '/m/a.flac'],
       ...['-map', '0:a:0', '-vn', '-sn', '-dn', '-map_metadata', '-1', '-ac', '2'],
       ...['-c:a', 'libopus', '-b:a', '128k', '-vbr', 'on', '-ar', '48000', '-f', 'ogg', 'pipe:1'],
     ]);

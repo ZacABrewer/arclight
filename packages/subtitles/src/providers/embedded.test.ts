@@ -30,7 +30,7 @@ function provider(config = {}, runFfmpeg?: (a: string[]) => Promise<Uint8Array>)
 describe('buildSubtitleExtractArgs', () => {
   it('copies text codecs and converts mov_text', () => {
     expect(buildSubtitleExtractArgs({ input: 'in.mkv', streamIndex: 4, codec: 'ass', output: 'pipe:1' })).toEqual([
-      'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', 'in.mkv', '-map', '0:4', '-c:s', 'copy', '-f', 'ass', 'pipe:1',
+      'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', 'in.mkv', '-map', '0:4', '-c:s', 'copy', '-f', 'ass', 'pipe:1',
     ]);
     const mov = buildSubtitleExtractArgs({ ffmpegPath: '/usr/bin/ffmpeg', input: 'a.mp4', streamIndex: 2, codec: 'mov_text', output: 'o.srt' });
     expect(mov[0]).toBe('/usr/bin/ffmpeg');
@@ -109,7 +109,7 @@ describe('EmbeddedProvider', () => {
     const [c] = await p.search(query([{ tag: 'zh-Hant', forced: false, hi: 'normal' }]));
     const file = await p.download(c!);
     expect(file.format).toBe('srt');
-    expect(calls[0]).toEqual(['ff', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', PATH, '-map', '0:7', '-c:s', 'srt', '-f', 'srt', 'pipe:1']);
+    expect(calls[0]).toEqual(['ff', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', PATH, '-map', '0:7', '-c:s', 'srt', '-f', 'srt', 'pipe:1']);
   });
 
   it('fails download without a runner (config) and on extraction failure (must-blacklist)', async () => {

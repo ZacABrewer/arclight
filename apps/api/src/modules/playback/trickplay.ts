@@ -8,6 +8,7 @@ import type { Db } from '../../db/index.js';
 import { mediaFiles } from '../library/schema.js';
 import { dynamicRangeOf, durationOf, TONEMAP_ZSCALE } from './video-info.js';
 import { fileStamp, type Limiter } from './video-stream.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Scrub thumbnails ("trickplay"): JPEG sprite sheets of a video file, one 320 px tile every 10 s,
 // 10x10 tiles per sheet, made by one low-priority background ffmpeg at a time and kept per file
@@ -37,8 +38,7 @@ export function buildTrickplayArgs(input: string, outDir: string, opts: { tonema
     '2',
     '-skip_frame',
     'nokey',
-    '-i',
-    input,
+    ...fileInput(input),
     '-map',
     '0:v:0',
     '-an',

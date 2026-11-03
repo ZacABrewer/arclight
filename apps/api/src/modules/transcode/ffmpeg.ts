@@ -1,4 +1,5 @@
 import type { MediaInfo, TranscodeAction, TranscodeContainer, TranscodeHwaccel, TranscodeOptions } from '@arclight/shared';
+import { fileInput } from './input-protocols.js';
 
 // The pure ffmpeg command builder. Given the source, the temp output path, a rule's action and
 // options and the file's media info, it returns the argv (without the binary). Stream indexes
@@ -278,7 +279,7 @@ export function buildFfmpegArgs(input: string, output: string, spec: BuildSpec, 
 
   const args = ['-hide_banner', '-nostdin', '-y'];
   if (encodeVideo) args.push(...hwInputArgs(options.hwaccel));
-  args.push('-i', input);
+  args.push(...fileInput(input));
 
   // ---- maps
   args.push('-map', '0:v:0');

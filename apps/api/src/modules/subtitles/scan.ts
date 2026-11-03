@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import type { MediaInfo } from '@arclight/shared';
 import { parseLanguageTag, parseSubtitleFileName, type ProbeResult } from '@arclight/subtitles';
 import type { ProcessRunner } from './runner.js';
+import { ffprobeArgs } from '../transcode/input-protocols.js';
 
 // Disk side of indexing (spec R7, R9.8): external subtitle files next to the video (and in the
 // configured subtitle folder) plus embedded subtitle streams from ffprobe or stored media info.
@@ -119,7 +120,7 @@ export type SubtitleProbe = (path: string) => Promise<ProbeResult | null>;
 /** ffprobe through the runner; null when the binary is missing or the file unreadable. */
 export function createFfprobe(runner: ProcessRunner, ffprobePath: () => string, timeoutMs = 60_000): SubtitleProbe {
   return async (path) => {
-    const r = await runner(ffprobePath(), ['-v', 'error', '-print_format', 'json', '-show_streams', path], { timeoutMs });
+    const r = await runner(ffprobePath(), ffprobeArgs(['-v', 'error', '-print_format', 'json', '-show_streams'], path), { timeoutMs });
     if (!r.ok) return null;
     try {
       const parsed = JSON.parse(r.stdout.toString('utf8')) as ProbeResult;

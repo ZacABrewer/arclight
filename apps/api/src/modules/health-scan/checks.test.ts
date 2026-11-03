@@ -150,9 +150,9 @@ describe('decode plan', () => {
 
   it('builds the ffmpeg arguments', () => {
     expect(decodeArgs('/m/x.mkv', { start: 1795, length: 10 }, 'video')).toEqual([
-      '-hide_banner', '-nostdin', '-nostats', '-v', 'error', '-ss', '1795', '-t', '10', '-i', '/m/x.mkv', '-map', '0:v:0?', '-map', '0:a?', '-f', 'null', '-',
+      '-hide_banner', '-nostdin', '-nostats', '-v', 'error', '-ss', '1795', '-t', '10', '-protocol_whitelist', 'file,pipe', '-i', '/m/x.mkv', '-map', '0:v:0?', '-map', '0:a?', '-f', 'null', '-',
     ]);
-    expect(decodeArgs('/a/t.flac', { start: 0, length: null }, 'track')).toEqual(['-hide_banner', '-nostdin', '-nostats', '-v', 'error', '-i', '/a/t.flac', '-map', '0:a?', '-f', 'null', '-']);
+    expect(decodeArgs('/a/t.flac', { start: 0, length: null }, 'track')).toEqual(['-hide_banner', '-nostdin', '-nostats', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', '/a/t.flac', '-map', '0:a?', '-f', 'null', '-']);
   });
 
   it('wraps commands in nice / ionice when they exist', () => {

@@ -165,7 +165,7 @@ describe('audio activity parsing and commands', () => {
     const cmd = buildAudioActivityCommand({ ffmpegPath: '/usr/bin/ffmpeg', input: '/m/a.mkv', window: { startMs: 90_000, durationMs: 600_000 } });
     expect(cmd.command).toBe('/usr/bin/ffmpeg');
     expect(cmd.args).toEqual([
-      '-nostdin', '-hide_banner', '-nostats', '-ss', '90.000', '-t', '600.000', '-i', '/m/a.mkv',
+      '-nostdin', '-hide_banner', '-nostats', '-ss', '90.000', '-t', '600.000', '-protocol_whitelist', 'file,pipe', '-i', '/m/a.mkv',
       '-map', '0:a:0', '-vn', '-sn', '-dn', '-af', 'silencedetect=noise=-30dB:d=0.300', '-f', 'null', '-',
     ]);
     const loud = buildAudioActivityCommand({ input: 'x', window: { startMs: 0, durationMs: 1000 }, detector: 'ebur128', audioStream: '0:a:1' });
