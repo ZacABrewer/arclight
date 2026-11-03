@@ -22,6 +22,7 @@ describe('aggregateDownloadState', () => {
     expect(aggregateDownloadState(['done', 'none'])).toBe('none');
     expect(aggregateDownloadState(['done', 'queued', 'downloading'])).toBe('downloading');
     expect(aggregateDownloadState(['done', 'queued'])).toBe('queued');
+    expect(aggregateDownloadState(['done', 'queued', 'waiting'])).toBe('waiting');
     expect(aggregateDownloadState(['done', 'done'])).toBe('done');
   });
 });

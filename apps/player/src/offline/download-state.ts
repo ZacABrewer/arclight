@@ -11,6 +11,8 @@ export function itemDownloadState(index: Pick<DownloadIndex, 'get'>, accountId: 
       return 'done';
     case 'downloading':
       return 'downloading';
+    case 'waiting':
+      return 'waiting';
     case 'failed':
       return pending.has(itemKey) ? 'queued' : 'none';
     default:

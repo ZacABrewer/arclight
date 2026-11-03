@@ -8146,6 +8146,7 @@
   "player.browse.paused": "[nl] Paused",
   "player.browse.download.action": "Downloaden",
   "player.browse.download.queued": "In de wachtrij",
+  "player.browse.download.waiting": "Wacht op wifi",
   "player.browse.download.downloading": "Bezig met downloaden…",
   "player.browse.download.done": "Gedownload",
   "player.browse.play": "[nl] Play",

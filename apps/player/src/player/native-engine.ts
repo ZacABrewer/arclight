@@ -536,8 +536,10 @@ export class NativeEngine {
       this.setPosition(t.id, 0, t.itemOffsetMs);
       this.applyLevel();
       void this.call(() => this.plugin.configureRemote(this.remoteConfig(next.item)));
-      this.emit();
+      // Advance before emitting (as AudioEngine does): the controller closes the finished item's
+      // report at its end only while its state still shows that item.
       this.hooks.onAdvance?.(next.item);
+      this.emit();
     }
   }
 

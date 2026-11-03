@@ -5,11 +5,12 @@ import { useDownloadState, usePlayerActions, type DownloadState } from './player
 const LABEL: Record<DownloadState, string> = {
   none: 'player.browse.download.action',
   queued: 'player.browse.download.queued',
+  waiting: 'player.browse.download.waiting',
   downloading: 'player.browse.download.downloading',
   done: 'player.browse.download.done',
 };
 
-/** The message key for a download state ("Download", "Queued", "Downloading…", "Downloaded"). */
+/** The message key for a download state ("Download", "Queued", "Waiting for Wi-Fi", "Downloading…", "Downloaded"). */
 export function downloadLabelKey(state: DownloadState): string {
   return LABEL[state];
 }

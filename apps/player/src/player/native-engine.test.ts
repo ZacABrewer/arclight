@@ -114,8 +114,15 @@ describe('NativeEngine', () => {
     const load = fake.named('load')[0] as LoadOptions;
     expect(load.tracks.map((t: NativeTrack) => t.itemKey)).toEqual(['track:1', 'track:2']);
     const nextId = load.tracks[1]!.id;
+    // The controller closes the finished item's report in onAdvance, so no snapshot may show the
+    // next item before it runs.
+    const seenBeforeAdvance: string[] = [];
+    engine.subscribe((snap) => {
+      if (!onAdvance.mock.calls.length && snap.item) seenBeforeAdvance.push(snap.item.itemKey);
+    });
     fake.emit('trackChanged', { index: 1, trackId: nextId, previousTrackId: load.tracks[0]!.id, reason: 'auto' });
     expect(onAdvance).toHaveBeenCalledWith(b);
+    expect(seenBeforeAdvance).not.toContain('track:2');
     expect(engine.current?.itemKey).toBe('track:2');
   });
 

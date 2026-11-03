@@ -298,6 +298,17 @@ describe('CORS for the app', () => {
     expect(String(res.headers['access-control-allow-headers']).toLowerCase()).toContain('authorization');
   });
 
+  it.each(['PUT', 'PATCH', 'DELETE'])('allows %s from the app (progress, queue, devices)', async (method) => {
+    const h = await harness();
+    const res = await h.app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/playback/queue',
+      headers: { origin: 'https://localhost', 'access-control-request-method': method, 'access-control-request-headers': 'authorization,content-type' },
+    });
+    expect(res.statusCode).toBeLessThan(300);
+    expect(String(res.headers['access-control-allow-methods']).split(',').map((m) => m.trim())).toContain(method);
+  });
+
   it('exposes the download headers to the app', async () => {
     const h = await harness();
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/system/ping', headers: { origin: 'capacitor://localhost' } });

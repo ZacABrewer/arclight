@@ -51,7 +51,9 @@ body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 /* ---------- dock: mini-player + tabs ---------- */
 .app-dock {
   position: fixed; z-index: 35; left: 0; right: 0; bottom: 0;
-  background: var(--al-surface-solid); border-top: 1px solid var(--al-line-2); box-shadow: var(--al-shadow-pop);
+  /* The surface token is translucent; a solid base under it keeps the page from showing through. */
+  background: linear-gradient(var(--al-surface-solid), var(--al-surface-solid)), #02070a;
+  border-top: 1px solid var(--al-line-2); box-shadow: var(--al-shadow-pop);
 }
 .app-dock .pl-mini { position: relative; box-shadow: none; border-top: 0; padding-bottom: 8px; border-bottom: 1px solid var(--al-line-1, var(--al-line-2)); }
 .app-tabs {
@@ -77,8 +79,8 @@ body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 .app-welcome__title { margin: 8px 0 0; font-size: 26px; line-height: 1.2; color: var(--al-text-1); }
 .app-welcome__body { margin: 0; color: var(--al-text-3); }
 .app-card { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
-.app-card__title { margin: 0; font-size: 22px; color: var(--al-text-1); }
-.app-card__sub { margin: -8px 0 0; color: var(--al-text-4); font-size: 14px; word-break: break-all; }
+.app-card__title { margin: 0; font-size: 22px; line-height: 1.25; color: var(--al-text-1); }
+.app-card__sub { margin: -6px 0 0; line-height: 1.4; color: var(--al-text-4); font-size: 14px; word-break: break-all; }
 
 /* ---------- lists (downloads) ---------- */
 .app-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

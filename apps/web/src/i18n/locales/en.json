@@ -8146,6 +8146,7 @@
   "player.browse.paused": "Paused",
   "player.browse.download.action": "Download",
   "player.browse.download.queued": "Queued",
+  "player.browse.download.waiting": "Waiting for Wi-Fi",
   "player.browse.download.downloading": "Downloading…",
   "player.browse.download.done": "Downloaded",
   "player.browse.play": "Play",

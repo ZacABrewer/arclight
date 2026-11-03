@@ -58,10 +58,14 @@ function pick(f: PlayerInfo['features']): Partial<PlayerInfo['features']> {
   return { downloads: f.downloads, car: f.car, cast: f.cast };
 }
 
-/** The native plugin for downloads, when the platform implements them (null otherwise). */
-export async function downloadPlugin(): Promise<ArclightPlayerPlugin | null> {
+/**
+ * The native plugin for downloads, when the platform implements them (null otherwise). Wrapped in an
+ * object: a Capacitor plugin proxy must never be the value a promise resolves to, or `await` calls
+ * `.then()` on it, which the native side rejects as unimplemented.
+ */
+export async function downloadPlugin(): Promise<{ plugin: ArclightPlayerPlugin } | null> {
   const b = await playerBackend();
-  return b.info.features.downloads ? ArclightPlayer : null;
+  return b.info.features.downloads ? { plugin: ArclightPlayer } : null;
 }
 
 /** Tests: forget the cached backend. */

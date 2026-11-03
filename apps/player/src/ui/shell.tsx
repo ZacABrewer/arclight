@@ -155,7 +155,9 @@ function Frame({ children, bare }: { children: ReactNode; bare?: boolean }) {
             {tabs.map((tab) => {
               const active = tab.match(pathname);
               return (
-                <Link key={tab.id} to={tab.to} className="app-tabs__link" aria-current={active ? 'page' : undefined}>
+                // exact: TanStack marks a Link active (and sets aria-current) for child routes too, which
+                // would light Home on every tab.
+                <Link key={tab.id} to={tab.to} activeOptions={{ exact: true }} className="app-tabs__link" aria-current={active ? 'page' : undefined}>
                   <Icon name={tab.icon} size={24} />
                   <span>{tab.label}</span>
                 </Link>

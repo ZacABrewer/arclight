@@ -31,5 +31,9 @@ describe('itemDownloadState', () => {
     await idx.put(entry(track(2)));
     await idx.updateTask('a:track:2#0', { status: 'failed', error: 'HTTP 500' });
     expect(itemDownloadState(idx, 'a', 'track:2')).toBe('none');
+
+    await idx.put(entry(track(3)));
+    await idx.updateTask('a:track:3#0', { status: 'waiting' });
+    expect(itemDownloadState(idx, 'a', 'track:3')).toBe('waiting');
   });
 });

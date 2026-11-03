@@ -141,10 +141,13 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // Any origin may call the API (credentials: the session cookie is SameSite=Lax, so other sites'
   // pages never send it). The Arclight player app runs at capacitor://localhost (iOS) and
   // https://localhost / http://localhost (Android) and authenticates with `Authorization: Bearer`;
-  // it reads the download file name and the stream headers, so those are exposed.
+  // it reads the download file name and the stream headers, so those are exposed. The methods are
+  // listed because @fastify/cors only allows GET/HEAD/POST by default, which blocks the app's
+  // progress and queue PUTs and its DELETEs.
   await app.register(cors, {
     origin: true,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     exposedHeaders: ['content-disposition', 'content-length', 'content-range', 'accept-ranges', 'retry-after', 'x-arclight-backend', 'x-arclight-transcode'],
   });
   await app.register(websocket);

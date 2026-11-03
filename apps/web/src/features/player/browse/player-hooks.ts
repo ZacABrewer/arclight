@@ -13,7 +13,7 @@ export interface PlayItemsOptions {
 }
 
 /** Offline copy of one item, as far as the player knows. */
-export type DownloadState = 'none' | 'queued' | 'downloading' | 'done';
+export type DownloadState = 'none' | 'queued' | 'waiting' | 'downloading' | 'done';
 
 export interface BrowsePlayerActions {
   /** Item key of the item loaded in the player ("track:5"), or null. */
@@ -55,11 +55,13 @@ export function usePlayerActions(): BrowsePlayerActions {
 
 /**
  * One state for several items (an album, a playlist): 'none' while any is missing (the button
- * downloads the rest), else 'downloading' / 'queued' while any is under way, else 'done'.
+ * downloads the rest), else 'downloading' / 'waiting' (held for Wi-Fi) / 'queued' while any is under
+ * way, else 'done'.
  */
 export function aggregateDownloadState(states: readonly DownloadState[]): DownloadState {
   if (states.length === 0 || states.includes('none')) return 'none';
   if (states.includes('downloading')) return 'downloading';
+  if (states.includes('waiting')) return 'waiting';
   if (states.includes('queued')) return 'queued';
   return 'done';
 }

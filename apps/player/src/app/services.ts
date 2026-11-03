@@ -54,7 +54,7 @@ export async function createServices(): Promise<AppServices> {
 
   const backend = await playerBackend();
   const downloads = new DownloadManager({
-    plugin: await downloadPlugin(),
+    plugin: (await downloadPlugin())?.plugin ?? null,
     index,
     settings: () => settings.get(),
     maxBitrateKbps: () => caps?.maxBitrateKbps,
