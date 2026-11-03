@@ -63,6 +63,7 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/app/sign-in': 'public',
   'POST /api/v1/app/pair': 'public',
   'POST /api/v1/app/pair-codes': 'portal',
+  'POST /api/v1/app/reauth': 'portal',
   'POST /api/v1/app/device-codes': 'public',
   'POST /api/v1/app/device-codes/poll': 'public',
   'POST /api/v1/app/device-codes/approve': 'portal',
