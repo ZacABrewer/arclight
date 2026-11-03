@@ -70,6 +70,13 @@
   "app.home.greeting": "Listening",
   "app.home.offlineTitle": "Downloaded",
 
+  "app.car.continue": "Continue",
+  "app.car.albums": "Albums",
+  "app.car.artists": "Artists",
+  "app.car.playlists": "Playlists",
+  "app.car.books": "Books",
+  "app.car.downloads": "Downloads",
+
   "app.downloads.title": "Downloads",
   "app.downloads.empty": "Nothing downloaded yet",
   "app.downloads.emptyHelp": "Download what's playing or your queue to listen without a connection.",

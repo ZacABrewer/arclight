@@ -14,6 +14,8 @@ import { downloadPlugin, playerBackend, type PlayerBackend } from '../native';
 import { DownloadIndex } from '../offline/download-index';
 import { DownloadManager } from '../offline/downloads';
 import { ProgressQueue } from '../offline/progress-queue';
+import { CarBrowser } from '../player/car';
+import { createCarLibrary } from '../player/car-library';
 import { appDeviceId, createAppPlayer, type AppPlayer } from '../player/setup';
 
 // Everything that lives for the whole app run, built once at start (main.tsx) and handed to
@@ -36,6 +38,8 @@ export interface AppServices {
   switchAccount(accountId: string | null): Promise<void>;
   /** Send queued offline progress now (when online). */
   flushProgress(): Promise<void>;
+  /** The app is in the foreground again. */
+  resumed(): void;
   subscribePlayer(listener: () => void): () => void;
 }
 
@@ -74,6 +78,7 @@ export async function createServices(): Promise<AppServices> {
       deviceId,
       deviceName,
       toWebUrl: (u) => (Capacitor.isNativePlatform() ? Capacitor.convertFileSrc(u) : u),
+      nativeSleepTimer: backend.native && backend.info.features.sleepTimer,
     });
 
   const flushProgress = async () => {
@@ -105,8 +110,7 @@ export async function createServices(): Promise<AppServices> {
     },
     async switchAccount(accountId) {
       if (player) {
-        player.controller.onPageHide();
-        player.controller.dispose();
+        player.dispose();
         player = null;
       }
       if (accountId) await accounts.setActive(accountId);
@@ -117,6 +121,10 @@ export async function createServices(): Promise<AppServices> {
       for (const l of [...playerListeners]) l();
     },
     flushProgress,
+    resumed() {
+      player?.onResume();
+      void flushProgress();
+    },
     subscribePlayer(listener) {
       playerListeners.add(listener);
       return () => playerListeners.delete(listener);
@@ -128,6 +136,24 @@ export async function createServices(): Promise<AppServices> {
     if (s.online) void flushProgress();
   });
   void flushProgress();
+  // CarPlay / Android Auto browse lists (only in builds whose native side has the car UI).
+  if (backend.native && backend.info.features.car) {
+    new CarBrowser({
+      plugin: backend.plugin,
+      library: createCarLibrary(qc, index),
+      player: () => services.player().controller,
+      onChange: (listener) => {
+        const offIndex = index.subscribe(listener);
+        const offNet = onNetChange(listener);
+        const offPlayer = services.subscribePlayer(listener);
+        return () => {
+          offIndex();
+          offNet();
+          offPlayer();
+        };
+      },
+    }).start();
+  }
   // New artwork signature: refetch so images use it.
   onArtworkLinkRenewed(() => void qc.invalidateQueries());
   // The token was refused (device removed on the server): drop the token; the account stays

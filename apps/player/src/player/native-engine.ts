@@ -37,10 +37,20 @@ export interface NativeEngineDeps {
   now?: () => number;
   /** A native "paused" that JS did not ask for is acted on after this long (track changes flicker). */
   externalPauseDelayMs?: number;
+  /** Lock-screen next / previous that JS has not answered by then is answered with "stay" (native gives JS 2 s). */
+  remoteAnswerMs?: number;
 }
 
-/** What the lock screen / headset / car asked for that the controller must decide. */
-export type ExternalCommand = 'play' | 'pause' | 'next' | 'previous';
+/**
+ * What the lock screen / headset / car did that the controller must know about: play / pause /
+ * next / previous to decide, and 'seek' when native moved the place itself (report it now).
+ */
+export type ExternalCommand = 'play' | 'pause' | 'next' | 'previous' | 'seek';
+
+export interface ExternalHandlerOptions {
+  /** The controller is busy loading an item (its own load answers native, so do not answer for it). */
+  busy?: () => boolean;
+}
 
 type EngineError = EngineSnapshot['error'];
 
@@ -54,6 +64,10 @@ interface Loaded {
 
 /** Ignore play/pause mismatches from native this soon after a local command (it has not applied it yet). */
 const COMMAND_GRACE_MS = 1_200;
+/** A native position this far from where JS expected it is a seek JS did not make (lock screen, car). */
+const POSITION_JUMP_MS = 4_000;
+/** Default for NativeEngineDeps.remoteAnswerMs (well inside native's 2 s fallback). */
+const REMOTE_ANSWER_MS = 900;
 
 export class NativeEngine {
   private readonly plugin: ArclightPlayerPlugin;
@@ -62,6 +76,7 @@ export class NativeEngine {
   private readonly listeners = new Set<(s: EngineSnapshot) => void>();
   private handles: PluginListenerHandle[] = [];
   private external: ((c: ExternalCommand) => void) | null = null;
+  private externalBusy: (() => boolean) | null = null;
 
   private item: PlayableItem | null = null;
   private loaded: Loaded | null = null;
@@ -87,6 +102,15 @@ export class NativeEngine {
   private pos: { trackId: string | null; localMs: number; at: number; globalMs: number } = { trackId: null, localMs: 0, at: 0, globalMs: 0 };
   private lastCommandAt = 0;
   private pauseTimer: ReturnType<typeof setTimeout> | null = null;
+  /** A lock-screen next / previous waiting for JS's answer (`load` or `skipTo` cancel native's own fallback). */
+  private remotePending = false;
+  private remoteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** No jump detection until then (a remote seek that was already reported). */
+  private jumpQuietUntil = 0;
+  /** Item switched to natively by `preAdvance`; the controller's `load` of it adopts what plays. */
+  private adopted: string | null = null;
+  /** The native sleep timer fades the volume itself: ignore the controller's fade meanwhile. */
+  private nativeFade = false;
   private ready: Promise<void>;
 
   constructor(deps: NativeEngineDeps) {
@@ -116,8 +140,53 @@ export class NativeEngine {
   }
 
   /** Where lock-screen next / previous (and external play / pause) go: the controller. */
-  setExternalHandler(handler: ((c: ExternalCommand) => void) | null): void {
+  setExternalHandler(handler: ((c: ExternalCommand) => void) | null, opts: ExternalHandlerOptions = {}): void {
     this.external = handler;
+    this.externalBusy = opts.busy ?? null;
+  }
+
+  /**
+   * Lock-screen / car "next" when the controller's next item is already queued natively behind
+   * the current one: switch to it at once with `skipTo`, so native has its answer well within
+   * its 2 s (and nothing reloads). The controller's `load` of that item then adopts what plays.
+   */
+  preAdvance(itemKey: string): boolean {
+    const next = this.nextLoaded;
+    if (!next || next.item.itemKey !== itemKey || this.nativeIndex < 0) return false;
+    const index = this.queue.findIndex((t) => this.trackGen.get(t.id) === next.gen);
+    if (index < 0) return false;
+    const t = this.queue[index]!;
+    this.settleRemote();
+    this.cancelExternalPause();
+    this.item = next.item;
+    this.loaded = next;
+    this.nextItem = null;
+    this.nextLoaded = null;
+    this.error = null;
+    this.adopted = itemKey;
+    this.wantPlay = true;
+    this.markCommand();
+    this.nativeIndex = index;
+    this.setPosition(t.id, 0, t.itemOffsetMs);
+    this.applyLevel();
+    void this.call(() => this.plugin.skipTo({ index, positionMs: 0 }));
+    void this.call(() => this.plugin.configureRemote(this.remoteConfig(next.item)));
+    this.emit();
+    return true;
+  }
+
+  /** The native queue's id of a part of the current item (native sleep timer "end of track"). */
+  nativeTrackId(partIndex: number): string | null {
+    const loaded = this.loaded;
+    if (!loaded) return null;
+    return this.queue.find((t) => this.trackGen.get(t.id) === loaded.gen && t.partIndex === partIndex)?.id ?? null;
+  }
+
+  /** On while the native sleep timer fades out by itself (the controller's fade is then ignored). */
+  setNativeFade(on: boolean): void {
+    if (this.nativeFade === on) return;
+    this.nativeFade = on;
+    this.applyLevel();
   }
 
   // ------------------------------------------------------------------ AudioEngine surface
@@ -175,6 +244,19 @@ export class NativeEngine {
 
   load(item: PlayableItem, startMs = 0, autoplay = true): void {
     this.cancelExternalPause();
+    const adopted = this.adopted;
+    this.adopted = null;
+    if (adopted === item.itemKey && this.loaded?.item.itemKey === item.itemKey && this.nativeIndex >= 0) {
+      // Already switched to natively (preAdvance): keep playing what native plays.
+      this.item = item;
+      this.loaded = { ...this.loaded, item };
+      this.error = null;
+      this.markCommand();
+      if (startMs > 0) this.seek(startMs);
+      if (!autoplay) this.pause();
+      else this.emit();
+      return;
+    }
     this.item = item;
     this.loaded = null;
     this.nextLoaded = null;
@@ -236,8 +318,10 @@ export class NativeEngine {
       void this.loadNative(item, target, this.wantPlay, {});
       return;
     }
-    if (index === this.nativeIndex) void this.call(() => this.plugin.seek({ positionMs: Math.round(at.localMs) }));
+    if (index === this.nativeIndex && !this.remotePending) void this.call(() => this.plugin.seek({ positionMs: Math.round(at.localMs) }));
     else {
+      // skipTo (unlike seek) also answers a pending lock-screen next / previous ("restart this one").
+      this.settleRemote();
       this.nativeIndex = index;
       void this.call(() => this.plugin.skipTo({ index, positionMs: Math.round(at.localMs) }));
     }
@@ -276,6 +360,8 @@ export class NativeEngine {
 
   stop(): void {
     this.cancelExternalPause();
+    this.settleRemote();
+    this.adopted = null;
     this.loadToken++;
     this.wantPlay = false;
     this.buffering = false;
@@ -301,7 +387,16 @@ export class NativeEngine {
   // ------------------------------------------------------------------ native queue
 
   private level(): number {
-    return outputLevel({ volume: this.volume, muted: this.muted, replayGain: replayGainFactor(this.item, this.rgMode), fade: this.fade }, false);
+    const fade = this.nativeFade ? 1 : this.fade;
+    return outputLevel({ volume: this.volume, muted: this.muted, replayGain: replayGainFactor(this.item, this.rgMode), fade }, false);
+  }
+
+  private remoteConfig(item: PlayableItem) {
+    return {
+      mode: item.kind === 'audiobook' ? ('audiobook' as const) : ('music' as const),
+      skipBackMs: this.deps.skipMs?.back ?? 30_000,
+      skipForwardMs: this.deps.skipMs?.forward ?? 30_000,
+    };
   }
 
   private applyLevel(): void {
@@ -341,14 +436,12 @@ export class NativeEngine {
       this.nativeIndex = startIndex;
       this.setPosition(current[startIndex]?.id ?? null, at.localMs, globalMs);
       await this.ready;
+      // `load` also answers a pending lock-screen next / previous natively.
+      this.settleRemote();
       await this.plugin.load({ tracks: this.queue, startIndex, startMs: Math.round(at.localMs), autoplay: autoplay && this.wantPlay, rate: this.speed });
       if (token !== this.loadToken) return;
       await this.plugin.setVolume({ volume: this.level() });
-      await this.plugin.configureRemote({
-        mode: item.kind === 'audiobook' ? 'audiobook' : 'music',
-        skipBackMs: this.deps.skipMs?.back ?? 30_000,
-        skipForwardMs: this.deps.skipMs?.forward ?? 30_000,
-      });
+      await this.plugin.configureRemote(this.remoteConfig(item));
       this.emit();
     } catch (err) {
       if (token !== this.loadToken) return;
@@ -408,9 +501,15 @@ export class NativeEngine {
     const t = this.trackOf(e.trackId);
     const loaded = this.loaded;
     if (!t || !loaded || this.trackGen.get(t.id) !== loaded.gen) return;
+    const globalMs = t.itemOffsetMs + e.positionMs;
+    // A jump JS did not ask for: native moved the place (a car / watch / lock-screen seek).
+    const now = this.now();
+    const jumped =
+      this.pos.trackId !== null && now - this.lastCommandAt > COMMAND_GRACE_MS && now >= this.jumpQuietUntil && Math.abs(globalMs - this.positionMs) > POSITION_JUMP_MS;
     this.nativeIndex = e.index;
-    this.setPosition(t.id, e.positionMs, t.itemOffsetMs + e.positionMs);
+    this.setPosition(t.id, e.positionMs, globalMs);
     this.emit();
+    if (jumped) this.external?.('seek');
   }
 
   private onTrackChanged(e: TrackChangedEvent): void {
@@ -436,13 +535,7 @@ export class NativeEngine {
       // Drop the finished item's tracks from the mirror (native keeps them behind the index).
       this.setPosition(t.id, 0, t.itemOffsetMs);
       this.applyLevel();
-      void this.call(() =>
-        this.plugin.configureRemote({
-          mode: next.item.kind === 'audiobook' ? 'audiobook' : 'music',
-          skipBackMs: this.deps.skipMs?.back ?? 30_000,
-          skipForwardMs: this.deps.skipMs?.forward ?? 30_000,
-        }),
-      );
+      void this.call(() => this.plugin.configureRemote(this.remoteConfig(next.item)));
       this.emit();
       this.hooks.onAdvance?.(next.item);
     }
@@ -505,20 +598,69 @@ export class NativeEngine {
   private onRemote(e: RemoteCommandEvent): void {
     switch (e.command) {
       case 'next':
-        this.external?.('next');
-        return;
       case 'previous':
-        this.external?.('previous');
+        // Native waits 2 s for JS to `load` / `skipTo`, then moves within its own queue.
+        this.remotePending = true;
+        this.external?.(e.command);
+        this.scheduleRemoteAnswer();
         return;
       case 'seekTo':
       case 'skipForward':
       case 'skipBackward':
-        // Native applied it; its position event follows. Nothing to decide here.
+        // Native applied it: take the new place and have it reported now, not at the next heartbeat.
+        this.onRemoteSeek(e);
         return;
       default:
         // play / pause / toggle / stop: native applied them; its state events tell us.
         return;
     }
+  }
+
+  private onRemoteSeek(e: RemoteCommandEvent): void {
+    const t = this.trackOf(this.pos.trackId) ?? (this.nativeIndex >= 0 ? (this.queue[this.nativeIndex] ?? null) : null);
+    const loaded = this.loaded;
+    if (!t || !loaded || this.trackGen.get(t.id) !== loaded.gen) {
+      this.external?.('seek');
+      return;
+    }
+    let localMs: number;
+    if (e.command === 'seekTo') localMs = e.positionMs ?? this.positionMs - t.itemOffsetMs;
+    else {
+      const by = e.intervalMs ?? (e.command === 'skipForward' ? (this.deps.skipMs?.forward ?? 30_000) : (this.deps.skipMs?.back ?? 30_000));
+      localMs = this.positionMs - t.itemOffsetMs + (e.command === 'skipForward' ? by : -by);
+    }
+    localMs = Math.max(0, t.durationMs > 0 ? Math.min(localMs, t.durationMs) : localMs);
+    this.setPosition(t.id, localMs, t.itemOffsetMs + localMs);
+    // Native's own position event follows; this seek is reported already.
+    this.jumpQuietUntil = this.now() + COMMAND_GRACE_MS;
+    this.emit();
+    this.external?.('seek');
+  }
+
+  /** Answer a pending lock-screen next / previous with "stay here" when JS decided nothing in time. */
+  private scheduleRemoteAnswer(): void {
+    if (!this.remotePending) return;
+    if (this.remoteTimer) clearTimeout(this.remoteTimer);
+    this.remoteTimer = setTimeout(() => {
+      this.remoteTimer = null;
+      if (!this.remotePending) return;
+      if (this.externalBusy?.()) {
+        // The controller is fetching the item to load; its load answers. Look again shortly.
+        this.scheduleRemoteAnswer();
+        return;
+      }
+      this.settleRemote();
+      void this.call(async () => {
+        const s = await this.plugin.getState();
+        if (s.index >= 0) await this.plugin.skipTo({ index: s.index, positionMs: Math.max(0, Math.round(s.positionMs)) });
+      });
+    }, this.deps.remoteAnswerMs ?? REMOTE_ANSWER_MS);
+  }
+
+  private settleRemote(): void {
+    this.remotePending = false;
+    if (this.remoteTimer) clearTimeout(this.remoteTimer);
+    this.remoteTimer = null;
   }
 
   private scheduleExternalPause(): void {

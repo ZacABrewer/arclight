@@ -15,6 +15,7 @@ import type { ArclightPlayerPlugin } from '../native/definitions';
 import type { DownloadIndex } from '../offline/download-index';
 import type { ProgressQueue } from '../offline/progress-queue';
 import { NativeEngine, type ResolvedItem, type ResolveOptions } from './native-engine';
+import { NativeSleepSync } from './native-sleep';
 
 // Builds the web player's controller on the native engine, with the app's data sources:
 // the server when online, the download index when not, and the offline progress queue.
@@ -31,6 +32,8 @@ export interface PlayerSetup {
   deviceName: string;
   /** Maps a downloaded file's URI for the WebView (Capacitor.convertFileSrc). */
   toWebUrl?: (uri: string) => string;
+  /** The plugin runs a native sleep timer (fires while JS is suspended). */
+  nativeSleepTimer?: boolean;
 }
 
 const LINK_REUSE_MARGIN_MS = 5 * 60_000;
@@ -118,6 +121,10 @@ export interface AppPlayer {
   engine: NativeEngine;
   /** Forget cached stream links (account switch, quality change). */
   resetLinks(): void;
+  /** The app is in the foreground again (take back what native counted meanwhile). */
+  onResume(): void;
+  /** Tear down (account switch). */
+  dispose(): void;
 }
 
 export function createAppPlayer(s: PlayerSetup): AppPlayer {
@@ -189,14 +196,35 @@ export function createAppPlayer(s: PlayerSetup): AppPlayer {
     mediaSession: false,
   });
 
-  engine.setExternalHandler((c) => {
-    if (c === 'play') controller.play();
-    else if (c === 'pause') controller.pause();
-    else if (c === 'next') controller.next();
-    else controller.previous();
-  });
+  engine.setExternalHandler(
+    (c) => {
+      if (c === 'play') controller.play();
+      else if (c === 'pause') controller.pause();
+      else if (c === 'next') {
+        // Native waits only 2 s for an answer: when the next item is already queued natively,
+        // switch to it at once; the controller's load of it then adopts what plays.
+        const key = controller.peekNext();
+        controller.next();
+        if (key) engine.preAdvance(key);
+      } else if (c === 'previous') controller.previous();
+      else controller.reportExternalSeek();
+    },
+    { busy: () => controller.getState().loading },
+  );
 
-  return { controller, engine, resetLinks: () => links.clear() };
+  const sleep = s.nativeSleepTimer && s.plugin.setSleepTimer ? new NativeSleepSync({ plugin: s.plugin, controller, engine }) : null;
+
+  return {
+    controller,
+    engine,
+    resetLinks: () => links.clear(),
+    onResume: () => sleep?.onResume(),
+    dispose: () => {
+      sleep?.destroy();
+      controller.onPageHide();
+      controller.dispose();
+    },
+  };
 }
 
 const DEVICE_KEY = 'arclight.app.deviceId';

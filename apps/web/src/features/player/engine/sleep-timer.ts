@@ -88,6 +88,13 @@ export class SleepTimer {
     return Math.max(0, (this.endMs - ctx.positionMs) / Math.max(0.5, ctx.speed));
   }
 
+  /** Minutes timers: set the time left (a native copy of the timer is the reference). */
+  setRemaining(remainingMs: number, now: number): void {
+    if (this.setting.kind !== 'minutes') return;
+    this.leftMs = Math.max(0, remainingMs);
+    this.lastTick = now;
+  }
+
   tick(ctx: SleepContext): SleepTick {
     const elapsed = Math.max(0, ctx.now - this.lastTick);
     this.lastTick = ctx.now;

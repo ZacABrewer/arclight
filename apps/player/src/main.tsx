@@ -45,7 +45,7 @@ async function boot(): Promise<void> {
     });
     // Coming back to the app: send queued progress, refresh what's stale.
     void CapApp.addListener('resume', () => {
-      void services.flushProgress();
+      services.resumed();
       void services.downloads.reconcile().catch(() => undefined);
     });
   }

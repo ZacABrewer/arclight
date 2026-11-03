@@ -10,6 +10,7 @@ type Listener = (e: unknown) => void;
 function fakePlugin() {
   const listeners = new Map<string, Set<Listener>>();
   const calls: Array<[string, unknown]> = [];
+  const state = { index: 0, positionMs: 0 };
   const rec =
     (name: string) =>
     async (arg?: unknown): Promise<void> => {
@@ -26,6 +27,12 @@ function fakePlugin() {
     setVolume: rec('setVolume'),
     stop: rec('stop'),
     configureRemote: rec('configureRemote'),
+    setShuffle: rec('setShuffle'),
+    setSleepTimer: rec('setSleepTimer'),
+    getState: async () => {
+      calls.push(['getState', undefined]);
+      return { status: 'playing', trackId: null, index: state.index, positionMs: state.positionMs, durationMs: 0, rate: 1 };
+    },
     addListener: async (name: string, l: Listener) => {
       if (!listeners.has(name)) listeners.set(name, new Set());
       listeners.get(name)!.add(l);
@@ -35,6 +42,7 @@ function fakePlugin() {
   return {
     plugin: plugin as unknown as ArclightPlayerPlugin,
     calls,
+    state,
     named: (n: string) => calls.filter(([c]) => c === n).map(([, a]) => a),
     emit: (name: string, e: unknown) => listeners.get(name)?.forEach((l) => l(e)),
   };
@@ -69,11 +77,11 @@ afterEach(() => {
   engine = null;
 });
 
-async function setup() {
+async function setup(remoteAnswerMs = 10_000) {
   const fake = fakePlugin();
   const { resolve, seen } = resolver();
   let now = 1_000_000;
-  engine = new NativeEngine({ plugin: fake.plugin, resolve, now: () => now, externalPauseDelayMs: 0 });
+  engine = new NativeEngine({ plugin: fake.plugin, resolve, now: () => now, externalPauseDelayMs: 0, remoteAnswerMs });
   await engine.whenReady();
   return { fake, seen, engine, advance: (ms: number) => (now += ms) };
 }
@@ -195,5 +203,119 @@ describe('NativeEngine', () => {
     expect(fake.named('setVolume').at(-1)).toEqual({ volume: 0 });
     expect(fake.named('setRate').at(-1)).toEqual({ rate: 1.5 });
     expect(engine.playbackSpeed).toBe(1.5);
+  });
+  it('reports a lock-screen / car seek at once, with the new place', async () => {
+    const { fake, engine, advance } = await setup();
+    const external = vi.fn();
+    engine.setExternalHandler(external);
+    engine.load(book(), 0);
+    await settle();
+    await settle();
+    advance(5_000);
+    fake.emit('remoteCommand', { command: 'seekTo', handled: true, positionMs: 300_000 });
+    expect(engine.positionMs).toBe(300_000);
+    expect(external).toHaveBeenCalledWith('seek');
+    external.mockClear();
+    fake.emit('remoteCommand', { command: 'skipForward', handled: true, intervalMs: 30_000 });
+    expect(engine.positionMs).toBe(330_000);
+    expect(external).toHaveBeenCalledWith('seek');
+    // Native's own position event for that seek is not reported twice.
+    external.mockClear();
+    const load = fake.named('load')[0] as LoadOptions;
+    fake.emit('position', { trackId: load.tracks[0]!.id, index: 0, positionMs: 330_000, durationMs: 1_800_000, bufferedMs: 0 });
+    expect(external).not.toHaveBeenCalled();
+  });
+
+  it('treats a native position jump it did not ask for as a seek', async () => {
+    const { fake, engine, advance } = await setup();
+    const external = vi.fn();
+    engine.setExternalHandler(external);
+    engine.load(book(), 0);
+    await settle();
+    await settle();
+    const load = fake.named('load')[0] as LoadOptions;
+    advance(5_000);
+    fake.emit('position', { trackId: load.tracks[0]!.id, index: 0, positionMs: 1_000, durationMs: 1_800_000, bufferedMs: 0 });
+    expect(external).not.toHaveBeenCalled();
+    advance(1_000);
+    fake.emit('position', { trackId: load.tracks[0]!.id, index: 0, positionMs: 900_000, durationMs: 1_800_000, bufferedMs: 0 });
+    expect(external).toHaveBeenCalledWith('seek');
+  });
+
+  it('answers a lock-screen next with skipTo to the queued next item, and its load adopts it', async () => {
+    const { fake, engine, advance } = await setup();
+    engine.setExternalHandler((c) => {
+      if (c === 'next') engine.preAdvance('track:2');
+    });
+    const a = track(1);
+    const b = track(2);
+    engine.setNext(b);
+    engine.load(a, 0);
+    await settle();
+    await settle();
+    advance(5_000);
+    fake.emit('remoteCommand', { command: 'next', handled: false });
+    await settle();
+    expect(fake.named('skipTo').at(-1)).toEqual({ index: 1, positionMs: 0 });
+    expect(engine.current?.itemKey).toBe('track:2');
+    engine.load(b, 0);
+    await settle();
+    await settle();
+    expect(fake.named('load')).toHaveLength(1);
+    expect(engine.current?.itemKey).toBe('track:2');
+  });
+
+  it('answers a lock-screen previous ("restart") with skipTo, which cancels native fallback', async () => {
+    const { fake, engine, advance } = await setup();
+    engine.setExternalHandler((c) => {
+      if (c === 'previous') engine.seek(0);
+    });
+    engine.load(track(1), 0);
+    await settle();
+    await settle();
+    advance(5_000);
+    fake.emit('remoteCommand', { command: 'previous', handled: false });
+    await settle();
+    expect(fake.named('skipTo').at(-1)).toEqual({ index: 0, positionMs: 0 });
+    engine.seek(10_000);
+    await settle();
+    expect(fake.named('seek').at(-1)).toEqual({ positionMs: 10_000 });
+  });
+
+  it('answers "stay" when JS decides nothing for a lock-screen next', async () => {
+    const { fake, engine, advance } = await setup(5);
+    let busy = true;
+    engine.setExternalHandler(() => undefined, { busy: () => busy });
+    engine.load(track(1), 0);
+    await settle();
+    await settle();
+    advance(5_000);
+    fake.state.positionMs = 42_000;
+    fake.emit('remoteCommand', { command: 'next', handled: false });
+    await new Promise((r) => setTimeout(r, 15));
+    expect(fake.named('skipTo')).toHaveLength(0);
+    busy = false;
+    await new Promise((r) => setTimeout(r, 15));
+    expect(fake.named('skipTo').at(-1)).toEqual({ index: 0, positionMs: 42_000 });
+  });
+
+  it('never asks native to shuffle (the controller orders the queue)', async () => {
+    const { fake, engine } = await setup();
+    engine.setNext(track(2));
+    engine.load(track(1), 0);
+    await settle();
+    await settle();
+    expect(fake.named('setShuffle')).toHaveLength(0);
+  });
+
+  it('ignores the controller fade while native fades for its sleep timer', async () => {
+    const { fake, engine } = await setup();
+    engine.load(track(1), 0);
+    await settle();
+    engine.setNativeFade(true);
+    engine.setFade(0.2);
+    await settle();
+    expect(fake.named('setVolume').at(-1)).toEqual({ volume: 1 });
+    expect(engine.nativeTrackId(0)).toBe((fake.named('load')[0] as LoadOptions).tracks[0]!.id);
   });
 });
