@@ -13,7 +13,7 @@ import { combineRestrictions } from '../requests/certification.js';
 import { setSection } from '../settings/service.js';
 import { ProgressStore } from '../playback/progress.js';
 import { runHouseholdBackfill } from './backfill.js';
-import { FRESH_CREDENTIAL_MS, householdsFor, PIN_MAX_FAILURES } from './service.js';
+import { FRESH_CREDENTIAL_MS, HouseholdService, householdsFor, PIN_LOCK_BASE_MS, PIN_LOCK_MAX_MS, PIN_MAX_FAILURES, pinLockMs } from './service.js';
 
 // Household profiles over HTTP and in the service: the owner profile and backfill, managing
 // profiles, selecting (PIN rule, lockout, fresh-credential exception, credential kinds), and
@@ -253,8 +253,8 @@ describe('selecting a profile', () => {
     expect(locked.json().error).toBe('pin-locked');
     expect(locked.json().retryAfterSeconds).toBeGreaterThan(0);
     expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
-    // Another credential has its own counter.
-    expect((await select(h, a.session(), kid.id, '2468')).statusCode).toBe(200);
+    // The lock belongs to the profile: a new sign-in is locked out too.
+    expect((await select(h, a.session(), kid.id, '2468')).statusCode).toBe(429);
     // Every failure and the lockout are audited with the profile id and never the PIN.
     const audit = h.db.select().from(schema.auditEvents).all();
     expect(audit.filter((e) => e.action === 'household.profile.pin-wrong')).toHaveLength(PIN_MAX_FAILURES);
@@ -263,6 +263,56 @@ describe('selecting a profile', () => {
     // After the window: the right PIN works again.
     h.clock.t += 16 * 60_000;
     expect((await select(h, a.cookie, kid.id, '2468')).statusCode).toBe(200);
+  });
+
+  it('keeps the lockout across sign-ins and restarts, escalates it, and the owner lifts it by resetting the PIN', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Escalate', pin: '1111' });
+    const fail = async (n: number) => {
+      for (let i = 0; i < n; i++) expect((await select(h, a.session(), kid.id, '0000')).statusCode).toBe(401);
+    };
+    // Failures from different sign-ins add up on the profile.
+    await fail(PIN_MAX_FAILURES - 1);
+    // A fresh service (a restart) reads the count from the database.
+    const restarted = new HouseholdService({ db: h.db, now: () => new Date(h.clock.t) });
+    const cred = { via: 'session' as const, userId: a.id, sessionId: 999_999, activeProfileId: 0 };
+    await expect(restarted.select(cred, kid.id, '0000')).rejects.toThrow('pin-wrong');
+    let res = await select(h, a.session(), kid.id, '1111');
+    expect(res.statusCode).toBe(429);
+    expect(Number(res.headers['retry-after'])).toBe(PIN_LOCK_BASE_MS / 1000);
+    // The second lockout lasts twice as long.
+    h.clock.t += PIN_LOCK_BASE_MS + 1000;
+    await fail(PIN_MAX_FAILURES);
+    res = await select(h, a.session(), kid.id, '1111');
+    expect(Number(res.headers['retry-after'])).toBe((2 * PIN_LOCK_BASE_MS) / 1000);
+    expect(pinLockMs(0)).toBe(PIN_LOCK_BASE_MS);
+    expect(pinLockMs(20)).toBe(PIN_LOCK_MAX_MS);
+    // The owner sets a new PIN: the lock is gone and the escalation starts over.
+    expect((await call(h, 'PATCH', `/api/v1/households/profiles/${kid.id}`, a.cookie, { pin: '2222' })).statusCode).toBe(200);
+    const row = h.db.select().from(schema.householdProfiles).where(eq(schema.householdProfiles.id, kid.id)).get()!;
+    expect([row.failedPinAttempts, row.pinLockedUntil, row.pinLockouts]).toEqual([0, null, 0]);
+    expect((await select(h, a.session(), kid.id, '2222')).statusCode).toBe(200);
+  });
+
+  it('counts PIN checks still running, so a burst cannot get more than five guesses in', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Burst', pin: '4444' });
+    const results = await Promise.all(Array.from({ length: 12 }, () => select(h, a.session(), kid.id, '0000')));
+    const codes = results.map((r) => r.statusCode);
+    expect(codes.filter((c) => c === 401)).toHaveLength(PIN_MAX_FAILURES);
+    expect(codes.filter((c) => c === 429)).toHaveLength(12 - PIN_MAX_FAILURES);
+  });
+
+  it('a right PIN resets the count of wrong ones', async () => {
+    const h = await harness();
+    const a = await account(h);
+    const kid = await addProfile(h, a.cookie, { name: 'Reset', pin: '3333' });
+    for (let i = 0; i < PIN_MAX_FAILURES - 1; i++) await select(h, a.session(), kid.id, '0000');
+    expect((await select(h, a.session(), kid.id, '3333')).statusCode).toBe(200);
+    for (let i = 0; i < PIN_MAX_FAILURES - 1; i++) expect((await select(h, a.session(), kid.id, '0000')).statusCode).toBe(401);
+    expect((await select(h, a.session(), kid.id, '3333')).statusCode).toBe(200);
   });
 
   it('a fresh credential may re-select the PIN profile it is on without the PIN; an older one may not', async () => {

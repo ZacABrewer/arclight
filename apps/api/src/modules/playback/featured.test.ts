@@ -138,10 +138,18 @@ describe('featured', () => {
   it('falls back to the most played titles when TMDB trending is unavailable', async () => {
     const lib = await library();
     lib.trending = null;
-    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, itemKey: `movie:${lib.ids.tonight}`, at: iso(NOW - DAY), durationMs: 1 }).run();
-    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, itemKey: `movie:${lib.ids.tonight}`, at: iso(NOW - 2 * DAY), durationMs: 1 }).run();
+    const profileId = lib.profileId;
+    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, profileId, itemKey: `movie:${lib.ids.tonight}`, at: iso(NOW - DAY), durationMs: 1 }).run();
+    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, profileId, itemKey: `movie:${lib.ids.tonight}`, at: iso(NOW - 2 * DAY), durationMs: 1 }).run();
     // Too old to count.
-    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, itemKey: `movie:${lib.ids.long}`, at: iso(NOW - 30 * DAY), durationMs: 1 }).run();
+    lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, profileId, itemKey: `movie:${lib.ids.long}`, at: iso(NOW - 30 * DAY), durationMs: 1 }).run();
+    // Another household profile of the same account: its plays are its own.
+    const other = lib.db
+      .insert(schema.householdProfiles)
+      .values({ userId: lib.userId, name: 'Other', color: '#123456', initial: 'O', createdAt: iso(NOW), updatedAt: iso(NOW) })
+      .returning()
+      .get();
+    for (let i = 1; i <= 3; i++) lib.db.insert(schema.playbackPlays).values({ userId: lib.userId, profileId: other.id, itemKey: `movie:${lib.ids.top}`, at: iso(NOW - i * DAY), durationMs: 1 }).run();
     const { items } = await videoFeatured(lib.ctx, kid(lib), 8);
     expect(items.filter((i) => i.kicker === 'trending').map((i) => i.title)).toEqual(['Tonight Pick']);
   });

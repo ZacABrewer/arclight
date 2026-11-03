@@ -18,6 +18,8 @@ export const videoFingerprints = sqliteTable(
     frameMs: real('frame_ms').notNull(),
     /** Where the window starts in the file. */
     startMs: integer('start_ms').notNull().default(0),
+    /** How long the window is (null on rows from before 0.23.0: never reused). */
+    lengthMs: integer('length_ms'),
     /** uint32 little-endian codes. */
     hashes: blob('hashes', { mode: 'buffer' }).notNull(),
     createdAt: text('created_at').notNull(),

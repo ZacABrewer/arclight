@@ -8,6 +8,37 @@
 // Two episodes that share an intro share a long stretch of similar codes at a constant frame
 // offset. alignCodes finds candidate offsets by voting on exact (16-bit lane) matches, measures
 // how similar the codes stay along each, and returns the longest similar run.
+//
+// Both are CPU work of tens to hundreds of milliseconds per call, so they are written as
+// generators that yield every few milliseconds: `fingerprintAsync` / `alignCodesAsync` hand the
+// event loop back (setImmediate) at each yield so playback and the API are not stalled while a
+// season is scanned; `fingerprint` / `alignCodes` run the same steps straight through. (The api
+// ships as one bundled file, so a worker_thread would need a second entry point.)
+
+/** A computation that yields whenever it is a good moment to give the event loop a turn. */
+export type Steps<T> = Generator<void, T, void>;
+
+/** Runs steps to the end without pausing. */
+export function runSteps<T>(steps: Steps<T>): T {
+  for (;;) {
+    const n = steps.next();
+    if (n.done) return n.value;
+  }
+}
+
+/** Runs steps, letting pending I/O run (setImmediate) at every yield. */
+export async function driveSteps<T>(steps: Steps<T>): Promise<T> {
+  for (;;) {
+    const n = steps.next();
+    if (n.done) return n.value;
+    await new Promise<void>((r) => setImmediate(r));
+  }
+}
+
+/** Frames of FFT work between yields (~ a few ms). */
+const FRAMES_PER_YIELD = 128;
+/** Codes of A voted between yields. */
+const VOTES_PER_YIELD = 512;
 
 export const SAMPLE_RATE = 8000;
 export const FRAME_SIZE = 1024;
@@ -153,12 +184,24 @@ const END_BIAS = 2;
 
 /** One code per 64 ms (code t covers frames t-LAG .. t+SPAN-1). The first LAG codes and silence are 0. */
 export function fingerprint(pcm: Int16Array): Uint32Array {
+  return runSteps(fingerprintSteps(pcm));
+}
+
+/** fingerprint() without blocking the event loop for more than a few milliseconds at a time. */
+export function fingerprintAsync(pcm: Int16Array): Promise<Uint32Array> {
+  return driveSteps(fingerprintSteps(pcm));
+}
+
+export function* fingerprintSteps(pcm: Int16Array): Steps<Uint32Array> {
   const frameCount = pcm.length < FRAME_SIZE ? 0 : Math.floor((pcm.length - FRAME_SIZE) / HOP) + 1;
   const n = Math.max(0, frameCount - SPAN + 1);
   const out = new Uint32Array(n);
   if (n === 0) return out;
   const energies: Float64Array[] = [];
-  for (let t = 0; t < frameCount; t++) energies.push(bandEnergies(pcm, t * HOP));
+  for (let t = 0; t < frameCount; t++) {
+    energies.push(bandEnergies(pcm, t * HOP));
+    if ((t + 1) % FRAMES_PER_YIELD === 0) yield;
+  }
   const stacks: Float64Array[] = [];
   for (let t = 0; t < n; t++) {
     const s = new Float64Array(BANDS);
@@ -172,11 +215,15 @@ export function fingerprint(pcm: Int16Array): Uint32Array {
   return out;
 }
 
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
 /** s16le bytes (ffmpeg's `-f s16le` output) as samples. */
 export function pcmFromS16le(buf: Buffer): Int16Array {
   const n = buf.length >> 1;
   const out = new Int16Array(n);
-  for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(i * 2);
+  // One memory copy on little-endian hosts (all supported ones); per-sample reads otherwise.
+  if (LITTLE_ENDIAN) new Uint8Array(out.buffer).set(buf.subarray(0, n * 2));
+  else for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(i * 2);
   return out;
 }
 
@@ -241,6 +288,10 @@ function lanes(c: number): [number, number, number, number] {
 
 /** Offsets (frameB - frameA) by exact-match votes, best first, with at least `minVotes`. */
 export function voteOffsets(a: Uint32Array, b: Uint32Array, top = 3, minVotes = 20, maxBucket = 64): number[] {
+  return runSteps(voteOffsetsSteps(a, b, top, minVotes, maxBucket));
+}
+
+function* voteOffsetsSteps(a: Uint32Array, b: Uint32Array, top: number, minVotes: number, maxBucket: number): Steps<number[]> {
   const index = new Map<number, number[]>();
   for (let j = 0; j < b.length; j++) {
     const c = b[j]!;
@@ -252,7 +303,9 @@ export function voteOffsets(a: Uint32Array, b: Uint32Array, top = 3, minVotes = 
     }
   }
   const votes = new Map<number, number>();
+  yield;
   for (let i = 0; i < a.length; i++) {
+    if ((i + 1) % VOTES_PER_YIELD === 0) yield;
     const c = a[i]!;
     if (c === 0) continue;
     for (const key of lanes(c)) {
@@ -332,11 +385,21 @@ export function longestRun(x: Float64Array, threshold: number, maxGap: number): 
  * edges are refined on the raw similarity so the 2 s smoothing does not blur them.
  */
 export function alignCodes(a: Uint32Array, b: Uint32Array, opts: AlignOptions = {}): AlignedRun | null {
+  return runSteps(alignSteps(a, b, opts));
+}
+
+/** alignCodes() without blocking the event loop for more than a few milliseconds at a time. */
+export function alignCodesAsync(a: Uint32Array, b: Uint32Array, opts: AlignOptions = {}): Promise<AlignedRun | null> {
+  return driveSteps(alignSteps(a, b, opts));
+}
+
+export function* alignSteps(a: Uint32Array, b: Uint32Array, opts: AlignOptions = {}): Steps<AlignedRun | null> {
   const threshold = opts.threshold ?? 0.7;
   const win = frames(opts.smoothMs ?? 2000);
   const gap = frames(opts.maxGapMs ?? 1500);
   let best: AlignedRun | null = null;
-  for (const offset of voteOffsets(a, b, opts.topOffsets ?? 3, opts.minVotes ?? 20, opts.maxBucket ?? 64)) {
+  for (const offset of yield* voteOffsetsSteps(a, b, opts.topOffsets ?? 3, opts.minVotes ?? 20, opts.maxBucket ?? 64)) {
+    yield;
     const raw = similarityAt(a, b, offset);
     const run = longestRun(smooth(raw, win), threshold, gap);
     if (!run) continue;

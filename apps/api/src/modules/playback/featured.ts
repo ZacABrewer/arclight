@@ -159,14 +159,14 @@ export const tmdbTrending: TrendingSource = async (db) => {
   return running;
 };
 
-/** "movie:<id>" / "series:<id>" of the account's most played titles in the last 7 days. */
+/** "movie:<id>" / "series:<id>" of the active profile's most played titles in the last 7 days. */
 function mostPlayedKeys(ctx: VideoBrowseContext, user: BrowseUser): string[] {
-  if (user.userId === null) return [];
+  if (user.userId === null || user.profileId === null) return [];
   const since = new Date((ctx.now?.() ?? Date.now()) - 7 * DAY_MS).toISOString();
   const rows = ctx.db
     .select({ itemKey: playbackPlays.itemKey, n: sql<number>`count(*)` })
     .from(playbackPlays)
-    .where(and(eq(playbackPlays.userId, user.userId), gte(playbackPlays.at, since)))
+    .where(and(eq(playbackPlays.profileId, user.profileId), gte(playbackPlays.at, since)))
     .groupBy(playbackPlays.itemKey)
     .all();
   const episodeIds = rows.flatMap((r) => (r.itemKey.startsWith('episode:') ? [Number(r.itemKey.slice(8))] : []));

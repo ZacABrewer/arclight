@@ -20,6 +20,12 @@ export const householdProfiles = sqliteTable(
     isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
     /** `scrypt$…` hash of the 4-digit PIN (auth/password.ts); null: no PIN. Never returned. */
     pinHash: text('pin_hash'),
+    /** Wrong PINs in a row since the last right one or lockout (any credential). */
+    failedPinAttempts: integer('failed_pin_attempts').notNull().default(0),
+    /** Epoch ms until which the PIN is refused; null: not locked. */
+    pinLockedUntil: integer('pin_locked_until'),
+    /** Lockouts since the last right PIN; each one doubles the next lockout. */
+    pinLockouts: integer('pin_lockouts').notNull().default(0),
     /** The profile's own limit, combined with the account's (the stricter wins). Always null on the owner. */
     contentRestrictions: text('content_restrictions', { mode: 'json' }).$type<ContentRestrictions | null>(),
     /** Stored as a patch over the ProfileSettings defaults, so new settings get their default. */

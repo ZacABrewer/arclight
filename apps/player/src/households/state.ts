@@ -4,7 +4,9 @@ import type { HouseholdProfilesResponse } from '@arclight/shared';
 // account has two or more profiles, and not again until the app is started anew. The flag
 // lives in sessionStorage (a WebView's session ends with the process), per account.
 
-const KEY = 'arclight.profilePicked';
+/** The app's own key (a JSON list of account ids); the web keeps a plain flag under another one. */
+export const PROFILE_PICKED_KEY = 'arclight.app.profilePicked';
+const KEY = PROFILE_PICKED_KEY;
 
 function storage(): Storage | null {
   try {

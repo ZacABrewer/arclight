@@ -41,7 +41,7 @@ Arclight enforces limits on the server, not just in the interface. Titles above 
 
 A PIN keeps someone from switching into a profile they shouldn't use, such as the owner profile from a Kids profile. Arclight asks for it when someone switches to that profile.
 
-- After 5 wrong PINs within 15 minutes, switching to that profile is locked for up to 15 minutes. Arclight tells the app how long to wait. The count is kept separately for each sign-in and device.
+- After 5 wrong PINs in a row, switching to that profile is locked for 15 minutes. Each further lockout without a right PIN in between doubles the wait, up to 24 hours. Arclight tells the app how long to wait. The count belongs to the profile, so signing in again or restarting Arclight does not reset it. The right PIN resets it, and the account owner can lift a lockout at once by setting a new PIN (or removing it) for that profile.
 - There is one exception for a sign-in less than 10 minutes old: it may re-select the profile it is already on without the PIN, because the password was just entered.
 - PINs are stored hashed. They are never shown again and never written to the logs or the audit log.
 

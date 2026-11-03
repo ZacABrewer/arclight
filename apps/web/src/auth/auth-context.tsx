@@ -8,6 +8,7 @@ import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences
 import { t, applyLocaleSetting } from '../i18n/index.js';
 import { setReduceMotion } from '../arclight/motion-preference.js';
 import { useThemeController } from '../features/themes/use-themes.js';
+import { clearProfilePicked } from '../features/player/redesign/profile-session.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -44,8 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
     } finally {
       qc.removeQueries({ queryKey: authKeys.all });
-      // Everything cached belonged to the signed-in user.
+      // Everything cached belonged to the signed-in user, and so did "Who's watching?".
       qc.clear();
+      clearProfilePicked();
     }
   }, [qc]);
 

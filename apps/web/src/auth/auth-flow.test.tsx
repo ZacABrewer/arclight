@@ -7,6 +7,7 @@ import { createToastStore } from '../lib/toast.js';
 import { createQueryClient } from '../query-client.js';
 import { routeTree } from '../router.js';
 import { loginHref } from './guard.js';
+import { PROFILE_PICKED_KEY } from '../features/player/redesign/profile-session.js';
 
 class FakeSocket {
   onopen = null;
@@ -121,6 +122,28 @@ describe('route guard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Vee/ }));
     expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Security/ })).toBeNull();
+  });
+});
+
+describe('sign out', () => {
+  it('forgets the Who is watching pick of this tab', async () => {
+    const { status, session } = signedIn(calendarViewer);
+    let signedOut = false;
+    handler = (url, init) => {
+      if (url === '/api/v1/auth/logout' && init?.method === 'POST') {
+        signedOut = true;
+        return { status: 204 };
+      }
+      if (url === '/api/v1/auth/status') return { status: 200, body: signedOut ? anonymous() : status };
+      if (url === '/api/v1/auth/me') return signedOut ? { status: 401, body: { error: 'unauthorized' } } : { status: 200, body: session };
+      return undefined;
+    };
+    sessionStorage.setItem(PROFILE_PICKED_KEY, '1');
+    renderAt('/calendar');
+    fireEvent.click(await screen.findByRole('button', { name: /Vee/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    await waitFor(() => expect(signedOut).toBe(true));
+    await waitFor(() => expect(sessionStorage.getItem(PROFILE_PICKED_KEY)).toBeNull());
   });
 });
 

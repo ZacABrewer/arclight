@@ -281,7 +281,7 @@
   "app.video.episode": "Episode {n}",
   "app.video.episodes": "Episodes",
   "app.video.nextEpisode": "Next episode",
-  "app.video.nextIn": "Next episode in {s}",
+  "app.video.nextIn": "Next episode in {s}s",
   "app.video.nowPlaying": "Now playing",
   "app.video.off": "Off",
   "app.video.playNow": "Play now",

@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { setSection } from '../settings/service.js';
 import type { Db } from '../../db/index.js';
@@ -240,6 +241,61 @@ describe('SegmentService', () => {
 
     const off = service(await seasonLib(3), [], { detection: false });
     expect(await off.nightly()).toBe('intro and credits detection is turned off');
+  });
+
+  it('reuses a stored head only for the same window length', async () => {
+    const lib = await seasonLib();
+    const calls: string[] = [];
+    const svc = service(lib, calls);
+    await svc.scanSeason(lib.seriesId, 1);
+    expect(calls).toHaveLength(8);
+    const f = lib.files[0]!;
+    // A head stored for another window length (it starts at 0 all the same).
+    lib.db.update(schema.videoFingerprints).set({ lengthMs: 1234 }).where(and(eq(schema.videoFingerprints.mediaFileId, f.id), eq(schema.videoFingerprints.part, 'head'))).run();
+    await svc.scanSeason(lib.seriesId, 1, true);
+    expect(calls.slice(8)).toEqual([f.path]);
+  });
+
+  it('keeps the earlier segments of a file whose audio could not be read this time', async () => {
+    const lib = await seasonLib();
+    const svc = service(lib, []);
+    await svc.scanSeason(lib.seriesId, 1);
+    const f = lib.files[0]!;
+    const before = await effectiveSegments(lib.db, f, []);
+    expect(before).toHaveLength(2);
+    // Its stored codes are gone and ffmpeg now fails on it.
+    lib.db.delete(schema.videoFingerprints).where(eq(schema.videoFingerprints.mediaFileId, f.id)).run();
+    lib.byPath.delete(f.path);
+    await svc.scanSeason(lib.seriesId, 1, true);
+    expect(await effectiveSegments(lib.db, f, [])).toEqual(before);
+    expect((await effectiveSegments(lib.db, lib.files[1]!, [])).length).toBe(2);
+  });
+
+  it('nightly stops on abort and drops the seasons it queued that have not started', async () => {
+    const db = await createTestDb();
+    seedAdmin(db);
+    const dir = mkdtempSync(join(tmp, 'abort-'));
+    const { show } = seedSeries(db, dir, {
+      title: 'Abort Show',
+      tmdbId: 777,
+      episodes: [1, 2].flatMap((season) => [1, 2].map((e) => ({ season, episode: e, info: info(EP_SECONDS * 1000), dateAdded: `2026-01-0${season}T00:00:00.000Z` }))),
+    });
+    const files = db.select({ id: schema.mediaFiles.id, path: schema.mediaFiles.path }).from(schema.mediaFiles).all().sort((a, b) => a.id - b.id);
+    const lib: SeasonLib = { db, seriesId: show.id, files, byPath: new Map(files.map((f, i) => [f.path, episodePcm(i)])) };
+    const calls: string[] = [];
+    let busy = true;
+    const svc = service(lib, calls, { busy: () => busy });
+    const ctrl = new AbortController();
+    const run = svc.nightly(ctrl.signal);
+    await new Promise((r) => setTimeout(r, 30));
+    ctrl.abort();
+    expect(await run).toBe('stopped: 1 seasons left for the next run');
+    // The season already started finishes; the other one is no longer queued.
+    busy = false;
+    await svc.idle();
+    expect(calls).toHaveLength(4);
+    expect(svc.isQueued(show.id, 1) || svc.isQueued(show.id, 2)).toBe(false);
+    expect(await svc.changedSeasons()).toHaveLength(1);
   });
 
   it('a season with one file is marked done without ffmpeg', async () => {

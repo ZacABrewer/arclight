@@ -111,11 +111,12 @@ export function TvSettingsScreen() {
   const [intro, setIntro] = useState(playIntroOnLaunch);
   const themes = useQuery({ queryKey: ['theme', 'catalog'], queryFn: () => request('/theme', ThemeCatalog), staleTime: 5 * 60_000, retry: false, meta: { silent: true } });
 
-  // The quality shown follows the profile once it is known.
+  // The quality shown follows the account and profile once they are known.
   const profileId = profile?.id ?? null;
-  const [qualityFor, setQualityFor] = useState(profileId);
-  if (qualityFor !== profileId) {
-    setQualityFor(profileId);
+  const qualityKey = `${active?.id ?? ''}:${profileId ?? ''}`;
+  const [qualityFor, setQualityFor] = useState(qualityKey);
+  if (qualityFor !== qualityKey) {
+    setQualityFor(qualityKey);
     setQuality(readVideoQuality(profileId));
   }
 

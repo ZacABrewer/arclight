@@ -5,7 +5,8 @@ import type { Session } from '@arclight/shared';
 // non-owner profile switches the whole browser session: while it is active, every page outside
 // /player (admin and request portal) redirects to /player. The api enforces the same rule.
 
-export const PROFILE_PICKED_KEY = 'arclight.profilePicked';
+/** The web's own key: the player app keeps a per-account list under a different one (households/state.ts). */
+export const PROFILE_PICKED_KEY = 'arclight.web.profilePicked';
 
 export function wasProfilePicked(): boolean {
   try {
@@ -20,6 +21,15 @@ export function markProfilePicked(): void {
     sessionStorage.setItem(PROFILE_PICKED_KEY, '1');
   } catch {
     // Blocked storage: the picker shows again next time, which is safe.
+  }
+}
+
+/** Forgets the pick (sign-out): the next person in this tab sees the picker. */
+export function clearProfilePicked(): void {
+  try {
+    sessionStorage.removeItem(PROFILE_PICKED_KEY);
+  } catch {
+    // Blocked storage: nothing was stored.
   }
 }
 

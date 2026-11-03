@@ -154,6 +154,46 @@ describe('TrickplayService', () => {
     expect(await off.status(lib.fileId, { enqueue: true })).toEqual({ status: 'unavailable' });
   });
 
+  it('clear() during a run leaves the running job alone, forgets failures and drops queued files', async () => {
+    const lib = await library();
+    const { file: other } = seedMovie(lib.db, lib.dir, { title: 'Second', tmdbId: 44 });
+    const calls: string[][] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const running = new Promise<void>((r) => (started = r));
+    const inner = fakeRun(2, calls);
+    const svc = service(lib.db, lib.dir, async (bin, args, timeoutMs) => {
+      started();
+      await gate;
+      return inner(bin, args, timeoutMs);
+    });
+    svc.enqueue(lib.fileId);
+    svc.enqueue(other.id);
+    await running;
+    await svc.clear();
+    expect(svc.pending).toBe(1);
+    release();
+    await svc.idle();
+    // The running file finished into its own folder; the queued one was dropped.
+    expect(calls).toHaveLength(1);
+    expect((await svc.status(lib.fileId, { enqueue: false })).status).toBe('ready');
+    expect(await svc.status(other.id, { enqueue: false })).toEqual({ status: 'unavailable' });
+  });
+
+  it('clear() forgets failed files so they are tried again', async () => {
+    const lib = await library();
+    const calls: string[][] = [];
+    const svc = service(lib.db, lib.dir, fakeRun(0, calls, 1));
+    svc.enqueue(lib.fileId);
+    await svc.idle();
+    expect(await svc.status(lib.fileId, { enqueue: true })).toEqual({ status: 'unavailable' });
+    await svc.clear();
+    expect(await svc.status(lib.fileId, { enqueue: true })).toEqual({ status: 'pending' });
+    await svc.idle();
+    expect(calls).toHaveLength(2);
+  });
+
   it('nightly: removes folders of deleted files and, for the whole library, queues files without sheets', async () => {
     const lib = await library();
     const calls: string[][] = [];

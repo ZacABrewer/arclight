@@ -144,7 +144,7 @@
   "app.video.episode": "Épisode {n}",
   "app.video.episodes": "Épisodes",
   "app.video.nextEpisode": "Épisode suivant",
-  "app.video.nextIn": "Épisode suivant dans {s}",
+  "app.video.nextIn": "Épisode suivant dans {s} s",
   "app.video.nowPlaying": "En cours",
   "app.video.off": "Désactivés",
   "app.video.playNow": "Lire maintenant",

@@ -266,7 +266,7 @@ export class NativeVideoLauncher {
       selectedSubtitle: this.current.subtitle,
       audioTracks: v.audioTracks.map((a) => {
         const l = audioTrackLabel(a);
-        return { index: a.index, label: l.detail ? `${l.name} · ${l.detail}` : l.name };
+        return { index: a.index, label: l.detail ? `${l.name} · ${l.detail}` : l.name, language: a.language, codec: a.codec, channels: a.channels, title: a.title };
       }),
       ...(session.audioTrack !== null && session.audioTrack !== undefined ? { selectedAudio: session.audioTrack } : {}),
       chapters: item.chapters.map((c) => ({ title: c.title, startMs: c.startMs })),
@@ -421,11 +421,12 @@ export class NativeVideoLauncher {
   private async onTracksChanged(e: VideoTracksChangedEvent): Promise<void> {
     const c = this.matches(e.itemKey);
     if (!c) return;
-    c.audioTrack = e.audioTrack;
+    const v = c.item.video;
+    // An index that is not one of the item's tracks is never kept or turned into a language.
+    const audio = e.audioTrack !== null ? v?.audioTracks.find((a) => a.index === e.audioTrack) : undefined;
+    if (e.audioTrack === null || audio) c.audioTrack = e.audioTrack;
     c.subtitle = e.subtitle;
     if (!this.deps.saveProfileSettings) return;
-    const v = c.item.video;
-    const audio = e.audioTrack !== null ? v?.audioTracks.find((a) => a.index === e.audioTrack) : undefined;
     const sub = e.subtitle !== null ? v?.subtitleTracks.find((s) => s.id === e.subtitle) : undefined;
     const patch: ProfileSettingsPatch = {};
     const audioLang = normLanguage(audio?.language);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   alignCodes,
+  alignCodesAsync,
   BANDS,
   BIN_BAND,
   codeOf,
@@ -8,6 +9,7 @@ import {
   codesToBlob,
   fft,
   fingerprint,
+  fingerprintAsync,
   FRAME_MS,
   longestRun,
   pcmFromS16le,
@@ -153,6 +155,23 @@ describe('pair alignment on synthetic episodes', () => {
         expect(Math.abs(startB - starts[b]! * 1000)).toBeLessThanOrEqual(750);
       }
     }
+  });
+
+  it('the async variants give the same results and let the event loop run meanwhile', async () => {
+    let turns = 0;
+    let ticking = true;
+    const tick = () => {
+      turns++;
+      if (ticking) setImmediate(tick);
+    };
+    setImmediate(tick);
+    const asyncCodes = await fingerprintAsync(eps[0]!);
+    const run = await alignCodesAsync(codes[0]!, codes[1]!);
+    ticking = false;
+    expect(asyncCodes).toEqual(codes[0]);
+    expect(run).toEqual(alignCodes(codes[0]!, codes[1]!));
+    // 300 s of audio is ~4700 frames: dozens of yields, each one a turn for other work.
+    expect(turns).toBeGreaterThan(20);
   });
 
   it('finds nothing between unrelated episodes', () => {

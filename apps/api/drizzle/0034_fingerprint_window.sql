@@ -1,0 +1,1 @@
+ALTER TABLE `video_fingerprints` ADD `length_ms` integer;
