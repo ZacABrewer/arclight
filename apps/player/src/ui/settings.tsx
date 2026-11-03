@@ -78,7 +78,7 @@ function AccountRow({ account, active }: { account: Account; active: boolean }) 
             {t('app.settings.switch')}
           </Button>
         ) : null}
-        <Button variant="ghost" onClick={() => setConfirm(true)}>
+        <Button variant="ghost" data-tv-not-first="" onClick={() => setConfirm(true)}>
           {t('app.settings.signOut')}
         </Button>
       </div>

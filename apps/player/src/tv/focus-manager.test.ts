@@ -157,6 +157,12 @@ describe('FocusManager', () => {
     expect(active()).toBe('first');
   });
 
+  it('does not start on an element marked data-tv-not-first', () => {
+    render(`<main data-tv-group="main"><button id="out" data-tv-not-first data-box="0,0,60,40">Out</button><a id="next" href="#/n" data-box="0,60,60,40">N</a></main>`);
+    key('ArrowDown', window);
+    expect(active()).toBe('next');
+  });
+
   it('OK clicks a non-native focusable', () => {
     render(`<main data-tv-group="main"><div id="tile" tabindex="0" role="button" data-box="0,0,10,10">Tile</div></main>`);
     const click = vi.fn();

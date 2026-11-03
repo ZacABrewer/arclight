@@ -182,10 +182,12 @@ export class FocusManager {
     const wanted = page !== undefined ? this.pageMemory.get(page) : undefined;
     const main = within.querySelector<HTMLElement>('[data-tv-group="main"]');
     const pool = main ? list.filter((el) => main.contains(el)) : list;
-    // A text box is not a good first stop (the on-screen keyboard is one OK away), unless asked for.
+    // A text box is not a good first stop (the on-screen keyboard is one OK away), unless asked for;
+    // neither is anything marked data-tv-not-first (such as Sign out).
     const el =
       (wanted ? pool.find((x) => focusKey(x) === wanted) : undefined) ??
       pool.find((x) => x.hasAttribute('data-tv-autofocus')) ??
+      pool.find((x) => !isTextInput(x) && !x.hasAttribute('data-tv-not-first')) ??
       pool.find((x) => !isTextInput(x)) ??
       pool[0] ??
       list[0];
