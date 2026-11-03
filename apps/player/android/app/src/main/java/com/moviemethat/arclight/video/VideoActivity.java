@@ -1323,14 +1323,18 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         liftSubtitles(true);
         skip.setControlsShown(true);
         upNext.setControlsShown(true);
+        // Cancelling also stops a fade-in still running from a call just before (load() and a
+        // rebuild both show the controls): that left them "shown" at alpha 0, invisible but
+        // holding the focus, so the first keys of a stream moved an unseen focus and Enter pressed
+        // the hidden Play. Fade in from wherever the alpha is instead.
         controls.animate().cancel();
-        if (wasHidden) {
-            controls.setVisibility(View.VISIBLE);
+        controls.setVisibility(View.VISIBLE);
+        if (wasHidden) controls.setAlpha(0f);
+        if (controls.getAlpha() < 1f) {
             long d = ui.anim(150);
             if (d == 0) {
                 controls.setAlpha(1f);
             } else {
-                controls.setAlpha(0f);
                 controls.animate().alpha(1f).setDuration(d).setUpdateListener(a -> overlay.invalidate()).start();
             }
         }
@@ -1522,8 +1526,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         } else if (down) {
             scheduleHide();
             if ((code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) && staysInRow(code)) return true;
-            // Down from the bar lands on Play, not on whichever pill sits nearest the knob.
-            if (code == KeyEvent.KEYCODE_DPAD_DOWN && controls.bar.isFocused() && !controls.bar.isScrubbing()) {
+            // Down from the bar lands on Play, not on whichever pill sits nearest the knob (leaving
+            // the bar cancels a scrub preview, as any focus loss does).
+            if (code == KeyEvent.KEYCODE_DPAD_DOWN && controls.bar.isFocused()) {
                 controls.toggle.requestFocus(View.FOCUS_DOWN);
                 return true;
             }
