@@ -79,11 +79,23 @@ describe('buildVideoProfile', () => {
 });
 
 describe('format helpers', () => {
+  it('player titles: the series name over "S1 E3 · Episode name"', () => {
+    expect(playerEpisodeLine(1, 3, 'Pilot')).toBe('S1 E3 · Pilot');
+    expect(playerEpisodeLine(1, 3, null)).toBe('S1 E3');
+    expect(playerEpisodeLine(null, null, 'Pilot')).toBe('Pilot');
+    expect(playerHeading({ kind: 'episode', title: 'Pilot', subtitle: 'The Show' })).toBe('The Show');
+    expect(playerHeading({ kind: 'episode', title: 'Pilot', subtitle: 'The Show', pause: { title: 'Show Name' } })).toBe('Show Name');
+    expect(playerHeading({ kind: 'movie', title: 'A Film', subtitle: null })).toBe('A Film');
+  });
+
   it('offers to resume only between 2 % and 90 %', () => {
     expect(resumePoint(null)).toBeNull();
     expect(resumePoint({ positionMs: 1000, durationMs: 100_000, played: false })).toBeNull();
     expect(resumePoint({ positionMs: 50_000, durationMs: 100_000, played: false })).toBe(50_000);
     expect(resumePoint({ positionMs: 95_000, durationMs: 100_000, played: false })).toBeNull();
+    // 90 % is the server's played threshold: nothing left to resume from there.
+    expect(resumePoint({ positionMs: 89_999, durationMs: 100_000, played: false })).toBe(89_999);
+    expect(resumePoint({ positionMs: 90_000, durationMs: 100_000, played: false })).toBeNull();
     expect(resumePoint({ positionMs: 50_000, durationMs: 100_000, played: true })).toBeNull();
     expect(resumePoint({ positionMs: 50_000, durationMs: 0, played: false }, 100_000)).toBe(50_000);
   });

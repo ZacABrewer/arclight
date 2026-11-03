@@ -16,6 +16,8 @@ public final class VideoTimeline {
     public static final long UP_NEXT_COUNTDOWN_MS = 10_000;
     /** Without a credits segment the card shows this long before the end. */
     static final long UP_NEXT_LEAD_MS = 20_000;
+    /** Share (in %) at which an item counts as watched; PLAYED_THRESHOLD (0.9) on the server. */
+    static final long PLAYED_PERCENT = 90;
     /** A skip button hides this close to the segment's end (seeking there would be pointless). */
     static final long SKIP_TAIL_MS = 1_500;
 
@@ -53,11 +55,14 @@ public final class VideoTimeline {
         return durationMs - UP_NEXT_LEAD_MS;
     }
 
-    /** Watched to the end: inside the credits, or within the last 5 %. */
+    /**
+     * Watched: inside the credits, or 90 % in (the server's played threshold, PLAYED_THRESHOLD in
+     * packages/shared, so the app and the server agree).
+     */
     public static boolean completed(long positionMs, long durationMs, List<VideoRequest.Segment> segments) {
         VideoRequest.Segment c = credits(segments, durationMs);
         if (c != null && positionMs >= c.startMs) return true;
-        return durationMs > 0 && positionMs >= durationMs * 95 / 100;
+        return durationMs > 0 && positionMs >= durationMs * PLAYED_PERCENT / 100;
     }
 
     /**

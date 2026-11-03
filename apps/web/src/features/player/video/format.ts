@@ -1,21 +1,22 @@
-import type { PlayableChapter, VideoAudioTrack, VideoProgress, VideoSegment, VideoSubtitleTrack } from '@arclight/shared';
+import { PLAYED_THRESHOLD, RESUME_MIN as SHARED_RESUME_MIN, type PlayableChapter, type VideoAudioTrack, type VideoProgress, type VideoSegment, type VideoSubtitleTrack } from '@arclight/shared';
 import { getLocale, t } from '../../../i18n/index.js';
 import { formatTime } from '../../../i18n/format.js';
 
 // Pure helpers for the Movies & TV pages and the video player: resume rules, track labels,
 // where the playhead is among chapters and segments, WebVTT parsing.
 
-/** The resume prompt shows between these shares of the runtime. */
-export const RESUME_MIN = 0.02;
-export const RESUME_MAX = 0.9;
+/** The resume prompt shows from RESUME_MIN up to (not including) RESUME_MAX of the runtime; at
+ * RESUME_MAX (90 %) the server counts the item as watched, so there is nothing left to resume. */
+export const RESUME_MIN = SHARED_RESUME_MIN;
+export const RESUME_MAX = PLAYED_THRESHOLD;
 
-/** A saved place worth offering to resume (2 %–90 % in, not finished). */
+/** A saved place worth offering to resume (2 % up to 90 % in, not finished). */
 export function resumePoint(progress: VideoProgress | null | undefined, durationMs?: number): number | null {
   if (!progress || progress.played) return null;
   const total = progress.durationMs || durationMs || 0;
   if (total <= 0) return null;
   const share = progress.positionMs / total;
-  return share >= RESUME_MIN && share <= RESUME_MAX ? progress.positionMs : null;
+  return share >= RESUME_MIN && share < RESUME_MAX ? progress.positionMs : null;
 }
 
 /** 0..1 watched share for a progress bar (1 when played). */

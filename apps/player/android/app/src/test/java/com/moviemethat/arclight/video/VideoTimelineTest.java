@@ -43,9 +43,9 @@ public class VideoTimelineTest {
     @Test
     public void completed() {
         assertTrue(VideoTimeline.completed(40 * MIN, 42 * MIN, segs));
-        assertFalse(VideoTimeline.completed(39 * MIN, 42 * MIN, segs));
-        assertTrue(VideoTimeline.completed(96 * MIN, 100 * MIN, Collections.emptyList()));
-        assertFalse(VideoTimeline.completed(94 * MIN, 100 * MIN, Collections.emptyList()));
+        assertFalse(VideoTimeline.completed(37 * MIN, 42 * MIN, segs));
+        assertTrue(VideoTimeline.completed(90 * MIN, 100 * MIN, Collections.emptyList()));
+        assertFalse(VideoTimeline.completed(89 * MIN, 100 * MIN, Collections.emptyList()));
         assertFalse(VideoTimeline.completed(5, 0, Collections.emptyList()));
     }
 
