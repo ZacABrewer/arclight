@@ -1,4 +1,4 @@
-import { directionOf, pickNext, pickStage, type Box, type Direction } from './spatial';
+import { directionOf, pickNext, pickStage, stageScore, type Box, type Direction } from './spatial';
 import { ensureVisible, stageScale } from './stage-scroll';
 
 // D-pad focus for the TV layout. The remote's arrows arrive as ArrowUp/Down/Left/Right key
@@ -154,12 +154,13 @@ export class FocusManager {
     const row = from.closest('[data-tv-row]');
     const origin = { box: this.rectOf(from), inHeader: Boolean(from.closest('[data-tv-fixed]')) };
     const headerBottom = this.rectOf(stage).top + 72 * stageScale(stage);
-    const i = pickStage(
-      origin,
-      els.map((el) => ({ box: this.rectOf(el), sameRow: !row || row.contains(el), inHeader: Boolean(el.closest('[data-tv-fixed]')) })),
-      dir,
-      headerBottom,
-    );
+    const candidates = els.map((el) => ({ box: this.rectOf(el), sameRow: !row || row.contains(el), inHeader: Boolean(el.closest('[data-tv-fixed]')) }));
+    // Down from the header enters the page at its first item (the "All" chip, the hero's
+    // button), not whichever is nearest the tab: the first in page order that down can reach.
+    const i =
+      origin.inHeader && dir === 'down'
+        ? candidates.findIndex((c) => !c.inHeader && stageScore(origin, c, dir, headerBottom) < Infinity)
+        : pickStage(origin, candidates, dir, headerBottom);
     if (i < 0) return false;
     this.focus(els[i]!, dir);
     return true;
