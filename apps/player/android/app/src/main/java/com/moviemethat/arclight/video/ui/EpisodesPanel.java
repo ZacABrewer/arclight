@@ -72,7 +72,9 @@ public final class EpisodesPanel extends SidePanel {
 
         rowScroll = new ScrollView(context);
         rowScroll.setVerticalScrollBarEnabled(false);
-        rowScroll.setClipToPadding(false);
+        // Clipped to the padding so scrolled rows never draw under the season chips (the column
+        // does not clip its children; the focus ring is drawn by the overlay, outside this view).
+        rowScroll.setClipToPadding(true);
         rowScroll.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(52));
         rows = new LinearLayout(context);
         rows.setOrientation(LinearLayout.VERTICAL);

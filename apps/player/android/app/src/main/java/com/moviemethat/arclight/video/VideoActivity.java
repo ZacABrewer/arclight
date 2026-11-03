@@ -1345,13 +1345,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         SubtitleView subs = playerView.getSubtitleView();
         Ui u = ui;
         if (subs == null || u == null) return;
-        int h = subs.getHeight() > 0 ? subs.getHeight() : playerView.getHeight();
-        if (h <= 0) {
-            subs.post(() -> liftSubtitles(controlsShown));
-            return;
-        }
-        float fraction = u.pxf(OverlayMetrics.captionBottom(lifted)) / h;
-        subs.setBottomPaddingFraction(Math.max(0f, Math.min(0.5f, fraction)));
+        // Bottom padding, not setBottomPaddingFraction: WebVTT cues without a line setting carry an
+        // explicit line of -1, and Media3 ignores the padding fraction for positioned cues. The
+        // view's own padding shrinks the box every cue is laid out in.
+        subs.setBottomPaddingFraction(0f);
+        int pad = u.px(OverlayMetrics.captionBottom(lifted));
+        if (subs.getPaddingBottom() != pad) subs.setPadding(0, 0, 0, pad);
     }
 
     private void scheduleHide() {

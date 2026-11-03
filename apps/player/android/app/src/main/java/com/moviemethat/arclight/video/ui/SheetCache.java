@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.LruCache;
 import androidx.annotation.Nullable;
@@ -27,13 +28,14 @@ public final class SheetCache {
 
     private static final String TAG = "ArclightVideo";
     private static final int MAX_SHEETS = 3;
+    static final long RETRY_MS = 10_000;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final LruCache<Integer, Bitmap> sheets = new LruCache<>(MAX_SHEETS);
     private final Set<Integer> loading = new HashSet<>();
-    /** Sheets that failed for this item (not retried while scrubbing). */
-    private final Set<Integer> failed = new HashSet<>();
+    /** Sheets that failed for this item, with when: retried after {@link #RETRY_MS}, not on every scrub step. */
+    private final Map<Integer, Long> failed = new java.util.HashMap<>();
     @Nullable private VideoRequest.Trickplay trickplay;
     private Map<String, String> headers = java.util.Collections.emptyMap();
     /** Bumped on every {@link #bind}: late decodes for the previous item are dropped. */
@@ -69,7 +71,7 @@ public final class SheetCache {
 
     private void request(int sheet) {
         VideoRequest.Trickplay t = trickplay;
-        if (t == null || closed || sheets.get(sheet) != null || loading.contains(sheet) || failed.contains(sheet)) return;
+        if (t == null || closed || sheets.get(sheet) != null || loading.contains(sheet) || recentlyFailed(sheet)) return;
         loading.add(sheet);
         final int gen = generation;
         final String url = t.sheets.get(sheet);
@@ -91,9 +93,10 @@ public final class SheetCache {
                     if (closed || gen != generation) return;
                     loading.remove(sheet);
                     if (result == null) {
-                        failed.add(sheet);
+                        failed.put(sheet, SystemClock.elapsedRealtime());
                         return;
                     }
+                    failed.remove(sheet);
                     sheets.put(sheet, result);
                     Listener l = listener;
                     if (l != null) l.onSheetReady(sheet);
@@ -102,6 +105,11 @@ public final class SheetCache {
         } catch (java.util.concurrent.RejectedExecutionException e) {
             loading.remove(sheet);
         }
+    }
+
+    private boolean recentlyFailed(int sheet) {
+        Long at = failed.get(sheet);
+        return at != null && SystemClock.elapsedRealtime() - at < RETRY_MS;
     }
 
     public void shutdown() {
