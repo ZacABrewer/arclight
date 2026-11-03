@@ -49,7 +49,7 @@ function setup(opts: { passVideoName?: boolean; asrStatus?: number } = {}) {
 describe('buildAudioExtractArgs', () => {
   it('builds mono 16 kHz PCM extraction, by language or first stream', () => {
     expect(buildAudioExtractArgs({ input: 'in.mkv', output: 'pipe:1' })).toEqual([
-      'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-i', 'in.mkv', '-map', '0:a:0',
+      'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,pipe', '-i', 'in.mkv', '-map', '0:a:0',
       '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-f', 'wav', 'pipe:1',
     ]);
     const byLang = buildAudioExtractArgs({ ffmpegPath: 'ff', input: 'x', audioStreamLanguage3: 'jpn', output: 'o', container: 's16le' });

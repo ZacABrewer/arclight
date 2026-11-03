@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { locateFfmpeg } from '../transcode/runner.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Writes tags, artwork and chapters into a downloaded episode with ffmpeg (stream copy, so the
 // audio is never re-encoded): ID3v2.3 for MP3, MP4 atoms for M4A/MP4, Vorbis comments for
@@ -64,17 +65,17 @@ export function ffmetadataChapters(chapters: readonly Chapter[], durationSeconds
 /** ffmpeg arguments for one tagging pass (exported for tests). */
 export function tagArgs(req: TagRequest, out: string, chaptersFile: string | null): string[] {
   const ext = extname(req.file).toLowerCase();
-  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', req.file];
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', ...fileInput(req.file)];
   const cover = req.coverFile && COVER_OK.has(ext) ? req.coverFile : null;
   let next = 1;
   let coverIndex = -1;
   let chaptersIndex = -1;
   if (cover) {
-    args.push('-i', cover);
+    args.push(...fileInput(cover));
     coverIndex = next++;
   }
   if (chaptersFile && CHAPTERS_OK.has(ext)) {
-    args.push('-f', 'ffmetadata', '-i', chaptersFile);
+    args.push('-f', 'ffmetadata', ...fileInput(chaptersFile));
     chaptersIndex = next++;
   }
   if (cover) args.push('-map', '0:a', '-map', `${coverIndex}:v`, '-disposition:v:0', 'attached_pic');

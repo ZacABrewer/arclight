@@ -34,7 +34,7 @@ function fakeRun(sheets: number, calls: string[][], code = 0): TrickplayRunner {
 describe('pure helpers', () => {
   it('ffmpeg arguments with and without tone mapping', () => {
     const sdr = buildTrickplayArgs('/m/a.mkv', '/c/1/s.tmp', { tonemap: false });
-    expect(sdr.slice(0, 10)).toEqual(['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '2', '-skip_frame', 'nokey', '-i', '/m/a.mkv']);
+    expect(sdr.slice(0, 12)).toEqual(['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '2', '-skip_frame', 'nokey', '-protocol_whitelist', 'file,pipe', '-i', '/m/a.mkv']);
     expect(sdr[sdr.indexOf('-vf') + 1]).toBe('fps=1/10,scale=320:-2:flags=fast_bilinear,tile=10x10');
     expect(sdr.slice(-7, -1)).toEqual(['-q:v', '6', '-start_number', '0', '-f', 'image2']);
     expect(sdr.at(-1)).toBe(join('/c/1/s.tmp', '%d.jpg'));

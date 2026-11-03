@@ -38,6 +38,13 @@ The full list is in [install-other-platforms.md](install-other-platforms.md).
 
 For the VPN layouts the host must provide `/dev/net/tun` and let the Gluetun container use the `NET_ADMIN` capability. If Gluetun fails to start, see [Troubleshooting: container restarting](../TROUBLESHOOTING.md#container-restarting).
 
+## ffmpeg (native installs)
+
+The Docker image ships Jellyfin's ffmpeg 7.x, so Docker users have nothing to do. A native install uses the `ffmpeg` and `ffprobe` on `PATH` (or `ARCLIGHT_FFMPEG` and `ARCLIGHT_FFPROBE`) for media analysis, the player, transcoding, music tagging and subtitles.
+
+- Use **ffmpeg 6.0 or newer**. Older builds are not tested, and they lack hardening that newer releases add for files that only pretend to be media.
+- Arclight treats downloaded files as untrusted. Every ffmpeg and ffprobe input is opened with `-protocol_whitelist file,pipe`, so a playlist or concat file disguised as a video cannot make ffmpeg fetch URLs (outside the torrent VPN) or open other protocols. A build older than 3.0 does not know that option and fails every job.
+
 ## Folders and permissions
 
 Arclight needs two places on disk. In Docker they are mounted into the containers:

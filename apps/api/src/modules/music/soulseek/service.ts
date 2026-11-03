@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import {
@@ -63,6 +63,8 @@ export type FolderImporter = (input: {
   artistId: number;
   albumIds: readonly number[];
   mode: 'copy' | 'move';
+  /** The slskd downloads folder: the importer only removes an emptied folder strictly inside it. */
+  downloadsRoot: string;
 }) => Promise<MusicImportRun>;
 
 export interface SoulseekServiceOptions {
@@ -96,9 +98,19 @@ export function searchQueryFor(artistName: string, albumTitle: string): string {
     .trim();
 }
 
-/** Where slskd puts a finished file: `<downloads>/<remote parent folder>/<file name>`. */
+/**
+ * Where slskd puts a finished file: `<downloads>/<remote parent folder>/<file name>`. Both
+ * names come from the peer, so they are reduced to single safe segments (`..`, `.`, empty and
+ * drive segments become `_`) and the result always stays strictly inside the downloads folder.
+ */
 export function localPathOf(downloadsPath: string, remoteFile: string): string {
   return join(downloadsPath, remoteBaseName(remoteDirName(remoteFile)), remoteBaseName(remoteFile));
+}
+
+/** True when `folder` is strictly inside `root` (not the root itself, not outside it). */
+export function isStrictlyInside(root: string, folder: string): boolean {
+  const rel = relative(resolve(root), resolve(folder));
+  return rel !== '' && !isAbsolute(rel) && rel.split(/[\\/]/)[0] !== '..';
 }
 
 export class SoulseekService {
@@ -395,6 +407,12 @@ export class SoulseekService {
     let last: MusicImportRun | null = null;
     let error: string | null = null;
     for (const path of folders) {
+      if (!isStrictlyInside(settings.downloadsPath, path)) {
+        // Defence in depth: localPathOf already keeps peer names inside the downloads folder.
+        error = 'A downloaded file is not inside the slskd downloads folder; nothing was imported.';
+        this.o.log?.warn({ id: row.id, path }, 'soulseek import folder outside the downloads folder');
+        continue;
+      }
       try {
         last = await this.o.importFolder({
           path,
@@ -403,6 +421,7 @@ export class SoulseekService {
           artistId: row.artistId,
           albumIds: [row.albumId],
           mode: settings.importMode,
+          downloadsRoot: settings.downloadsPath,
         });
       } catch (err) {
         error = err instanceof Error ? err.message : String(err);

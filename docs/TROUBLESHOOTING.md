@@ -1204,7 +1204,7 @@ Source: `FfprobeMissing` (warning).
 **Fix:**
 
 - Docker: the image ships ffmpeg; check you are not overriding `PATH`.
-- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary.
+- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary. Use ffmpeg 6.0 or newer, see [Requirements](getting-started/requirements.md#ffmpeg-native-installs).
 - Restart Arclight, then press **Analyze** on a title or run the AnalyzeMedia task under System > Tasks.
 
 <a id="orphan-files-found"></a>

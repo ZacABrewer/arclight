@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { Transform, pipeline, type Readable } from 'node:stream';
 import { locateFfmpeg } from '../transcode/runner.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Live audio transcodes for the player: one ffmpeg per request, writing to stdout, which the
 // stream route pipes to the client (chunked, no ranges; seeking restarts with `startMs`). Audio
@@ -37,7 +38,7 @@ export interface AudioTranscodeSpec {
 export function buildAudioTranscodeArgs(input: string, spec: AudioTranscodeSpec): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
   if (spec.startMs && spec.startMs > 0) args.push('-ss', (spec.startMs / 1000).toFixed(3));
-  args.push('-i', input, '-map', '0:a:0', '-vn', '-sn', '-dn', '-map_metadata', '-1');
+  args.push(...fileInput(input), '-map', '0:a:0', '-vn', '-sn', '-dn', '-map_metadata', '-1');
   if (spec.channels && spec.channels > 2) args.push('-ac', '2');
   const kbps = `${Math.round(spec.bitrateKbps)}k`;
   switch (spec.format) {

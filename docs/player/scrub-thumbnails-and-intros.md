@@ -32,6 +32,8 @@ Set this under **Settings > Player > Scrub thumbnails and intros > Scrub thumbna
 
 Sheets live in `cache/player/trickplay/` inside your config folder, one folder per file. When a file is replaced (an upgrade), its old sheets are deleted and new ones are made. Folders of files that left the library are removed by the nightly job.
 
+Episode thumbnails and subtitles converted for the player are kept next to them, in `cache/player/thumbs/` and `cache/player/subtitles/`. When a file changes, the copies made for its old version are deleted as the new ones are made. Every six hours the oldest of these are removed while the two folders hold more than 2 GB; they are made again when needed.
+
 **Settings > Player** shows how much space the sheets use. **Clear scrub thumbnails** deletes them all. They are made again when needed.
 
 Apps and TVs load the sheets through signed links that expire like stream links, so they work without a sign-in cookie.

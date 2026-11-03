@@ -93,7 +93,7 @@ describe('tag arguments', () => {
     const temp = tagTempPath('/lib/A/01 - Opening.flac');
     expect(temp).toBe(join('/lib/A', '.01 - Opening.arclight-tagging.flac'));
     const args = tagWriteArgs('/lib/A/01 - Opening.flac', temp, { tags: { title: 'Opening' }, coverPath: '/lib/A/cover.jpg' });
-    expect(args.slice(0, 9)).toEqual(['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', '/lib/A/01 - Opening.flac', '-i', '/lib/A/cover.jpg']);
+    expect(args.slice(0, 13)).toEqual(['-hide_banner', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', '/lib/A/01 - Opening.flac', '-protocol_whitelist', 'file,pipe', '-i', '/lib/A/cover.jpg']);
     expect(args.join(' ')).toContain('-map 0:a -map 1:v:0 -disposition:v:0 attached_pic');
     expect(args.join(' ')).toContain('-c copy -map_metadata 0');
     expect(args[args.length - 1]).toBe(temp);
@@ -115,6 +115,8 @@ describe('split arguments', () => {
       '-y',
       '-ss',
       '240.000',
+      '-protocol_whitelist',
+      'file,pipe',
       '-i',
       '/dl/img.wav',
       '-t',
@@ -153,7 +155,7 @@ describe('ReplayGain', () => {
 
   it('measures a span with null output', () => {
     expect(replayGainArgs('/a.flac', { startMs: 1000, endMs: 3000 }).join(' ')).toBe(
-      '-hide_banner -nostdin -nostats -v info -ss 1.000 -i /a.flac -t 2.000 -map 0:a:0 -af replaygain -f null -',
+      '-hide_banner -nostdin -nostats -v info -ss 1.000 -protocol_whitelist file,pipe -i /a.flac -t 2.000 -map 0:a:0 -af replaygain -f null -',
     );
   });
 });

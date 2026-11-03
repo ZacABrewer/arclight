@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
-import { and, asc, desc, eq, gte, inArray, isNotNull, like, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { isNetworkProxy } from '@arclight/indexers';
 import type { NotificationEvent } from '@arclight/notifications';
@@ -32,6 +32,7 @@ import {
   PodcastSubscriptionSettings as SubscriptionSchema,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { likeContains } from '../../db/like-contains.js';
 import type { EventBus } from '../../events.js';
 import { ProxiesService } from '../indexers/proxies.js';
 import { getSection } from '../settings/service.js';
@@ -375,7 +376,7 @@ export class PodcastsService {
     if (q.podcastId) conds.push(eq(podcastEpisodes.podcastId, q.podcastId));
     if (q.status) conds.push(eq(podcastEpisodes.status, q.status));
     if (q.played !== undefined) conds.push(eq(podcastEpisodes.played, q.played));
-    if (q.term) conds.push(like(podcastEpisodes.title, `%${q.term.replace(/[%_]/g, (c) => `\\${c}`)}%`));
+    if (q.term) conds.push(likeContains(podcastEpisodes.title, q.term));
     const where = conds.length > 0 ? and(...conds) : undefined;
     const total = this.db.select({ n: sql<number>`count(*)` }).from(podcastEpisodes).where(where).get()?.n ?? 0;
     const col = {

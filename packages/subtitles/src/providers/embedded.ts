@@ -10,6 +10,7 @@ import type {
   SubtitleQuery,
 } from '../types.js';
 import { BaseProvider, languageSet } from './base.js';
+import { fileInput } from '../ffmpeg-input.js';
 
 // Embedded subtitles: text subtitle streams already inside the container, found with an
 // injected ffprobe-like probe and extracted with an injected ffmpeg runner.
@@ -73,7 +74,7 @@ export function buildSubtitleExtractArgs(o: ExtractArgsInput): string[] {
   return [
     o.ffmpegPath ?? 'ffmpeg',
     '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', o.input,
+    ...fileInput(o.input),
     '-map', `0:${o.streamIndex}`,
     '-c:s', convert ? 'srt' : 'copy',
     '-f', muxer,

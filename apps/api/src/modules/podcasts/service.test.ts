@@ -339,6 +339,13 @@ describe('retention and played state', () => {
     expect(s.setPlayed(id, true).played).toBe(true);
     expect(s.setPlayed(id, false).played).toBe(false);
     expect(s.episodes({ podcastId: p.id, played: false }).totalRecords).toBe(4);
+    // LIKE wildcards in the search term match literally.
+    expect(s.episodes({ podcastId: p.id, term: '%' }).totalRecords).toBe(0);
+    expect(s.episodes({ podcastId: p.id, term: '_' }).totalRecords).toBe(0);
+    expect(s.episodes({ podcastId: p.id, term: 'tw' }).totalRecords).toBe(1);
+    const e1 = episodesOf(p.id).find((e) => e.guid === 'e1')!;
+    db.update(podcastEpisodes).set({ title: '100% On_e' }).where(eq(podcastEpisodes.id, e1.id)).run();
+    expect(s.episodes({ podcastId: p.id, term: '0% on_' }).records.map((e) => e.id)).toEqual([e1.id]);
   });
 });
 

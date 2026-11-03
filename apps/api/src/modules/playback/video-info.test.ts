@@ -217,7 +217,7 @@ describe('ffmpeg argv', () => {
   it('transcodes with seek, scale, tone-mapping and AAC 2.0 in software', () => {
     const args = buildVideoStreamArgs('/m/a.mkv', { ...base, method: 'transcode', copyAudio: false, startMs: 90_500, hwaccel: 'none', videoCodec: 'h264', height: 1080, sourceHeight: 2160, videoKbps: 8000, tonemap: true, zscale: true, fps: 24 });
     const s = args.join(' ');
-    expect(s).toContain('-ss 90.500 -i /m/a.mkv');
+    expect(s).toContain('-ss 90.500 -protocol_whitelist file,pipe -i /m/a.mkv');
     expect(s).toContain('scale=-2:1080,zscale=t=linear');
     expect(s).toContain('format=yuv420p');
     expect(s).toContain('-c:v libx264');
@@ -230,7 +230,7 @@ describe('ffmpeg argv', () => {
     expect(embedded).toContain('[0:s:1][0:v:0]scale2ref[sub][base];[base][sub]overlay');
     expect(embedded).toContain('-map [v]');
     const external = buildVideoStreamArgs('/m/a.mkv', { ...base, method: 'transcode', hwaccel: 'none', burn: { path: '/m/a.sup' } }).join(' ');
-    expect(external).toContain('-i /m/a.mkv -i /m/a.sup');
+    expect(external).toContain('-protocol_whitelist file,pipe -i /m/a.mkv -protocol_whitelist file,pipe -i /m/a.sup');
     expect(external).toContain('[1:s:0][0:v:0]scale2ref');
   });
 
@@ -244,7 +244,7 @@ describe('ffmpeg argv', () => {
 
   it('builds WebVTT and thumbnail commands', () => {
     expect(buildSubtitleArgs('/m/a.mkv', 2, '/c/out.vtt').join(' ')).toContain('-map 0:s:2 -c:s webvtt -f webvtt /c/out.vtt');
-    expect(buildSubtitleArgs('/m/a.srt', null, '/c/out.vtt', 'CP1252').join(' ')).toContain('-sub_charenc CP1252 -i /m/a.srt');
+    expect(buildSubtitleArgs('/m/a.srt', null, '/c/out.vtt', 'CP1252').join(' ')).toContain('-sub_charenc CP1252 -protocol_whitelist file,pipe -i /m/a.srt');
     expect(buildThumbnailArgs('/m/a.mkv', 90_000, '/c/t.jpg').join(' ')).toContain('-ss 90.000');
   });
 });

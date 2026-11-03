@@ -249,6 +249,8 @@ Sends each event to any URL you choose.
 
 A script runs with Arclight's own permissions. In Docker the script must exist inside the container. A script that hangs is killed after the timeout.
 
+The script gets a reduced environment: the standard variables a program needs (`PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TZ`, `TEMP`/`TMP`/`TMPDIR`, `PUID`/`PGID`, and on Windows `SystemRoot`, `ComSpec`, `PATHEXT`, `USERPROFILE`, `APPDATA` and the other system folders) plus the event's `ARCLIGHT_*` variables. Other variables of the Arclight server, which can hold passwords or keys, are not passed on. If a script needs one of them, list its name in the server variable `ARCLIGHT_SCRIPT_ENV` (names separated by commas or spaces; `*` passes the whole environment, as before 0.24).
+
 ## Events (Notify on)
 
 | Switch | Fires when | Notes |

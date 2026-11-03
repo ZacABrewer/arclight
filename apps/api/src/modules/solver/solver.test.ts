@@ -5,7 +5,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { BrowserCandidate, ChallengeSolver, SolveRequest } from '@arclight/challenge-solver';
+import type { BrowserCandidate, ChallengeSolver, ChallengeSolverOptions, SolveRequest } from '@arclight/challenge-solver';
+import { SolverService } from './service.js';
 import { FlareSolverrClient } from '@arclight/indexers';
 import type { AppContext } from '../../app.js';
 import type { Db } from '../../db/index.js';
@@ -268,6 +269,19 @@ describe('definition indexers that require FlareSolverr', () => {
 
 // ---- routes -------------------------------------------------------------------------------
 
+describe('target guard', () => {
+  it('blocks loopback and LAN targets unless allowPrivateTargets is on', async () => {
+    let opts: ChallengeSolverOptions | undefined;
+    const service = new SolverService({ db, configDir: dir, findBrowser: () => EDGE, createSolver: (o) => ((opts = o), fake.solver) });
+    await service.handle({ cmd: 'sessions.list' });
+    expect(service.settings().allowPrivateTargets).toBe(false);
+    await expect(opts!.checkTarget!(new URL('http://127.0.0.1:9696/'))).rejects.toThrow(/local or reserved/);
+    await expect(opts!.checkTarget!(new URL('http://192.168.1.10/'))).rejects.toThrow(/local or reserved/);
+    service.updateSettings({ allowPrivateTargets: true });
+    await expect(opts!.checkTarget!(new URL('http://127.0.0.1:9696/'))).resolves.toBeUndefined();
+  });
+});
+
 describe('POST /api/v1/solver/v1', () => {
   it('requires the API key and answers in the FlareSolverr shape', async () => {
     app = await buildApp();
@@ -321,7 +335,7 @@ describe('POST /api/v1/solver/v1', () => {
     const status = await app.inject({ method: 'GET', url: '/api/v1/solver/status', headers });
     expect(status.json()).toMatchObject({ enabled: true, browser: EDGE, running: false, proxyId: expect.any(Number) });
     const put = await app.inject({ method: 'PUT', url: '/api/v1/settings/solver', payload: { enabled: false, timeoutSeconds: 90 }, headers });
-    expect(put.json()).toEqual({ enabled: false, timeoutSeconds: 90, idleCloseSeconds: 300 });
+    expect(put.json()).toEqual({ enabled: false, timeoutSeconds: 90, idleCloseSeconds: 300, allowPrivateTargets: false });
     expect(rows().some(isBuiltinSolverRow)).toBe(false);
     expect((await app.inject({ method: 'PUT', url: '/api/v1/settings/solver', payload: { timeoutSeconds: 1 }, headers })).statusCode).toBe(400);
   });

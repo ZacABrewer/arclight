@@ -65,7 +65,7 @@ The page offers **Connect** and **Disconnect** buttons for this provider only.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Adapter name | empty | The VPN adapter's name as your OS shows it, for example `ProtonVPN` or `wg0` |
+| Adapter name | empty | The VPN adapter's name as your OS shows it, for example `ProtonVPN`, `Ethernet 2` or `wg0`. Names with double quotes, backticks, typographic quotes or control characters are refused. |
 
 Arclight finds the adapter's IPv4 address, treats a missing adapter as "VPN down", and binds the torrent engine to that address. Because only the engine is bound, other Arclight traffic (indexer searches, metadata) still goes out normally.
 

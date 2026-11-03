@@ -139,6 +139,11 @@ export class DockerClient {
     }
   }
 
+  /** POST /images/{source}/tag: point `repository:tag` at an image already on the host. */
+  async tag(source: string, repository: string, tag: string): Promise<void> {
+    await this.call('POST', `/images/${encodeURIComponent(source)}/tag?repo=${encodeURIComponent(repository)}&tag=${encodeURIComponent(tag)}`);
+  }
+
   async createContainer(name: string, body: Record<string, unknown>): Promise<string> {
     const out = await this.call<{ Id: string }>('POST', `/containers/create?name=${encodeURIComponent(name)}`, body);
     return out.Id;

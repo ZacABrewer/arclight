@@ -79,3 +79,4 @@ export * from './music-playlists.js';
 export * from './playback.js';
 export * from './households.js';
 export * from './safe-regex.js';
+export * from './script-env.js';

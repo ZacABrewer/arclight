@@ -77,6 +77,7 @@ export {
   SlskdClient,
   remoteBaseName,
   remoteDirName,
+  safeRemoteSegment,
   transferPhase,
   type SlskdDownload,
   type SlskdSearchOptions,

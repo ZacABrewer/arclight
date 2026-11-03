@@ -80,7 +80,7 @@ describe('embedded tracks', () => {
     const ok = fakeRunner(() => ({ stdout: Buffer.from(JSON.stringify(probe)) }));
     const result = await createFfprobe(ok.runner, () => 'ffprobe')('/v.mkv');
     expect(result?.streams).toHaveLength(6);
-    expect(ok.calls[0]!.args).toEqual(['-v', 'error', '-print_format', 'json', '-show_streams', '/v.mkv']);
+    expect(ok.calls[0]!.args).toEqual(['-v', 'error', '-print_format', 'json', '-show_streams', '-protocol_whitelist', 'file,pipe', '/v.mkv']);
     const bad = fakeRunner(() => ({ ok: false, exitCode: null, error: 'spawn ffprobe ENOENT' }));
     expect(await createFfprobe(bad.runner, () => 'ffprobe')('/v.mkv')).toBeNull();
   });

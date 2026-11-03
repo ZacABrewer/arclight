@@ -97,7 +97,7 @@ import {
 import { AudiobookImporter } from './audio/audiobook-import.js';
 import { AUDIO_EXTENSIONS, checkReleaseFiles, expectedRuntimeMinutes, type SafetyFile, type SafetyTrigger } from '../download-clients/safety.js';
 import { isUnpackableArchive } from './unpack/archives.js';
-import { findSevenZip, SevenZip } from './unpack/sevenzip.js';
+import { describeSevenZip, findSevenZip, SevenZip } from './unpack/sevenzip.js';
 import { stagingDirFor, unpackArchives, UnpackError } from './unpack/unpacker.js';
 import { MusicImporter, type MusicImportRun } from './audio/music-import.js';
 import { ImportsError } from './errors.js';
@@ -238,7 +238,7 @@ export class ImportsService {
     this.platform = options.platform ?? process.platform;
     this.now = options.now ?? (() => new Date());
     this.fsOps = options.fsOps;
-    this.sevenZip = options.sevenZip ?? defaultSevenZip;
+    this.sevenZip = options.sevenZip ?? (() => defaultSevenZip(this.log));
     this.profiles = new ProfilesService({ db: options.db });
     const importerOptions = {
       db: this.db,
@@ -550,7 +550,8 @@ export class ImportsService {
       });
     } catch (err) {
       if (err instanceof UnpackError && err.rejectsRelease) {
-        const reason = err.kind === 'encrypted' ? `Unsafe release: ${err.message}` : `Broken release: ${err.message}`;
+        const unsafe = err.kind === 'encrypted' || err.kind === 'tooLarge' || err.kind === 'links';
+        const reason = unsafe ? `Unsafe release: ${err.message}` : `Broken release: ${err.message}`;
         return { done: await this.rejectRelease(item, result, reason, 'unpack', err.kind) };
       }
       if (err instanceof UnpackError && err.kind === 'diskSpace') this.retryable.add(item.id);
@@ -642,6 +643,8 @@ export class ImportsService {
     artistId: number;
     albumIds: readonly number[];
     mode: 'copy' | 'move';
+    /** An emptied source folder is only removed when strictly inside this folder. */
+    downloadsRoot: string;
   }): Promise<MusicImportRun> {
     const item: TrackedDownload = {
       id: -1,
@@ -668,7 +671,7 @@ export class ImportsService {
       isReadOnly: input.mode === 'copy',
       grabbedRelease: null,
     };
-    return this.music.importCompletedDownload(item, input.path);
+    return this.music.importCompletedDownload(item, input.path, { removeWithin: input.downloadsRoot });
   }
 
   private async importAudiobookDownload(item: TrackedDownload, path: string, result: ImportRunResult): Promise<ImportRunResult> {
@@ -2144,7 +2147,18 @@ function scannedFiles(scan: ScanResult): SafetyFile[] {
   }));
 }
 
-async function defaultSevenZip(): Promise<SevenZip | null> {
+const warnedOldSevenZip = new Set<string>();
+
+async function defaultSevenZip(log?: Logger): Promise<SevenZip | null> {
   const binary = await findSevenZip();
-  return binary ? new SevenZip(binary) : null;
+  if (!binary) return null;
+  const info = await describeSevenZip(binary);
+  if (!info.linkSafe && !warnedOldSevenZip.has(binary)) {
+    warnedOldSevenZip.add(binary);
+    log?.warn(
+      { binary, version: info.version },
+      '7-Zip is older than 25.00: archives that contain links are refused instead of unpacked. Update 7-Zip (Docker images already ship a current 7zz).',
+    );
+  }
+  return new SevenZip(binary, undefined, undefined, info);
 }

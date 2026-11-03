@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import type { HealthFindingData, HealthFindingType, HealthScanMode, HealthSeverity } from '@arclight/shared';
 import { baseLanguages, missingLanguages } from '../additional-languages/audio.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // Pure health checks: given what was learnt about a file (stat, ffprobe, ffmpeg decode) and
 // what the library expects of it, the problems found. No I/O here; service.ts gathers the
@@ -295,7 +296,7 @@ export function decodeArgs(path: string, s: DecodeSlice, kind: FileKind): string
   const args = ['-hide_banner', '-nostdin', '-nostats', '-v', 'error'];
   if (s.start > 0) args.push('-ss', String(s.start));
   if (s.length !== null) args.push('-t', String(s.length));
-  args.push('-i', path);
+  args.push(...fileInput(path));
   if (kind === 'video') args.push('-map', '0:v:0?', '-map', '0:a?');
   else args.push('-map', '0:a?');
   args.push('-f', 'null', '-');

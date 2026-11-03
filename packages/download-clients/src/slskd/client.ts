@@ -61,16 +61,30 @@ export function transferPhase(state: string): SlskdTransferPhase {
   return 'queued';
 }
 
-/** The last segment of a Soulseek path (they use backslashes, some peers use slashes). */
-export function remoteBaseName(path: string): string {
-  const parts = path.split(/[\\/]/).filter((p) => p !== '');
-  return parts.at(-1) ?? path;
+/**
+ * One segment of a peer-supplied path made safe to use as a local name: empty, `.`, `..` and
+ * bare drive (`C:`) segments become `_`, so a remote name can never point at a parent folder.
+ */
+export function safeRemoteSegment(segment: string): string {
+  const cleaned = segment.replace(/[\\/\0]/g, '_');
+  return cleaned === '' || cleaned === '.' || cleaned === '..' || /^[A-Za-z]:$/.test(cleaned) ? '_' : cleaned;
 }
 
-/** The directory part of a Soulseek path, separators kept. */
+/** The last segment of a Soulseek path (they use backslashes, some peers use slashes), made safe. */
+export function remoteBaseName(path: string): string {
+  const parts = path.split(/[\\/]/).filter((p) => p !== '');
+  return safeRemoteSegment(parts.at(-1) ?? '');
+}
+
+/** The directory part of a Soulseek path, separators kept; `.`/`..`/drive segments become `_`. */
 export function remoteDirName(path: string): string {
   const cut = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
-  return cut < 0 ? '' : path.slice(0, cut);
+  if (cut < 0) return '';
+  return path
+    .slice(0, cut)
+    .split(/([\\/])/)
+    .map((part, i) => (i % 2 === 1 || part === '' ? part : safeRemoteSegment(part)))
+    .join('');
 }
 
 export class SlskdClient {

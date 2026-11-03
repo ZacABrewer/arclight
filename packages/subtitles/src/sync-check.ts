@@ -1,5 +1,6 @@
 import { convertToSrt, detectFormat, parseSrt, type Cue } from './formats.js';
 import { buildAlassCommand, buildFfsubsyncCommand, type CommandDescriptor } from './postprocess.js';
+import { fileInput } from './ffmpeg-input.js';
 
 // Sync-quality scoring. Two ways to measure how well a subtitle's timing matches its video:
 //
@@ -59,7 +60,7 @@ export function buildAudioActivityCommand(o: AudioActivityOptions): CommandDescr
     '-nostdin', '-hide_banner', '-nostats',
     '-ss', secs(o.window.startMs),
     '-t', secs(o.window.durationMs),
-    '-i', o.input,
+    ...fileInput(o.input),
     '-map', o.audioStream ?? '0:a:0',
     '-vn', '-sn', '-dn',
     '-af', filter,

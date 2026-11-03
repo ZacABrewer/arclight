@@ -480,8 +480,10 @@ Ids are the numeric Discord ids (5 to 25 digits). The page shows the state (Off,
 | `/request` | Request a movie or series. Options: title, year, and 4k. |
 | `/link` | Link your Discord account with a code. |
 | `/status` | Show the status of your requests, optionally filtered by title. |
-| `/search` | Search titles and see whether they are in the library. |
+| `/search` | Search titles and see whether they are in the library. Needs a linked account. |
 | `/pending` | List pending requests, with approve and decline buttons. Admins only. |
+
+Each Discord user can run up to 5 searches (`/search` and `/request` together) per minute. To let people who have not linked an account use `/search`, set `allowUnlinkedSearch` to `true` in the Discord bot settings through the API (`PUT /api/v1/settings/discordbot`).
 
 ## Related
 

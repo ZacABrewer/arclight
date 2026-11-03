@@ -199,6 +199,18 @@ function fileNameOf(title: string): string {
   return (clean || 'Track').slice(0, 150);
 }
 
+/**
+ * Whether an emptied source folder may be removed after a verified move: never a filesystem
+ * root, and when the caller names a downloads folder (Soulseek), only a folder strictly inside it.
+ */
+export function mayRemoveSource(path: string, within: string | undefined): boolean {
+  const target = resolve(path);
+  if (dirname(target) === target) return false;
+  if (within === undefined) return true;
+  const rel = relative(resolve(within), target);
+  return rel !== '' && !isAbsolute(rel) && rel.split(/[\\/]/)[0] !== '..';
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -368,7 +380,7 @@ export class MusicImporter {
   // -------------------------------------------------------------------------------------
 
   /** Imports a completed music download. The caller (ImportsService) handles queue state. */
-  async importCompletedDownload(item: TrackedDownload, path: string): Promise<MusicImportRun> {
+  async importCompletedDownload(item: TrackedDownload, path: string, opts: { removeWithin?: string } = {}): Promise<MusicImportRun> {
     const settings = this.o.mediaManagement();
     const run: MusicImportRun = { verified: false, outcomes: [], messages: [], retryable: false, importedAlbumIds: [], warnings: [], isFile: false };
     const target = this.targetOf(item);
@@ -422,7 +434,7 @@ export class MusicImporter {
         : imported.size > 0 || (previously.size > 0 && run.outcomes.every((o) => o.status !== 'failed'));
 
     if (run.verified) {
-      if (mode === 'move' && !scan.isFile && !(await containsAudio(path))) {
+      if (mode === 'move' && !scan.isFile && mayRemoveSource(path, opts.removeWithin) && !(await containsAudio(path))) {
         await rm(path, { recursive: true, force: true }).catch((err: unknown) => this.o.log?.debug({ err, path }, 'source folder cleanup skipped'));
       }
       return run;
