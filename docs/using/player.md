@@ -1,14 +1,14 @@
 # Player
 
-Arclight has a built-in player for your own music and audiobooks. It runs in the browser at `/player`, apart from the main app, so you can open it on a phone, a tablet or a computer and just listen.
+Arclight has a built-in player for your own music, audiobooks, movies and TV shows. It runs in the browser at `/player`, apart from the main app, so you can open it on a phone, a tablet or a computer and just listen.
 
-The player plays files that Arclight already has on disk. Items without a file do not show up. Music and audiobooks work now. Movies and TV, and podcasts, show as "Coming soon" and are planned for later.
+The player plays files that Arclight already has on disk. Items without a file do not show up. Music, audiobooks, movies and TV work now. Podcasts show as "Coming soon" and are planned for later.
 
 The player is a preview. It is off until an admin turns it on.
 
 ## Turning the player on (admins)
 
-1. Open **Settings > General > Features** and make sure **Music** and **Audiobooks** are on. The player only shows the sections you have enabled.
+1. Open **Settings > General > Features** and make sure the sections you want (**Music**, **Audiobooks**, **Movies**, **TV**) are on. The player only shows the sections you have enabled.
 2. Open **Settings > Player** and switch on **Turn on the player**.
 3. Save.
 
@@ -24,6 +24,9 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Stream link lifetime | How long links for casting and other players keep working. 1 to 72 hours. | 6 hours |
 | Playback engine | **Arclight** plays files itself. **Jellyfin** streams them through a Jellyfin or Emby server. See [Playing through Jellyfin](#playing-through-jellyfin). | Arclight |
 | Jellyfin server | Which Jellyfin or Emby server to stream through. Shown when the engine is Jellyfin. | First enabled server |
+| Movies & TV | Lets the player show and play movies and episodes. | On |
+| Live video slots | How many videos the server may convert or repackage at once, for everyone together. Each one costs CPU or GPU time. | 3 |
+| Live video slots per user | How many of those one person may use. Starting a new video replaces that person's oldest one. | 1 |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -45,7 +48,7 @@ A user's own bitrate limit wins over the server's remote limit. Admins always ha
 
 ## Opening the player
 
-Go to `/player` on your Arclight address. The home page shows **Continue listening**: albums and audiobooks you started, so you can pick up where you left off. The top bar has **Music**, **Books** (audiobooks) and search. Movies & TV and Podcasts are greyed out for now.
+Go to `/player` on your Arclight address. The home page shows **Continue listening**: albums and audiobooks you started, so you can pick up where you left off. The top bar has **Music**, **Books** (audiobooks), **Movies & TV** and search. Podcasts are greyed out for now.
 
 ## Music
 
@@ -127,6 +130,22 @@ The **format badge** on Now playing shows how the file reaches you:
 
 Converting costs server power, so Arclight only does it when it has to. A converted stream cannot be fetched in ranges, so a seek starts a new conversion from that point. This can take a moment.
 
+## Movies & TV
+
+Movies and episodes play in the same player. Shows open on their next episode, and an episode can go straight on to the next one. Content restrictions on a user (certification limits, hiding adult content) hide those titles from that person everywhere, including search and links.
+
+How a video reaches you depends on what your device can play:
+
+- **Direct**: the original file is sent as it is, with full seeking. This is the best quality and costs the server nothing.
+- **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
+- **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
+
+The player says which one it uses and why. Remuxed and converted streams cannot be fetched in ranges, so seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+
+Text subtitles (SRT, ASS, WebVTT, embedded or next to the file) can be turned on and off at any time. Picture subtitles (PGS, VobSub) have to be burned into the picture, which means a transcode.
+
+To run conversions in Docker with Intel graphics, pass the GPU into the container (for example `--device /dev/dri:/dev/dri`).
+
 ## Sign in to the Arclight app
 
 The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
@@ -139,6 +158,16 @@ The code works once and expires after five minutes. Press **New code** for anoth
 **Your devices**, under the code, lists every phone or tablet signed in with your account. **Remove** signs that device out at once. Changing your password, or an admin resetting it, signs every device out too.
 
 The app needs the same player access as the browser. If the player is off, or your account may not use it, the app cannot sign in.
+
+## Sign in on a TV
+
+The Arclight app on Android TV signs in without a keyboard:
+
+1. On the TV, choose to sign in with a code. The TV shows a short code and an address ending in `/player/link`.
+2. On your phone or computer, open that address, sign in to Arclight if asked, and type the code.
+3. The TV signs in by itself within a few seconds.
+
+The code expires after ten minutes and works once. The TV is then signed in as the person who typed the code, so it shows that person's library, restrictions and progress. It appears under **Your devices** like any other device, where **Remove** signs it out.
 
 ## Continue listening
 

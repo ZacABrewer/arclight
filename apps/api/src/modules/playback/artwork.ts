@@ -27,7 +27,7 @@ const NAMES: Record<ArtworkKind, string[]> = {
 };
 
 /** The first image in `dir` named like one of `names` (case-insensitive, in that order). */
-async function folderImage(dir: string, names: readonly string[]): Promise<Artwork> {
+export async function folderImage(dir: string, names: readonly string[]): Promise<Artwork> {
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -59,7 +59,7 @@ async function embedded(path: string): Promise<Artwork> {
   }
 }
 
-function remote(images: ReadonlyArray<{ coverType: string; url: string; remoteUrl?: string | null | undefined }> | null, types: readonly string[]): Artwork {
+export function remote(images: ReadonlyArray<{ coverType: string; url: string; remoteUrl?: string | null | undefined }> | null, types: readonly string[]): Artwork {
   for (const type of types) {
     const img = images?.find((i) => i.coverType === type);
     const url = [img?.url, img?.remoteUrl].find((u) => typeof u === 'string' && /^https?:\/\//i.test(u));

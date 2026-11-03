@@ -19,8 +19,8 @@ export const appDevices = sqliteTable(
     appVersion: text('app_version').notNull(),
     /** sha256 hex of the bearer token. */
     tokenHash: text('token_hash').notNull(),
-    /** How the device signed in: `password` or `pairing`. */
-    method: text('method').$type<'password' | 'pairing'>().notNull().default('password'),
+    /** How the device signed in: `password`, `pairing` or `device-code` (TV sign-in). */
+    method: text('method').$type<'password' | 'pairing' | 'device-code'>().notNull().default('password'),
     createdAt: text('created_at').notNull(),
     /** Last request with the token (written at most once a minute). */
     lastSeenAt: text('last_seen_at').notNull(),

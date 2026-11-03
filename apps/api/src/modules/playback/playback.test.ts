@@ -213,7 +213,7 @@ describe('access guard', () => {
     const h = await harness();
     const admin = await signIn(h, { role: 'admin' });
     setSection(h.db, 'features', { music: true, audiobooks: false, podcasts: false });
-    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json().sections).toEqual({ music: true, audiobooks: false, podcasts: false, books: false, video: false });
+    expect((await get(h, '/api/v1/playback/me', admin.cookie)).json().sections).toEqual({ music: true, audiobooks: false, podcasts: false, books: false, video: true });
     expect((await get(h, '/api/v1/playback/audiobooks/home', admin.cookie)).json().code).toBe('SECTION_OFF');
     const key = authServiceFor(h.ctx).apiKey();
     expect((await get(h, '/api/v1/playback/music/albums', undefined, { 'x-api-key': key })).statusCode).toBe(200);
@@ -284,7 +284,7 @@ describe('access guard', () => {
     const admin = await signIn(h, { role: 'admin' });
     expect((await get(h, '/api/v1/settings/player', user.cookie)).statusCode).toBe(403);
     const saved = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/player', headers: { cookie: admin.cookie }, payload: { enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2 } });
-    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null });
+    expect(saved.json()).toEqual({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 256, streamLinkHours: 2, backend: 'arclight', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1 });
     expect((await h.app.inject({ method: 'POST', url: '/api/v1/settings/player/engine-test', headers: { cookie: user.cookie }, payload: {} })).statusCode).toBe(403);
   });
 });
@@ -410,7 +410,8 @@ describe('items', () => {
     expect(item.replayGain).toEqual({ trackGainDb: -6.5, albumGainDb: null });
     expect(item.artworkUrl).toBe(`/api/v1/playback/artwork/album/${album.id}`);
     expect((await get(h, '/api/v1/playback/item/track:99999', user.cookie)).statusCode).toBe(404);
-    expect((await get(h, '/api/v1/playback/item/movie:1', user.cookie)).statusCode).toBe(400);
+    expect((await get(h, '/api/v1/playback/item/movie:1', user.cookie)).statusCode).toBe(404);
+    expect((await get(h, '/api/v1/playback/item/bogus:1', user.cookie)).statusCode).toBe(400);
   });
 
   it('an audiobook is every file on one timeline; chapters fall back to one per file', async () => {
@@ -480,7 +481,8 @@ describe('progress', () => {
 
     const list = await get(h, `/api/v1/playback/progress?itemKeys=${key},track:${trackIds[1]}`, user.cookie);
     expect(list.json().items).toHaveLength(1);
-    expect((await get(h, '/api/v1/playback/progress?itemKeys=movie:1', user.cookie)).statusCode).toBe(400);
+    expect((await get(h, '/api/v1/playback/progress?itemKeys=movie:1', user.cookie)).statusCode).toBe(200);
+    expect((await get(h, '/api/v1/playback/progress?itemKeys=bogus:1', user.cookie)).statusCode).toBe(400);
   });
 
   it('a favourite or speed PATCH does not make the next reports look stale', async () => {

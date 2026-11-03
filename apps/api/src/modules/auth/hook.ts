@@ -65,6 +65,9 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   // The Arclight player app's sign-in and QR pairing (rate-limited by the auth service).
   '/app/sign-in',
   '/app/pair',
+  // TV sign-in: the TV asks for a code and polls; approval needs a signed-in browser (below).
+  '/app/device-codes',
+  '/app/device-codes/poll',
 ]);
 /** Route prefixes that answer without credentials; the setup routes guard themselves. */
 export const PUBLIC_PREFIXES: readonly string[] = ['/setup/'];
@@ -142,6 +145,8 @@ export const SESSION_ONLY_PREFIXES: readonly string[] = [
   `${API_PREFIX}/auth/sessions`,
   // A pairing code signs in another device: only from a browser session.
   `${API_PREFIX}/app/pair-codes`,
+  // Approving a TV's device code signs that TV in: only from a browser session.
+  `${API_PREFIX}/app/device-codes/approve`,
 ];
 
 /**

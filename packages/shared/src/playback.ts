@@ -621,8 +621,8 @@ export const PlayerSearchResponse = z.object({
   artists: z.array(PlayerArtist),
   audiobooks: z.array(PlayerAudiobook),
   /** Movies and shows with files (empty when Movies & TV is off for this user). */
-  movies: z.array(z.lazy(() => PlayerMovie)),
-  series: z.array(z.lazy(() => PlayerSeries)),
+  movies: z.array(z.lazy(() => PlayerMovie)).default([]),
+  series: z.array(z.lazy(() => PlayerSeries)).default([]),
 });
 export type PlayerSearchResponse = z.infer<typeof PlayerSearchResponse>;
 
@@ -758,7 +758,8 @@ export type VideoSession = z.infer<typeof VideoSession>;
 /**
  * GET|HEAD /stream/video/:mediaFileId?u&exp&sig&m=&a=&s=&h=&k=&b=. Signature domain
  * `video:<userId>:<mediaFileId>:<exp>`. `m`: method; `a`: audio ordinal; `s`: start ms
- * (remux/transcode); `h`: max height; `k`: video kbps cap; `b`: subtitle id to burn in.
+ * (remux/transcode); `h`: max height; `k`: video kbps cap; `b`: subtitle id to burn in; `ac`: audio
+ * copy|aac2|aac6; `vc`: h264|hevc. Clients use the session's URL as it is.
  */
 export const VideoStreamQuery = z.object({
   u: z.coerce.number().int().positive(),
@@ -770,6 +771,10 @@ export const VideoStreamQuery = z.object({
   h: z.coerce.number().int().min(144).max(4320).optional(),
   k: z.coerce.number().int().min(100).max(1_000_000).optional(),
   b: z.string().max(20).optional(),
+  /** Remux/transcode audio: copy the track, or AAC stereo / 5.1 (set by the session). */
+  ac: z.enum(['copy', 'aac2', 'aac6']).optional(),
+  /** Transcode video codec (set by the session). */
+  vc: z.enum(['h264', 'hevc']).optional(),
 });
 export type VideoStreamQuery = z.infer<typeof VideoStreamQuery>;
 

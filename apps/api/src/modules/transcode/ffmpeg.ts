@@ -185,7 +185,8 @@ function isTenBit(info: MediaInfo | null): boolean {
   return (info?.videoBitDepth ?? 8) > 8;
 }
 
-function hwInputArgs(hwaccel: TranscodeHwaccel): string[] {
+/** Input-side args that set a backend up (device, hwaccel); also used by live player transcodes. */
+export function hwInputArgs(hwaccel: TranscodeHwaccel): string[] {
   switch (hwaccel) {
     case 'vaapi':
       return ['-vaapi_device', VAAPI_DEVICE];

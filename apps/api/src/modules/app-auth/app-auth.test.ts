@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
-import { APP_PAIR_CODE_ALPHABET, APP_PAIR_CODE_TTL_MS, parseAppPairingUri } from '@arclight/shared';
+import { APP_DEVICE_CODE_TTL_MS, APP_PAIR_CODE_ALPHABET, APP_PAIR_CODE_TTL_MS, parseAppPairingUri } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import type { Db } from '../../db/index.js';
@@ -313,5 +313,88 @@ describe('CORS for the app', () => {
     const h = await harness();
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/system/ping', headers: { origin: 'capacitor://localhost' } });
     expect(String(res.headers['access-control-expose-headers'])).toContain('content-disposition');
+  });
+});
+
+describe('TV sign-in (device codes)', () => {
+  const TV = { deviceName: 'Living Room TV', platform: 'android-tv', appVersion: '2.0.0' } as const;
+  const create = (h: Harness, body: object = TV, ip?: string) => post(h, '/api/v1/app/device-codes', body, {}, ip);
+  const poll = (h: Harness, pollToken: string) => post(h, '/api/v1/app/device-codes/poll', { pollToken });
+  const approve = (h: Harness, userCode: string, headers: Record<string, string>) => post(h, '/api/v1/app/device-codes/approve', { userCode }, headers);
+
+  it('the TV shows a code, a signed-in browser approves it, and the next poll gets a device token once', async () => {
+    const h = await harness();
+    const u = await makeUser(h, { player: true });
+    const res = await create(h, { ...TV, serverUrl: 'http://media.example.com:8080/' });
+    expect(res.statusCode).toBe(201);
+    const code = res.json();
+    expect(code.userCode).toMatch(new RegExp(`^[${APP_PAIR_CODE_ALPHABET}]{8}$`));
+    expect(code).toMatchObject({ intervalSec: 5, verifyUrl: 'http://media.example.com:8080/player/link' });
+    expect(Date.parse(code.expiresAt) - h.clock.t).toBe(APP_DEVICE_CODE_TTL_MS);
+    expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'pending' });
+
+    // Typed with a dash and in lower case, as people do.
+    const typed = `${code.userCode.slice(0, 4)}-${code.userCode.slice(4)}`.toLowerCase();
+    const ok = await approve(h, typed, { cookie: u.cookie });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ deviceName: 'Living Room TV', platform: 'android-tv' });
+    // A second approval of the same code fails.
+    expect((await approve(h, code.userCode, { cookie: u.cookie })).json().code).toBe('DEVICE_CODE_INVALID');
+
+    h.clock.t += 5000;
+    const done = await poll(h, code.pollToken);
+    expect(done.statusCode).toBe(200);
+    const body = done.json();
+    expect(body).toMatchObject({ status: 'approved', user: { id: u.id } });
+    expect(body.token).toMatch(/^alt_/);
+    const row = h.db.select().from(schema.appDevices).all()[0]!;
+    expect(row).toMatchObject({ userId: u.id, name: 'Living Room TV', platform: 'android', appVersion: '2.0.0', method: 'device-code' });
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/app/devices', headers: bearer(body.token) })).statusCode).toBe(200);
+    // Single use: the poll token is spent.
+    h.clock.t += 5000;
+    expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'expired' });
+    const actions = h.db.select().from(schema.auditEvents).all().map((r) => r.action);
+    expect(actions).toEqual(expect.arrayContaining(['app.device-code.approve', 'login.success']));
+  });
+
+  it('uses the Application URL when the TV sends no address; codes expire', async () => {
+    const h = await harness();
+    setSection(h.db, 'requests', { applicationUrl: 'https://arclight.example.com' });
+    const code = (await create(h)).json();
+    expect(code.verifyUrl).toBe('https://arclight.example.com/player/link');
+    h.clock.t += APP_DEVICE_CODE_TTL_MS + 1;
+    expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'expired' });
+    const u = await makeUser(h, { player: true });
+    expect((await approve(h, code.userCode, { cookie: u.cookie })).statusCode).toBe(404);
+    expect((await poll(h, 'not-a-real-poll-token')).json()).toEqual({ status: 'expired' });
+  });
+
+  it('limits polling speed and codes per address', async () => {
+    const h = await harness();
+    const code = (await create(h, TV, '198.51.100.7')).json();
+    expect((await poll(h, code.pollToken)).statusCode).toBe(200);
+    expect((await poll(h, code.pollToken)).statusCode).toBe(429);
+    h.clock.t += 2500;
+    expect((await poll(h, code.pollToken)).statusCode).toBe(200);
+    for (let i = 1; i < 10; i++) expect((await create(h, TV, '198.51.100.7')).statusCode).toBe(201);
+    expect((await create(h, TV, '198.51.100.7')).statusCode).toBe(429);
+    expect((await create(h, TV, '198.51.100.8')).statusCode).toBe(201);
+    h.clock.t += 11 * 60_000;
+    expect((await create(h, TV, '198.51.100.7')).statusCode).toBe(201);
+  });
+
+  it('approving needs player access and a browser session; codes are validated', async () => {
+    const h = await harness();
+    const code = (await create(h)).json();
+    const nope = await makeUser(h, { player: false });
+    expect((await approve(h, code.userCode, { cookie: nope.cookie })).statusCode).toBe(403);
+    expect((await approve(h, code.userCode, {})).statusCode).toBe(401);
+    const u = await makeUser(h, { player: true });
+    const token = (await signInApp(h, u.username)).json().token;
+    expect((await approve(h, code.userCode, bearer(token))).statusCode).toBe(403);
+    expect((await approve(h, 'ZZZZZZZZ', { cookie: u.cookie })).json().code).toBe('DEVICE_CODE_INVALID');
+    expect((await create(h, { ...TV, platform: 'tizen' })).statusCode).toBe(400);
+    // Still pending after the failed attempts.
+    expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'pending' });
   });
 });

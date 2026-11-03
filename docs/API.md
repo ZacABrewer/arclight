@@ -76,7 +76,7 @@ no admin exists. `POST /setup/admin` and the headless `POST /setup/complete` cre
 only while none exists (409 afterwards); `POST /setup/rootfolder` needs the signed-in admin.
 
 **Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
-`GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `POST /app/sign-in`, `POST /app/pair`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
+`GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `POST /app/sign-in`, `POST /app/pair`, `POST /app/device-codes`, `POST /app/device-codes/poll`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
 and `/setup/*` (which guard themselves: writes need the admin once one exists, and answer
 409 `SETUP_COMPLETE` after setup). The SPA's static files are outside `/api/v1`.
 A GET route may also be public conditionally: `config: { publicWhen: (req) => boolean }` is
@@ -2558,7 +2558,8 @@ password or with a one-time code from the web player, and gets a **device token*
 
 A device token acts as its user on every route that user may call (portal routes, the player,
 streams, and admin routes for admins), with no CSRF step. It may not call the session-only routes
-(own password, two-factor, passkeys, identities, personal API keys, sessions, `POST /app/pair-codes`)
+(own password, two-factor, passkeys, identities, personal API keys, sessions, `POST /app/pair-codes`,
+`POST /app/device-codes/approve`)
 or the secret routes; those answer `403`. An unknown or removed `alt_` token is anonymous (`401`), never
 the local bypass. `lastSeenAt` and `lastIp` are written at most once a minute. A device's token
 ends when the device is removed, when the app signs out, and with every "sign out everywhere":
@@ -2570,16 +2571,20 @@ password was right; ask for the authenticator code and send it as `totp`), `401 
 for user accounts, or its only second factor is a passkey; pair with a code instead),
 `403 TWO_FACTOR_SETUP_REQUIRED` (an admin without two-factor while it is required),
 `403 PLAYER_DISABLED`, `403 PLAYER_NOT_ALLOWED`, `401 PAIR_CODE_INVALID`, `410 PAIR_CODE_EXPIRED`,
+`404 DEVICE_CODE_INVALID`,
 `429 RATE_LIMITED`. Sign-in and pairing share the web sign-in's limit of 10 failures per 15
 minutes per address, and keep out of the request audit (they record `login.success` /
-`login.failed` with `method: app` or `app-pairing`, and `app.device.create`).
+`login.failed` with `method: app`, `app-pairing` or `app-device-code`, and `app.device.create`).
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/app/sign-in` | Public. `AppSignInRequest` `{username, password, deviceName (1-100), platform ('ios' \| 'android'), appVersion (1-40), totp? (6 digits), recoveryCode?}`. Answers `AppSignInResponse` `{token, deviceId, user (as GET /user/me), server: {name: 'Arclight', version}}` |
 | POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
 | POST | `/app/pair` | Public. `AppPairRequest` `{code, deviceName, platform, appVersion}`; the code is upper-cased and spaces and dashes are dropped (`abcd-efgh` works). Answers `AppSignInResponse`. A code works once: any try uses it up. Unknown codes count as failed sign-ins |
-| GET | `/app/devices` | The caller's devices: `AppDevice[]` `{id, userId, name, platform, appVersion, createdAt, lastSeenAt, lastIp, method ('password' \| 'pairing'), current (this request's token)}`. Admins: `?all=true` for every user's, `?userId=` for one user's, each with `userName`; others `403 FORBIDDEN` |
+| POST | `/app/device-codes` | Public; TV sign-in (the device-code flow). `AppDeviceCodeRequest` `{deviceName, platform ('android-tv' \| 'android' \| 'ios'), appVersion?, serverUrl?}`. `201` `AppDeviceCode` `{userCode (8 characters, shown as ABCD-EFGH), pollToken (secret), expiresAt (in 10 minutes), intervalSec (5), verifyUrl}`. `verifyUrl` is `<serverUrl, else the Application URL, else the request's origin>/player/link`. 10 codes per 10 minutes per address, then `429` |
+| POST | `/app/device-codes/poll` | Public. `{pollToken}` → `{status: 'pending'}`, `{status: 'expired'}` (also unknown or already used), or once approved `{status: 'approved', ...AppSignInResponse}` (method `device-code`; `android-tv` is stored as `android`). The token is issued once; polling faster than every 2 seconds is `429` |
+| POST | `/app/device-codes/approve` | Signed-in browser session; needs player access. `{userCode}` (case, spaces and dashes ignored) → `{deviceName, platform}`; the TV's next poll gets a token for the approving user. Unknown, expired or already approved codes are `404 DEVICE_CODE_INVALID` and count as failed sign-ins. Audited as `app.device-code.approve` |
+| GET | `/app/devices` | The caller's devices: `AppDevice[]` `{id, userId, name, platform, appVersion, createdAt, lastSeenAt, lastIp, method ('password' \| 'pairing' \| 'device-code'), current (this request's token)}`. Admins: `?all=true` for every user's, `?userId=` for one user's, each with `userName`; others `403 FORBIDDEN` |
 | DELETE | `/app/devices/:id` | Remove a device; its token stops working at once. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/app/sign-out` | With a device token: removes that device. `204`; `400 NOT_APP` without a device token |
 
@@ -2588,7 +2593,7 @@ CORS: every origin is reflected with credentials, so the app's origins (`capacit
 `Content-Length`, `Content-Range`, `Accept-Ranges`, `Retry-After`, `X-Arclight-Backend` and
 `X-Arclight-Transcode` are exposed to scripts.
 
-## Player (music and audiobooks)
+## Player (music, audiobooks, movies and TV)
 
 Contract: `packages/shared/src/playback.ts`; module `apps/api/src/modules/playback`. The built-in
 player streams the library's music and audiobooks to the web UI and the companion apps. By default
@@ -2614,7 +2619,7 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server)}` (admin) |
+| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server), video (Movies & TV on, default true), videoMaxStreams (live remux/transcode slots, default 3), videoMaxStreamsPerUser (default 1)}` (admin) |
 | PUT | `/settings/player` | Save `PlayerSettings` (admin) |
 | POST | `/settings/player/engine-test` | `PlayerEngineTestRequest` `{jellyfinServerId?}`: connects to that Jellyfin/Emby server (or the first enabled one) and tries to resolve one library audio file. Answers `PlayerEngineTestResult` `{ok, serverId, serverName, version, sample: {fileId, resolved, itemId} \| null, message}` (`200` also when `ok` is false). Admin |
 | GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine). Any signed-in user |
@@ -2695,6 +2700,37 @@ caller's own row with a linked media-server account's (`settings.mediaServerLink
 wins, except that a played row from the last 5 minutes beats a newer unplayed one; play count
 and last played take the highest; favourite and prefs come from the caller's own row when there
 is one.
+
+### Movies & TV
+
+Movies and episodes with a file play in the same player (item keys `movie:<id>` and
+`episode:<id>`). Off with `video: false` in `PlayerSettings`: every route below then answers
+`404 SECTION_OFF`, and `sections.video` in `/playback/me` is false. The Jellyfin engine applies to
+audio only. Content restrictions (`settings.contentRestrictions`: certification caps, adult
+content) hide titles from every list, search, item, session, stream, subtitle and artwork route
+(`404`). A video `PlayableItem` carries `video` (the default version's `VideoInfo`: container,
+codecs, size, HDR, audio and subtitle tracks), `versions` (best first), `chapters`, `segments`
+(intro and credits, from chapter titles) and, for episodes, `previous` and `next`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/playback/video/session` | `VideoSessionRequest` `{itemKey, profile, mediaFileId?, audioTrack?, subtitle?, startMs?, quality ('auto' \| 'original' \| '1080p' \| '720p' \| '480p')}`; `profile` is the device's `VideoDeviceProfile` `{containers, videoCodecs, hevc10bit, hdr, audioCodecs, maxAudioChannels, maxHeight, maxBitrateKbps?}`. Answers `VideoSession` `{method ('direct' \| 'remux' \| 'transcode'), reasons, url (signed, absolute), mimeType, streamStartMs, seekable, durationMs, audioTrack, subtitles (text tracks as signed WebVTT URLs), burnedSubtitle, expiresAt}`. Without `mediaFileId` the first version that direct plays wins, else the best. Reasons: `container`, `video-codec`, `video-profile`, `audio-codec`, `audio-channels`, `hdr`, `resolution`, `bitrate`, `burn-subtitle`, `quality`. `404 NO_SUBTITLE` for an unknown subtitle, `400 NOT_VIDEO` for other keys. Call again with `startMs` to seek in a stream that is not seekable |
+| GET, HEAD | `/stream/video/:mediaFileId` | The video (the session's signed link, or a cookie or device token). `m=direct`: the file with ranges, `ETag`, `304` and `416` as for audio. `m=remux` and `m=transcode`: fragmented MP4 from a live ffmpeg starting at `s` (ms), with audio track `a`, audio `ac` (`copy`, `aac2`, `aac6`), height `h`, video kbps `k`, codec `vc` and burned subtitle `b`; no ranges. `X-Arclight-Video: <method>/<hwaccel>`. A remote request over the cap is transcoded whatever `m` says. `HEAD` on a live stream answers `200` or `503` (no free slot) without starting ffmpeg. `503 TRANSCODE_BUSY` (with `Retry-After`), `503 FFMPEG_MISSING`, `500 STREAM_FAILED` |
+| GET | `/stream/subtitle/:mediaFileId/:subId.vtt` | A text subtitle as WebVTT (`e<n>` embedded, `x<id>` an external file), converted once and cached; `Access-Control-Allow-Origin: *`. Image subtitles (PGS, VobSub) are `404`: pick them in the session to burn them in |
+| GET | `/playback/artwork/movie/:id`, `/series/:id`, `/episode/:id` | `?type=poster\|fanart\|logo&w=`: a `302` to the catalogue image at the nearest TMDB size, else `404`. An episode answers a frame from its file (JPEG, cached), else a `302` to the series backdrop |
+| GET | `/playback/video/home` | `VideoHome` `{continueWatching, nextUp, recentMovies, recentEpisodes, genres}` |
+| GET | `/playback/movies`, `/playback/series` | `VideoBrowseQuery` `{search, sort ('title' \| 'added' \| 'year' \| 'rating'), order, genre, letter, watched ('all' \| 'unwatched' \| 'watched'), page, pageSize}` → `{items, total, page, pageSize}`; only titles with a file. Cards carry `badges` (`4K`, `HDR`, `DV`) |
+| GET | `/playback/movies/:id`, `/playback/series/:id` | A movie with its versions and the caller's progress; a series with seasons, episodes with files, played counts and `nextUp` |
+| POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}` |
+
+`/playback/search` adds `movies` and `series` when Movies & TV is on; `/playback/continue` stays
+audio only (video resumes from `/playback/video/home`). Progress uses the normal progress routes.
+Live remux and transcode follow the audio transcoder's rules with their own limits
+(`videoMaxStreams`, `videoMaxStreamsPerUser`): a user's newest stream replaces their oldest.
+Transcodes use Intel QSV or VAAPI when ffmpeg finds a working device and software otherwise; a
+hardware encoder that fails is marked broken and the stream restarts in software. HDR is
+tone-mapped to SDR when the device cannot show it. Video links are signed in their own domain, so
+audio and video links do not open each other.
 
 ## notifications (connections, templates, delivery log, personal destinations)
 
