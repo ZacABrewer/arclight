@@ -68,6 +68,8 @@ function session(req: VideoSessionRequest, over: Partial<VideoSession> = {}): Vi
     subtitles: [{ id: 'e0', label: 'English', language: 'eng', forced: false, default: true, url: 'http://server.example.com/sub/e0.vtt' }],
     burnedSubtitle: null,
     expiresAt: '2026-11-02T12:00:00Z',
+    delivery: 'progressive',
+    sessionId: null,
     ...over,
   };
 }

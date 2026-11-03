@@ -8399,6 +8399,7 @@
   "player.video.densityShort.m": "M",
   "player.video.densityShort.l": "G",
   "player.video.method.direct": "Lecture directe",
+  "player.video.method.hls": "HLS",
   "player.video.method.remux": "Remux",
   "player.video.method.transcode": "Transcodage",
   "settings.users.profiles.tab": "Profils",

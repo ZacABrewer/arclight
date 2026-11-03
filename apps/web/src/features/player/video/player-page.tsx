@@ -17,9 +17,10 @@ import { Art } from '../redesign/tiles.js';
 import { useShow, videoApi } from './api.js';
 import { chapterAt, clock, cueTextAt, episodeCode, languageName, parseVtt, playerEpisodeLine, playerHeading, resumePoint, segmentAt, type Cue } from './format.js';
 import { watchPaths } from './paths.js';
-import { VideoPlayback, type VideoState } from './playback.js';
+import { createHlsEngine, readBandwidthHint, writeBandwidthHint } from './hls-engine.js';
+import { qualityForRung, VideoPlayback, type VideoState } from './playback.js';
 import { EpisodesPanel, SettingsPanel, TracksPanel, type PanelId } from './player-panels.js';
-import { browserVideoProfile } from './profile.js';
+import { browserDeliveries, browserVideoProfile } from './profile.js';
 import './watch.css';
 import './player-overlay.css';
 
@@ -167,8 +168,16 @@ function usePlaybackState(pb: VideoPlayback | null): VideoState | null {
   return useSyncExternalStore(pb?.subscribe ?? NO_STATE, pb?.getState ?? nullState, pb?.getState ?? nullState);
 }
 
-/** "DIRECT PLAY · 4K HDR10 · 62 Mb/s". */
-function streamLabel(t: ReturnType<typeof useT>, item: PlayableItem, session: VideoSession): string {
+const HWACCEL_LABEL: Record<string, string> = { qsv: 'QSV', vaapi: 'VAAPI', nvenc: 'NVENC', videotoolbox: 'VideoToolbox' };
+
+/** "DIRECT PLAY · 4K HDR10 · 62 Mb/s"; HLS: "HLS · 1080p · QSV" (the rung playing, the encoder). */
+function streamLabel(t: ReturnType<typeof useT>, item: PlayableItem, session: VideoSession, state: VideoState): string {
+  if (session.delivery === 'hls' && session.hls) {
+    const id = state.activeRung ?? state.pinnedRung ?? session.hls.startRung;
+    const rung = session.hls.rungs.find((r) => r.id === id);
+    const hw = rung && rung.codec !== 'copy' ? HWACCEL_LABEL[state.health?.hwaccel ?? 'none'] : undefined;
+    return [t('player.video.method.hls'), rung ? `${rung.height}p` : null, hw].filter(Boolean).join(' · ');
+  }
   const v = item.video;
   const h = v?.height ?? 0;
   const res = h >= 2000 ? '4K' : h >= 1400 ? '1440p' : h >= 1000 ? '1080p' : h >= 700 ? '720p' : h > 0 ? `${h}p` : null;
@@ -286,6 +295,11 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
       item,
       profile: browserVideoProfile(),
       requestSession: videoApi.session,
+      deliveries: browserDeliveries(),
+      hlsEngine: createHlsEngine,
+      fetchHealth: videoApi.health,
+      endSession: videoApi.endSession,
+      bandwidth: { read: readBandwidthHint, write: writeBandwidthHint },
       sendProgress: playbackApi.report,
       beacon: sendProgressBeacon,
       deviceId: deviceId(),
@@ -688,7 +702,7 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
           {state?.session ? (
             <span className="vp-health" data-method={state.session.method} title={state.session.reasons.map((r) => t(`player.video.reason.${r}`)).join('\n') || undefined}>
               <span className="vp-health__dot" aria-hidden="true" />
-              {streamLabel(t, item, state.session)}
+              {streamLabel(t, item, state.session, state)}
             </span>
           ) : null}
           <button type="button" className="vp-btn vp-btn--ghost" aria-label={t('player.video.back')} onClick={onBack} tabIndex={tab}>
@@ -855,6 +869,10 @@ export function VideoStage({ item, startMs, mediaFileId, onBack }: { item: Playa
             <SettingsPanel item={item} state={state} onQuality={(q) => {
               writeStoredQuality(profileIdRef.current, q);
               void pb.setQuality(q);
+            }} onRung={(id) => {
+              const q = qualityForRung(id);
+              if (q) writeStoredQuality(profileIdRef.current, q);
+              void pb.setRung(id);
             }} onSpeed={pb.setSpeed} onVersion={(id) => void pb.setVersion(id)} />
           ) : (
             <EpisodesPanel item={item} onPick={(key) => (key === item.itemKey ? closePanel() : goTo(key))} />

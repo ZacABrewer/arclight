@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProgressReport, VideoSession, VideoSessionRequest } from '@arclight/shared';
-import { SAFE_PROFILE, VideoPlayback, type VideoElementLike } from './playback.js';
+import type { ProgressReport, VideoHlsHealth, VideoHlsRung, VideoSession, VideoSessionRequest } from '@arclight/shared';
+import type { HlsEngine, HlsEngineOptions } from './hls-engine.js';
+import { qualityForRung, rungForQuality, SAFE_PROFILE, STALL_LONG_MS, VideoPlayback, type VideoElementLike } from './playback.js';
 import { session, videoItem } from './test-fixtures.js';
 
 class FakeVideo extends EventTarget implements VideoElementLike {
@@ -212,5 +213,338 @@ describe('VideoPlayback', () => {
     expect(onEnded).toHaveBeenCalledTimes(1);
     expect(p.getState().status).toBe('ended');
     expect(reports.map((r) => r.event)).toContain('stop');
+  });
+});
+
+// ---- HLS sessions (playback design §4.6-4.8) -------------------------------------------
+
+const RUNGS: VideoHlsRung[] = [
+  { id: 'src', height: 2160, videoKbps: 36_000, codec: 'copy', range: 'hdr10', level: 0 },
+  { id: '1080', height: 1080, videoKbps: 8000, codec: 'h264', range: 'sdr', level: 1 },
+  { id: '720', height: 720, videoKbps: 4000, codec: 'h264', range: 'sdr', level: 2 },
+  { id: '480', height: 480, videoKbps: 1600, codec: 'h264', range: 'sdr', level: 3 },
+  { id: '360', height: 360, videoKbps: 800, codec: 'h264', range: 'sdr', level: 4 },
+];
+
+function hlsSession(id: string, over: Partial<VideoSession> = {}): VideoSession {
+  const master = `http://localhost/api/v1/stream/hls/${id}/master.m3u8?sig=x`;
+  return session({
+    method: 'transcode',
+    reasons: ['hdr'],
+    url: master,
+    mimeType: 'application/vnd.apple.mpegurl',
+    seekable: true,
+    streamStartMs: 0,
+    delivery: 'hls',
+    sessionId: id,
+    hls: { masterUrl: master, rungs: RUNGS, startRung: '1080', healthUrl: `http://localhost/api/v1/playback/video/session/${id}/health?sig=x` },
+    ...over,
+  });
+}
+
+class FakeEngine implements HlsEngine {
+  readonly kind = 'hlsjs' as const;
+  readonly controllable = true;
+  readonly handlesStart = true;
+  pins: Array<string | null> = [];
+  caps: Array<string | null> = [];
+  destroyed = false;
+  bw: number | null = 12_000;
+  constructor(readonly opts: HlsEngineOptions) {}
+  pin(id: string | null) {
+    this.pins.push(id);
+  }
+  cap(id: string | null) {
+    this.caps.push(id);
+  }
+  bandwidthKbps() {
+    return this.bw;
+  }
+  destroy() {
+    this.destroyed = true;
+  }
+}
+
+function setupHls(
+  sessions: (body: VideoSessionRequest, n: number) => VideoSession,
+  over: { health?: VideoHlsHealth; now?: () => number; quality?: 'auto' | '720p' } = {},
+) {
+  const requests: VideoSessionRequest[] = [];
+  const reports: ProgressReport[] = [];
+  const engines: FakeEngine[] = [];
+  const ended: string[] = [];
+  const stored: Array<number | null> = [];
+  const p = new VideoPlayback({
+    item: videoItem(),
+    profile,
+    requestSession: async (body) => {
+      requests.push(body);
+      return sessions(body, requests.length);
+    },
+    sendProgress: async (_key, r) => {
+      reports.push(r);
+    },
+    beacon: () => true,
+    deviceId: 'test-device',
+    deliveries: ['hls', 'progressive'],
+    hlsEngine: async (_el, opts) => {
+      const e = new FakeEngine(opts);
+      engines.push(e);
+      return e;
+    },
+    fetchHealth: async () => over.health ?? { encodeSpeed: 3, aheadSec: 60, maxSustainableRung: null, hwaccel: 'qsv' },
+    endSession: (id) => ended.push(id),
+    bandwidth: { read: () => 9000, write: (k) => stored.push(k) },
+    ...(over.now ? { now: over.now } : {}),
+    ...(over.quality ? { initial: { quality: over.quality } } : {}),
+  });
+  const el = new FakeVideo();
+  p.attach(el);
+  return { p, el, requests, reports, engines, ended, stored };
+}
+
+describe('VideoPlayback with HLS', () => {
+  it('asks for HLS with a bandwidth hint and device key, and plays the master through the engine', async () => {
+    const { p, el, requests, engines } = setupHls(() => hlsSession('s1'));
+    current = p;
+    await p.start(90_000);
+    expect(requests[0]).toMatchObject({ deliveries: ['hls', 'progressive'], deviceKey: 'test-device', bandwidthKbps: 9000, startMs: 90_000 });
+    expect(requests[0]?.avoidDirect).toBeUndefined();
+    expect(engines).toHaveLength(1);
+    expect(engines[0]!.opts).toMatchObject({ url: expect.stringContaining('/master.m3u8'), startSec: 90, startRung: '1080', pinned: null, bandwidthKbps: 9000 });
+    // The engine starts at 90 s itself: no seek on loadedmetadata, the element src is not touched.
+    el.fire('loadedmetadata');
+    expect(el.currentTime).toBe(0);
+    expect(el.src).toBe('');
+    expect(p.getState()).toMatchObject({ levelControl: true, pinnedRung: null });
+  });
+
+  it('seeks locally, forward and backward, with no new session', async () => {
+    const { p, el, requests } = setupHls(() => hlsSession('s1'));
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    await p.seek(500_000);
+    await p.seek(30_000);
+    await p.skip(-10_000);
+    expect(requests).toHaveLength(1);
+    expect(el.currentTime).toBe(20);
+    expect(p.getState().positionMs).toBe(20_000);
+    el.currentTime = 25;
+    el.fire('timeupdate');
+    // Media time: no stream offset is added.
+    expect(p.getState().positionMs).toBe(25_000);
+  });
+
+  it('pins a quality as a fixed level of the same session, and Auto goes back to ABR', async () => {
+    const { p, el, requests, engines } = setupHls(() => hlsSession('s1'));
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    await p.setQuality('720p');
+    expect(engines[0]!.pins).toEqual(['720']);
+    expect(p.getState()).toMatchObject({ quality: '720p', pinnedRung: '720' });
+    await p.setRung('360');
+    expect(engines[0]!.pins.at(-1)).toBe('360');
+    // 360 has no stored quality value: the setting keeps the last one.
+    expect(p.getState()).toMatchObject({ quality: '720p', pinnedRung: '360' });
+    await p.setRung(null);
+    expect(engines[0]!.pins.at(-1)).toBeNull();
+    expect(p.getState()).toMatchObject({ quality: 'auto', pinnedRung: null });
+    expect(requests).toHaveLength(1);
+  });
+
+  it('starts pinned to the stored quality', async () => {
+    const { p, engines } = setupHls(() => hlsSession('s1'), { quality: '720p' });
+    current = p;
+    await p.start(0);
+    expect(engines[0]!.opts).toMatchObject({ pinned: '720', startRung: '720' });
+    expect(p.getState().pinnedRung).toBe('720');
+  });
+
+  it('caps ABR at the server advice (health and header) and below a rung that got 409', async () => {
+    const { p, el, engines } = setupHls(() => hlsSession('s1'), { health: { encodeSpeed: 0.92, aheadSec: 12, maxSustainableRung: '1080', hwaccel: 'none' } });
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    await flush();
+    const e = engines[0]!;
+    expect(e.caps).toEqual(['1080']);
+    expect(p.getState()).toMatchObject({ capRung: '1080', health: { encodeSpeed: 0.92 } });
+    e.opts.onAdvice?.('720');
+    expect(e.caps.at(-1)).toBe('720');
+    // A higher advice never lifts a lower cap.
+    e.opts.onAdvice?.('src');
+    expect(e.caps.at(-1)).toBe('720');
+    e.opts.onUnsustainable?.('720');
+    expect(e.caps.at(-1)).toBe('480');
+    expect(p.getState().capRung).toBe('480');
+  });
+
+  it('moves a pin down when its rung is unsustainable', async () => {
+    const { p, el, engines } = setupHls(() => hlsSession('s1'));
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    await p.setRung('1080');
+    engines[0]!.opts.onUnsustainable?.('1080');
+    expect(p.getState().pinnedRung).toBe('720');
+    expect(engines[0]!.pins.at(-1)).toBe('720');
+  });
+
+  it('switching audio asks for a new session at the place, ends the old one and keeps the pin', async () => {
+    let n = 0;
+    const { p, el, requests, engines, ended } = setupHls(() => {
+      n += 1;
+      return hlsSession(`s${n}`, { audioTrack: n === 1 ? 0 : 1 });
+    });
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    await p.setRung('480');
+    el.currentTime = 200;
+    el.fire('timeupdate');
+    await p.setAudioTrack(1);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ audioTrack: 1, startMs: 200_000, quality: '480p', bandwidthKbps: 12_000 });
+    expect(engines[0]!.destroyed).toBe(true);
+    expect(ended).toEqual(['s1']);
+    expect(engines[1]!.opts).toMatchObject({ startSec: 200, pinned: '480' });
+  });
+
+  it('DELETEs the session and keeps the bandwidth estimate when the item is left', async () => {
+    const { p, el, engines, ended, stored } = setupHls(() => hlsSession('s9'));
+    await p.start(0);
+    el.fire('playing');
+    p.dispose();
+    expect(engines[0]!.destroyed).toBe(true);
+    expect(ended).toEqual(['s9']);
+    expect(stored).toContain(12_000);
+  });
+
+  it('an engine failure asks for the session again from the place', async () => {
+    let n = 0;
+    const { p, el, requests, engines } = setupHls(() => {
+      n += 1;
+      return hlsSession(`s${n}`);
+    });
+    current = p;
+    await p.start(0);
+    el.fire('playing');
+    el.currentTime = 50;
+    el.fire('timeupdate');
+    // hls.js handles element errors itself.
+    el.error = { code: 3 };
+    el.fire('error');
+    await flush();
+    expect(requests).toHaveLength(1);
+    engines[0]!.opts.onFatal?.('network');
+    await flush();
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.startMs).toBe(50_000);
+  });
+
+  it('counts stalls after startup (not seeks, not under 0.5 s) and reports them with the startup time', async () => {
+    let now = 1000;
+    const { p, el, reports } = setupHls(() => hlsSession('s1'), { now: () => now });
+    current = p;
+    const started = p.start(0);
+    now = 2400;
+    await started;
+    el.fire('playing');
+    expect(p.getState().startupMs).toBe(1400);
+    // A rebuffer of 2 s.
+    el.fire('waiting');
+    now += 2000;
+    el.fire('playing');
+    // A short one (ignored).
+    el.fire('waiting');
+    now += 200;
+    el.fire('playing');
+    // A seek's wait is not a stall.
+    await p.seek(300_000);
+    el.fire('seeking');
+    el.fire('waiting');
+    now += 4000;
+    el.fire('playing');
+    expect(p.getState()).toMatchObject({ stalls: 1, stallMs: 2000 });
+    p.pause();
+    await flush();
+    expect(reports.find((r) => r.event === 'pause')).toMatchObject({ stalls: 1, stallMs: 2000, startupMs: 1400 });
+  });
+});
+
+describe('direct play guard (§4.8)', () => {
+  it('switches to HLS at the place after two rebuffers within 60 s, once', async () => {
+    let now = 0;
+    const { p, el, requests, engines } = setupHls((body) => (body.avoidDirect ? hlsSession('h1') : session()), { now: () => now });
+    current = p;
+    await p.start(0);
+    el.fire('loadedmetadata');
+    el.fire('playing');
+    expect(requests[0]?.avoidDirect).toBeUndefined();
+    el.currentTime = 100;
+    el.fire('timeupdate');
+    now = 10_000;
+    el.fire('waiting');
+    now = 11_000;
+    el.fire('playing');
+    expect(requests).toHaveLength(1);
+    now = 50_000;
+    el.fire('waiting');
+    now = 51_000;
+    el.fire('playing');
+    await flush();
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ avoidDirect: true, startMs: 100_000, deliveries: ['hls', 'progressive'] });
+    expect(engines).toHaveLength(1);
+  });
+
+  it('switches after one rebuffer longer than 3 s', async () => {
+    vi.useFakeTimers();
+    try {
+      const { p, el, requests } = setupHls((body) => (body.avoidDirect ? hlsSession('h1') : session()));
+      current = p;
+      await p.start(0);
+      el.fire('loadedmetadata');
+      el.fire('playing');
+      el.fire('waiting');
+      await vi.advanceTimersByTimeAsync(STALL_LONG_MS + 10);
+      expect(requests).toHaveLength(2);
+      expect(requests[1]?.avoidDirect).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stays on direct play when a quality is pinned', async () => {
+    vi.useFakeTimers();
+    try {
+      const { p, el, requests } = setupHls(() => session(), { quality: '720p' });
+      current = p;
+      await p.start(0);
+      el.fire('loadedmetadata');
+      el.fire('playing');
+      el.fire('waiting');
+      await vi.advanceTimersByTimeAsync(STALL_LONG_MS * 3);
+      expect(requests).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('rung and quality mapping', () => {
+  it('maps qualities to rungs and back', () => {
+    expect(rungForQuality('auto', RUNGS)).toBeNull();
+    expect(rungForQuality('original', RUNGS)).toBe('src');
+    expect(rungForQuality('original', RUNGS.slice(1))).toBe('1080');
+    expect(rungForQuality('1080p', RUNGS)).toBe('1080');
+    expect(rungForQuality('720p', RUNGS.filter((r) => r.id !== '720'))).toBe('480');
+    expect(rungForQuality('480p', [RUNGS[1]!])).toBe('1080');
+    expect(qualityForRung('src')).toBe('original');
+    expect(qualityForRung('720')).toBe('720p');
+    expect(qualityForRung('2160')).toBeNull();
+    expect(qualityForRung(null)).toBe('auto');
   });
 });

@@ -1,4 +1,5 @@
-import type { VideoDeviceProfile } from '@arclight/shared';
+import type { VideoDelivery, VideoDeviceProfile } from '@arclight/shared';
+import { browserPlaysHls } from './hls-engine.js';
 
 // What this browser can play, sent with every video session request so the server can choose
 // direct play, a remux or a transcode. Built from `MediaSource.isTypeSupported` and
@@ -88,7 +89,28 @@ export function browserProbes(): ProfileProbes {
   }
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const screenPixels = typeof screen !== 'undefined' ? Math.max(screen.width || 0, screen.height || 0) * dpr : 1920;
-  return { supports, hdrDisplay, screenPixels, audioChannels: 2 };
+  return { supports, hdrDisplay, screenPixels, audioChannels: audioOutputChannels() };
+}
+
+/** Channels the audio output takes (5.1 over HDMI reports 6); 2 when it cannot be read. */
+export function audioOutputChannels(): number {
+  const Ctx = typeof window !== 'undefined' ? (window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) : undefined;
+  if (!Ctx) return 2;
+  let ctx: AudioContext | null = null;
+  try {
+    ctx = new Ctx();
+    const n = ctx.destination.maxChannelCount;
+    return Number.isFinite(n) && n > 0 ? n : 2;
+  } catch {
+    return 2;
+  } finally {
+    void ctx?.close().catch(() => undefined);
+  }
+}
+
+/** How sessions may be delivered here: HLS where hls.js (MSE / ManagedMediaSource) or native HLS works. */
+export function browserDeliveries(playsHls: () => boolean = browserPlaysHls): VideoDelivery[] {
+  return playsHls() ? ['hls', 'progressive'] : ['progressive'];
 }
 
 let cached: VideoDeviceProfile | null = null;
