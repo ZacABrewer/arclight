@@ -7,8 +7,10 @@ import { ContainerUpdater, inWindow, orderParentsFirst, recreateBody } from './c
 import type { ContainerInspect } from './docker.js';
 import { createContainerUpdatesCheck } from './health.js';
 import { runContainerUpdateJob } from './index.js';
-import { parseChallenge, parseImageRef, remoteDigest } from './registry.js';
+import { parseChallenge, parseImageRef, realmAllowed, remoteDigest } from './registry.js';
 import { UpdatesService } from './service.js';
+
+const NEW_DIGEST = `sha256:${'a1'.repeat(32)}`;
 
 // ---- a fake Docker Engine API ----------------------------------------------------------------
 
@@ -95,11 +97,23 @@ class FakeDocker {
       return img ? json(img) : [404, JSON.stringify({ message: 'No such image' })];
     }
     if (url.pathname === '/images/create' && method === 'POST') {
-      const ref = `${url.searchParams.get('fromImage')}:${url.searchParams.get('tag')}`;
+      const from = url.searchParams.get('fromImage')!;
+      const tag = url.searchParams.get('tag')!;
+      const byDigest = tag.startsWith('sha256:');
+      const ref = byDigest ? `${from}@${tag}` : `${from}:${tag}`;
       this.calls.push(`pull ${ref}`);
-      const old = this.images.get(ref);
-      this.addImage(ref, 'sha256:newdigest', old?.Config ?? {});
+      const old = this.images.get(ref) ?? [...this.images.entries()].find(([k]) => k.startsWith(`${from}:`))?.[1];
+      this.addImage(ref, byDigest ? tag : NEW_DIGEST, old?.Config ?? {});
       return [200, '{"status":"Pulling"}\n{"status":"Downloaded newer image"}\n'];
+    }
+    if (parts[0] === 'images' && parts.at(-1) === 'tag' && method === 'POST') {
+      const source = decodeURIComponent(parts.slice(1, -1).join('/'));
+      const img = this.images.get(source);
+      if (!img) return [404, JSON.stringify({ message: 'No such image' })];
+      const to = `${url.searchParams.get('repo')}:${url.searchParams.get('tag')}`;
+      this.calls.push(`tag ${source} -> ${to}`);
+      this.images.set(to, img);
+      return [201, ''];
     }
     if (url.pathname === '/containers/create' && method === 'POST') {
       const name = url.searchParams.get('name')!;
@@ -171,7 +185,7 @@ function fakeRegistry(digests: Record<string, string>, seen: string[] = []): typ
 }
 
 const REMOTE = {
-  'registry-1.docker.io/qmcgaw/gluetun:latest': 'sha256:newdigest',
+  'registry-1.docker.io/qmcgaw/gluetun:latest': NEW_DIGEST,
   'lscr.io/linuxserver/qbittorrent:latest': 'sha256:qbit1',
   'ghcr.io/arclight/arclight:latest': 'sha256:arc1',
 };
@@ -231,6 +245,29 @@ describe('image references and registry digests', () => {
     expect(digest).toBe('sha256:qbit1');
     expect(seen).toEqual(['HEAD lscr.io/v2/linuxserver/qbittorrent/manifests/latest', 'GET lscr.io/token', 'HEAD lscr.io/v2/linuxserver/qbittorrent/manifests/latest']);
     await expect(remoteDigest(parseImageRef('ghcr.io/nobody/nothing'), { fetchImpl: fakeRegistry(REMOTE) })).rejects.toThrow(/not in ghcr.io/);
+  });
+
+  it('refuses a token realm on another host (DATA-44)', async () => {
+    const seen: string[] = [];
+    const hostile = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      seen.push(`${init?.method ?? 'GET'} ${url.host} ${new Headers(init?.headers).get('authorization') ?? '-'}`);
+      return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer realm="https://collector.example.com/token",service="x"' } });
+    }) as typeof fetch;
+    await expect(remoteDigest(parseImageRef('ghcr.io/a/b'), { fetchImpl: hostile })).rejects.toThrow(/not part of that registry/);
+    expect(seen).toEqual(['HEAD ghcr.io -']);
+    expect(realmAllowed(new URL('https://auth.docker.io/token'), new URL('https://registry-1.docker.io'), 'registry-1.docker.io')).toBe(true);
+    expect(realmAllowed(new URL('https://ghcr.io/token'), new URL('https://lscr.io'), 'lscr.io')).toBe(true);
+    expect(realmAllowed(new URL('http://ghcr.io/token'), new URL('https://ghcr.io'), 'ghcr.io')).toBe(false);
+  });
+
+  it('caps the token answer', async () => {
+    const big = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/token') return new Response('x'.repeat(200_000));
+      return new Response(null, { status: 401, headers: { 'www-authenticate': `Bearer realm="https://${url.host}/token"` } });
+    }) as typeof fetch;
+    await expect(remoteDigest(parseImageRef('ghcr.io/a/b'), { fetchImpl: big })).rejects.toThrow(/oversized token/);
   });
 });
 
@@ -292,7 +329,7 @@ describe('ContainerUpdater against a fake Docker API', () => {
       ['gluetun', true, false, null],
       ['qbittorrent', false, false, 'gluetun'],
     ]);
-    expect(items.find((i) => i.name === 'gluetun')).toMatchObject({ currentDigest: 'sha256:olddigest', latestDigest: 'sha256:newdigest' });
+    expect(items.find((i) => i.name === 'gluetun')).toMatchObject({ currentDigest: 'sha256:olddigest', latestDigest: NEW_DIGEST });
     // Labels come from Docker inspect (the opt-in label included).
     expect(items.find((i) => i.name === 'gluetun')!.labels).toMatchObject({ 'arclight.autoupdate': 'true' });
     expect((await updater.info('notify')).containers).toHaveLength(3);
@@ -304,7 +341,9 @@ describe('ContainerUpdater against a fake Docker API', () => {
     const run = await updater.update(['gluetun']);
     expect(run).toMatchObject({ ok: true, handedOff: false, updated: ['gluetun', 'qbittorrent', 'arclight'] });
     expect(d.calls).toEqual([
-      'pull qmcgaw/gluetun:latest',
+      // the digest the check compared, then the tag moved onto it
+      `pull qmcgaw/gluetun@${NEW_DIGEST}`,
+      `tag qmcgaw/gluetun@${NEW_DIGEST} -> qmcgaw/gluetun:latest`,
       'create gluetun-arclight-new',
       'create qbittorrent-arclight-new',
       'create arclight-arclight-new',
@@ -327,6 +366,8 @@ describe('ContainerUpdater against a fake Docker API', () => {
     ]);
     const newGluetun = d.find('gluetun')!;
     expect(newGluetun.Id).not.toBe(gluetun.Id);
+    // The recreated container runs the image that was compared, not whatever the tag points at now.
+    expect(newGluetun.Image).toBe(d.images.get(`qmcgaw/gluetun@${NEW_DIGEST}`)!.Id);
     const gBody = d.created.find((x) => x.name === 'gluetun-arclight-new')!.body;
     // The image's own env and cmd are not frozen into the new container; run-time env is kept.
     expect(gBody['Env']).toEqual(['VPN_TYPE=wireguard']);

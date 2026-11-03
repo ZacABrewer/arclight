@@ -111,10 +111,38 @@ describe('requests routes', () => {
     const h = await app();
     const read = await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.userCookie } });
     expect(read.json()).toMatchObject({ partialRequestsEnabled: true });
-    const body = { ...read.json(), hideAvailable: true };
+    const full = await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie } });
+    const body = { ...full.json(), hideAvailable: true };
     expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/requests', headers: { cookie: h.userCookie }, payload: body })).statusCode).toBe(403);
     const saved = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie }, payload: body });
     expect(saved.json().hideAvailable).toBe(true);
+  });
+
+  it('portal users read only the request-form switches; root folders, quotas and approval rules stay with managers', async () => {
+    const h = await app();
+    const full = (await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie } })).json();
+    const secretish = {
+      ...full,
+      movie: { ...full.movie, rootFolderPath: '/srv/media/movies', tags: [7] },
+      movie4k: { ...full.movie4k, enabled: true, rootFolderPath: '/srv/media/movies-4k', qualityProfileId: 4 },
+      defaultQuotas: { ...full.defaultQuotas, movieLimit: 3, movieDays: 7 },
+      approvalBudgets: [{ scope: 'all', movieGb: 100, periodDays: 30 }],
+      applicationUrl: 'https://requests.example.com',
+      enableSpecialEpisodes: true,
+      partialRequestsEnabled: false,
+    };
+    const saved = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie }, payload: secretish });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const read = await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.userCookie } });
+    expect(read.statusCode).toBe(200);
+    const portal = read.json();
+    expect(portal).toMatchObject({ movie4k: { enabled: true, rootFolderPath: null, qualityProfileId: null }, enableSpecialEpisodes: true, partialRequestsEnabled: false, approvalBudgets: [], applicationUrl: '' });
+    expect(portal.movie.rootFolderPath).toBeNull();
+    expect(JSON.stringify(portal)).not.toContain('/srv/media');
+    expect(JSON.stringify(portal)).not.toContain('example.com');
+    expect(portal.defaultQuotas).toMatchObject({ movieLimit: null, movieDays: null });
+    // The admin still reads the whole section.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/settings/requests', headers: { cookie: h.adminCookie } })).json()).toMatchObject({ applicationUrl: 'https://requests.example.com' });
   });
 
   it('serves discover pages, title detail, sliders, issues and watchlist over HTTP', async () => {

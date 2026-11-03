@@ -14,6 +14,10 @@ import type { FeedStatusReport } from '../../feeds.js';
 import { STALE_INTERVALS } from '../../feeds.js';
 import { definitionSha256, type FetchLike } from './definition-feed.js';
 import type { DefinitionStore } from './definitions.js';
+import { createSafeFetch, isBlockedAddress, normalizeHost, readLimited, readLimitedText, SafeFetchError } from '@arclight/net';
+
+/** Largest catalogue listing read. */
+const MAX_LISTING_BYTES = 8 * 1024 * 1024;
 
 // Community catalogue: the Cardigann definitions the Prowlarr/Jackett community maintains,
 // fetched at runtime (never bundled) into `<config>/definitions/community/`.
@@ -122,6 +126,11 @@ export interface CommunityCatalogueOptions {
   /** `<config>/definitions/community`; must be the store's communityDir. */
   dir: string;
   settings: () => CommunityCatalogueSettings;
+  /**
+   * Test seam for every request. Without it the listing (an admin-configured URL, LAN allowed)
+   * and the files it names (chosen by whoever publishes the listing: public only, except the
+   * listing's own origin) go through address-checked safe fetches.
+   */
   fetch?: FetchLike;
   log?: Logger;
   now?: () => Date;
@@ -130,6 +139,7 @@ export interface CommunityCatalogueOptions {
 
 export class CommunityCatalogue {
   private readonly fetchImpl: FetchLike;
+  private readonly injected: boolean;
   private readonly now: () => Date;
   private running: Promise<CommunityCatalogueSyncResult> | undefined;
   private cache: StateFile | undefined;
@@ -138,7 +148,8 @@ export class CommunityCatalogue {
   private readonly stateFile: string;
 
   constructor(private readonly opts: CommunityCatalogueOptions) {
-    this.fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
+    this.injected = opts.fetch !== undefined;
+    this.fetchImpl = opts.fetch ?? createSafeFetch({ allowPrivate: true, maxBytes: MAX_LISTING_BYTES, timeoutMs: 0 });
     this.now = opts.now ?? (() => new Date());
     const parent = dirname(opts.dir);
     this.previousDir = join(parent, '.community-previous');
@@ -267,10 +278,10 @@ export class CommunityCatalogue {
     return run;
   }
 
-  private async get(url: string, signal: AbortSignal | undefined, headers: Record<string, string> = {}): Promise<Response> {
+  private async get(url: string, signal: AbortSignal | undefined, headers: Record<string, string> = {}, fetchImpl: FetchLike = this.fetchImpl): Promise<Response> {
     const timeout = AbortSignal.timeout(this.opts.timeoutMs ?? 30_000);
     try {
-      return await this.fetchImpl(url, {
+      return await fetchImpl(url, {
         headers: { 'user-agent': 'Arclight', accept: 'application/json, text/plain, */*', ...headers },
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
@@ -308,8 +319,9 @@ export class CommunityCatalogue {
     if (!res.ok) return fail(`${url}: HTTP ${res.status}${rateLimitHint(res)}`);
     let raw: unknown;
     try {
-      raw = JSON.parse(await res.text()) as unknown;
-    } catch {
+      raw = JSON.parse(await readLimitedText(res, MAX_LISTING_BYTES)) as unknown;
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'tooLarge') return fail(`${url}: ${err.message}`);
       return fail(`${url}: not JSON`);
     }
     let listing: ListingFile[];
@@ -343,10 +355,11 @@ export class CommunityCatalogue {
     }
     let downloaded = 0;
     const queue = [...toDownload];
+    const fileFetch = this.fileFetcher(url);
     const worker = async () => {
       for (let f = queue.shift(); f; f = queue.shift()) {
         if (signal?.aborted) return;
-        const outcome = await this.download(f, signal);
+        const outcome = await this.download(f, signal, fileFetch);
         if (outcome.ok) {
           await writeFile(join(this.stagingDir, f.name), outcome.data);
           manifest.files[f.name] = { hash: f.hash, hashKind: f.hashKind };
@@ -403,13 +416,49 @@ export class CommunityCatalogue {
     return result;
   }
 
-  private async download(f: ListingFile, signal: AbortSignal | undefined): Promise<{ ok: true; data: Uint8Array } | { ok: false; reason: string }> {
+  /**
+   * Fetch for the files of one listing. The file URLs come from the remote listing, so they
+   * must be public; only the listing's own origin may sit on the LAN (an admin who points the
+   * catalogue at a LAN mirror gets its files too). Redirects are re-vetted on every hop.
+   */
+  private fileFetcher(listingUrl: string): (url: string) => FetchLike {
+    if (this.injected) return () => this.fetchImpl;
+    const listing = new URL(listingUrl);
+    const listingHost = normalizeHost(listing.hostname);
+    const timeoutMs = 0; // `get` sets the deadline
+    const publicFetch = createSafeFetch({ maxBytes: MAX_FILE_BYTES, timeoutMs });
+    const ownFetch = createSafeFetch({
+      maxBytes: MAX_FILE_BYTES,
+      timeoutMs,
+      allowAddress: (address, hostname) => !isBlockedAddress(address) || normalizeHost(hostname) === listingHost,
+    });
+    return (url) => (new URL(url).origin === listing.origin ? ownFetch : publicFetch);
+  }
+
+  private async download(
+    f: ListingFile,
+    signal: AbortSignal | undefined,
+    fileFetch: (url: string) => FetchLike,
+  ): Promise<{ ok: true; data: Uint8Array } | { ok: false; reason: string }> {
     if (f.size !== undefined && f.size > MAX_FILE_BYTES) return { ok: false, reason: `larger than ${MAX_FILE_BYTES} bytes` };
+    let protocol: string;
     try {
-      const res = await this.get(f.url, signal);
+      protocol = new URL(f.url).protocol;
+    } catch {
+      return { ok: false, reason: 'invalid file URL' };
+    }
+    if (protocol !== 'https:' && protocol !== 'http:') return { ok: false, reason: `unsupported URL scheme ${protocol}` };
+    try {
+      const res = await this.get(f.url, signal, {}, fileFetch(f.url));
       if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
-      const data = new Uint8Array(await res.arrayBuffer());
-      if (data.byteLength > MAX_FILE_BYTES) return { ok: false, reason: `larger than ${MAX_FILE_BYTES} bytes` };
+      // The cap is enforced while streaming, not after buffering the whole body.
+      let data: Uint8Array;
+      try {
+        data = new Uint8Array(await readLimited(res, MAX_FILE_BYTES));
+      } catch (err) {
+        if (err instanceof SafeFetchError && err.code === 'tooLarge') return { ok: false, reason: `larger than ${MAX_FILE_BYTES} bytes` };
+        throw err;
+      }
       const hash = hashOf(f.hashKind, data);
       if (hash !== f.hash) return { ok: false, reason: `hash mismatch (listing ${f.hash.slice(0, 12)}, file ${hash.slice(0, 12)})` };
       return { ok: true, data };

@@ -378,6 +378,19 @@ describe('refreshQueue', () => {
     expect(service.clientStatuses().get(c.id)).toMatchObject({ ok: false });
   });
 
+  it('masks credentials a client error quotes before storing it as a status line', async () => {
+    const { service, fake, advance } = await setup({ missingGraceMs: 1 });
+    const c = service.create(qbit('Main'));
+    fake(c.id).items = [item({ id: 'h1' })];
+    await service.refreshQueue();
+    fake(c.id).failGetItems = new DownloadClientError('unreachable', 'request to http://sab.example.com/api?apikey=abc123apikey&ma_password=hunter2pass failed');
+    advance(60_000);
+    await service.refreshQueue();
+    const stored = JSON.stringify([service.listTracked()[0]!.statusMessages, service.clientStatuses().get(c.id)]);
+    expect(stored).toContain('sab.example.com');
+    expect(stored).not.toMatch(/abc123apikey|hunter2pass/);
+  });
+
   it('a throwing hook does not break the refresh', async () => {
     const { service, fake } = await setup();
     const c = service.create(qbit('Main'));

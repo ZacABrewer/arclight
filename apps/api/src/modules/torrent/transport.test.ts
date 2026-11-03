@@ -62,6 +62,18 @@ describe('torrent transport settings', () => {
     expect(session!.settings).toMatchObject({ encryption: 'disabled', webSeedConnectionsPerTorrent: 0 });
   });
 
+  it('keeps local peers and trackers off by default and passes them to the engine (DATA-22)', async () => {
+    const { app } = await build();
+    const res = TorrentSettingsResponse.parse((await app.inject({ method: 'GET', url: '/api/v1/settings/torrent' })).json());
+    expect(res).toMatchObject({ localPeers: false, localTrackers: false });
+    const { h, app: app2 } = await build({ enabled: true });
+    await h.service.start();
+    expect(h.service.session!.settings).toMatchObject({ allowLocalPeers: false, allowLocalTrackers: false });
+    const put = await app2.inject({ method: 'PUT', url: '/api/v1/settings/torrent', payload: { localPeers: true, localTrackers: true } });
+    expect(put.statusCode).toBe(200);
+    expect(h.service.session!.settings).toMatchObject({ allowLocalPeers: true, allowLocalTrackers: true });
+  });
+
   it('re-opens the sockets on the same port when uTP or TCP is toggled', async () => {
     const { h } = await build({ enabled: true });
     await h.service.start();

@@ -272,9 +272,14 @@ export class Storage {
     if (!this.layout.isValidBlock(piece, begin, data.length))
       return Promise.reject(new TorrentEngineError('storage', `invalid block ${piece}:${begin}:${data.length}`));
     this.cacheBlock(piece, begin, data);
+    this.unverified.add(piece);
+    return this.queueWrite(piece, begin, data);
+  }
+
+  /** Queues a write behind earlier writes of the same piece, with backlog accounting. */
+  private queueWrite(piece: number, begin: number, data: Buffer): Promise<void> {
     this.queuedWriteBytes += data.length;
     if (this.queuedWriteBytes > this.backlogMax) this.writeBlocked = true;
-    this.unverified.add(piece);
     const prev = this.pendingWrites.get(piece) ?? Promise.resolve();
     const io = this.opts.io;
     const p = prev.catch(() => {}).then(() => (io ? io.write(data.length, () => this.doWrite(piece, begin, data)) : this.doWrite(piece, begin, data)));
@@ -327,6 +332,12 @@ export class Storage {
       if (this.cacheSize <= max || p === piece) break;
       this.cache.delete(p);
       this.cacheSize -= e.bytes;
+    }
+    // The current piece alone is over the budget (a huge piece length): stop caching it. Its
+    // blocks are on disk and a piece not complete in the cache is hashed from disk.
+    if (this.cacheSize > max) {
+      this.cache.delete(piece);
+      this.cacheSize -= entry.bytes;
     }
   }
 
@@ -456,6 +467,36 @@ export class Storage {
     if (ok) await this.markVerified(piece);
     else this.have.set(piece, false);
     return ok;
+  }
+
+  /**
+   * Hashes a whole piece held in memory (web seeds): nothing touches the disk until it passes.
+   * Yields between chunks like `verifyPiece` so big pieces do not stall the event loop.
+   */
+  async pieceMatches(piece: number, data: Buffer): Promise<boolean> {
+    const expected = this.torrent.pieceHashes[piece];
+    if (!expected || data.length !== this.layout.pieceSize(piece)) return false;
+    const h = createHash('sha1');
+    for (let off = 0; off < data.length; off += HASH_YIELD_BYTES) {
+      if (off > 0) await new Promise<void>((r) => setImmediate(r));
+      h.update(data.subarray(off, off + HASH_YIELD_BYTES));
+    }
+    return h.digest().equals(expected);
+  }
+
+  /**
+   * Writes a whole piece that already passed `pieceMatches` and marks it verified. Queued after
+   * any block writes of the same piece, so the checked bytes are what ends up on disk.
+   */
+  writeVerifiedPiece(piece: number, data: Buffer): Promise<void> {
+    if (this.closed) return Promise.reject(new TorrentEngineError('storage', 'storage is closed'));
+    if (data.length !== this.layout.pieceSize(piece)) return Promise.reject(new TorrentEngineError('storage', `invalid piece ${piece}:${data.length}`));
+    this.dropCache(piece);
+    return this.queueWrite(piece, 0, data).then(async () => {
+      this.dropCache(piece);
+      this.unverified.delete(piece);
+      await this.markVerified(piece);
+    });
   }
 
   /** Marks a piece verified and finalizes files it completes. */

@@ -137,9 +137,9 @@ export class Subf2mProvider extends BaseProvider {
   private async page(url: string, referer?: string): Promise<string | null> {
     for (let attempt = 1; ; attempt++) {
       const res = await this.request(url, { headers: this.headers(referer) });
-      if (res.ok) return res.text();
+      if (res.ok) return this.readText(res);
       if (res.status === 403) {
-        const body = await res.text();
+        const body = await this.readText(res);
         if (/cf-chl|challenge-platform|just a moment|captcha/i.test(body)) {
           throw this.error('captcha', 'blocked by a browser challenge');
         }
@@ -304,7 +304,7 @@ export class Subf2mProvider extends BaseProvider {
     if (!href) throw this.error('api-throttled', 'download button not found');
     const res = await this.request(absoluteUrl(href, BASE), { headers: this.headers(candidate.pageUrl) });
     if (!res.ok) throw this.statusError(res, 'download');
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = await this.readBytes(res);
     const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
     const isRar = bytes[0] === 0x52 && bytes[1] === 0x61 && bytes[2] === 0x72 && bytes[3] === 0x21;
     if (!isZip && !isRar) throw this.error('api-throttled', 'download is not a valid archive');

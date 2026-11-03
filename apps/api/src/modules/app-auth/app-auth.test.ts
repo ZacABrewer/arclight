@@ -10,6 +10,7 @@ import { authServiceFor, SESSION_COOKIE } from '../auth/index.js';
 import { totpCode } from '../auth/totp.js';
 import { setSection } from '../settings/service.js';
 import { appAuthServiceFor, APP_DEVICE_TOUCH_MS, PAIR_CODES_PER_WINDOW } from './index.js';
+import { APP_DEVICE_IDLE_MS, APP_REAUTH_MS, MAX_PENDING_DEVICE_CODES } from './service.js';
 
 // The Arclight player app's sign-in over HTTP: password sign-in (with two-factor), QR pairing,
 // the Bearer token on portal and player routes, device management, revocation and CORS for the
@@ -396,5 +397,122 @@ describe('TV sign-in (device codes)', () => {
     expect((await create(h, { ...TV, platform: 'tizen' })).statusCode).toBe(400);
     // Still pending after the failed attempts.
     expect((await poll(h, code.pollToken)).json()).toEqual({ status: 'pending' });
+  });
+
+  it('shows the player address once the owner set one, over the address the TV used', async () => {
+    const h = await harness();
+    const lan = { ...TV, serverUrl: 'http://192.0.2.10:7878' };
+    expect((await create(h, lan)).json().verifyUrl).toBe('http://192.0.2.10:7878/player/link');
+    setSection(h.db, 'requests', { applicationUrl: 'https://media.example.com' });
+    // The Application URL alone is not a player address: the TV's own address still wins.
+    expect((await create(h, lan)).json().verifyUrl).toBe('http://192.0.2.10:7878/player/link');
+    setSection(h.db, 'player', { enabled: true, address: { paths: ['/tv'] } });
+    expect((await create(h, lan)).json().verifyUrl).toBe('https://media.example.com/tv/link');
+    setSection(h.db, 'player', { enabled: true, address: { paths: ['/tv'], hosts: [{ hostname: 'watch.example.com' }] } });
+    expect((await create(h, lan)).json().verifyUrl).toBe('https://watch.example.com/link');
+  });
+});
+
+describe('sign-in QR with a player hostname', () => {
+  it('carries the player hostname as the server address', async () => {
+    const h = await harness();
+    setSection(h.db, 'requests', { applicationUrl: 'http://media.example.com' });
+    setSection(h.db, 'player', { enabled: true, address: { hosts: [{ hostname: 'watch.example.com' }] } });
+    const u = await makeUser(h, { player: true });
+    const code = (await post(h, '/api/v1/app/pair-codes', undefined, { cookie: u.cookie })).json();
+    expect(code.serverUrl).toBe('http://watch.example.com');
+    expect(parseAppPairingUri(code.qr)).toEqual({ server: 'http://watch.example.com', code: code.code });
+  });
+});
+
+describe('0.24 hardening', () => {
+  it('a device token unused for 90 days stops working and is removed (AUTH-21)', async () => {
+    const h = await harness();
+    const u = await makeUser(h, { player: true });
+    const token = (await signInApp(h, u.username)).json().token;
+    h.clock.t += APP_DEVICE_IDLE_MS - 60_000;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(200);
+    // Used just now: the idle clock restarts.
+    h.clock.t += APP_DEVICE_IDLE_MS - 60_000;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(200);
+    h.clock.t += APP_DEVICE_IDLE_MS + 1;
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/user/me', headers: bearer(token) })).statusCode).toBe(401);
+    expect(h.db.select().from(schema.appDevices).all()).toEqual([]);
+    expect(h.db.select().from(schema.auditEvents).all().map((r) => r.action)).toContain('app.device.expired');
+  });
+
+  it('a full device-code table drops the oldest code instead of refusing new TVs (AUTH-13)', async () => {
+    const h = await harness();
+    const TV = { deviceName: 'TV', platform: 'android-tv', appVersion: '2.0.0' };
+    const create = (ip: string) => post(h, '/api/v1/app/device-codes', TV, {}, ip);
+    const first = (await create('198.51.100.1')).json();
+    for (let i = 1; i < MAX_PENDING_DEVICE_CODES; i++) {
+      const res = await create(`198.51.${100 + Math.floor(i / 10)}.${(i % 10) + 1}`);
+      expect(res.statusCode).toBe(201);
+    }
+    // The table is full: a new TV still gets a code, the oldest one goes.
+    expect((await create('203.0.113.9')).statusCode).toBe(201);
+    expect((await post(h, '/api/v1/app/device-codes/poll', { pollToken: first.pollToken })).json()).toEqual({ status: 'expired' });
+  });
+
+  it('an app token may not import a configuration or restore a backup (DATA-13)', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const token = (await signInApp(h, admin.username)).json().token;
+    const imported = await post(h, '/api/v1/config/import', { settings: { security: { apiKey: 'a'.repeat(32) } } }, bearer(token));
+    expect(imported.statusCode).toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/1', {}, bearer(token))).statusCode).toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/upload', undefined, bearer(token))).statusCode).toBe(403);
+    expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(token), payload: {} })).statusCode).toBe(403);
+    // Reading stays open to the admin's app.
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/settings/vpn', headers: bearer(token) })).statusCode).toBe(200);
+  });
+
+  it('an app token writes the command routes only for 10 minutes after confirming the password', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const token = (await signInApp(h, admin.username)).json().token;
+    const putVpn = () => h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(token), payload: {} });
+    const script = { name: 'Run', implementation: 'custom-script', settings: { path: '/bin/true' } };
+
+    // The token alone: 403 with a code the app can act on (not 401: the token is fine).
+    const refused = await putVpn();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().code).toBe('REAUTH_REQUIRED');
+    expect((await post(h, '/api/v1/notification', script, bearer(token))).json().code).toBe('REAUTH_REQUIRED');
+
+    // A wrong password: 403 INVALID_CREDENTIALS (the app stays signed in) and still refused.
+    const wrong = await post(h, '/api/v1/app/reauth', { password: 'nope-nope' }, bearer(token));
+    expect(wrong.statusCode).toBe(403);
+    expect(wrong.json().code).toBe('INVALID_CREDENTIALS');
+    expect((await putVpn()).json().code).toBe('REAUTH_REQUIRED');
+
+    const ok = await post(h, '/api/v1/app/reauth', { password: 'password1' }, bearer(token));
+    expect(ok.statusCode).toBe(200);
+    expect(Date.parse(ok.json().expiresAt)).toBe(h.clock.t + APP_REAUTH_MS);
+    expect((await putVpn()).statusCode).not.toBe(403);
+    expect((await post(h, '/api/v1/system/backup/restore/1', {}, bearer(token))).statusCode).not.toBe(403);
+    expect((await post(h, '/api/v1/notification', script, bearer(token))).json().code).not.toBe('REAUTH_REQUIRED');
+    expect(h.db.select().from(schema.auditEvents).all().map((r) => r.action)).toContain('app.device.reauth');
+
+    // Another device of the same user is not confirmed by it.
+    const other = (await signInApp(h, admin.username, { deviceName: 'Tablet' })).json().token;
+    expect((await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers: bearer(other), payload: {} })).json().code).toBe('REAUTH_REQUIRED');
+
+    // Ten minutes later the device has to confirm again.
+    h.clock.t += APP_REAUTH_MS + 1;
+    expect((await putVpn()).json().code).toBe('REAUTH_REQUIRED');
+  });
+
+  it('only app tokens confirm through /app/reauth, and a non-admin-scope key stays refused', async () => {
+    const h = await harness();
+    const admin = await makeUser(h, { role: 'admin' });
+    const key = await post(h, '/api/v1/user/me/apikeys', { name: 'k', scope: 'requests' }, { cookie: admin.cookie });
+    expect(key.statusCode).toBe(201);
+    const headers = { 'x-api-key': key.json().key };
+    expect((await post(h, '/api/v1/app/reauth', { password: 'password1' }, headers)).statusCode).toBe(400);
+    const res = await h.app.inject({ method: 'PUT', url: '/api/v1/settings/vpn', headers, payload: {} });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('FORBIDDEN');
   });
 });

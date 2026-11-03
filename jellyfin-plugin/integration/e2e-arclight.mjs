@@ -159,7 +159,7 @@ async function main() {
   r = await http('POST', `${ALU}/auth/login`, { body: { username: AL_ADMIN.name, password: AL_ADMIN.pw } });
   const cookie = (r.headers.get('set-cookie') ?? '').split(';')[0];
   check('Arclight admin login', r.status === 200 && cookie.startsWith('al_session='), r.body);
-  r = await http('GET', `${ALU}/settings/security`, { headers: { Cookie: cookie } });
+  r = await http('POST', `${ALU}/settings/security/apikey/reveal`, { headers: { Cookie: cookie } });
   const AL_KEY = r.json?.apiKey;
   check('Arclight API key read', typeof AL_KEY === 'string' && AL_KEY.length > 10, r.body);
   const themeSettings = (await http('GET', `${ALU}/settings/themes`, { al: AL_KEY })).json;

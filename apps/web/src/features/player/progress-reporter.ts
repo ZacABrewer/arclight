@@ -14,6 +14,8 @@ export interface ReporterSnapshot {
   speed: number;
   playing: boolean;
   playMethod: 'DirectPlay' | 'Transcode';
+  /** Video playback stats since `start` (rebuffers after startup, their time, click to first frame). */
+  stats?: { stalls: number; stallMs: number; startupMs: number | null };
 }
 
 export interface ReporterOptions {
@@ -50,6 +52,7 @@ export class ProgressReporter {
       ...(this.opts.deviceName ? { deviceName: this.opts.deviceName } : {}),
       clientTime: (this.opts.now?.() ?? new Date()).toISOString(),
       playMethod: s.playMethod,
+      ...(s.stats ? { stalls: s.stats.stalls, stallMs: Math.round(s.stats.stallMs), ...(s.stats.startupMs !== null ? { startupMs: Math.round(s.stats.startupMs) } : {}) } : {}),
     };
   }
 

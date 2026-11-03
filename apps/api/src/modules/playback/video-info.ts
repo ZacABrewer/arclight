@@ -14,6 +14,7 @@ import type {
   VideoSubtitleTrack,
 } from '@arclight/shared';
 import { hwInputArgs, presetArgs, videoEncoder } from '../transcode/ffmpeg.js';
+import { fileInput } from '../transcode/input-protocols.js';
 
 // The pure half of video playback: media info -> VideoInfo, version labels and badges, segments
 // from chapter names, the direct/remux/transcode decision and the ffmpeg argv of a live stream.
@@ -348,6 +349,14 @@ export function defaultVideoKbps(height: number): number {
   return 1_800;
 }
 
+const CAP_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+
+/** The tallest standard height (≤ `maxHeight`) that a video bitrate carries well. */
+export function capHeight(maxHeight: number, videoKbps: number): number {
+  const candidates = [maxHeight, ...CAP_HEIGHTS.filter((h) => h < maxHeight - 8)];
+  return candidates.find((h) => defaultVideoKbps(h) * 0.75 <= videoKbps) ?? candidates[candidates.length - 1]!;
+}
+
 export interface VideoDecisionInput {
   info: VideoInfo;
   /** Base layer range of a DV file (baseRangeOf); null: none. */
@@ -447,9 +456,11 @@ export function decideVideo(input: VideoDecisionInput): VideoPlan {
     return { method: 'remux', reasons: order(reasons), height: null, videoKbps: null, videoCodec: null, copyAudio, audioChannels, tonemap: false, burn: null };
   }
   if (pictureOk) reasons.add('video-codec');
-  const outHeight = Math.min(height > 0 ? height : allowed, allowed);
-  const useHevc = vcodecs.includes('hevc') && outHeight > 1080;
+  let outHeight = Math.min(height > 0 ? height : allowed, allowed);
   const audioKbps = audioChannels === 6 ? 384 : 192;
+  // Under a cap the height follows the bitrate (300 kbps at 1080p is a blur).
+  if (cap > 0) outHeight = capHeight(outHeight, cap - audioKbps);
+  const useHevc = vcodecs.includes('hevc') && outHeight > 1080;
   let kbps = defaultVideoKbps(outHeight);
   if (useHevc) kbps = Math.round(kbps * 0.7);
   // Never aim above the source (a low-bitrate file re-encoded for its codec stays small).
@@ -519,9 +530,9 @@ export function buildVideoStreamArgs(input: string, spec: LiveVideoSpec): string
   const hw = spec.method === 'transcode' ? (spec.hwaccel ?? 'none') : 'none';
   if (spec.method === 'transcode') args.push(...hwInputArgs(hw));
   const ss = spec.startMs > 0 ? ['-ss', (spec.startMs / 1000).toFixed(3)] : [];
-  args.push(...ss, '-i', input);
+  args.push(...ss, ...fileInput(input));
   const burn = spec.method === 'transcode' ? (spec.burn ?? null) : null;
-  if (burn && 'path' in burn) args.push(...ss, '-i', burn.path);
+  if (burn && 'path' in burn) args.push(...ss, ...fileInput(burn.path));
   const audioMap = spec.audioTrack === null ? [] : ['-map', `0:a:${spec.audioTrack}?`];
 
   if (spec.method === 'remux') {
@@ -559,10 +570,10 @@ export function buildVideoStreamArgs(input: string, spec: LiveVideoSpec): string
 
 /** The argv converting one subtitle stream (embedded ordinal, or a whole external file) to WebVTT at `out`. */
 export function buildSubtitleArgs(input: string, ordinal: number | null, out: string, charset?: string): string[] {
-  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...(charset ? ['-sub_charenc', charset] : []), '-i', input, '-map', ordinal === null ? '0:s:0' : `0:s:${ordinal}`, '-c:s', 'webvtt', '-f', 'webvtt', out];
+  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...(charset ? ['-sub_charenc', charset] : []), ...fileInput(input), '-map', ordinal === null ? '0:s:0' : `0:s:${ordinal}`, '-c:s', 'webvtt', '-f', 'webvtt', out];
 }
 
 /** The argv of a 16:9 frame thumbnail at `atMs`, `width` pixels wide, written as JPEG to `out`. */
 export function buildThumbnailArgs(input: string, atMs: number, out: string, width = 480): string[] {
-  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-ss', (atMs / 1000).toFixed(3), '-i', input, '-map', '0:v:0', '-frames:v', '1', '-vf', `scale=${width}:-2`, '-q:v', '4', '-f', 'image2', out];
+  return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-ss', (atMs / 1000).toFixed(3), ...fileInput(input), '-map', '0:v:0', '-frames:v', '1', '-vf', `scale=${width}:-2`, '-q:v', '4', '-f', 'image2', out];
 }

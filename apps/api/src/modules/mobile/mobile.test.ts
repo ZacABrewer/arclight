@@ -131,16 +131,31 @@ describe('mobile env', () => {
 });
 
 describe('MobileService devices', () => {
-  it('upserts by relay device id, rebinding the device to whoever registered last', async () => {
+  it('upserts by relay device id, rebinding the device to whoever registered last from the same phone', async () => {
     const { db, mobile, register } = await setup();
     const alice = await addUser(db, 'alice');
     const bob = await addUser(db, 'bob');
     const first = register(alice);
-    const again = mobile.register(bob, { relayDeviceId: first.relayDeviceId, relaySecret: 'another-secret-0123456789', platform: 'android', deviceName: 'Pixel' });
+    // Bob signs in on Alice's phone: the app sends the same relay device and secret.
+    const again = mobile.register(bob, { relayDeviceId: first.relayDeviceId, relaySecret: `${SECRET}-${alice}-1`, platform: 'android', deviceName: 'Pixel' });
     expect(again.id).toBe(first.id);
     expect(mobile.list(alice)).toEqual([]);
     expect(mobile.list(bob)).toEqual([expect.objectContaining({ platform: 'android', deviceName: 'Pixel', userId: bob })]);
+    // The owner may re-register with a new secret.
+    mobile.register(bob, { relayDeviceId: first.relayDeviceId, relaySecret: 'another-secret-0123456789', platform: 'android', deviceName: 'Pixel' });
     expect(db.select().from(mobileDevices).get()?.relaySecret).toBe('another-secret-0123456789');
+  });
+
+  it('refuses to move another user’s device to someone who knows only its relay id (admins may)', async () => {
+    const { db, mobile, register } = await setup();
+    const alice = await addUser(db, 'alice');
+    const mallory = await addUser(db, 'mallory');
+    const first = register(alice);
+    const input = { relayDeviceId: first.relayDeviceId, relaySecret: 'guessed-secret-0123456789', platform: 'ios' as const, deviceName: 'Mine now' };
+    expect(() => mobile.register(mallory, input)).toThrow(expect.objectContaining({ code: 'CONFLICT' }));
+    expect(mobile.list(alice)).toHaveLength(1);
+    expect(db.select().from(mobileDevices).get()?.relaySecret).toBe(`${SECRET}-${alice}-1`);
+    expect(mobile.register(mallory, input, { isAdmin: true }).userId).toBe(mallory);
   });
 
   it('removes devices with their user (cascade)', async () => {

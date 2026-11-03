@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ImdbListSettings,
   PlexWatchlistSettings,
+  RssListSettings,
   StevenLuSettings,
   TmdbCollectionSettings,
   TmdbKeywordSettings,
@@ -350,6 +351,32 @@ describe('feeds', () => {
       { mediaType: 'series', tmdbId: 1399, imdbId: null, tvdbId: null, title: 'Show', year: null },
     ]);
     expect(() => parseFeed('hello', 'movie')).toThrow(ImportListFetchError);
+  });
+
+  it('scans RSS in linear time, even with unclosed tags (DATA-37)', () => {
+    for (const hostile of ['<item>'.repeat(50000), '<rss>' + '<item><title>'.repeat(30000), '<rss><item>' + '<![CDATA['.repeat(30000) + '</item>']) {
+      const t = performance.now();
+      parseFeed(hostile, 'both');
+      expect(performance.now() - t).toBeLessThan(100);
+    }
+    // Attributes, Atom entries and an unclosed item before a good one still read as before.
+    const xml = '<feed><entry xml:lang="en"><title type="text">Up (2009)</title><tmdb>14160</tmdb></entry><item>broken<item><title>X</title><guid>tt0133093</guid></item></feed>';
+    expect(parseFeed(xml, 'movie')).toEqual([
+      { mediaType: 'movie', tmdbId: 14160, imdbId: null, tvdbId: null, title: 'Up', year: 2009 },
+      { mediaType: 'movie', tmdbId: null, imdbId: 'tt0133093', tvdbId: null, title: 'X', year: null },
+    ]);
+  });
+
+  it('refuses a feed body past the size cap', async () => {
+    const big = new Response(new ReadableStream({
+      start(c) {
+        for (let i = 0; i < 17; i++) c.enqueue(new Uint8Array(1024 * 1024).fill(32));
+        c.close();
+      },
+    }));
+    const ctx = providerCtx(fakeFetch([[/feed\.example\.com/, () => big]]));
+    await expect(providers.rss(RssListSettings.parse({ url: 'https://feed.example.com/rss' }), 'movie', ctx)).rejects.toMatchObject({ code: 'bad-response' });
+    expect(() => parseFeed(' '.repeat(16 * 1024 * 1024 + 1), 'movie')).toThrow(ImportListFetchError);
   });
 
   it('stevenLu reads the popular-movies JSON as movies only', async () => {

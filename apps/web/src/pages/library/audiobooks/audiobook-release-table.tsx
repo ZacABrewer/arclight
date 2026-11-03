@@ -13,6 +13,7 @@ import { GrabButton } from '../grab-button.js';
 import { useReleaseFilters } from '../release-filter-bar.js';
 import { UnreleasedSearchNotice, type ReleaseState } from '../../../components/media/release-state.js';
 import { t } from '../../../i18n/index.js';
+import { externalHref } from '../../../lib/safe-url.js';
 
 const dash = <span className="mk-dim">—</span>;
 
@@ -39,7 +40,7 @@ export function AudiobookReleaseTable({ target, bookTitles }: { target: Audioboo
         return (
           <div className="music-release">
             {r.infoUrl ? (
-              <a className="mk-release-title" href={r.infoUrl} target="_blank" rel="noreferrer noopener" title={r.title}>
+              <a className="mk-release-title" href={externalHref(r.infoUrl)} target="_blank" rel="noreferrer noopener" title={r.title}>
                 {r.title}
               </a>
             ) : (

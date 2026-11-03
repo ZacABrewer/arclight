@@ -5,6 +5,7 @@ import { locateFfprobe, parseFfprobeOutput } from '../media-analysis/index.js';
 import { locateFfmpeg } from '../transcode/runner.js';
 import { decodeArgs, decodeSlices, withLowPriority, type DecodeOutcome, type FileKind, type PriorityTools, type ProbeOutcome } from './checks.js';
 import type { HealthScanMode } from '@arclight/shared';
+import { ffprobeArgs } from '../transcode/input-protocols.js';
 
 // The processes the health scan runs: ffprobe (container + streams) and ffmpeg (decode to
 // null). Both go through `nice -n 19 ionice -c 3` when asked and when those exist (Linux; on
@@ -157,7 +158,7 @@ export class FfmpegHealthTools implements HealthTools {
   async probe(path: string, opts: ToolOptions): Promise<ProbeOutcome> {
     const l = await this.locate();
     if (!l.ffprobe) return null;
-    const cmd = this.command(l.ffprobe, ['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams', path], opts.lowPriority, l);
+    const cmd = this.command(l.ffprobe, ffprobeArgs(['-v', 'error', '-hide_banner', '-print_format', 'json', '-show_format', '-show_streams'], path), opts.lowPriority, l);
     const r = await this.run(cmd.file, cmd.args, { signal: opts.signal, timeoutMs: this.opts.probeTimeoutMs ?? 60_000 });
     if (opts.signal?.aborted) throw new Error('aborted');
     if (r.exitCode !== 0) return { ok: false, message: errorLines(r.stderr).slice(-1)[0] ?? `ffprobe exited with ${r.exitCode ?? 'a signal'}` };

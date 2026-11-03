@@ -5,6 +5,7 @@ import {
   PlayerMoviePage,
   PlayerSeriesDetails,
   PlayerSeriesPage,
+  VideoHlsHealth,
   VideoHome,
   VideoSession,
   VideoWatchedResponse,
@@ -22,6 +23,8 @@ import { playerKeys } from '../api.js';
 //   GET  /playback/series   | /playback/series/:id
 //   POST /playback/watched              mark played / unplayed
 //   POST /playback/video/session        what and how to stream (call again to seek a live stream)
+//   DELETE /playback/video/session/:id  end an HLS session now (encoder and slot freed)
+//   GET  <session.hls.healthUrl>        encoder speed and advice (signed, no cookie needed)
 //   POST /app/device-codes/approve      "Sign in a TV"
 
 export type VideoSort = 'title' | 'added' | 'year' | 'rating';
@@ -59,6 +62,14 @@ export const videoApi = {
   show: (id: number) => request(`/playback/series/${id}`, PlayerSeriesDetails),
   watched: (body: VideoWatchedRequest) => request('/playback/watched', VideoWatchedResponse, { method: 'POST', json: body }),
   session: (body: VideoSessionRequest) => request('/playback/video/session', VideoSession, { method: 'POST', json: body }),
+  /** Fire and forget; `keepalive` so it still goes out when the tab closes. */
+  endSession: (sessionId: string) =>
+    void request(`/playback/video/session/${encodeURIComponent(sessionId)}`, null, { method: 'DELETE', keepalive: true }).catch(() => undefined),
+  health: async (url: string): Promise<VideoHlsHealth> => {
+    const res = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    if (!res.ok) throw Object.assign(new Error(`health ${res.status}`), { status: res.status });
+    return VideoHlsHealth.parse(await res.json());
+  },
   approveDeviceCode: (userCode: string) => request('/app/device-codes/approve', AppDeviceCodeApproveResponse, { method: 'POST', json: { userCode } }),
 };
 

@@ -246,6 +246,13 @@
       "when": 1793695251327,
       "tag": "0034_fingerprint_window",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1793732511381,
+      "tag": "0035_tag_sync_chroma_share_hash_email_verified",
+      "breakpoints": true
     }
   ]
 }

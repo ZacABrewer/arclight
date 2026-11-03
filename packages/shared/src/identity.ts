@@ -32,7 +32,7 @@ export const OidcProvider = z.object({
    * The issuer URL (https://auth.example.com/application/o/arclight/) or its discovery document
    * (…/.well-known/openid-configuration). The discovered `issuer` must match exactly.
    */
-  issuer: z.string().trim().url().max(2048),
+  issuer: z.string().trim().url({ protocol: /^https?$/ }).max(2048),
   clientId: z.string().trim().min(1).max(512),
   /** Empty for public clients (PKCE only). SECRET_MASK on read; sending it back keeps the stored one. */
   clientSecret: z.string().max(2048).default(''),
@@ -85,6 +85,11 @@ export const ForwardAuthSettings = z.object({
   defaultRole: UserRole.default('user'),
   adminGroups: GroupList.default([]),
   allowedGroups: GroupList.default([]),
+  /**
+   * The header may sign in admin accounts. On by default (as before 0.24); turn it off so a
+   * header that slips past the proxy can reach user accounts at most.
+   */
+  allowAdmins: z.boolean().default(true),
 });
 export type ForwardAuthSettings = z.infer<typeof ForwardAuthSettings>;
 
@@ -123,7 +128,7 @@ export const SignInOptions = z.object({
 export type SignInOptions = z.infer<typeof SignInOptions>;
 
 /** POST /settings/identity/test: checks a provider's discovery document. */
-export const OidcTestRequest = z.object({ issuer: z.string().trim().url().max(2048) });
+export const OidcTestRequest = z.object({ issuer: z.string().trim().url({ protocol: /^https?$/ }).max(2048) });
 export const OidcTestResult = z.object({
   ok: z.boolean(),
   issuer: z.string().optional(),
@@ -239,6 +244,14 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
+/**
+ * Re-authentication for adding a passkey, an authenticator app or a personal API key: the
+ * session must be younger than ten minutes, or the request carries the account's password.
+ * The api answers 401 REAUTH_REQUIRED otherwise (accounts without a password sign in again).
+ */
+export const ReauthRequest = z.object({ currentPassword: z.string().min(1).max(1024).optional() });
+export type ReauthRequest = z.infer<typeof ReauthRequest>;
+
 /** POST /user/me/passkeys: finish registering. */
 export const PasskeyRegister = z.object({
   ceremony: z.string().min(1).max(256),
@@ -295,6 +308,8 @@ export const UserApiKeyCreate = z.object({
   scope: ApiKeyScope.default('read'),
   /** 0 or absent: never expires. */
   expiresInDays: z.number().int().min(0).max(3650).optional(),
+  /** See ReauthRequest. */
+  currentPassword: z.string().min(1).max(1024).optional(),
 });
 export type UserApiKeyCreate = z.input<typeof UserApiKeyCreate>;
 

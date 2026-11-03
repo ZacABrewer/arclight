@@ -251,10 +251,12 @@ describe('sign-in over HTTP', () => {
     const pin = await h.server.inject({ method: 'POST', url: '/api/v1/auth/plex/pin' });
     expect(pin.statusCode).toBe(200);
     const { id } = pin.json() as { id: number };
-    const pending = await h.server.inject({ method: 'POST', url: '/api/v1/auth/plex/poll', payload: { id } });
+    // The poll carries the browser-binding cookie from the pin (plex-pins.test.ts covers refusals).
+    const binding = { cookie: String([pin.headers['set-cookie']].flat()[0]).split(';')[0]! };
+    const pending = await h.server.inject({ method: 'POST', url: '/api/v1/auth/plex/poll', headers: binding, payload: { id } });
     expect(pending.statusCode).toBe(202);
     h.servers.plex.approve(id, 'grace-token', { id: 11, username: 'grace' }, [h.servers.plex.machineId]);
-    const done = await h.server.inject({ method: 'POST', url: '/api/v1/auth/plex/poll', payload: { id } });
+    const done = await h.server.inject({ method: 'POST', url: '/api/v1/auth/plex/poll', headers: binding, payload: { id } });
     expect(done.statusCode).toBe(200);
     expect(String(done.headers['set-cookie'])).toContain(`${SESSION_COOKIE}=`);
     expect(done.json()).toMatchObject({ user: { username: 'grace' } });

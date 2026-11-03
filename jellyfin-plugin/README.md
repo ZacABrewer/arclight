@@ -91,7 +91,7 @@ You also need an Arclight server that Jellyfin can reach over the network, and a
 4. Go to **Dashboard > Plugins > Arclight** and enter:
    - **Arclight URL**: the address the *Jellyfin server* uses to reach Arclight, for example `http://arclight:7000` on a shared Docker network, or `https://arclight.example.com`.
    - **API key**: the key from Arclight **Settings > Media servers**.
-5. Click **Test connection**, then **Save**.
+5. Click **Test connection**, then **Save**. The saved API key is only ever sent to the saved Arclight URL. To test a different address, type the API key as well; otherwise the test answers "Enter the API key to test a different address".
 6. In Arclight, link each Jellyfin user to their Arclight account. Until a user is linked, per-user features show "Ask your admin to link your account in Arclight".
 
 Users who already have Jellyfin Web open must reload the page once to load the new UI.
@@ -172,7 +172,7 @@ Progress events are throttled to one per playback session per 60 seconds by defa
 | Setting | Default | Notes |
 | --- | --- | --- |
 | Arclight URL | (empty) | `http(s)://host[:port][/path]` |
-| API key | (empty) | Stored in `plugins/configurations/Jellyfin.Plugin.Arclight.apikey`, not in the plugin XML, so the Dashboard's plugin-configuration API never returns it. Kept across updates. |
+| API key | (empty) | Stored in `plugins/configurations/Jellyfin.Plugin.Arclight.apikey`, not in the plugin XML, so the Dashboard's plugin-configuration API never returns it. Kept across updates. On Linux and macOS the file is created readable only by the Jellyfin user (mode 0600). |
 | Send events / playback / watched / library / users | on | |
 | Send events every N seconds | 10 | A batch also goes out early once 200 events are waiting. At most 500 events per request. |
 | Progress at most every N seconds | 60 | |
@@ -232,7 +232,7 @@ These endpoints are called by the web script, and any client may use them with a
 | (intro) | No endpoint of its own: an `IIntroProvider` that Jellyfin's `/Items/{id}/Intros` calls. |
 | `GET /Arclight/Labels?ids=` (≤ 100) | (none) Computed from Jellyfin's media info, cached per item until the item changes; only items visible to the caller. |
 | `GET /Arclight/Themes`, `POST /Arclight/Themes/Choice` `{choice}` | `GET /api/v1/jellyfin/themes` (+ `/userconfig` for "follow"); the choice is stored in the plugin. |
-| `GET /Arclight/Theme.css?theme=<pack>`, `GET /Arclight/theme-fonts/{pack}/{file}.woff2` | `GET /api/v1/jellyfin/theme/:id.css`, `/theme-fonts/:id/:file`. Anonymous (stylesheet links carry no token), ids validated. The plugin caches each file for an hour (so Arclight sees at most one fetch per pack per hour); browsers revalidate the stylesheet on every load with ETag/304 and keep fonts for a week. |
+| `GET /Arclight/Theme.css?theme=<pack>`, `GET /Arclight/theme-fonts/{pack}/{file}.woff2` | `GET /api/v1/jellyfin/theme/:id.css`, `/theme-fonts/:id/:file`. Anonymous (stylesheet links carry no token). A pack id must be in Arclight's installed pack list (`GET /themes`, cached for 10 minutes and refreshed at most once a minute for an unknown id) before anything is fetched, and only fonts the pack's stylesheet links are served. Responses are always `text/css; charset=utf-8` or `font/woff2` with `X-Content-Type-Options: nosniff`, never Arclight's own Content-Type. The plugin caches each file for an hour in a cache of at most 200 entries; a missing file is remembered for 5 minutes and a failure for 30 seconds, and the last good copy is served while Arclight is down. Browsers revalidate the stylesheet on every load with ETag/304 and keep fonts for a week. |
 | `GET /Arclight/web/arclight.js`, `arclight.css` | (none) Static, no authentication, contains no secrets. |
 | `GET /Arclight/Admin/Status`, `POST /Arclight/Admin/ApiKey`, `POST /Arclight/Admin/TestConnection` | (none / `ping`) Administrators only. |
 

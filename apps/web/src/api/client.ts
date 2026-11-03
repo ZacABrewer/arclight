@@ -55,6 +55,8 @@ function triggersSignIn(path: string): boolean {
   );
 }
 
+const REAUTH_CODES: ReadonlySet<string> = new Set(['REAUTH_REQUIRED', 'INVALID_CREDENTIALS']);
+
 let onTwoFactorSetupRequired: (() => void) | null = null;
 
 /**
@@ -97,9 +99,10 @@ export async function request(path: string, schema: z.ZodType | null, init: Requ
   // The session cookie rides along on every call (same origin; the dev server proxies /api).
   const res = await fetch(url, { credentials: 'same-origin', ...rest, headers: finalHeaders, body });
 
-  if (res.status === 401 && onUnauthorized && triggersSignIn(path)) onUnauthorized(path);
   if (!res.ok) {
     const err = await toApiError(res, path);
+    // "Confirm your password" (REAUTH_REQUIRED) and a wrong one answer 401 on a live session.
+    if (err.status === 401 && onUnauthorized && triggersSignIn(path) && !REAUTH_CODES.has(err.code ?? '')) onUnauthorized(path);
     if (err.status === 403 && err.code === 'TWO_FACTOR_SETUP_REQUIRED') onTwoFactorSetupRequired?.();
     throw err;
   }

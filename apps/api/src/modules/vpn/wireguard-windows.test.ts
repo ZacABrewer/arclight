@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_WIREGUARD_EXE } from '@arclight/shared';
 import { VpnError } from './errors.js';
-import { findInterfaceIPv4, parseGetNetIpAddress, parseNetshAddresses, type InterfaceProbeDeps } from './interfaces.js';
+import { assertInterfaceName, findInterfaceIPv4, parseGetNetIpAddress, parseNetshAddresses, type InterfaceProbeDeps } from './interfaces.js';
 import { fixture, iface, scriptedShell } from './test-support.js';
+import { psQuote } from './shell.js';
 import { parseWgDump, tunnelNameFromConfig, WireguardWindows } from './wireguard-windows.js';
 
 const WG = 'C:\\Program Files\\WireGuard\\wg.exe';
@@ -63,6 +64,23 @@ describe('tunnel names', () => {
   });
 });
 
+describe('assertInterfaceName', () => {
+  it('accepts real adapter names and refuses quotes, backticks and control characters', () => {
+    for (const ok of ['Ethernet 2', 'Wi-Fi', 'ProtonVPN', 'vEthernet (WSL)', 'Intel(R) Ethernet #2', "o'brien", 'wg0']) {
+      expect(() => assertInterfaceName(ok)).not.toThrow();
+    }
+    expect(() => assertInterfaceName('a’b')).toThrow(VpnError);
+    for (const bad of ['a‘b', 'a‚b', 'a‛b', 'a“b', 'a"b', 'a`b', 'a\nb', '  ']) {
+      expect(() => assertInterfaceName(bad)).toThrow(VpnError);
+    }
+  });
+
+  it('psQuote doubles ASCII and smart single quotes', () => {
+    expect(psQuote("a'b")).toBe("'a''b'");
+    expect(psQuote('x’; calc; ’')).toBe("'x’’; calc; ’’'");
+  });
+});
+
 describe('findInterfaceIPv4', () => {
   it('prefers os.networkInterfaces, matching names case-insensitively', async () => {
     const shell = scriptedShell([]);
@@ -74,7 +92,10 @@ describe('findInterfaceIPv4', () => {
   it('falls back to PowerShell Get-NetIPAddress, then netsh, on Windows', async () => {
     const ps = scriptedShell([{ match: (f) => f === 'powershell.exe', reply: { stdout: fixture('get-netipaddress.txt') } }]);
     await expect(findInterfaceIPv4("o'brien", interfaces(ps.run))).resolves.toBe('10.2.0.2');
-    expect(ps.calls[0]!.args.at(-1)).toContain("-InterfaceAlias 'o''brien' -AddressFamily IPv4");
+    // The name goes in through the environment, never into the script text.
+    expect(ps.calls[0]!.args.at(-1)).toContain('-InterfaceAlias $env:ARCLIGHT_VPN_ADAPTER -AddressFamily IPv4');
+    expect(ps.calls[0]!.args.join(' ')).not.toContain('brien');
+    expect(ps.calls[0]!.opts?.env).toEqual({ ARCLIGHT_VPN_ADAPTER: "o'brien" });
 
     const netsh = scriptedShell([
       { match: (f) => f === 'powershell.exe', reply: { code: 1, stderr: fixture('get-netipaddress-missing.txt') } },

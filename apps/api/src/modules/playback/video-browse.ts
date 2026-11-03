@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   itemKey,
+  parseItemKey,
   rankMatches,
   RESUME_MIN,
   type ContentRestrictions,
@@ -600,16 +601,49 @@ export function videoSearch(ctx: VideoBrowseContext, user: BrowseUser, q: string
   };
 }
 
-/** Marks items, a series or a season played/unplayed; returns how many items changed. */
-export function markWatched(ctx: VideoBrowseContext, owner: PlaybackOwner, req: VideoWatchedRequest): number {
+/**
+ * Marks items, a series or a season played/unplayed; returns how many items changed. Only movies
+ * and episodes the caller can browse count: other kinds, unknown ids and items outside
+ * `restrictions` are skipped without a progress row, so the count says nothing about them.
+ */
+export function markWatched(ctx: VideoBrowseContext, owner: PlaybackOwner, req: VideoWatchedRequest, restrictions: ContentRestrictions | null): number {
   const nowMs = ctx.now?.() ?? Date.now();
   let keys: string[];
-  if (req.itemKeys) keys = [...new Set(req.itemKeys)];
+  if (req.itemKeys) keys = visibleVideoKeys(ctx.db, [...new Set(req.itemKeys)], restrictions);
   else {
-    keys = playableEpisodes(ctx.db, req.seriesId!)
-      .filter((e) => req.seasonNumber === undefined || e.seasonNumber === req.seasonNumber)
-      .map((e) => itemKey('episode', e.id));
+    const show = ctx.db.select({ certification: series.certification }).from(series).where(eq(series.id, req.seriesId!)).get();
+    keys = !show || !withinRestrictions(restrictions, 'series', show.certification)
+      ? []
+      : playableEpisodes(ctx.db, req.seriesId!)
+          .filter((e) => req.seasonNumber === undefined || e.seasonNumber === req.seasonNumber)
+          .map((e) => itemKey('episode', e.id));
   }
   for (const key of keys) ctx.progress.update(owner, key, { played: req.played }, nowMs);
   return keys.length;
+}
+
+/** The movie and episode keys of `keys` that exist and are within `restrictions`, in order. */
+function visibleVideoKeys(db: Db, keys: readonly string[], restrictions: ContentRestrictions | null): string[] {
+  const movieIds: number[] = [];
+  const episodeIds: number[] = [];
+  for (const key of keys) {
+    const parsed = parseItemKey(key);
+    if (parsed?.kind === 'movie') movieIds.push(parsed.id);
+    else if (parsed?.kind === 'episode') episodeIds.push(parsed.id);
+  }
+  const visible = new Set<string>();
+  for (let i = 0; i < movieIds.length; i += CHUNK) {
+    const rows = db.select({ id: movies.id, certification: movies.certification }).from(movies).where(inArray(movies.id, movieIds.slice(i, i + CHUNK))).all();
+    for (const r of rows) if (withinRestrictions(restrictions, 'movie', r.certification)) visible.add(itemKey('movie', r.id));
+  }
+  for (let i = 0; i < episodeIds.length; i += CHUNK) {
+    const rows = db
+      .select({ id: episodes.id, certification: series.certification })
+      .from(episodes)
+      .innerJoin(series, eq(series.id, episodes.seriesId))
+      .where(inArray(episodes.id, episodeIds.slice(i, i + CHUNK)))
+      .all();
+    for (const r of rows) if (withinRestrictions(restrictions, 'series', r.certification)) visible.add(itemKey('episode', r.id));
+  }
+  return keys.filter((k) => visible.has(k));
 }

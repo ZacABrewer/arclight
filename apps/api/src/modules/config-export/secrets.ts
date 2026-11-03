@@ -5,17 +5,34 @@ import { SECRET_MASK } from '@arclight/shared';
 // "this is secret" marker, so secrets are recognised by key name. The rule is deliberately
 // broad: masking a harmless value costs a round trip, leaking a token costs much more.
 
-const SECRET_KEY = /(password|passphrase|passwd|secret|token|apikey|api_key|cookies?|privatekey|private_key|presharedkey|passkey|rsskey|userkey|appkey|credentials?|webhookurl|webhook_url)$/i;
+const SECRET_KEY = /(password|passphrase|passwd|secret|token|apikey|api_key|cookies?|privatekey|private_key|presharedkey|passkey|rsskey|userkey|appkey|authkey|auth_key|secretkey|secret_key|credentials?|webhookurl|webhook_url|recoverycodes?|recovery_codes?|otp|2fa|twofactor|two_factor)$/i;
+/**
+ * Short names that are only secret as the whole key or as a word at the end (`pin`,
+ * `profile_pin`, `profilePin`), never as a plain suffix: `code` alone is a TOTP code but
+ * `languageCode`/`statusCode` are not, so `code` is deliberately absent.
+ */
+const SECRET_WORD = /(^|_)(pass|pin|seed|otpcode|totpcode)$/i;
+const SECRET_CAMEL = /[a-z0-9](Pass|Pin)$/;
 /** Key names that end like a secret but are not one. */
-const NOT_SECRET = /^(tokenexpiresat|sortkey|dupekey|publickey|haspassword|hadapikey)$/i;
+const NOT_SECRET = /^(tokenexpiresat|sortkey|dupekey|publickey|haspassword|hadapikey|haspin)$/i;
 
 export function isSecretKey(key: string): boolean {
   if (NOT_SECRET.test(key)) return false;
-  return key.toLowerCase() === 'key' || SECRET_KEY.test(key);
+  return key.toLowerCase() === 'key' || SECRET_KEY.test(key) || SECRET_WORD.test(key) || SECRET_CAMEL.test(key);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Keys never copied from imported JSON: `JSON.parse` makes `__proto__` an own key, and assigning
+ * it onto a fresh object would swap that object's prototype.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export function isUnsafeKey(key: string): boolean {
+  return UNSAFE_KEYS.has(key);
 }
 
 /** Deep copy with every non-empty secret value replaced by SECRET_MASK. */
@@ -27,7 +44,7 @@ function walk(value: unknown, secret: boolean): unknown {
   if (Array.isArray(value)) return value.map((v) => walk(v, secret));
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = walk(v, secret || isSecretKey(k));
+    for (const [k, v] of Object.entries(value)) if (!isUnsafeKey(k)) out[k] = walk(v, secret || isSecretKey(k));
     return out;
   }
   if (secret && typeof value === 'string' && value !== '') return SECRET_MASK;
@@ -61,6 +78,7 @@ export function resolveMasks(incoming: unknown, current: unknown, onMissing: (pa
     const cur = isPlainObject(current) ? current : {};
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(incoming)) {
+      if (isUnsafeKey(k)) continue;
       const resolved = resolveMasks(v, cur[k], onMissing, path ? `${path}.${k}` : k);
       if (resolved !== undefined) out[k] = resolved;
     }

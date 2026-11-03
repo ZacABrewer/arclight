@@ -810,7 +810,7 @@ export class JellyfinPluginService {
     await this.assertVisible(user, mediaType, tmdbId);
     const found = await this.requests().discover.titleProviders(mediaType, tmdbId, q.region);
     const map = (list: { tmdbId: number; name: string; logo?: string }[]): JellyfinProvider[] => list.map((p) => ({ id: p.tmdbId, name: p.name, logoUrl: p.logo ?? null }));
-    return { region: q.region, link: found.link, flatrate: map(found.flatrate), rent: map(found.rent), buy: map(found.buy), attribution: 'Data from JustWatch' };
+    return { region: q.region, link: httpUrlOrNull(found.link), flatrate: map(found.flatrate), rent: map(found.rent), buy: map(found.buy), attribution: 'Data from JustWatch' };
   }
 
   /** GET /jellyfin/requests: the caller's own media and language requests, newest first. */
@@ -956,6 +956,17 @@ export function pickTrailer(videos: readonly TitleVideo[]): { site: string; key:
   if (!pick) return null;
   const url = /youtube/i.test(pick.site) ? `https://www.youtube.com/watch?v=${encodeURIComponent(pick.key)}` : `https://vimeo.com/${encodeURIComponent(pick.key)}`;
   return { site: pick.site, key: pick.key, url };
+}
+
+/** The URL when it is absolute http(s), else null: metadata links are rendered as hrefs by clients (the plugin's vanilla DOM code included). */
+export function httpUrlOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function safe<T>(fn: () => T, fallback: T): T {

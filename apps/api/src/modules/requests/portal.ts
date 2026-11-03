@@ -67,6 +67,7 @@ export function publicPortal(
   requests: RequestsService,
   mediaServerLogin: () => MediaServerLoginOption,
   features: () => PublicPortal['features'] = () => undefined,
+  urls: () => Pick<PublicPortal, 'portalUrl' | 'playerUrl'> = () => ({ portalUrl: null, playerUrl: null }),
 ): PublicPortal {
   const s = requests.settings();
   const server = mediaServerLogin();
@@ -78,5 +79,6 @@ export function publicPortal(
     allowAnonymousDiscover: s.publicPortal.enabled && s.publicPortal.allowAnonymousDiscover,
     loginMethods: { local: true, mediaServer: server, plex: server?.kind === 'plex' },
     features: features(),
+    ...urls(),
   };
 }

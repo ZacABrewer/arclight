@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import type { PlayableItem, VideoAudioTrack, VideoQuality, VideoSubtitleTrack } from '@arclight/shared';
+import type { PlayableItem, VideoAudioTrack, VideoHlsRung, VideoQuality, VideoSubtitleTrack } from '@arclight/shared';
 import { cx } from '../../../arclight/cx.js';
 import { useT } from '../../../i18n/index.js';
 import { Art, ProgressBar } from '../redesign/tiles.js';
@@ -125,22 +125,32 @@ export function TracksPanel({ item, state, onAudio, onSubtitle }: { item: Playab
   );
 }
 
+/** Quality menu label of an HLS rung: "Original" for the source copy, else its height ("1080p"). */
+export function rungLabel(t: Translate, rung: VideoHlsRung): string {
+  return rung.id === 'src' ? t('player.video.qualityOption.original') : `${rung.height}p`;
+}
+
 export function SettingsPanel({
   item,
   state,
   onQuality,
+  onRung,
   onSpeed,
   onVersion,
 }: {
   item: PlayableItem;
   state: VideoState;
   onQuality: (q: VideoQuality) => void;
+  /** HLS: pin a rung of the session (null: Auto). */
+  onRung?: (rungId: string | null) => void;
   onSpeed: (s: number) => void;
   onVersion: (mediaFileId: number) => void;
 }) {
   const t = useT();
   const versions = item.versions ?? [];
   const reasons = state.session?.reasons ?? [];
+  // HLS with level control: the menu is the session's ladder (Auto = ABR), switched in place.
+  const rungs = state.levelControl && onRung ? (state.session?.hls?.rungs ?? []) : [];
   return (
     <Panel id="vp-settings" title={t('player.video.settings')}>
       {versions.length > 1 ? (
@@ -151,9 +161,16 @@ export function SettingsPanel({
         </Group>
       ) : null}
       <Group id="vp-quality-h" title={t('player.video.quality')}>
-        {QUALITIES.map((q) => (
-          <Option key={q} checked={state.quality === q} onSelect={() => onQuality(q)} label={t(`player.video.qualityOption.${q}`)} />
-        ))}
+        {rungs.length ? (
+          <>
+            <Option checked={state.pinnedRung === null} onSelect={() => onRung?.(null)} label={t('player.video.qualityOption.auto')} />
+            {rungs.map((r) => (
+              <Option key={r.id} checked={state.pinnedRung === r.id} onSelect={() => onRung?.(r.id)} label={rungLabel(t, r)} />
+            ))}
+          </>
+        ) : (
+          QUALITIES.map((q) => <Option key={q} checked={state.quality === q} onSelect={() => onQuality(q)} label={t(`player.video.qualityOption.${q}`)} />)
+        )}
       </Group>
       <Group id="vp-speed-h" title={t('player.video.speed')}>
         {SPEEDS.map((s) => (
@@ -165,7 +182,7 @@ export function SettingsPanel({
           <h3 className="vp-group__title" id="vp-stream-h">
             {t('player.video.stream')}
           </h3>
-          <p className="vp-muted vp-group__text">{t(`player.video.method.${state.session.method}`)}</p>
+          <p className="vp-muted vp-group__text">{state.session.delivery === 'hls' ? `${t('player.video.method.hls')} · ${t(`player.video.method.${state.session.method}`)}` : t(`player.video.method.${state.session.method}`)}</p>
           {reasons.length ? (
             <ul className="vp-reasons">
               {reasons.map((r) => (

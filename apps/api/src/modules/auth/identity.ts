@@ -13,9 +13,10 @@ import {
 } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
-import { userIdentities } from '../../db/schema.js';
+import { userIdentities, users } from '../../db/schema.js';
 import { setSection } from '../settings/service.js';
 import { audit } from '../audit/recorder.js';
+import { TokenBuckets, type RateLimitOptions } from '../requests/portal.js';
 import { hashToken } from './hash.js';
 import {
   authorizationUrl,
@@ -44,6 +45,10 @@ export const FORWARD_AUTH_PROVIDER = 'forward-auth';
 /** An unfinished sign-in at the provider expires after this long. */
 export const ATTEMPT_TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 10_000;
+/** Unfinished sign-ins one address may hold; more are refused, never evicting anyone else's. */
+const MAX_ATTEMPTS_PER_PEER = 20;
+/** Sign-in starts per address: a burst for retries, then one every 10 seconds. */
+export const OIDC_START_LIMIT: RateLimitOptions = { capacity: 20, refillPerSecond: 0.1 };
 const DISCOVERY_TTL_MS = 10 * 60_000;
 
 /** One authorization request in flight (keyed by its `state`). */
@@ -58,6 +63,8 @@ interface Attempt {
   rememberMe: boolean;
   /** Set when a signed-in user is linking this provider to their account. */
   linkUserId?: number;
+  /** Client address that started it (per-address cap). */
+  peer: string;
   expires: number;
 }
 
@@ -69,6 +76,8 @@ export interface IdentityServiceOptions {
   fetch?: FetchLike;
   /** Test seam: the provider's signing keys (default: its JWKS over HTTP). */
   keysFor?: (jwksUri: string) => JWTVerifyGetKey;
+  /** Sign-in starts per client address (default OIDC_START_LIMIT). */
+  startLimit?: RateLimitOptions;
 }
 
 export type CallbackOutcome = { kind: 'login'; result: LoginResult; returnTo: string; providerId: string } | { kind: 'linked'; returnTo: string; providerId: string };
@@ -116,6 +125,8 @@ export class IdentityService {
   private readonly fetchImpl: FetchLike;
   private readonly keysFor: (jwksUri: string) => JWTVerifyGetKey;
   private readonly attempts = new Map<string, Attempt>();
+  private readonly pendingByPeer = new Map<string, number>();
+  private readonly starts: TokenBuckets;
   private readonly discovery = new Map<string, { doc: OidcDiscovery; keys: JWTVerifyGetKey; at: number }>();
   private proxies: { key: string; list: TrustedProxies } | null = null;
 
@@ -126,6 +137,7 @@ export class IdentityService {
     this.now = opts.now ?? (() => new Date());
     this.fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
     this.keysFor = opts.keysFor ?? remoteKeys;
+    this.starts = new TokenBuckets(opts.startLimit ?? OIDC_START_LIMIT, () => this.now().getTime());
     this.auth.forwardAuth = (creds) => this.resolveForwardAuth(creds);
   }
 
@@ -221,24 +233,36 @@ export class IdentityService {
 
   // ------------------------------------------------------------------------------- sign-in flow
 
+  private dropAttempt(state: string): Attempt | undefined {
+    const attempt = this.attempts.get(state);
+    if (!attempt) return undefined;
+    this.attempts.delete(state);
+    const left = (this.pendingByPeer.get(attempt.peer) ?? 1) - 1;
+    if (left > 0) this.pendingByPeer.set(attempt.peer, left);
+    else this.pendingByPeer.delete(attempt.peer);
+    return attempt;
+  }
+
   private prune(): void {
     const t = this.now().getTime();
-    for (const [k, v] of this.attempts) if (v.expires <= t) this.attempts.delete(k);
-    while (this.attempts.size > MAX_ATTEMPTS) {
-      const first = this.attempts.keys().next().value;
-      if (first === undefined) break;
-      this.attempts.delete(first);
-    }
+    for (const [k, v] of this.attempts) if (v.expires <= t) this.dropAttempt(k);
   }
 
   /**
    * Starts an authorization request. Returns the provider URL and the browser-binding value the
    * caller sets as a short-lived cookie: the callback only completes in the browser that started.
+   * Rate-limited per client address (`peer`); when an address (or the whole table) holds too many
+   * unfinished sign-ins, new ones are refused instead of pushing out other people's.
    */
-  async start(providerId: string, opts: { appBase: string; returnTo?: unknown; rememberMe?: boolean; linkUserId?: number }): Promise<{ url: string; binding: string }> {
+  async start(providerId: string, opts: { appBase: string; returnTo?: unknown; rememberMe?: boolean; linkUserId?: number; peer?: string | undefined }): Promise<{ url: string; binding: string }> {
+    const peer = opts.peer ?? '';
+    if (!this.starts.take(peer)) throw new OidcError('rate_limited', 'too many sign-in attempts from this address; wait a moment');
     const provider = this.provider(providerId);
-    const { doc } = await this.discovered(provider);
     this.prune();
+    if ((this.pendingByPeer.get(peer) ?? 0) >= MAX_ATTEMPTS_PER_PEER || this.attempts.size >= MAX_ATTEMPTS) {
+      throw new OidcError('rate_limited', 'too many unfinished sign-ins; finish one or wait a few minutes');
+    }
+    const { doc } = await this.discovered(provider);
     const state = randomToken(32);
     const binding = randomToken(32);
     const attempt: Attempt = {
@@ -249,10 +273,12 @@ export class IdentityService {
       bindingHash: hashToken(binding),
       returnTo: safeReturnTo(opts.returnTo),
       rememberMe: opts.rememberMe ?? true,
+      peer,
       expires: this.now().getTime() + ATTEMPT_TTL_MS,
       ...(opts.linkUserId !== undefined ? { linkUserId: opts.linkUserId } : {}),
     };
     this.attempts.set(state, attempt);
+    this.pendingByPeer.set(peer, (this.pendingByPeer.get(peer) ?? 0) + 1);
     const url = authorizationUrl(doc, { clientId: provider.clientId, redirectUri: attempt.redirectUri, scopes: provider.scopes, state, nonce: attempt.nonce, codeVerifier: attempt.codeVerifier });
     return { url, binding };
   }
@@ -273,9 +299,8 @@ export class IdentityService {
     ctx: { binding: string | undefined; sessionUserId: number | null; ip?: string | undefined; userAgent?: string | undefined },
   ): Promise<CallbackOutcome> {
     const state = typeof query['state'] === 'string' ? query['state'] : '';
-    const attempt = state ? this.attempts.get(state) : undefined;
     // Consume first: a replayed callback (same state) finds nothing.
-    if (state) this.attempts.delete(state);
+    const attempt = state ? this.dropAttempt(state) : undefined;
     if (!attempt || attempt.expires <= this.now().getTime()) throw new OidcError('state', 'this sign-in attempt is unknown or expired');
     if (attempt.providerId !== providerId) throw new OidcError('state', 'the sign-in attempt belongs to another provider');
     if (!ctx.binding || hashToken(ctx.binding) !== attempt.bindingHash) throw new OidcError('state', 'the sign-in was started in another browser');
@@ -344,7 +369,8 @@ export class IdentityService {
     let user: User | null = link ? this.auth.getUser(link.userId) : null;
 
     if (!user && provider.matchBy === 'email' && usable) {
-      const matches = this.auth.findUsersByEmail(email);
+      // Only emails an admin set or a provider vouched for: anyone can type any address into their profile.
+      const matches = this.auth.findUsersByEmail(email).filter((u) => u.emailVerified);
       if (matches.length > 1) fail('no_account', 'several accounts use this email');
       const match = matches[0];
       if (match) {
@@ -369,6 +395,7 @@ export class IdentityService {
       user = created;
     }
     if (!user) return fail('no_account', 'no Arclight account for this sign-in');
+    if (emailVerified(claims)) this.vouchEmail(user.id, email);
     if (decision.role !== null) user = this.auth.syncRole(user.id, decision.role);
     this.db
       .update(userIdentities)
@@ -386,6 +413,16 @@ export class IdentityService {
     return `user-${subject.slice(0, 12)}`;
   }
 
+  /** A provider verified this address for the account's own identity: the account's email counts as verified. */
+  private vouchEmail(userId: number, email: string): void {
+    if (!email) return;
+    this.db
+      .update(users)
+      .set({ emailVerified: true })
+      .where(and(eq(users.id, userId), eq(users.email, email), eq(users.emailVerified, false)))
+      .run();
+  }
+
   private hasLink(userId: number, providerId: string): boolean {
     return this.db.select({ id: userIdentities.id }).from(userIdentities).where(and(eq(userIdentities.userId, userId), eq(userIdentities.providerId, providerId))).get() !== undefined;
   }
@@ -398,7 +435,8 @@ export class IdentityService {
   private link(userId: number, provider: OidcProvider, subject: string, claims: Record<string, unknown>): void {
     const existing = this.db.select().from(userIdentities).where(and(eq(userIdentities.providerId, provider.id), eq(userIdentities.subject, subject))).get();
     if (existing && existing.userId !== userId) throw new OidcError('link_conflict', 'that identity is linked to another Arclight account');
-    const email = typeof claims['email'] === 'string' ? claims['email'].toLowerCase() : null;
+    const email = typeof claims['email'] === 'string' ? claims['email'].trim().toLowerCase() : null;
+    if (email && emailVerified(claims)) this.vouchEmail(userId, email);
     if (existing) return;
     // One identity per provider per account: linking again replaces the old one.
     this.db.delete(userIdentities).where(and(eq(userIdentities.userId, userId), eq(userIdentities.providerId, provider.id))).run();
@@ -440,7 +478,8 @@ export class IdentityService {
 
   /**
    * Forward-auth: only when it is on, the TCP peer is a configured proxy and the user header is
-   * present. Headers from any other peer are ignored, whatever X-Forwarded-For says.
+   * present. Headers from any other peer are ignored, whatever X-Forwarded-For says. With
+   * `allowAdmins` off, a header naming (or promoting to) an admin is ignored too.
    */
   async resolveForwardAuth(creds: RequestCredentials): Promise<RequestAuth | null> {
     const s = this.settings().forwardAuth;
@@ -456,7 +495,14 @@ export class IdentityService {
     }
     const email = s.emailHeader ? (creds.header(s.emailHeader)?.trim().toLowerCase() ?? '') : '';
     let user = this.forwardUser(username, email);
+    const refusedAdmin = (role: User['role']): boolean => {
+      if (role !== 'admin' || s.allowAdmins) return false;
+      this.log?.warn({ username }, 'forward-auth may not sign in admins; ignoring the header');
+      return true;
+    };
+    if (user && refusedAdmin(decision.role ?? user.role)) return null;
     if (!user && s.autoCreate) {
+      if (refusedAdmin(decision.role ?? s.defaultRole)) return null;
       const name = s.nameHeader ? creds.header(s.nameHeader)?.trim().slice(0, 100) : undefined;
       user = await this.auth.createExternalUser({
         username: this.auth.freeUsername(username),
@@ -469,6 +515,8 @@ export class IdentityService {
     }
     if (!user) return null;
     if (decision.role !== null && decision.role !== user.role) user = this.auth.syncRole(user.id, decision.role);
+    // syncRole keeps the only admin an admin, whatever the groups say.
+    if (refusedAdmin(user.role)) return null;
     const isAdmin = user.role === 'admin';
     return { user, via: 'forward', isAdmin, appAccess: effectiveAppAccess(user, isAdmin) };
   }
@@ -480,7 +528,7 @@ export class IdentityService {
     const byName = this.auth.findUserByUsername(username);
     if (byName) return toUser(byName);
     if (email) {
-      const matches = this.auth.findUsersByEmail(email).filter((u) => u.role !== 'admin');
+      const matches = this.auth.findUsersByEmail(email).filter((u) => u.role !== 'admin' && u.emailVerified);
       if (matches.length === 1) return toUser(matches[0]!);
     }
     return null;

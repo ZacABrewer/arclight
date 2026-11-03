@@ -7,7 +7,8 @@ import { householdKeys, selectFailure, selectProfile } from './api';
 
 // Choosing a profile on the picker (TV and phone): straight in, or the PIN pad first for a profile
 // with a PIN (§9 Q5). A wrong PIN clears the pad; 5 wrong tries lock the profile on this device
-// for the server's retry-after time.
+// for the server's retry-after time. Going back to an owner profile without a PIN on an older
+// sign-in needs the account password, which the pad cannot take: that says so and stays on the picker.
 
 export interface PickState {
   /** The profile whose PIN is being asked for. */
@@ -64,7 +65,10 @@ export function usePickProfile(onPicked: (p: HouseholdProfile) => void): PickSta
       setResetKey((k) => k + 1);
       if (f.kind === 'pin-required') setMessage(pin ? t('app.tv.pin.wrong') : null);
       else if (f.kind === 'pin-wrong') setMessage(t('app.tv.pin.wrong'));
-      else if (f.kind === 'pin-locked') {
+      else if (f.kind === 'password-required') {
+        setPinFor(null);
+        setMessage(t('app.tv.pin.passwordRequired', { name: p.name }));
+      } else if (f.kind === 'pin-locked') {
         setLockedUntil(Date.now() + f.retryAfterSeconds * 1000);
         setMessage(t('app.tv.pin.locked', { count: lockMessageMinutes(f.retryAfterSeconds) }));
       } else {

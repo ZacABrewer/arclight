@@ -10,14 +10,20 @@ export interface ShellResult {
   stderr: string;
 }
 
-export type ShellRunner = (file: string, args: readonly string[], opts?: { timeoutMs?: number }) => Promise<ShellResult>;
+export interface ShellOptions {
+  timeoutMs?: number;
+  /** Extra environment variables on top of the server's own. A value passed this way is never parsed as code. */
+  env?: Record<string, string>;
+}
+
+export type ShellRunner = (file: string, args: readonly string[], opts?: ShellOptions) => Promise<ShellResult>;
 
 export const nodeShellRunner: ShellRunner = (file, args, opts = {}) =>
   new Promise((resolve, reject) => {
     execFile(
       file,
       [...args],
-      { timeout: opts.timeoutMs ?? 15_000, windowsHide: true, maxBuffer: 1024 * 1024 },
+      { timeout: opts.timeoutMs ?? 15_000, windowsHide: true, maxBuffer: 1024 * 1024, ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}) },
       (err, stdout, stderr) => {
         if (err && typeof (err as NodeJS.ErrnoException).code === 'string') {
           // ENOENT, EACCES, ...: the program could not be started at all.
@@ -30,7 +36,11 @@ export const nodeShellRunner: ShellRunner = (file, args, opts = {}) =>
     );
   });
 
-/** Quote a value for a single-quoted PowerShell string literal. */
+/**
+ * Quote a value for a single-quoted PowerShell string literal. PowerShell also treats the
+ * "smart" single quotes U+2018 to U+201B as quote characters, so those are doubled too. Prefer
+ * passing values through `ShellOptions.env` (`$env:NAME` in the script), which needs no quoting.
+ */
 export function psQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+  return `'${value.replace(/['‘-‛]/g, (q) => q + q)}'`;
 }

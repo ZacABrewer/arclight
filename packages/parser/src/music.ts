@@ -1,7 +1,7 @@
 import type { AudioSourceKind, ReleaseAudioEvaluation, ReleaseKind } from '@arclight/shared';
 import { mergeAudioQuality, parseAudioQuality, stripAudioExtension, type ParsedAudioQuality } from './audio-quality.js';
 import { parseReleaseHash } from './hash.js';
-import { prepare } from './normalize.js';
+import { prepare, clampPath, clampTitle } from './normalize.js';
 import { parseAudiobookPath, type ParsedAudiobookRelease } from './audiobook.js';
 
 // Music release names. Two families:
@@ -514,6 +514,7 @@ function normalizeSeparators(name: string): string {
 
 /** Parse a music release name ("Artist - Album (2020) [FLAC]", "Artist-Album-WEB-2020-GRP"). */
 export function parseMusicRelease(raw: string): ParsedMusicRelease {
+  raw = clampTitle(raw);
   const { title: noExt, extension } = stripAudioExtension(raw.trim());
   const releaseTitle = prepare(noExt);
   const releaseHash = parseReleaseHash(releaseTitle);
@@ -600,6 +601,7 @@ export function parseAudioPath(path: string, domain?: 'music'): ParsedMusicRelea
 /** Audiobook paths: see `parseAudiobookPath` (Author/Title, Author/Series/Book N - Title). */
 export function parseAudioPath(path: string, domain: 'audiobook'): ParsedAudiobookRelease;
 export function parseAudioPath(path: string, domain: 'music' | 'audiobook' = 'music'): ParsedMusicRelease | ParsedAudiobookRelease {
+  path = clampPath(path);
   if (domain === 'audiobook') return parseAudiobookPath(path);
   const parts = path.split(/[\\/]+/).filter(Boolean);
   const fileName = parts[parts.length - 1] ?? path;

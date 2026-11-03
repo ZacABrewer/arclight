@@ -143,6 +143,8 @@ import { matchRelease, type LibrarySnapshot, type MovieMatch, type SeriesMatch }
 import { pendingReleases, releaseSearchResults, releaseSearchState } from './schema.js';
 import { animeSeasonQueries, wantsSeasonSearch } from './season-search.js';
 import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, type ItemOutcome } from './search-status.js';
+import { readReleaseFile } from '../indexers/release-file.js';
+import { pruneMap } from '../../bounded-map.js';
 
 // The release pipeline: decide on releases (RSS, searches, pushes), act on the decisions
 // (grab / park as pending), and run the scheduled searches.
@@ -151,6 +153,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const RELEASE_CACHE_TTL_MS = 30 * MINUTE;
+/** Releases remembered for grabbing by guid (several large searches' worth). */
+export const RELEASE_CACHE_MAX = 5000;
 const CLIENT_RETRY_MINUTES = 5;
 const MAX_REDIRECTS = 5;
 
@@ -1690,6 +1694,7 @@ export class ReleasesService {
         const res = await this.fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout(this.downloadTimeoutMs) });
         if (res.status >= 300 && res.status < 400) {
           const location = res.headers.get('location');
+          await res.body?.cancel().catch(() => undefined);
           if (!location) break;
           if (location.startsWith('magnet:')) {
             if (release.protocol === 'usenet') throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
@@ -1702,8 +1707,10 @@ export class ReleasesService {
           throw new ReleasesError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${res.status})`);
         }
         if (!res.ok) throw new ReleasesError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytes.length === 0) throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
+        // Capped read (torrent 10 MB, NZB 50 MB); the timeout covers the body too.
+        const bytes = await readReleaseFile(res, release.protocol === 'usenet' ? 'usenet' : 'torrent').catch((err: unknown) => {
+          throw new ReleasesError('DOWNLOAD_FAILED', `Downloading the release failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        });        if (bytes.length === 0) throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
         return release.protocol === 'usenet' ? { nzb: bytes } : { torrentFile: bytes };
       }
       throw new ReleasesError('DOWNLOAD_FAILED', 'Too many redirects downloading the release');
@@ -1718,8 +1725,12 @@ export class ReleasesService {
 
   private cacheReleases(releases: readonly ReleaseResource[]): void {
     const now = Date.now();
-    for (const [key, v] of this.releaseCache) if (now - v.at > RELEASE_CACHE_TTL_MS) this.releaseCache.delete(key);
-    for (const r of releases) this.releaseCache.set(`${r.indexerId}:${r.guid}`, { release: r, at: now });
+    for (const r of releases) {
+      const key = `${r.indexerId}:${r.guid}`;
+      this.releaseCache.delete(key); // re-insert so the newest entries are kept when capping
+      this.releaseCache.set(key, { release: r, at: now });
+    }
+    pruneMap(this.releaseCache, RELEASE_CACHE_MAX, (v) => now - v.at > RELEASE_CACHE_TTL_MS);
   }
 
   private cachedRelease(indexerId: number, guid: string): ReleaseResource | undefined {

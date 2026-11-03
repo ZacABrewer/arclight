@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decode, decodePrefix, encode, rawDictValues, type BDict } from './bencode.js';
+import { decode, decodePrefix, encode, getInt, rawDictValues, type BDict } from './bencode.js';
 import { TorrentEngineError } from './errors.js';
 
 const b = (s: string) => Buffer.from(s, 'latin1');
@@ -13,6 +13,13 @@ describe('bencode decode', () => {
 
   it('decodes huge integers as bigint', () => {
     expect(decode(b('i123456789012345678901234567890e'))).toBe(123456789012345678901234567890n);
+  });
+
+  it('getInt treats integers outside the safe range as missing (DATA-55)', () => {
+    const d = decode(b('d1:ai9007199254740993e1:bi9007199254740991e1:ci-9007199254740993ee')) as BDict;
+    expect(getInt(d, 'a')).toBeUndefined(); // Number() would round it to ...992
+    expect(getInt(d, 'b')).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getInt(d, 'c')).toBeUndefined();
   });
 
   it('decodes byte strings as Buffers', () => {

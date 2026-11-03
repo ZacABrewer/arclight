@@ -50,12 +50,16 @@ in this order:
 
 1. **Session cookie** `al_session` (from `POST /auth/login` or `POST /setup/admin`):
    httpOnly, `SameSite=Lax`, `Secure` when the request arrived over https (directly or via
-   `X-Forwarded-Proto`). Only a sha256 of the token is stored. Sessions last
+   `X-Forwarded-Proto` from a trusted proxy), or when its host is the host of an https Application
+   URL. Only a sha256 of the token is stored. Sessions last
    `sessionDays` (default 30) and slide forward once past half their lifetime;
    `rememberMe: false` gives a browser-session cookie and a one-day server lifetime.
 2. **HTTP Basic** credentials, only when the auth method is `basic`.
 3. **API key** in the `X-Api-Key` header or `?apikey=` query. One key per install, generated
-   on first boot and stored in the `security` settings section. It grants admin access.
+   on first boot and stored in the `security` settings section. It grants admin access. Prefer the
+   header: a key in the URL can end up in proxy logs, browser history and `Referer` headers
+   (Arclight masks it in its own logs and sends `Referrer-Policy: same-origin`). The query form
+   stays for *arr-compatible tools.
 4. **Arclight app device token**: `Authorization: Bearer alt_…` from `POST /app/sign-in` or
    `POST /app/pair` ([app](#app-arclight-player-app-sign-in)). Checked first; a token that is not
    valid is anonymous.
@@ -67,13 +71,53 @@ in this order:
 Anonymous requests to protected routes get `401 {"error","code":"UNAUTHORIZED"}` (plus
 `WWW-Authenticate: Basic` when the method is `basic`). Unknown routes answer 404.
 
+**Client addresses.** `req.ip` (rate limits, the audit log, sessions) and the forwarded protocol
+and host come from `X-Forwarded-For` / `-Proto` / `-Host` only when the connection is from a
+trusted proxy: `ARCLIGHT_TRUSTED_PROXIES` (default: loopback and private ranges; a CIDR list,
+`private`, a hop count, `all` or `none`). The chain is read from the right and stops at the first
+untrusted hop.
+
+**Sign-in limits.** Every sign-in path (login, Basic, media-server sign-in, the second factor,
+passkeys, app sign-in, pairing and device codes, re-authentication, password change and the
+headless setup retry) shares one limiter: 10 failures per address and account, 50 per address,
+and, per account from any address after 10 failures, a delay doubling from 30 seconds up to
+5 minutes. A refusal is `429 RATE_LIMITED` with `Retry-After` (seconds). The counters are in
+memory and capped at 10,000 entries each.
+
+**Narrow credentials.** App device tokens and API keys below `admin` scope may not write
+`COMMAND_WRITE_ROUTES` (`hook.ts`): `POST /config/import`, `POST /system/backup/restore/upload`,
+`POST /system/backup/restore/:id`, `PUT /settings/backup`, `PUT /subtitle/settings`,
+`PUT /settings/solver` and `PUT /settings/vpn`, or create, change or test a `custom-script`
+notification: `403 FORBIDDEN`. Reading those settings is unchanged. An app token may write them
+for 10 minutes after confirming its user's password with `POST /app/reauth` `{ "password" }`
+(`200 { "expiresAt" }`; a wrong password is `403 INVALID_CREDENTIALS`, rate-limited like a
+sign-in, audited as `app.device.reauth`). Until then the answer is
+`403 {"code":"REAUTH_REQUIRED"}` (not 401: the token stays valid), so the app can ask for the
+password and retry. The confirmation belongs to that device and is kept in memory. App tokens idle for 90 days
+stop working (`401`; the device is removed, audited as `app.device.expired`).
+
+**Portal-only hostnames.** On a public-portal hostname with `portalOnly` on, an admin signed in
+by session, Basic, app token or the local-address rule gets `403 {"code":"PORTAL_ONLY_HOST"}`
+on routes without `config.access` (admin-only routes). Public routes, portal routes and API keys
+answer as on any other hostname.
+
+**Response headers.** Every response carries `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: same-origin`, `X-Frame-Options: SAMEORIGIN` and a `Content-Security-Policy`
+(`frame-ancestors 'self'`; HTML pages also restrict scripts to `'self'`). A route that sets its own
+policy keeps it. `Strict-Transport-Security: max-age=15552000` is sent on https requests whose host
+is the host of an https Application URL.
+
 **First launch.** Until an admin account exists, every route answers
 `403 {"code":"SETUP_REQUIRED"}`, whatever the credentials (the API key included), except
 `GET /auth/status`, `GET /setup/status`, `POST /setup/admin`, `POST /setup/complete` and
 `GET /system/ping` (and `/ping` on the compat surface). `/api/v3`, `/metrics` and the event
 socket are closed too. `GET /auth/status` reports `adminExists`; `needsSetup` stays true while
 no admin exists. `POST /setup/admin` and the headless `POST /setup/complete` create the admin
-only while none exists (409 afterwards); `POST /setup/rootfolder` needs the signed-in admin.
+only while none exists (409 afterwards), one at a time: of two racing calls only one creates an
+admin. The headless call validates its body, creates the admin, and only then creates root folders
+on disk; if a later step fails, repeating the call with the same `username`/`password` signs in as
+that admin (rate-limited like a sign-in) and finishes. `POST /setup/rootfolder` needs the
+signed-in admin.
 
 **Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
 `GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `POST /app/sign-in`, `POST /app/pair`, `POST /app/device-codes`, `POST /app/device-codes/poll`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
@@ -111,6 +155,26 @@ filtered: non-admins get their own request and issue events (everyone's with Vie
 View issues), library events with the Library, Calendar or Wanted area and queue, download,
 history, release and import events with the Activity area; nothing else.
 
+Local bypass and self-requests: with "Require for local addresses" off, local peers skip sign-in,
+but never a request this Arclight process made to itself. The server records the local address and
+port of every outbound socket it opens and refuses the bypass when an incoming request's TCP peer
+is one of them; every request made through the safe fetch (`@arclight/net`) also carries
+`x-arclight-outbound: 1`, and a request with that header never gets the bypass (this covers a loop
+back through a reverse proxy).
+
+WebSocket limits (all sockets: `/events`, `/log/stream`, `/engine-agent/events`): frames from the
+client may be at most 64 KiB (larger ones close the socket with code 1009); a client that falls
+more than 1 MB behind is closed with code 1013 and should reconnect; at most 10 sockets are open
+per user (or per credential type for keys), and the next one is closed with 1013.
+
+The folder browser (`GET /filesystem`, `POST /filesystem/mkdir`, compat `GET /api/v3/filesystem`)
+is a secret route: personal keys need the admin scope, and app device tokens cannot call it.
+
+Push subscriptions (`POST /push/subscription`): `endpoint` must be `https://`. For non-admins it
+must be on a browser push service (`fcm.googleapis.com`, `android.googleapis.com`,
+`*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`); admins may use any
+public HTTPS host. Local addresses are refused (`400`).
+
 Media-server sign-in (`POST /auth/login` with a media-server method, `POST /auth/plex/poll`)
 never signs in an admin (`403`), and only ever creates `role: 'user'` accounts with no app
 access and no local password (`localPassword: false`). `PUT /user/:id` refuses to promote such
@@ -129,24 +193,25 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | POST | `/auth/login` | public | `{method?, username, password, rememberMe?}` → `Session`; sets the cookie. `method` (`LoginMethod`): `local` (default) checks Arclight's password; `jellyfin`/`emby`/`mediaServer` sign in against Settings > Media server (`AuthenticateByName`), creating a local `user` with the default permissions of Settings > Requests on first sign-in (`createUsersOnLogin`). 401 `INVALID_CREDENTIALS`, 400 (not configured / wrong kind), 403 (login disabled, account disabled), 429 |
-| POST | `/auth/plex/pin` | public | Plex sign-in step 1 → `PlexPin` `{id, code, authUrl}`; open `authUrl` in a popup (requests module) |
-| POST | `/auth/plex/poll` | public | `PlexPollRequest` `{id, rememberMe?}` → 202 `{pending: true}` until approved, then `Session` + cookie. Allowed for accounts already linked, or (Plex server configured, `createUsersOnLogin`) accounts that can reach that server; 403 otherwise |
+| POST | `/auth/plex/pin` | public | Plex sign-in step 1 → `PlexPin` `{id, code, authUrl}` and an HttpOnly `al_plex` cookie (15 minutes) binding the pin to this browser; open `authUrl` in a popup (requests module). 429 over the per-address limit |
+| POST | `/auth/plex/poll` | public | `PlexPollRequest` `{id, rememberMe?}` with the `al_plex` cookie from step 1 → 202 `{pending: true}` until approved, then `Session` + cookie; the pin is spent. 403 without the matching cookie, for a pin already used or expired, or for a pin started by a signed-in link. Allowed for accounts already linked, or (Plex server configured, `createUsersOnLogin`) accounts that can reach that server; 403 otherwise. 429 over the per-address or per-pin limit |
 | POST | `/auth/logout` | public | Ends the session and clears the cookie (204) |
 | GET | `/auth/status` | public | `{needsSetup, authMethod, authenticated, session}` |
 | GET | `/auth/me` | any | Current `Session` (`user`, `via`, `isAdmin`, `expiresAt`) |
 | GET | `/auth/sessions` | any | The caller's active sessions (`current` marks this one) |
 | DELETE | `/auth/sessions/:id` | any | Revoke one of the caller's sessions |
 | GET | `/user/me` | any | The signed-in user |
-| PUT | `/user/me` | any | Update own display name, email, avatar, settings |
+| PUT | `/user/me` | any | Update own display name, email, avatar, settings. A changed email is unverified (not used for sign-in matching); 409 `EMAIL_IN_USE` when another account has it |
 | PUT | `/user/me/password` | any | `{currentPassword, newPassword}`; ends the caller's other sessions (204) |
 | GET | `/user` | admin | List users |
 | GET | `/user/:id` | admin | One user |
 | POST | `/user` | admin | Create (201); 409 `USER_EXISTS` (usernames are case-insensitive) |
 | PUT | `/user/:id` | admin | Update; `password` resets it and ends the user's sessions; 409 `LAST_ADMIN` on demoting the only admin |
 | DELETE | `/user/:id` | admin | Delete (204); not yourself, not the only admin |
-| GET | `/settings/security` | admin | `{method, requireForLocal, sessionDays, apiKey}` |
+| GET | `/settings/security` | admin | `{method, requireForLocal, sessionDays, apiKey}`; `apiKey` is masked (`********` and its last four characters) |
 | PUT | `/settings/security` | admin | Update `{method, requireForLocal, sessionDays}` |
 | POST | `/settings/security/apikey` | admin | Regenerate the API key → `{apiKey}` |
+| POST | `/settings/security/apikey/reveal` | admin session | The full API key → `{apiKey}`; recorded in the audit log as `apikey.reveal`. Personal API keys (any scope) and app tokens get 403 |
 | GET | `/setup/status` | public | `{needsSetup, steps[{id, complete, optional}]}` for admin, tmdb, rootFolders, downloadClient, indexer |
 | POST | `/setup/admin` | public | Create the first admin and sign it in (201); 409 once a user exists |
 | POST | `/setup/rootfolder` | setup admin | `{path, mediaType, createIfMissing}`: create the directory if asked, add the root folder (existing path returns it) |
@@ -175,6 +240,10 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 | GET | `/log/file/:name` | Download one of them |
 | GET | `/log/stream` | WebSocket: one `LogRecord` JSON per message |
 
+Secrets are masked (`********`) before a record reaches the ring buffer, the log files or stdout:
+query values such as `apikey`, `token`, `sig`, `code` and `state`, fields such as `authorization`,
+`cookie`, `x-api-key` and `password`, and `name=value` pairs that look like credentials.
+
 ## health
 
 | Method | Path | Purpose |
@@ -193,7 +262,7 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET (WebSocket) | `/events` | Live feed: `hello` on connect, then every event bus message |
+| GET (WebSocket) | `/events` | Live feed: `hello` on connect, then every event bus message. A browser `Origin` must be one that may use credentials (see CORS under [app](#app-arclight-player-app-sign-in)), else the upgrade is `403`. The credentials are checked again every 30 seconds: a signed-out or revoked one closes the socket with `1008` |
 
 ## settings
 
@@ -925,19 +994,19 @@ Changes are announced as an `applicationUpdate` notification (`previousVersion`/
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/indexer` | List indexers |
+| GET | `/indexer` | List indexers. `settings.apiKey`, definition fields of type `password` and secret-named fields (cookie, passkey, ...) read as `********` |
 | GET | `/indexer/schema` | Indexer templates (Torznab, Newznab) |
 | GET | `/indexer/categories` | Standard category list |
 | GET | `/indexer/status` | Failure/backoff status per indexer |
 | GET | `/indexer/stats` | `?days=1..90` (default 30): `IndexerStats`, queries / grabs / failures / mean response ms per indexer and per UTC day, plus totals |
 | GET | `/indexer/health` | `?days=1\|7\|30` (default 7): `IndexerHealth`, per indexer queries, failure rate, mean / p95 response ms, mean results, zero-result share, grabs, last success / failure (with message), backoff state and a verdict (`healthy`, `slow`, `failing`, `unused`, `noResults`); the thresholds are in the response |
-| POST | `/indexer/test` | Test unsaved indexer settings (any implementation) |
+| POST | `/indexer/test` | Test unsaved indexer settings (any implementation). With `id` (a saved indexer), masked secrets are tested with the stored values |
 | POST | `/indexer/testall` | Test every saved indexer |
-| GET | `/indexer/:id` | One indexer |
+| GET | `/indexer/:id` | One indexer (secrets masked as in the list) |
 | GET | `/indexer/:id/caps` | Capabilities (`?refresh=true` refetches) |
 | GET | `/indexer/:id/download` | `?url=` a result link of that indexer: streams the `.torrent` / `.nzb` as an attachment, or `302` to a magnet. Goes through the indexer (definition login cookies, proxies). Links must be a recent search result or on one of the indexer's hosts (400 otherwise); 404 `UNAVAILABLE` when the indexer no longer has it |
 | POST | `/indexer` | Create |
-| PUT | `/indexer/:id` | Update |
+| PUT | `/indexer/:id` | Update; a masked `apiKey` or definition field keeps the stored value |
 | DELETE | `/indexer/:id` | Delete |
 | GET | `/search` | Manual search across enabled indexers; returns a release list (results stay grabbable for 30 min) |
 | POST | `/search/grab` | `SearchGrabRequest` `{guid, indexerId, force?, downloadClientId?}`: re-runs the decision engine on the cached search result and grabs it. No library match → 409 `NO_MATCH` unless `force`, which sends it untracked to the default client of its protocol (unknown in the queue). 404 when the result is no longer cached |
@@ -1217,13 +1286,25 @@ portal-only hostname answers `302 /` for any page that is not a portal page, `/l
 `/setup`. The hostname comes from `Host` or `X-Forwarded-Host` (forwarded headers are always
 trusted). This hides the admin UI; it is not access control (the api checks every call). While enabled,
 `GET /public/portal` → `PublicPortal {enabled, title, applicationUrl, message,
-allowAnonymousDiscover, loginMethods {local, mediaServer {kind, name?} | null, plex}}` is
+allowAnonymousDiscover, loginMethods {local, mediaServer {kind, name?} | null, plex}, portalUrl,
+playerUrl}` (the public addresses as in `GET /playback/me`) is
 public (signed-in callers may always read it). With `allowAnonymousDiscover` too, every
 `GET /discover/*` route and `GET /discoverslider` answer anonymous visitors (as a user without
 permissions: `canRequest: false`, no requests or watchlist). Anonymous calls are rate-limited
 per client IP by a token bucket (burst 120, 2 tokens / s) answering
 `429 {code: "RATE_LIMITED"}` with `Retry-After`; signed-in callers are not limited.
 Requesting always needs sign-in.
+
+`PUT /settings/requests` answers `400` `AddressClashResponse` `{error, code: 'address-clash',
+clashes: [{field: 'paths' | 'hosts', value}]}` when a portal path or hostname is already a
+player address (`PlayerSettings.address`, below); the player settings refuse portal addresses
+the same way. Page loads on a player path or hostname get `<meta name="arclight-player">` with a
+`PlayerDocument` (`{mode: "path", base}` or `{mode: "host", playerOnly}`), which the web maps
+onto `/player`. A player-only hostname answers `302 /` for any page that is not a player page,
+`/login` or `/setup`. A portal hostname wins over a player hostname. While
+`PlayerSettings.enabled` is false no page gets the player tag: extra player paths and the root
+of a player hostname answer `302 /player` (the "player is off" page), and a player-only
+hostname sends every page but `/player`, `/login` and `/setup` there too.
 
 ### Discover (TMDB proxy with Arclight status)
 
@@ -1344,10 +1425,10 @@ back as `********` (send it back to keep it). Links are stored in the user's set
 | GET | `/settings/mediaserver` | `MANAGE_SETTINGS` → `MediaServerSettings` (masked) |
 | PUT | `/settings/mediaserver` | `MANAGE_SETTINGS`: replace the section (URL must be http(s)) |
 | POST | `/settings/mediaserver/test` | `MANAGE_SETTINGS`; optional body = unsaved settings → `MediaServerTestResult` (`System/Info` / Plex `identity`) |
-| POST | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`. `{username, password}` (Jellyfin/Emby `AuthenticateByName`) or `{pinId}` (a completed Plex PIN; also sets `plexToken`) → `UserRequestSettings`. 403 bad credentials, 409 account linked to another user |
+| POST | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`. `{username, password}` (Jellyfin/Emby `AuthenticateByName`) or `{pinId}` (a completed Plex PIN the caller created, with its `al_plex` cookie; also sets `plexToken`) → `UserRequestSettings`. 403 bad credentials or a pin from another browser or account, 409 account linked to another user |
 | DELETE | `/user/:id/mediaserver/link` | Self or `MANAGE_USERS`: remove the link → `UserRequestSettings` |
-| POST | `/user/me/mediaserver/plex/pin` | Signed-in user: start a Plex PIN for linking (no sign-in) → `PlexPin` |
-| POST | `/user/me/mediaserver/plex/poll` | Signed-in user, `{id}`: 202 `{pending: true}` until approved, then links the Plex account to the caller (stores the token and `plexToken`; no new session) → `UserRequestSettings`; 409 when linked to another user |
+| POST | `/user/me/mediaserver/plex/pin` | Signed-in user: start a Plex PIN for linking (no sign-in) → `PlexPin`, plus the `al_plex` cookie binding it to this browser and user |
+| POST | `/user/me/mediaserver/plex/poll` | Signed-in user, `{id}`, with the `al_plex` cookie (403 otherwise, or when another user created the pin): 202 `{pending: true}` until approved, then links the Plex account to the caller (stores the token and `plexToken`; no new session) → `UserRequestSettings`; 409 when linked to another user |
 | GET | `/user/import/mediaserver` | `MANAGE_USERS` → `MediaServerUser[]` (Jellyfin/Emby users, or Plex friends) with `linkedUserId` |
 | POST | `/user/import/mediaserver` | `MANAGE_USERS`: `MediaServerImportRequest` `{externalIds?}` (absent = all) → `MediaServerImportResult`; creates linked `user`s with default permissions, skips linked/disabled ones |
 | POST | `/request/digest` | `MANAGE_REQUESTS`: send the admin digest now → `RequestsDigestResult` |
@@ -1373,7 +1454,7 @@ Jellyfin/Emby/Plex). With no server at all the library decides, as before.
 | GET | `/user/:id/requestsettings` | `UserRequestSettings`: personal notification agents, Plex token (masked), watchlist sync, `autoRequestFromWatchlist`, `mediaServerLink` (token masked) (self or `MANAGE_USERS`) |
 | PUT | `/user/:id/requestsettings` | Replace them; a masked token keeps the stored one; `mediaServerLink` is ignored (use the link routes) |
 | POST | `/user/:id/requestsettings/test` | Send a test through each enabled personal agent → `UserNotificationTestResult` |
-| GET | `/settings/requests` | `RequestsSettings` (any signed-in user; the web reads the 4K and partial-request flags) |
+| GET | `/settings/requests` | `RequestsSettings`. `MANAGE_SETTINGS` / `MANAGE_USERS`: the whole section. Other signed-in users get only the request-form switches (4K movie/series `enabled`, `partialRequestsEnabled`, `enableSpecialEpisodes`, `hideAvailable`, `hideRequested`); every other field comes back at its default |
 | PUT | `/settings/requests` | `MANAGE_SETTINGS`: replace the section |
 
 `RequestsSettings` also carries `applicationUrl` (public URL used for links in
@@ -1539,6 +1620,23 @@ rescans the `podcast` libraries containing a podcast folder after podcast downlo
 | POST | `/mediaserver/test` | `MediaServerTestRequest` (unsaved form; `id` + masked key reuses the stored key) → `MediaServerProbeResult` |
 | POST | `/mediaserver/:id/test` | `MediaServerProbeResult`: `{ok, serverName, version, libraries[]}` or `{ok: false, message, code}` (`System/Info` + `Library/VirtualFolders`, Plex `/` + `library/sections`, Audiobookshelf `/status` + `/api/libraries`) |
 | GET | `/mediaserver/:id/users` | `MediaServerAccountResource[]` `{id, name, isAdmin, isDisabled, lastActivityAt}` (Jellyfin/Emby `Users`, Plex server `accounts`); 502 when the server fails |
+
+**Tag sync** (module `apps/api/src/modules/tag-sync`, admin only). Per Jellyfin/Emby/Plex server, `tagSync`
+on `MediaServerInput` (`MediaServerTagSync` `{enabled, mode: all|selected, tagIds, prefix, lockTags}`) writes Arclight's
+movie and series tags to the matching items (Jellyfin/Emby item `Tags`, Plex labels, best-effort) as `prefix + label`.
+Ownership is kept in `media_server_tag_syncs`; only labels Arclight wrote are ever removed, and labels the item already
+had are recorded as `preexisting` and never removed. Jellyfin/Emby items whose `Tags` lock Arclight added (it was not in
+`LockedFields` before) are kept in `media_server_tag_locks`; remove-all unlocks only those. Passes that run back to back
+(Sync now during a run) record their changed items together in `lastChanged`. Runs after tag changes (30 s debounce, at most 5 min), nightly
+(`MediaServerTagSync`, `50 3 * * *`) and on demand; 4 requests a second per server, reads in batches of 50.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/mediaserver/:id/tag-sync` | `TagSyncStatus` `{running, lastRunAt, lastChanged, lastUnmatched, lastError}`; 404 unknown server, 400 Audiobookshelf |
+| POST | `/mediaserver/:id/tag-sync/preview` | Full dry run of the saved settings → `TagSyncPreview` `{changes[] (max 500: entityType, entityId, title, remoteItemId, add[], remove[]), totalChanges, unmatched, truncated}`; 400 disabled server, 502 when the server fails |
+| POST | `/mediaserver/:id/tag-sync/run` | 202; starts a full sync (single-flight per server) |
+| POST | `/mediaserver/:id/tag-sync/forget` | 204; sync turned off, Keep: deletes the ownership and lock rows, the labels and locks stay |
+| POST | `/mediaserver/:id/tag-sync/remove-all` | 202; sync turned off, Remove: removes the owned labels and the tag locks Arclight added, then deletes the rows |
 
 **Clients** (`@arclight/media-servers`, native fetch, no db): `createMediaServerClient({kind,
 url, apiKey, fetch?, timeoutMs?})` → `info()`, `libraries()`, `users()`, `listItems(mediaType)`,
@@ -2503,7 +2601,7 @@ choices (`GET/PUT /push/preferences`); delivery and the relay are described in
 |---|---|---|
 | GET | `/mobile/pairing` | `{ serverUrl, pushEnabled }`: the Application URL (Settings > Requests) or null, and false when the server runs with `ARCLIGHT_PUSH_RELAY=off`. The web UI encodes `arclight-admin://pair?url=<encoded base URL>` in its QR code (`mobilePairingUri`; the app still reads the older `arclight://pair` form), using its own origin when `serverUrl` is null |
 | GET | `/mobile/devices` | The caller's devices (MobileDeviceResource: id, userId, relayDeviceId, platform `ios`/`android`, deviceName, appVersion, appId, createdAt, lastSeenAt, lastError). `?all=true`: every user's, with `userName` (admins; others `403 FORBIDDEN`) |
-| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion?, appId? }`). `appId` is the app's bundle ID (for example `com.moviemethat.arclight.admin`); it is stored and sent to the relay with every notification so the relay picks the right APNs topic. Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource |
+| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion?, appId? }`). `appId` is the app's bundle ID (for example `com.moviemethat.arclight.admin`); it is stored and sent to the relay with every notification so the relay picks the right APNs topic. Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource. A device registered to another user moves only when the request carries that device's current `relaySecret` (the same phone, signed in as someone else) or comes from an admin; otherwise `409 CONFLICT` |
 | DELETE | `/mobile/devices/:id` | Unpair. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/mobile/devices/:id/test` | Send a test notification now: `{ ok, outcome: sent \| removed \| rate_limited \| failed \| disabled, message? }`. A device the relay reports gone is deleted (`removed`). One test per device per 10 s, else `429 RATE_LIMITED` |
 
@@ -2579,17 +2677,21 @@ minutes per address, and keep out of the request audit (they record `login.succe
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/app/sign-in` | Public. `AppSignInRequest` `{username, password, deviceName (1-100), platform ('ios' \| 'android'), appVersion (1-40), totp? (6 digits), recoveryCode?}`. Answers `AppSignInResponse` `{token, deviceId, user (as GET /user/me), server: {name: 'Arclight', version}}` |
-| POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
+| POST | `/app/pair-codes` | Signed-in browser session. A one-time code for the caller: `201` `AppPairCode` `{code (8 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789), expiresAt (in 5 minutes), serverUrl, qr: "arclight://pair?server=<encoded serverUrl>&code=<code>"}`. `serverUrl` is the origin of the first player hostname (`PlayerSettings.address.hosts`, with the base path), else the Application URL (Settings > Requests), else the request's origin plus base path. A new code replaces the caller's previous one; 10 codes per 10 minutes per user, then `429`. Needs player access |
 | POST | `/app/pair` | Public. `AppPairRequest` `{code, deviceName, platform, appVersion}`; the code is upper-cased and spaces and dashes are dropped (`abcd-efgh` works). Answers `AppSignInResponse`. A code works once: any try uses it up. Unknown codes count as failed sign-ins |
-| POST | `/app/device-codes` | Public; TV sign-in (the device-code flow). `AppDeviceCodeRequest` `{deviceName, platform ('android-tv' \| 'android' \| 'ios'), appVersion?, serverUrl?}`. `201` `AppDeviceCode` `{userCode (8 characters, shown as ABCD-EFGH), pollToken (secret), expiresAt (in 10 minutes), intervalSec (5), verifyUrl}`. `verifyUrl` is `<serverUrl, else the Application URL, else the request's origin>/player/link`. 10 codes per 10 minutes per address, then `429` |
+| POST | `/app/device-codes` | Public; TV sign-in (the device-code flow). `AppDeviceCodeRequest` `{deviceName, platform ('android-tv' \| 'android' \| 'ios'), appVersion?, serverUrl?}`. `201` `AppDeviceCode` `{userCode (8 characters, shown as ABCD-EFGH), pollToken (secret), expiresAt (in 10 minutes), intervalSec (5), verifyUrl}`. `verifyUrl` is `<playerUrl>/link` when the owner set a player address (see `GET /playback/me` `playerUrl`), else `<serverUrl, else the Application URL, else the request's origin>/player/link`. 10 codes per 10 minutes per address, then `429` |
 | POST | `/app/device-codes/poll` | Public. `{pollToken}` → `{status: 'pending'}`, `{status: 'expired'}` (also unknown or already used), or once approved `{status: 'approved', ...AppSignInResponse}` (method `device-code`; `android-tv` is stored as `android`). The token is issued once; polling faster than every 2 seconds is `429` |
 | POST | `/app/device-codes/approve` | Signed-in browser session; needs player access. `{userCode}` (case, spaces and dashes ignored) → `{deviceName, platform}`; the TV's next poll gets a token for the approving user. Unknown, expired or already approved codes are `404 DEVICE_CODE_INVALID` and count as failed sign-ins. Audited as `app.device-code.approve` |
 | GET | `/app/devices` | The caller's devices: `AppDevice[]` `{id, userId, name, platform, appVersion, createdAt, lastSeenAt, lastIp, method ('password' \| 'pairing' \| 'device-code'), current (this request's token)}`. Admins: `?all=true` for every user's, `?userId=` for one user's, each with `userName`; others `403 FORBIDDEN` |
 | DELETE | `/app/devices/:id` | Remove a device; its token stops working at once. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/app/sign-out` | With a device token: removes that device. `204`; `400 NOT_APP` without a device token |
 
-CORS: every origin is reflected with credentials, so the app's origins (`capacitor://localhost`,
-`https://localhost`, `http://localhost`) may send `Authorization`; `Content-Disposition`,
+CORS: the app's origins (`capacitor://localhost`, `https://localhost`, `http://localhost`) get
+`Access-Control-Allow-Origin` without credentials, so they may send `Authorization: Bearer`. Cookies
+(`Access-Control-Allow-Credentials: true`) are allowed only for the request's own host, the
+Application URL, the portal hostnames (while the portal is on) and `ARCLIGHT_CORS_ORIGINS`; a GET
+with signed link parameters (`sig`) is answered without credentials for any origin (cast
+receivers). Any other origin gets no CORS headers. `Vary: Origin` is always sent. `Content-Disposition`,
 `Content-Length`, `Content-Range`, `Accept-Ranges`, `Retry-After`, `X-Arclight-Backend` and
 `X-Arclight-Transcode` are exposed to scripts.
 
@@ -2619,10 +2721,10 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server), video (Movies & TV on, default true), videoMaxStreams (live remux/transcode slots, default 3), videoMaxStreamsPerUser (default 1)}` (admin) |
-| PUT | `/settings/player` | Save `PlayerSettings` (admin) |
+| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server), video (Movies & TV on, default true), videoMaxStreams (live remux/transcode slots, default 3), videoMaxStreamsPerUser (default 1), address `PublicPlayerAddress` {paths (extra player paths, one segment each, like portal paths), hosts `PlayerHost[]` {hostname, playerOnly (default true)}}}` (admin) |
+| PUT | `/settings/player` | Save `PlayerSettings` (admin). A path or hostname the request portal already uses is `400` `AddressClashResponse` `{error, code: 'address-clash', clashes: [{field: 'paths' \| 'hosts', value}]}` (paths compare case-insensitively, hostnames ignore case and a trailing dot) |
 | POST | `/settings/player/engine-test` | `PlayerEngineTestRequest` `{jellyfinServerId?}`: connects to that Jellyfin/Emby server (or the first enabled one) and tries to resolve one library audio file. Answers `PlayerEngineTestResult` `{ok, serverId, serverName, version, sample: {fileId, resolved, itemId} \| null, message}` (`200` also when `ok` is false). Admin |
-| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine). Any signed-in user |
+| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine), `playerUrl` (the player's public address: `https://<first player hostname><base path>` with the Application URL's scheme, else the Application URL plus the first extra player path or `/player`) and `portalUrl` (the same for the request portal while the public portal is on, else the Application URL plus `/portal`). Without an Application URL or a hostname, both are the address the request came in on plus `/player` or `/portal`. `canRequest` (the account may request something; false on a profile that is not the owner) and `appHome` (where **Open Arclight** goes: `/` for admins, else the first page of the account's app access, `/requests` or `/issues` with those permissions, null for none and on a profile that is not the owner) and `appUrl` (where the rest of Arclight answers, origin plus base path: the request's address, or the Application URL when the request came in on a player hostname, also while the player is off; null without one) feed the account menus. Any signed-in user |
 | GET | `/playback/item/:itemKey` | `PlayableItem`: title, subtitle (artist or authors), context (album, or `Series, book N`), artwork URL, parts, chapters, ReplayGain. `404` when unknown or without a file |
 | POST | `/playback/items` | `PlaybackItemsRequest` `{itemKeys}` (1 to 200): `PlayableItem[]` in the order asked, without duplicates; unknown keys, items without a file and turned-off sections are left out |
 | POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?, download?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads). With the Jellyfin engine each link carries `backend` (who will serve that part) and the answer `backendInUse` (`jellyfin` only when every part resolved on Jellyfin, else `arclight`) |
@@ -2721,7 +2823,35 @@ codecs, size, HDR, audio and subtitle tracks), `versions` (best first), `chapter
 | GET | `/playback/video/home` | `VideoHome` `{continueWatching, nextUp, recentMovies, recentEpisodes, genres}` |
 | GET | `/playback/movies`, `/playback/series` | `VideoBrowseQuery` `{search, sort ('title' \| 'added' \| 'year' \| 'rating'), order, genre, letter, watched ('all' \| 'unwatched' \| 'watched'), page, pageSize}` → `{items, total, page, pageSize}`; only titles with a file. Cards carry `badges` (`4K`, `HDR`, `DV`) |
 | GET | `/playback/movies/:id`, `/playback/series/:id` | A movie with its versions and the caller's progress; a series with seasons, episodes with files, played counts and `nextUp` |
-| POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}` |
+| POST | `/playback/watched` | `VideoWatchedRequest` `{itemKeys, or seriesId (+ seasonNumber?), played}` → `{updated}`. Only items the active profile may browse count: keys of missing titles or titles above its content limit are skipped, and a restricted series updates nothing |
+
+#### Adaptive video (HLS)
+
+Contract: `packages/shared/src/video-hls.ts`. A session request may add `deliveries`
+(`['hls', 'progressive']`: what the client can play; absent means `progressive` only, the 0.23
+behaviour), `bandwidthKbps` (the client's measured throughput), `avoidDirect` and `deviceKey` (a
+stable id per device; slot limits count per user and device). When the client lists `hls`, the
+stream is a remux or transcode and `videoDelivery` in `PlayerSettings` is `hls`, the session
+answers `delivery: 'hls'`, a `sessionId` and `hls` `{masterUrl, rungs, startRung, healthUrl}`;
+`url` is the master playlist (`application/vnd.apple.mpegurl`). Auto plays a file directly only
+when `bandwidthKbps` covers its bitrate with headroom (else `reasons` has `bitrate`). Remote
+sessions are capped at `remoteVideoMaxBitrateKbps` and the height follows the cap.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/stream/hls/:sessionId/master.m3u8` | Master playlist: one variant per rung (`BANDWIDTH`, `CODECS`, `RESOLUTION`, `VIDEO-RANGE`), best first. Signed like other stream links; `403` for a bad or expired signature, `404` for an ended session |
+| GET | `/stream/hls/:sessionId/:rung/index.m3u8` | Media playlist of a rung: the whole film as a VOD list of fMP4 segments (about 6 s, cut at the file's keyframes) with `EXT-X-MAP` |
+| GET | `/stream/hls/:sessionId/:rung/init.mp4` | The rung's init segment |
+| GET | `/stream/hls/:sessionId/:rung/:n.m4s` | Segment `n` (`video/iso.segment`). Encoded on demand: a request for the segment being encoded waits for it, a far one restarts the encoder there. `X-Arclight-Encode` carries the encode speed and how far ahead it is. `409 RUNG_UNSUSTAINABLE` when the server cannot keep up with this rung (switch down); `503` with `Retry-After` while busy or still encoding |
+| GET | `/playback/video/session/:sessionId/health` | `VideoHlsHealth` `{encodeSpeed, aheadSec, maxSustainableRung, hwaccel}` |
+| DELETE | `/playback/video/session/:sessionId` | End the session now: stops the encoder and frees the slot (`204`; `404` when unknown or another user's) |
+
+Encoders pause when they are 180 s ahead of the player and resume at 90 s; an encoder idle for
+2 minutes stops, and a session idle for 15 minutes is removed with its segments. The segment
+cache (`videoCacheGb`, at `videoCachePath` or `<config>/cache/player/hls`) drops the segments
+furthest behind the playheads first. Audio in HLS is AAC, AC-3 or E-AC-3 at 48 kHz; a forced
+picture subtitle is burned in when subtitles are off. `ProgressReport` takes optional `stalls`,
+`stallMs` and `startupMs` so clients can report stall statistics.
 
 `/playback/search` adds `movies` and `series` when Movies & TV is on; `/playback/continue` stays
 audio only (video resumes from `/playback/video/home`). Progress uses the normal progress routes.
@@ -2851,6 +2981,10 @@ A source app that refuses Arclight (wrong key) or does not answer is reported as
 
 Implemented in `apps/api/src/modules/audit`. Every mutating `/api/v1` request is recorded by an
 `onResponse` hook; `login.success` / `login.failed` come from the auth service. Admin only.
+Request bodies are stored with secret-named keys masked (passwords, tokens, API keys, cookies,
+recovery codes, PINs, `pass`, `authkey`, ...). Routes whose bodies carry codes keep out of the request
+audit and record their own entry: sign-in, the 2FA routes (`user.2fa.enable`, `user.2fa.disable`,
+`user.2fa.recovery`), household PINs, app sign-in and pairing.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -2898,7 +3032,7 @@ table (`DiscordBotSettings`); saving restarts the bot.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId}`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
+| GET/PUT | `/settings/discordbot` | Admin. `DiscordBotSettings` `{enabled, botToken, guildId, requestChannelId, adminRoleId, allowUnlinkedSearch}`; `allowUnlinkedSearch` (default `false`, API only) lets users who have not run `/link` use `/search`; `botToken` reads back as `********` and sending the mask keeps it; ids are Discord snowflakes; enabling needs a token |
 | GET | `/discordbot/status` | Admin. `DiscordBotStatus`: `state` (`disabled`/`connecting`/`connected`/`reconnecting`/`error`), bot user, `connectedAt`, `lastError`, `reconnectAttempts`, `commandsRegistered`, `linkedUsers` |
 | POST | `/discordbot/test` | Admin. Optional `DiscordBotSettings` body (mask = stored token). `GET /users/@me` with the token, then posts a test embed to `requestChannelId` when set → `DiscordBotTestResult` |
 | POST | `/user/me/discord/link-code` | Signed-in user (not API key). One-time 8-character code valid 10 minutes (a newer code replaces older ones) → `DiscordLinkCode` `{code, expiresAt, linkedDiscordUserId}` |
@@ -2915,8 +3049,11 @@ original response is edited):
 | `/link <code>` | Links the caller to the Arclight user who created the code |
 | `/request <title> [year] [4k]` | TMDB multi-search; up to 5 matches as buttons. A click creates the request as the linked user (`requests.create`, series request all seasons), so permissions, quotas, approval policies and content caps apply. Unlinked users are told to create a code under Profile > Discord |
 | `/status [title]` | The linked user's requests (up to 10), filtered by title |
-| `/search <title>` | TMDB matches with library / request status (normal and 4K) |
+| `/search <title>` | TMDB matches with library / request status (normal and 4K). Needs a linked account unless `allowUnlinkedSearch` is on |
 | `/pending` | Up to 5 pending requests with Approve/Decline buttons. Allowed for linked users with `MANAGE_REQUESTS` (who act as themselves) and for members holding `adminRoleId` (who act as the system; `modifiedBy` stays empty). Checked again on each click |
+
+Title lookups (`/search` and the search step of `/request`, both TMDB calls) are limited to 5
+per Discord user per minute; further calls get a "searching too often" reply.
 
 Request events (`created`, `approved`, `completed`) are posted as embeds to `requestChannelId`
 through `POST /channels/{id}/messages` with the bot token. Health check
@@ -2927,13 +3064,13 @@ fatal close code.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/torrent` | Engine settings plus `effectiveDownloadsRoot` and `resumeDir`. The transport options `encryption` (`preferred` / `required` / `disabled`), `tcp`, `utp`, `ipv6` and `webSeedConnectionsPerTorrent` are filled with the engine defaults when never saved. Also `diskGuard` (boolean, default true), `maxActiveChecks` (1 to 16, default 2) and `metadataTimeoutMinutes` (0 to 10080, default 60, 0 = never) |
-| PUT | `/settings/torrent` | Any subset; omitted keys keep their stored value. Applied live: limits, queue, `diskGuard`, `maxActiveChecks`, `metadataTimeoutMinutes`, `encryption` and `webSeedConnectionsPerTorrent` at once; `tcp` / `utp` / `ipv6` re-open the sockets on the same port; `dht` restarts the engine |
+| GET | `/settings/torrent` | Engine settings plus `effectiveDownloadsRoot` and `resumeDir`. The transport options `encryption` (`preferred` / `required` / `disabled`), `tcp`, `utp`, `ipv6`, `webSeedConnectionsPerTorrent`, `localPeers` and `localTrackers` (both default false: loopback / LAN peers from trackers, DHT and PEX, and loopback / LAN trackers and web seeds, are refused) are filled with the engine defaults when never saved. Also `diskGuard` (boolean, default true), `maxActiveChecks` (1 to 16, default 2) and `metadataTimeoutMinutes` (0 to 10080, default 60, 0 = never) |
+| PUT | `/settings/torrent` | Any subset; omitted keys keep their stored value. Applied live: limits, queue, `diskGuard`, `maxActiveChecks`, `metadataTimeoutMinutes`, `encryption`, `webSeedConnectionsPerTorrent`, `localPeers` and `localTrackers` at once (the last one for torrents started afterwards); `tcp` / `utp` / `ipv6` re-open the sockets on the same port; `dht` restarts the engine |
 | GET | `/torrent/status` | Engine state, bound address/port, VPN binding, `dhtNodes`, `dht6Nodes`, `utpConnections`, `peers`, `encryptedPeers`, `encryptedPeerRatio` (0..1), rates, counts per state. While the VPN tunnel guard limits the engine: `tunnelGuard` (`downloadLimit`, `uploadLimit`, `connectionLimit`; bytes/s, null = not limited). With the disk guard on: `diskGuard` (`downloadLimit` in bytes/s or null when not limiting, `writeRate`, `backlogBytes`, `backlogLimitBytes`, `checksActive`, `checksQueued`). `limits` holds the configured `maxConnections`, `maxConnectionsPerTorrent`, `maxActiveDownloads` and `maxActiveSeeds` |
 | GET | `/torrent/torrents` | `?id=&category=`: detailed torrents. Each peer has `encrypted` and `transport` (`tcp` / `utp`); each torrent has `webSeeds` (url, rate, downloaded, active requests, failures, `retryAt`, `lastError`), `superSeeding` and `limits` |
 | POST | `/torrent/:id/recheck` | Re-hash the payload |
 | POST | `/torrent/:id/pause` / `resume` | Pause / resume (resume is 409 while the VPN kill switch holds) |
-| POST | `/torrent/:id/move` | `{ savePath }` |
+| POST | `/torrent/:id/move` | `{ savePath }`: an absolute folder inside the engine downloads folder, a built-in client's save or category folder, or a library root folder (compared by real path); anything else is 400 |
 | POST | `/torrent/:id/priority` | `{ files?: [{ index, priority 0..7 }], sequential? }` |
 | POST | `/torrent/:id/limits` | `{ uploadLimit?, downloadLimit?, peerUploadLimit?, peerDownloadLimit? }` in bytes/s (0 = unlimited); omitted keys keep their value; persisted in the resume data |
 | POST | `/torrent/:id/superseed` | `{ enabled }`: BEP 16 super-seeding |
@@ -2962,9 +3099,10 @@ trust a payload whose file sizes match (fast-resume data with every piece) and q
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/engineagent` | `{ enabled, path, engineRunning }` |
-| PUT | `/settings/engineagent` | `{ enabled? }` (admin) |
-| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the API key in `X-Api-Key` (a browser session is refused, 401). Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
+| GET | `/settings/engineagent` | `{ enabled, acceptApiKey, path, engineRunning, token, apiKeyLastUsedAt }` (admin; sessions and admin-scoped keys only, since it holds the agent token) |
+| PUT | `/settings/engineagent` | `{ enabled?, acceptApiKey? }` (admin) |
+| POST | `/settings/engineagent/token` | Replaces the agent token; returns the settings (admin) |
+| * | `/engine-agent/*` | The engine agent protocol (see [REMOTE-ENGINE.md](REMOTE-ENGINE.md#protocol)) over this instance's built-in engine, for another Arclight's `remoteEngine` download client. Requires `engineAgent.enabled` (else 404) and the agent token in `X-Agent-Token` or `Authorization: Bearer` (a browser session is refused, 401). The token opens no other route. While `acceptApiKey` is on (instances upgraded from 0.23 with the agent on), the API key is also accepted and answers carry `x-agent-deprecation: api-key`. Repeated wrong tokens from one address get 429 `rate-limited` with `Retry-After`. Errors use the agent shape `{ error, code }`. `PUT /engine-agent/listen-port` is always 409: this instance's port follows its own torrent/VPN settings |
 | GET (WS) | `/engine-agent/events` | Agent event stream (`hello`, `added`, `removed`, `stateChange`, `completed`, `metadata`, `listenPort`) |
 
 The `remoteEngine` download client kind has settings `url`, `token` (write-only, masked like

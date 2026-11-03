@@ -122,6 +122,19 @@ describe('config import round trip', () => {
 });
 
 describe('config import planning', () => {
+  it('refuses filesystem-root, relative and nested root folders and writes nothing', async () => {
+    const db = await seededDb();
+    for (const bad of ['/', 'relative/x']) {
+      const out = importDocument(db, { rootFolders: { [bad]: { mediaType: 'series' } } });
+      expect(out.applied).toBe(false);
+      expect(out.errors.map((e) => e.path)).toEqual([`rootFolders.${bad}.path`]);
+    }
+    const nested = importDocument(db, { rootFolders: { '/tv/inner': { mediaType: 'series' } } });
+    expect(nested.applied).toBe(false);
+    expect(nested.errors[0]?.message).toMatch(/may not nest/);
+    expect(db.select().from(rootFolders).all().map((r) => r.path).sort()).toEqual(['/movies', '/tv']);
+  });
+
   it('dry run reports the diff and writes nothing', async () => {
     const db = await seededDb();
     const out = importDocument(
@@ -212,6 +225,21 @@ describe('config import planning', () => {
     const out = importDocument(db, { tags: ['a'], rootFolders: {}, delayProfiles: { b: { order: 1, tags: ['b'] } } });
     expect(out.changes.filter((c) => c.kind === 'tags').map((c) => c.key).sort()).toEqual(['a', 'b']);
     expect(db.select().from(tags).all().map((t) => t.label).sort()).toEqual(['a', 'b']);
+  });
+
+  it('refuses catastrophic regex patterns in formats and release profiles (DATA-34)', async () => {
+    const db = await createTestDb();
+    const out = importDocument(db, {
+      customFormats: {
+        Evil: {
+          includeWhenRenaming: false,
+          specifications: [{ implementation: 'releaseTitle', name: 't', negate: false, required: false, fields: { pattern: '(a+)+$' } }],
+        },
+      },
+      releaseProfiles: { Bad: { enabled: true, required: ['/(\\w|\\d)+$/'], ignored: ['cam'], tags: [] } },
+    });
+    expect(out.applied).toBe(false);
+    expect(out.errors.map((e) => e.path).sort()).toEqual(['customFormats.Evil.specifications[0]', 'releaseProfiles.Bad.required[0]']);
   });
 
   it('reports invalid entries with their path', async () => {
@@ -307,6 +335,15 @@ describe('secret helpers', () => {
     for (const k of ['username', 'host', 'sortKey', 'tokenExpiresAt', 'publicKey', 'keywords']) expect(isSecretKey(k), k).toBe(false);
   });
 
+  it('recognises 2FA, PIN and tracker secrets without catching harmless *Code / *seed names', () => {
+    for (const k of ['recoveryCode', 'recoveryCodes', 'totp', 'otp', '2fa', 'twoFactor', 'pin', 'profilePin', 'user_pin', 'pass', 'torrentPass', 'seed', 'authkey', 'authKey', 'secretkey', 'totpCode']) {
+      expect(isSecretKey(k), k).toBe(true);
+    }
+    for (const k of ['code', 'languageCode', 'countryCode', 'statusCode', 'episodeCode', 'hasPin', 'bypass', 'spin', 'crossSeed', 'cross-seed', 'seedRatio', 'seedTime', 'compass', 'passes']) {
+      expect(isSecretKey(k), k).toBe(false);
+    }
+  });
+
   it('masks nested secrets and resolves them back', () => {
     const stored = { a: { password: 'p', list: [{ token: 't' }] }, b: 1 };
     const masked = maskSecrets(stored);
@@ -314,6 +351,18 @@ describe('secret helpers', () => {
     const missing: string[] = [];
     expect(resolveMasks(masked, stored, (p) => missing.push(p))).toEqual(stored);
     expect(missing).toEqual([]);
+  });
+
+  it('never copies __proto__ keys from imported JSON (DATA-51)', () => {
+    const hostile = JSON.parse('{"__proto__": {"polluted": true}, "a": {"__proto__": {"password": "x"}, "token": "' + SECRET_MASK + '"}}');
+    const masked = maskSecrets(hostile) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(masked)).toBe(Object.prototype);
+    expect(Object.keys(masked)).toEqual(['a']);
+    const resolved = resolveMasks(hostile, { a: { token: 'stored' } }, () => undefined) as Record<string, Record<string, unknown>>;
+    expect(Object.getPrototypeOf(resolved)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(resolved['a'])).toBe(Object.prototype);
+    expect(resolved).toEqual({ a: { token: 'stored' } });
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 
   it('diffs leaves with paths', () => {

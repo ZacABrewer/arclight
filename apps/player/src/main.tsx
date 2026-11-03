@@ -47,7 +47,7 @@ async function boot(): Promise<void> {
   const tv = services.tv ? startTvRuntime(router) : null;
 
   // arclight://pair?server=…&code=… (the web player's QR code, opened by the camera app or a
-  // link): go to sign-in, which pairs straight away.
+  // link): go to sign-in, which shows the server and pairs only once the user accepts it.
   const openLink = (url: string) => {
     const link = parsePairingLink(url);
     if (!link) return;

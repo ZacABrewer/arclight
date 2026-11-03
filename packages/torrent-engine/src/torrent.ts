@@ -1,12 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
+import { BanList } from './ban-list.js';
 import { Bitfield } from './bitfield.js';
 import { addressKey, hostFamily, normalizeHost, type PeerAddress } from './compact.js';
 import type { DHT } from './dht/dht.js';
 import { errorMessage, TorrentEngineError } from './errors.js';
 import type { MagnetLink } from './magnet.js';
-import { type Metainfo, metainfoFromInfo } from './metainfo.js';
+import { type Metainfo, metainfoFromInfo, sanitizeSegment } from './metainfo.js';
+import { isLocalAddress, isLocalUrlHost } from './net-guard.js';
 import { Choker } from './peer/choker.js';
 import { openPeerStream } from './peer/connect.js';
 import { type BlockRequest, PeerConnection, type PeerTransport } from './peer/connection.js';
@@ -14,6 +16,7 @@ import {
   LOCAL_EXT,
   type MetadataMessage,
   MetadataAssembler,
+  MetadataHashError,
   metadataPiece,
   PEX_FLAG,
   type PexPeer,
@@ -221,6 +224,14 @@ interface Candidate {
 }
 
 const MAX_CANDIDATES = 2000;
+/** Failed pieces a peer IP / web seed may take part in before it is banned. */
+const BAN_STRIKES = 3;
+const MAX_STRIKE_ENTRIES = 4096;
+
+function formatBan(ms: number): string {
+  const h = ms / 3_600_000;
+  return h >= 1 ? `${Math.round(h)} h` : `${Math.max(1, Math.round(ms / 60_000))} min`;
+}
 
 /** One torrent: metadata, storage, peers, trackers, DHT/PEX discovery and its state machine. */
 export class Torrent extends EventEmitter<TorrentEvents> {
@@ -292,12 +303,21 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   private readonly receiving = new Set<Promise<void>>();
   /** Active time at which the wait for metadata (re)started (see metadataTimeoutMs). */
   private metadataWaitFrom = 0;
+  /** Who sent blocks of each unverified piece (peer keys and web seed keys). */
+  private readonly pieceSources = new Map<number, Set<string>>();
+  /** Hash-check failures each source took part in (peer IP or web seed key). */
+  private readonly strikes = new Map<string, number>();
+  /** IPs banned for a while for sending bad data (hash failures or bad metadata). */
+  private readonly bannedIps: BanList;
+  /** Pieces being hashed or written as a whole (peer verify or a web seed piece). */
+  private readonly finishing = new Map<number, Promise<unknown>>();
 
   constructor(
     private readonly ctx: TorrentContext,
     init: TorrentInit,
   ) {
     super();
+    this.bannedIps = new BanList({ now: () => this.ctx.now() });
     this.infoHash = init.infoHash;
     this.infoHashHex = init.infoHash.toString('hex');
     this.metainfo = init.metainfo;
@@ -330,14 +350,25 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       this.completedAt = r.completedAt;
       this.metadataWaitFrom = r.metadataWaitFromMs ?? 0;
     }
-    for (const p of init.magnet?.peers ?? []) this.addCandidate(p, 'manual');
+    // x.pe peers come with the magnet (from an indexer, not the admin): the address policy applies.
+    for (const p of init.magnet?.peers ?? []) this.addCandidate(p, 'manual', false);
     this.lastState = this.state;
   }
 
   // ---- public accessors ---------------------------------------------------------------------
 
   get name(): string {
-    return this.metainfo?.name ?? this.magnet?.name ?? this.infoHashHex;
+    if (this.metainfo) return this.metainfo.name;
+    // The magnet dn= is free text from whoever made the link; it becomes a folder name.
+    const dn = this.magnet?.name;
+    if (dn) {
+      try {
+        return sanitizeSegment(dn);
+      } catch {
+        // "..", "a/b" and the like: fall back to the info-hash
+      }
+    }
+    return this.infoHashHex;
   }
 
   get savePath(): string {
@@ -640,10 +671,46 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     }
   }
 
-  /** Adds peers from outside (tracker, DHT, PEX, manual). PEX flags may advertise uTP. */
-  addPeers(addrs: readonly PexPeer[], source: PeerSource = 'manual'): void {
-    for (const a of addrs) this.addCandidate(a, source);
+  /**
+   * Adds peers from outside (tracker, DHT, PEX, manual). PEX flags may advertise uTP.
+   * `trusted` peers skip the local-address policy; by default only peers added by hand
+   * (`manual`, through the API) are trusted.
+   */
+  addPeers(addrs: readonly PexPeer[], source: PeerSource = 'manual', trusted = source === 'manual'): void {
+    for (const a of addrs) this.addCandidate(a, source, trusted);
     if (this.networking) this.connectMore();
+  }
+
+  /**
+   * Loopback / LAN / other non-public peer addresses handed out by trackers, the DHT or other
+   * peers are dropped unless `allowLocalPeers` is on: otherwise anyone could point the engine
+   * at hosts on the local network.
+   */
+  private peerAddressAllowed(host: string, trusted: boolean): boolean {
+    return trusted || this.ctx.settings().allowLocalPeers || !isLocalAddress(host);
+  }
+
+  /** True while this IP is banned for sending bad data. */
+  isBannedIp(host: string): boolean {
+    return this.bannedIps.has(host);
+  }
+
+  /** When the ban on this IP ends (ms epoch), or null when it is not banned. */
+  bannedUntil(host: string): number | null {
+    return this.bannedIps.bannedUntil(host);
+  }
+
+  /**
+   * Bans an IP for this torrent for a while (1 h, doubling per repeat up to 24 h): drops its
+   * candidates and closes its connections. Trackers / DHT / PEX can hand it out again later.
+   */
+  private banIp(host: string, reason: string): void {
+    const ip = normalizeHost(host);
+    const ms = this.bannedIps.ban(ip);
+    if (ms === 0) return;
+    this.emit('warning', `banned peer ${ip} for ${formatBan(ms)}: ${reason}`);
+    for (const [key, c] of this.candidates) if (c.addr.host === ip && !c.connected) this.candidates.delete(key);
+    for (const p of [...this.peers.values()]) if (normalizeHost(p.conn.address.host) === ip) p.conn.destroy();
   }
 
   /** False for addresses we cannot reach from the configured bind address / IPv6 setting. */
@@ -656,9 +723,10 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     return !local || hostFamily(local) === fam;
   }
 
-  private addCandidate(peer: PexPeer, source: PeerSource): void {
+  private addCandidate(peer: PexPeer, source: PeerSource, trusted: boolean): void {
     const addr: PeerAddress = { host: normalizeHost(peer.host), port: peer.port };
     if (addr.port <= 0 || addr.port > 65535 || this.ctx.isBlocked(addr.host) || !this.reachable(addr.host)) return;
+    if (this.bannedIps.has(addr.host) || !this.peerAddressAllowed(addr.host, trusted)) return;
     const key = addressKey(addr);
     const utp = ((peer.flags ?? 0) & PEX_FLAG.utp) !== 0;
     const existing = this.candidates.get(key);
@@ -697,7 +765,11 @@ export class Torrent extends EventEmitter<TorrentEvents> {
         retryBaseSec: settings.trackerRetrySec,
         now: this.ctx.now,
       });
-      this.trackers.on('peers', (peers) => this.addPeers(peers, 'tracker'));
+      // A tracker that is itself on the LAN (allowed through allowLocalTrackers) hands out LAN
+      // peers: those are kept, so a private LAN tracker setup works without allowLocalPeers.
+      this.trackers.on('peers', (peers, url) =>
+        this.addPeers(peers, 'tracker', this.ctx.settings().allowLocalTrackers && isLocalUrlHost(url)),
+      );
       this.trackers.on('error', () => {});
       this.trackers.on('warning', (url, msg) => this.emit('warning', `tracker ${url}: ${msg}`));
       this.trackers.start();
@@ -729,6 +801,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     for (const c of this.candidates.values()) c.connected = false;
     // Half-finished pieces would otherwise sit in the cache until the torrent runs again.
     this.storage?.releaseCache();
+    this.pieceSources.clear();
     if (trackers) {
       if (announce) await trackers.stop(3000).catch(() => {});
       trackers.close();
@@ -741,7 +814,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
         if (!dht.listening || !this.networking) return;
         try {
           const res = await dht.announce(this.infoHash, this.ctx.listenPort());
-          if (this.networking) this.addPeers(res.peers, 'dht');
+          if (this.networking) this.addPeers(res.peers, 'dht', false);
         } catch (err) {
           this.emit('warning', `dht announce failed: ${errorMessage(err)}`);
         }
@@ -762,7 +835,15 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const halfOpenShare = Math.max(4, Math.ceil(settings.maxHalfOpenConnections / 2));
     const now = this.ctx.now();
     const list = [...this.candidates.entries()]
-      .filter(([k, c]) => !c.connected && !c.banned && c.nextAttemptAt <= now && !this.connecting.has(k))
+      .filter(([k, c]) => {
+        if (c.connected || c.banned || c.nextAttemptAt > now || this.connecting.has(k)) return false;
+        // banned since it was added, or the blocklist changed: forget it
+        if (this.bannedIps.has(c.addr.host) || this.ctx.isBlocked(c.addr.host)) {
+          this.candidates.delete(k);
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => a[1].failures - b[1].failures);
     for (const [key, c] of list) {
       // canOpen last: it spends one of the session's per-second connection tokens
@@ -810,7 +891,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.connecting.delete(key);
     if (opened.fellBack) c.plainOnly = true;
     if (opened.transport === 'utp') c.utp = true;
-    if (!this.networking || this.closed) {
+    if (!this.networking || this.closed || this.bannedIps.has(c.addr.host) || this.ctx.isBlocked(c.addr.host)) {
       opened.stream.destroy();
       c.connected = false;
       return;
@@ -822,6 +903,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   /** Takes over a stream from the session listener (handshake bytes still unread). */
   acceptIncoming(socket: Duplex, address: PeerAddress, info: IncomingInfo = { transport: 'tcp', encrypted: false }): boolean {
     if (!this.networking || this.peerCount >= this.ctx.settings().maxConnectionsPerTorrent) return false;
+    if (this.bannedIps.has(address.host) || this.ctx.isBlocked(normalizeHost(address.host))) return false;
     const key = addressKey(address);
     if (this.peers.has(key)) return false;
     const conn = this.makeConnection(socket, true, address, info);
@@ -886,7 +968,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
           });
       }
       if (!this.metainfo && hs.metadataSize && conn.remoteExtensionId('ut_metadata')) {
-        if (this.assembler.setSize(hs.metadataSize)) this.requestMetadata(p);
+        if (this.assembler.setSize(hs.metadataSize, p.key)) this.requestMetadata(p);
       }
     });
     conn.on('bitfield', (bits) => {
@@ -910,7 +992,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     });
     conn.on('metadata', (msg) => this.onMetadataMessage(p, msg));
     conn.on('pex', (msg) => {
-      if (this.ctx.settings().pex && !this.metainfo?.private) this.addPeers(msg.added, 'pex');
+      if (this.ctx.settings().pex && !this.metainfo?.private) this.addPeers(msg.added, 'pex', false);
     });
     conn.on('close', () => this.onPeerClose(p));
   }
@@ -1062,12 +1144,17 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   /** Stores a block from a peer or web seed (`key`), verifying the piece once complete. */
   private receiveBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
-    const p = this.storeBlock(key, index, begin, data, refill);
-    this.receiving.add(p);
-    const done = (): void => {
-      this.receiving.delete(p);
-    };
-    void p.then(done, done);
+    return this.track(this.storeBlock(key, index, begin, data, refill));
+  }
+
+  /** Adds a write / verify in progress to `receiving` (awaited on close). */
+  private track<T>(p: Promise<T>): Promise<T> {
+    const settled = p.then(
+      () => {},
+      () => {},
+    );
+    this.receiving.add(settled);
+    void settled.then(() => this.receiving.delete(settled));
     return p;
   }
 
@@ -1075,7 +1162,15 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const picker = this.picker;
     const storage = this.storage;
     if (!picker || !storage || storage.have.get(index)) return;
+    if (this.finishing.has(index)) {
+      // a web seed is checking / writing this whole piece: the block is not needed
+      picker.release(index, begin, key);
+      return;
+    }
     const res = picker.markReceived(index, begin, key);
+    let sources = this.pieceSources.get(index);
+    if (!sources) this.pieceSources.set(index, (sources = new Set()));
+    sources.add(key);
     this.downloadedSession += data.length;
     this.downMeter.add(data.length);
     for (const other of res.cancelFrom) this.peers.get(other)?.conn.cancel(index, begin, data.length);
@@ -1087,20 +1182,123 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       return;
     }
     if (!res.pieceComplete) return;
-    const ok = await storage.verifyPiece(index);
+    // A web seed piece for this index was being checked meanwhile: if it got written, done.
+    const busy = this.finishing.get(index);
+    if (busy) await busy;
+    // Not skipped when closing: close() waits for received blocks to finish verifying.
+    if (storage.have.get(index)) return;
+    const verify = storage.verifyPiece(index);
+    this.finishing.set(index, verify);
+    let ok: boolean;
+    try {
+      ok = await verify;
+    } finally {
+      if (this.finishing.get(index) === verify) this.finishing.delete(index);
+    }
     if (this.closed) return;
+    const from = this.pieceSources.get(index);
+    this.pieceSources.delete(index);
     if (!ok) {
       this.hashFailures++;
       picker.pieceFailed(index);
       this.emit('warning', `piece ${index} failed hash check`);
+      this.strikeSources(from);
       for (const other of this.peers.values()) this.requestBlocks(other);
       return;
     }
+    await this.pieceDone(index);
+  }
+
+  /** A piece passed its hash check and is on disk: tell the picker and the peers. */
+  private async pieceDone(index: number): Promise<void> {
+    const picker = this.picker;
+    if (!picker) return;
     picker.pieceVerified(index);
     this.emit('verified', index);
     if (picker.piecePriority(index) > 0) this.wantedLeft = Math.max(0, this.wantedLeft - 1);
     for (const other of this.peers.values()) if (!other.haveAll && other.conn.handshaken) other.conn.have(index);
     if (this.wantedLeft === 0) await this.onComplete();
+  }
+
+  /**
+   * Takes a whole piece from a web seed. It is hashed in memory and written only when it
+   * matches; a bad piece is dropped (nothing on disk changes) and counts a strike against the
+   * seed. True when the piece was written or is no longer needed.
+   */
+  private async storeWebPiece(key: string, index: number, data: Buffer): Promise<boolean> {
+    const storage = this.storage;
+    if (!this.picker || !storage || this.closed) return false;
+    if (storage.have.get(index) || this.finishing.has(index)) return true;
+    let release = (): void => {};
+    const gate = new Promise<void>((r) => (release = r));
+    this.finishing.set(index, gate);
+    try {
+      this.downloadedSession += data.length;
+      this.downMeter.add(data.length);
+      const ok = await storage.pieceMatches(index, data);
+      if (this.closed) return false;
+      if (!ok) {
+        this.hashFailures++;
+        this.emit('warning', `piece ${index} from a web seed failed hash check`);
+        this.strikeSources(new Set([key]));
+        return false;
+      }
+      try {
+        await storage.writeVerifiedPiece(index, data);
+      } catch (err) {
+        if (!this.closed) this.fail(err);
+        return false;
+      }
+    } finally {
+      this.finishing.delete(index);
+      release();
+    }
+    if (this.closed) return true;
+    this.pieceSources.delete(index);
+    await this.pieceDone(index);
+    return true;
+  }
+
+  /**
+   * Counts a failed piece against everyone who sent part of it. A peer IP or web seed in
+   * BAN_STRIKES failed pieces is banned (web seed: disabled) for this torrent.
+   */
+  private strikeSources(sources: Set<string> | undefined): void {
+    if (!sources) return;
+    for (const key of sources) {
+      const web = key.startsWith('web:');
+      const who = web ? key : this.peerIp(key);
+      if (!who) continue;
+      const n = (this.strikes.get(who) ?? 0) + 1;
+      this.strikes.delete(who);
+      if (n < BAN_STRIKES) {
+        if (this.strikes.size >= MAX_STRIKE_ENTRIES) {
+          const first = this.strikes.keys().next().value;
+          if (first !== undefined) this.strikes.delete(first);
+        }
+        this.strikes.set(who, n);
+        continue;
+      }
+      if (web) {
+        if (this.webSeeds?.disable(key)) {
+          this.emit('warning', `web seed disabled: ${n} pieces failed the hash check`);
+          if (this.webSeedPickerSeeds > 0) {
+            this.webSeedPickerSeeds--;
+            this.picker?.removeSeed();
+          }
+        }
+      } else this.banIp(who, `${n} pieces failed the hash check`);
+    }
+  }
+
+  /** The IP of a peer key (`host:port` / `[v6]:port`), from the live connection when there is one. */
+  private peerIp(key: string): string | null {
+    const live = this.peers.get(key);
+    if (live) return normalizeHost(live.conn.address.host);
+    const c = this.candidates.get(key);
+    if (c) return c.addr.host;
+    const m = /^\[?(.*?)\]?:\d+$/.exec(key);
+    return m?.[1] ? normalizeHost(m[1]) : null;
   }
 
   // ---- web seeds (BEP 19) ---------------------------------------------------------------------
@@ -1116,19 +1314,26 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       {
         metainfo: meta,
         layout: storage.layout,
-        pick: (key, count) => {
-          if (!this.picker || this.checking || this.moving || this.isComplete) return [];
-          return this.picker.pick(ALL_PIECES, key, count);
+        claimPiece: (key) => {
+          if (!this.picker || this.checking || this.moving || this.isComplete) return null;
+          return this.picker.claimPiece(key);
         },
         release: (index, begin, key) => this.picker?.release(index, begin, key),
-        deliver: (key, index, begin, data) => void this.receiveBlock(key, index, begin, data, () => {}),
+        deliverPiece: (key, index, data) => this.track(this.storeWebPiece(key, index, data)),
         wantsData: () => this.networking && !this.isComplete && !this.checking && !this.moving,
         consumeDownload: (bytes) => consumeAll([this.downloadBucket, ...this.ctx.downloadBuckets], bytes),
         localAddress: () => this.ctx.localAddress(),
         now: this.ctx.now,
       },
       urls,
-      { maxConnections: settings.webSeedConnectionsPerTorrent, retryMs: settings.webSeedRetryMs, userAgent: settings.userAgent, timeoutMs: settings.requestTimeoutMs },
+      {
+        maxConnections: settings.webSeedConnectionsPerTorrent,
+        retryMs: settings.webSeedRetryMs,
+        userAgent: settings.userAgent,
+        timeoutMs: settings.requestTimeoutMs,
+        // Web seed URLs come from the .torrent / magnet: LAN targets only with allowLocalTrackers.
+        allowPrivate: settings.allowLocalTrackers,
+      },
     );
     if (mgr.count === 0) return;
     this.webSeeds = mgr;
@@ -1344,9 +1549,21 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     }
     let info: Buffer | null;
     try {
-      info = this.assembler.add(msg.piece, msg.data);
+      info = this.assembler.add(p.key, msg.piece, msg.data);
     } catch (err) {
       this.emit('warning', errorMessage(err));
+      if (err instanceof MetadataHashError) {
+        for (const bad of err.peers) {
+          const ip = this.peerIp(bad);
+          if (ip) this.banIp(ip, 'sent metadata that does not match the info-hash');
+        }
+        // Start over with whoever is left (possibly at another peer's metadata size).
+        for (const other of this.peers.values()) {
+          if (other.conn.isClosed || !other.conn.remoteExtensionId('ut_metadata')) continue;
+          other.metadataInflight = 0;
+          this.requestMetadata(other);
+        }
+      }
       return;
     }
     if (info) void this.onMetadata(info);

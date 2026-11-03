@@ -12,6 +12,8 @@ import { DEVICE_SETTINGS_PATH } from '../../ui/phone-pages';
 import { DEFAULT_PLAYER_THEME } from '../../ui/profile-theme';
 import { readVideoQuality, VIDEO_QUALITIES, writeVideoQuality } from '../../video/quality';
 import { PROFILES_PATH } from '../tv-runtime';
+import { canAddProfile } from '@web/features/player/redesign/profile-session';
+import { ADD_PROFILE_HREF } from '../../ui/add-profile-row';
 import type { Translate } from '../format';
 
 // Settings (template "settings"): the category list on the left (focusing one selects it) and its
@@ -109,7 +111,8 @@ export function TvSettingsScreen() {
   const navigate = useNavigate();
   const settings = useProfileSettings();
   const save = useSaveProfileSettings();
-  const { profile, canManage } = useActiveProfile();
+  const { profile, profiles, canManage, max } = useActiveProfile();
+  const canAdd = canAddProfile({ canManage, count: profiles.length, max });
   const { active } = useAccounts();
   const [cat, setCat] = useState<SettingsCategory>('library');
   const [quality, setQuality] = useState<VideoQuality>(() => readVideoQuality(profile?.id));
@@ -215,6 +218,8 @@ export function TvSettingsScreen() {
       case 'profiles': {
         const out: SettingsOption[] = [{ kind: 'action', key: 'switchProfile', label: t('app.tv.switchProfile'), value: profile?.name ?? '', run: () => void navigate({ to: PROFILES_PATH }) }];
         if (canManage) out.push({ kind: 'action', key: 'manageProfiles', label: t('app.tv.settings.manageProfiles'), value: '', run: () => void navigate({ to: MANAGE_PROFILES_PATH }) });
+        // A single-profile account has no picker: its second profile is added here (features spec §1).
+        if (canAdd) out.push({ kind: 'action', key: 'addProfile', label: t('app.tv.addProfile'), value: '', run: () => void navigate({ href: ADD_PROFILE_HREF }) });
         return out;
       }
       case 'about': {
@@ -232,7 +237,7 @@ export function TvSettingsScreen() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, settings, quality, intro, themes.data, profile, canManage, active, locale, t, profileId]);
+  }, [cat, settings, quality, intro, themes.data, profile, canManage, canAdd, active, locale, t, profileId]);
 
   const intros: Partial<Record<SettingsCategory, string>> = {
     library: t('app.tv.settings.libraryIntro'),

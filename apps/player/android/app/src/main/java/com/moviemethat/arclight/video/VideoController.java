@@ -109,21 +109,50 @@ public final class VideoController {
     // ---- events ----------------------------------------------------------------------------------
 
     void progress(String itemKey, long positionMs, long durationMs, boolean paused) {
+        progress(itemKey, positionMs, durationMs, paused, null, 0);
+    }
+
+    /**
+     * A progress report with the item's playback health: rebuffers after startup, their total
+     * time, open to first frame ({@code stats}), and the bandwidth meter's estimate (kbit/s, 0 =
+     * none) that JS keeps as the next session's hint.
+     */
+    void progress(String itemKey, long positionMs, long durationMs, boolean paused, @Nullable StallTracker stats, long bandwidthKbps) {
         JSONObject o = new JSONObject();
         put(o, "itemKey", itemKey);
         put(o, "positionMs", positionMs);
         put(o, "durationMs", durationMs);
         put(o, "paused", paused);
+        putStats(o, stats, bandwidthKbps);
         emit("videoProgress", o, false);
     }
 
     void seekRequest(String itemKey, long positionMs, @Nullable Integer audioTrack, @Nullable String subtitle) {
+        seekRequest(itemKey, positionMs, audioTrack, subtitle, false);
+    }
+
+    /**
+     * {@code avoidDirect}: direct play kept stalling (StallTracker.fallbackDue); JS asks for a
+     * converted (HLS) stream at {@code positionMs} and answers with replaceVideoStream, or not at
+     * all when the quality is pinned. The player keeps playing meanwhile.
+     */
+    void seekRequest(String itemKey, long positionMs, @Nullable Integer audioTrack, @Nullable String subtitle, boolean avoidDirect) {
         JSONObject o = new JSONObject();
         put(o, "itemKey", itemKey);
         put(o, "positionMs", positionMs);
         if (audioTrack != null) put(o, "audioTrack", audioTrack);
         put(o, "subtitle", subtitle == null ? JSONObject.NULL : subtitle);
+        if (avoidDirect) put(o, "avoidDirect", true);
         emit("videoSeekRequest", o, false);
+    }
+
+    private static void putStats(JSONObject o, @Nullable StallTracker stats, long bandwidthKbps) {
+        if (stats != null) {
+            put(o, "stalls", stats.stalls());
+            put(o, "stallMs", stats.stallMs());
+            if (stats.startupMs() >= 0) put(o, "startupMs", stats.startupMs());
+        }
+        if (bandwidthKbps > 0) put(o, "bandwidthKbps", bandwidthKbps);
     }
 
     void next(String nextItemKey, boolean completed) {
@@ -134,12 +163,18 @@ public final class VideoController {
     }
 
     void closed(String itemKey, long positionMs, long durationMs, boolean completed, @Nullable String error) {
+        closed(itemKey, positionMs, durationMs, completed, error, null, 0);
+    }
+
+    void closed(String itemKey, long positionMs, long durationMs, boolean completed, @Nullable String error,
+            @Nullable StallTracker stats, long bandwidthKbps) {
         JSONObject o = new JSONObject();
         put(o, "itemKey", itemKey);
         put(o, "positionMs", positionMs);
         put(o, "durationMs", durationMs);
         put(o, "completed", completed);
         if (error != null) put(o, "error", error);
+        putStats(o, stats, bandwidthKbps);
         emit("videoClosed", o, true);
     }
 

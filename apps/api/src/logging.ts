@@ -1,7 +1,7 @@
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import pino, { type DestinationStream, type Logger } from 'pino';
-import { LOG_LEVEL_VALUES, listSearchTokens, matchesListSearch, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@arclight/shared';
+import { LOG_LEVEL_VALUES, SECRET_MASK, listSearchTokens, matchesListSearch, redactText, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@arclight/shared';
 import type { AppConfig } from './config.js';
 
 // Logger construction. Every record goes to three places through a pino multistream:
@@ -33,6 +33,66 @@ function levelName(value: unknown): LogLevel {
 }
 
 type Listener = (record: LogRecord) => void;
+
+// Secrets never reach a log destination (DATA-14): every line is scrubbed once before the ring
+// buffer, the file and stdout get it. Request URLs carry `?apikey=`, calendar and webhook
+// `token`s, signed-link `sig`s and OAuth `code`/`state`; other code may log headers or settings.
+/** Query parameters masked in any logged URL (on top of redactText's name=value rules). */
+const SECRET_QUERY = /([?&](?:apikey|api_key|token|access_token|sig|signature|code|state|password|passkey)=)[^&#\s"]+/gi;
+/** Object keys whose (string) value is masked wherever they appear in a record. */
+const SECRET_FIELD = /^(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-plex-token|password|passwd|apikey|api_key|token|secret|client_secret)$/i;
+
+function scrubString(value: string): string {
+  return redactText(value).replace(SECRET_QUERY, (_m, head: string) => `${head}${SECRET_MASK}`);
+}
+
+function scrubValue(value: unknown, depth: number): unknown {
+  if (typeof value === 'string') return scrubString(value);
+  if (depth > 8 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => scrubValue(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = SECRET_FIELD.test(key) && v !== null && v !== undefined && v !== '' ? SECRET_MASK : scrubValue(v, depth + 1);
+  }
+  return out;
+}
+
+const NEWLINE = '\n';
+
+/** One newline-terminated chunk of pino JSON lines with secrets masked; non-JSON lines as text. */
+export function scrubLogChunk(chunk: string): string {
+  return chunk
+    .split(NEWLINE)
+    .map((line) => {
+      if (line.trim() === '') return line;
+      try {
+        return JSON.stringify(scrubValue(JSON.parse(line), 0));
+      } catch {
+        return scrubString(line);
+      }
+    })
+    .join(NEWLINE);
+}
+
+/** Wraps destinations so a chunk is scrubbed once, however many destinations receive it. */
+function scrubbingStreams(destinations: DestinationStream[]): DestinationStream[] {
+  let lastIn: string | null = null;
+  let lastOut = '';
+  const scrub = (chunk: string): string => {
+    if (chunk !== lastIn) {
+      lastIn = chunk;
+      lastOut = scrubLogChunk(chunk);
+    }
+    return lastOut;
+  };
+  return destinations.map((d) => {
+    const flushable = d as DestinationStream & { flushSync?: () => void };
+    return {
+      write: (chunk: string) => d.write(scrub(chunk)),
+      ...(typeof flushable.flushSync === 'function' ? { flushSync: () => flushable.flushSync?.() } : {}),
+    };
+  });
+}
 
 /** Fixed-capacity ring of the most recent log records. Also a pino destination (`write`). */
 export class LogBuffer implements DestinationStream {
@@ -215,7 +275,8 @@ export class RotatingFileStream implements DestinationStream {
   }
 
   private open(): number {
-    const fd = openSync(this.path, 'a');
+    // Owner-only (logs can carry request details); the mode applies when the file is created.
+    const fd = openSync(this.path, 'a', 0o600);
     this.fd = fd;
     this.bytes = fstatSync(fd).size;
     return fd;
@@ -313,11 +374,10 @@ export function createLogger(config: Pick<AppConfig, 'logDir' | 'logLevel'>, opt
   } else stdout = pino.destination(1);
 
   // Streams accept everything; the logger's own level does the filtering.
-  const streams: pino.StreamEntry[] = [
-    { level: 'trace', stream: buffer },
-    { level: 'trace', stream: files },
-  ];
-  if (stdout) streams.push({ level: 'trace', stream: stdout });
+  const streams: pino.StreamEntry[] = scrubbingStreams(stdout ? [buffer, files, stdout] : [buffer, files]).map((stream) => ({
+    level: 'trace',
+    stream,
+  }));
 
   const log = pino({ level: config.logLevel }, pino.multistream(streams));
   if (opts.register ?? true) setLogRegistry({ buffer, logDir: config.logDir, fileName: LOG_FILE_NAME, files });

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Privacy manifest for the Arclight player app target. No tracking and no collected data types:
+     the app talks only to the user's own Arclight server, which is not collection by the developer.
+     Required-reason APIs used by the app's own Swift code and the Capacitor plugins it bundles
+     (the plugins and Capacitor may also ship their own manifests; Xcode merges them). See
+     docs/mobile/RELEASE-PLAYER-IOS.md, "Privacy manifest". -->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- @capacitor/preferences stores the app's own settings and account metadata in UserDefaults. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!-- DownloadManager.swift (attributesOfItem for finished download sizes) and
+		     @capacitor/filesystem (stat: ctime/mtime) read metadata of files in the app container. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- DownloadManager.swift reads free space (volumeAvailableCapacityForImportantUsage) to
+		     refuse a download that would not fit (E174.1) and to show free space on the Downloads
+		     storage screen (85F4.1). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+				<string>85F4.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

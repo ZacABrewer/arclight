@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import dgram from 'node:dgram';
 import { isIPv6 } from 'node:net';
 import { decodeCompactPeers, decodeCompactPeers6 } from '../compact.js';
-import { TorrentEngineError } from '../errors.js';
+import { resolveAllowed } from '@arclight/net';
+import { errorMessage, TorrentEngineError } from '../errors.js';
 import { trackerRequests } from './limiter.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
@@ -26,6 +27,11 @@ export interface UdpTrackerOptions {
   baseTimeoutMs?: number;
   /** Retransmissions after the first attempt (BEP 15 allows 8; default 2). */
   maxRetries?: number;
+  /**
+   * Allow trackers on loopback / LAN addresses. Without it the host must resolve to public
+   * addresses only, and datagrams go to the vetted address.
+   */
+  allowPrivate?: boolean;
   now?: () => number;
 }
 
@@ -34,6 +40,8 @@ export class UdpTracker implements TrackerClient {
   private connectionId: Buffer | null = null;
   private connectionAt = 0;
   private readonly host: string;
+  /** The vetted address datagrams go to (resolved per request). */
+  private target: string;
   private readonly port: number;
   private readonly now: () => number;
 
@@ -44,6 +52,7 @@ export class UdpTracker implements TrackerClient {
     const u = new URL(url);
     if (u.protocol !== 'udp:') throw new TorrentEngineError('tracker', `not a udp tracker: ${url}`);
     this.host = u.hostname.replace(/^\[|\]$/g, '');
+    this.target = this.host;
     this.port = Number(u.port || 80);
     this.now = opts.now ?? Date.now;
   }
@@ -89,7 +98,7 @@ export class UdpTracker implements TrackerClient {
         reject(new TorrentEngineError('aborted', 'udp tracker request aborted'));
       };
       const send = (): void => {
-        sock.send(build(tx), this.port, this.host, (err) => {
+        sock.send(build(tx), this.port, this.target, (err) => {
           if (err) onError(err);
         });
         timer = setTimeout(() => {
@@ -127,8 +136,27 @@ export class UdpTracker implements TrackerClient {
     return this.connectionId;
   }
 
+  /** Picks the address to send to; refuses non-public ones unless `allowPrivate`. */
+  private async resolveTarget(): Promise<void> {
+    if (this.opts.allowPrivate) {
+      this.target = this.host;
+      return;
+    }
+    let answers;
+    try {
+      answers = await resolveAllowed(this.host);
+    } catch (err) {
+      throw new TorrentEngineError('tracker', `tracker refused: ${errorMessage(err)}`, { cause: err });
+    }
+    const want = isIPv6(this.host) ? 6 : 4;
+    const pick = answers.find((a) => a.family === want);
+    if (!pick) throw new TorrentEngineError('tracker', `udp tracker ${this.host} has no IPv${want} address`);
+    this.target = pick.address;
+  }
+
   private withSocket<T>(fn: (sock: dgram.Socket) => Promise<T>, signal?: AbortSignal): Promise<T> {
     return trackerRequests.run(async () => {
+      await this.resolveTarget();
       const sock = await this.openSocket();
       try {
         return await fn(sock);

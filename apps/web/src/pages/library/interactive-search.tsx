@@ -22,6 +22,7 @@ import { packCoverageLabel } from './pack-coverage.js';
 import { useReleaseFilters } from './release-filter-bar.js';
 import { UnreleasedSearchNotice, type ReleaseState } from '../../components/media/release-state.js';
 import { t } from '../../i18n/index.js';
+import { externalHref } from '../../lib/safe-url.js';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
   if (r.age >= 1) return `${r.age}d`;
@@ -48,7 +49,7 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
       sortValue: (r) => r.title,
       cell: (r) => {
         const title = r.infoUrl ? (
-          <a className="mk-release-title" href={r.infoUrl} target="_blank" rel="noreferrer noopener" title={r.title}>
+          <a className="mk-release-title" href={externalHref(r.infoUrl)} target="_blank" rel="noreferrer noopener" title={r.title}>
             {r.title}
           </a>
         ) : (

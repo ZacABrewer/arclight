@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type { MobileDeviceInput, MobileDeviceResource, MobileTestResult, PushPayload, RelaySendBody } from '@arclight/shared';
@@ -28,7 +29,14 @@ const MAX_PENDING_RETRIES = 50;
 /** One test notification per device per this long. */
 export const TEST_INTERVAL_MS = 10_000;
 
-export type MobileErrorCode = 'NO_USER' | 'NOT_FOUND' | 'FORBIDDEN' | 'RATE_LIMITED';
+export type MobileErrorCode = 'NO_USER' | 'NOT_FOUND' | 'FORBIDDEN' | 'RATE_LIMITED' | 'CONFLICT';
+
+/** Constant-time string comparison. */
+function sameSecret(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
 
 export class MobileError extends Error {
   constructor(
@@ -151,9 +159,17 @@ export class MobileService {
       .map((r) => toResource(r.device, r.displayName ?? r.username));
   }
 
-  /** Upsert by relay device id: a phone that re-registers (or signs in as someone else) keeps one row, bound to `userId`. */
-  register(userId: number, input: MobileDeviceInput): MobileDeviceResource {
+  /**
+   * Upsert by relay device id: a phone that re-registers (or signs in as someone else) keeps one
+   * row, bound to `userId`. Moving a row to another user needs the device's relay secret (the
+   * same phone) or an admin; knowing only the device id gets CONFLICT.
+   */
+  register(userId: number, input: MobileDeviceInput, opts: { isAdmin?: boolean } = {}): MobileDeviceResource {
     const now = this.iso();
+    const existing = this.opts.db.select({ userId: mobileDevices.userId, relaySecret: mobileDevices.relaySecret }).from(mobileDevices).where(eq(mobileDevices.relayDeviceId, input.relayDeviceId)).get();
+    if (existing && existing.userId !== userId && !opts.isAdmin && !sameSecret(existing.relaySecret, input.relaySecret)) {
+      throw new MobileError('CONFLICT', 'this device is registered to another account');
+    }
     const values = {
       userId,
       relayDeviceId: input.relayDeviceId,

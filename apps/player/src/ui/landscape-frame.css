@@ -1,0 +1,37 @@
+/* Phone landscape chrome (features spec §5.5): the redesign's wide header and page, clear of the
+   side insets, with the mini-player docked at the bottom right instead of the bottom tabs. */
+
+.app-wide .app-wide__header {
+  padding-left: max(var(--rd-gutter), calc(var(--app-safe-left) + 16px));
+  padding-right: max(calc(50px * var(--rd-scale)), calc(var(--app-safe-right) + 16px));
+  padding-top: 0;
+}
+/* The header's own fade sits under the status bar too. */
+.app-wide .app-wide__header::before { top: 0; }
+
+.app-wide .app-wide__main {
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+  padding-bottom: calc(24px + var(--app-safe-bottom));
+}
+.app-wide:has(.app-wide__mini .pl-mini) .app-wide__main { padding-bottom: calc(var(--app-mini) + 32px + var(--app-safe-bottom)); }
+/* The app's own pages (queue, downloads, device settings, now playing) on the page gutter. */
+.app-wide .app-wide__main.rd-legacy {
+  padding-left: max(var(--rd-gutter), calc(var(--app-safe-left) + 16px));
+  padding-right: max(var(--rd-gutter), calc(var(--app-safe-right) + 16px));
+}
+
+.app-wide__mini .pl-mini {
+  left: auto;
+  right: max(16px, calc(var(--app-safe-right) + 8px));
+  bottom: max(12px, var(--app-safe-bottom));
+  z-index: 35;
+  width: min(420px, calc(100vw - 32px));
+  padding: 8px 12px;
+  overflow: hidden;
+  border: 1px solid var(--al-line-2);
+  border-radius: var(--al-pl-radius, 8px);
+}
+.app-wide__mini .pl-mini__progress { top: 0; }
+.app-wide__mini .pl-mini__art { width: 40px; height: 40px; }
+.app-wide__mini .pl-mini__open { min-height: 44px; }

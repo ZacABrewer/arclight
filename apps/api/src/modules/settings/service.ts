@@ -60,6 +60,7 @@ import {
   type MusicMetadataSettingsResponse,
   type MusicMetadataSettingsUpdate,
   type AudiobookMetadataSettingsUpdate,
+  UpdateSettings,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { settings } from '../../db/schema.js';
@@ -172,6 +173,9 @@ const sections = {
   // Owned by the playback module: the built-in player switch, remote streaming and its bitrate cap,
   // and how long signed stream links last (routes under /settings/player).
   player: PlayerSettings,
+  // Owned by the updates module: version checks, channel and auto-update window (routes under
+  // /settings/updates). Registered here so config files and ARCLIGHT_SETTING__updates__* reach it.
+  updates: UpdateSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

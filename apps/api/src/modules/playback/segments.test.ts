@@ -24,6 +24,7 @@ import {
   type EpisodeCodes,
   type PcmExtractor,
 } from './segments.js';
+import type { LogRunner } from './segment-boundaries.js';
 import { Limiter } from './video-stream.js';
 import type { MediaInfo } from '@arclight/shared';
 
@@ -43,10 +44,19 @@ const CREDITS_SECONDS = 25;
 const intro = theme(40, 7);
 const credits = theme(CREDITS_SECONDS, 99);
 
-/** Full PCM of fake episode i: the intro theme at its start, the credits theme at the very end. */
+const episodes = new Map<number, Int16Array>();
+
+/**
+ * Full PCM of fake episode i: the intro theme at its start, the credits theme at the very end.
+ * Made once per file (4 minutes of synthetic audio each; nothing writes to it).
+ */
 function episodePcm(i: number): Int16Array {
-  const pcm = episode(EP_SECONDS, 1000 + i, intro, Math.round(INTRO_STARTS[i]! * SAMPLE_RATE));
-  pcm.set(credits, (EP_SECONDS - CREDITS_SECONDS) * SAMPLE_RATE);
+  let pcm = episodes.get(i);
+  if (!pcm) {
+    pcm = episode(EP_SECONDS, 1000 + i, intro, Math.round(INTRO_STARTS[i]! * SAMPLE_RATE));
+    pcm.set(credits, (EP_SECONDS - CREDITS_SECONDS) * SAMPLE_RATE);
+    episodes.set(i, pcm);
+  }
   return pcm;
 }
 
@@ -72,7 +82,7 @@ describe('pure helpers', () => {
     expect(windowOf('head', 150_000)).toEqual({ startMs: 0, lengthMs: 60_000 });
     expect(windowOf('tail', 3_000_000)).toEqual({ startMs: 2_580_000, lengthMs: 420_000 });
     expect(windowOf('tail', 150_000)).toEqual({ startMs: 97_500, lengthMs: 52_500 });
-    expect(buildAudioExtractArgs('/m/e.mkv', 1, 97_500, 52_500)).toEqual(['-nostdin', '-v', 'error', '-ss', '97.500', '-t', '52.500', '-i', '/m/e.mkv', '-map', '0:a:1', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1']);
+    expect(buildAudioExtractArgs('/m/e.mkv', 1, 97_500, 52_500)).toEqual(['-nostdin', '-v', 'error', '-ss', '97.500', '-t', '52.500', '-protocol_whitelist', 'file,pipe', '-i', '/m/e.mkv', '-map', '0:a:1', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1']);
     expect(buildAudioExtractArgs('/m/e.mkv', 0, 0, 60_000)).not.toContain('-ss');
     expect(defaultAudioOrdinal({ audioStreams: [{ default: false }, { default: true }] } as MediaInfo)).toBe(1);
     expect(defaultAudioOrdinal(null)).toBe(0);
@@ -159,11 +169,13 @@ async function seasonLib(count = 4): Promise<SeasonLib> {
   return { db, seriesId: show.id, files, byPath };
 }
 
-function service(lib: SeasonLib, calls: string[], opts: { busy?: () => boolean; detection?: boolean } = {}) {
+function service(lib: SeasonLib, calls: string[], opts: { busy?: () => boolean; detection?: boolean; recaps?: boolean; probe?: LogRunner } = {}) {
   return new SegmentService({
     db: lib.db,
     locate: async () => '/fake/ffmpeg',
-    settings: () => ({ segmentDetection: opts.detection ?? true }) as never,
+    // Recaps (and their body reads) are off here unless a test turns them on.
+    settings: () => ({ segmentDetection: opts.detection ?? true, segmentDetectionRecaps: opts.recaps ?? false }) as never,
+    probe: opts.probe ?? (async () => ''),
     liveBusy: opts.busy ?? (() => false),
     limiter: new Limiter(1, 100),
     extract: fakeExtract(lib.byPath, calls),
@@ -298,6 +310,72 @@ describe('SegmentService', () => {
     expect(await svc.changedSeasons()).toHaveLength(1);
   });
 
+  it('recaps on: bodies are read (codes only), heads keep chroma, and the setting is part of the season stamp', async () => {
+    const lib = await seasonLib();
+    const calls: string[] = [];
+    let recaps = true;
+    const svc = new SegmentService({
+      db: lib.db,
+      locate: async () => '/fake/ffmpeg',
+      settings: () => ({ segmentDetection: true, segmentDetectionRecaps: recaps }) as never,
+      probe: async () => '',
+      liveBusy: () => false,
+      limiter: new Limiter(1, 100),
+      extract: fakeExtract(lib.byPath, calls),
+      pollMs: 5,
+      now: () => Date.parse('2026-05-01T00:00:00.000Z'),
+    });
+    await svc.scanSeason(lib.seriesId, 1);
+    // head, tail and body of 4 episodes.
+    expect(calls).toHaveLength(12);
+    const rows = lib.db.select().from(schema.videoFingerprints).all();
+    expect(rows.filter((r) => r.part === 'body')).toHaveLength(4);
+    expect(rows.filter((r) => r.part === 'body').every((r) => r.chroma === null)).toBe(true);
+    expect(rows.filter((r) => r.part !== 'body').every((r) => r.chroma !== null && r.chroma.length > 0)).toBe(true);
+    const body = rows.find((r) => r.part === 'body')!;
+    expect({ startMs: body.startMs, lengthMs: body.lengthMs }).toEqual(windowOf('body', EP_SECONDS * 1000));
+    // No episode here opens with a recap.
+    expect(lib.db.select().from(schema.videoSegments).all().some((r) => r.type === 'recap')).toBe(false);
+    expect(await svc.changedSeasons()).toEqual([]);
+    recaps = false;
+    expect(await svc.changedSeasons()).toEqual([{ seriesId: lib.seriesId, seasonNumber: 1 }]);
+    // Heads and tails from before chroma are read again; bodies are not needed with recaps off.
+    lib.db.update(schema.videoFingerprints).set({ chroma: null }).where(eq(schema.videoFingerprints.mediaFileId, lib.files[0]!.id)).run();
+    await svc.scanSeason(lib.seriesId, 1);
+    expect(calls.slice(12)).toEqual([lib.files[0]!.path, lib.files[0]!.path]);
+  });
+
+  it('moves intro edges onto a black frame or silence found by the probe', async () => {
+    const lib = await seasonLib();
+    const probes: string[][] = [];
+    // A black frame ending 1.2 s before every probed edge, as ffmpeg logs it (from the window start).
+    const probe: LogRunner = async (_bin, args) => {
+      probes.push([...args]);
+      const ss = args.includes('-ss') ? Number(args[args.indexOf('-ss') + 1]) : 0;
+      const t = Number(args[args.indexOf('-t') + 1]);
+      const edge = ss + Math.min(2.5, t / 2);
+      const end = edge - 1.2 - ss;
+      return `[blackdetect @ 0x1] black_start:${(end - 0.3).toFixed(3)} black_end:${end.toFixed(3)} black_duration:0.300\n`;
+    };
+    const plain = service(lib, []);
+    await plain.scanSeason(lib.seriesId, 1);
+    const before = await effectiveSegments(lib.db, lib.files[1]!, []);
+    const svc = service(lib, [], { probe });
+    await svc.scanSeason(lib.seriesId, 1, true);
+    const after = await effectiveSegments(lib.db, lib.files[1]!, []);
+    // Intro start and end moved by 1.2 s (within a few ms of window rounding); credits untouched.
+    expect(Math.abs(after[0]!.startMs - (before[0]!.startMs - 1200))).toBeLessThanOrEqual(5);
+    expect(Math.abs(after[0]!.endMs - (before[0]!.endMs - 1200))).toBeLessThanOrEqual(5);
+    expect(after[1]).toEqual(before[1]);
+    // Two probes per episode (intro start and end), the file has video: blackdetect is asked for.
+    expect(probes).toHaveLength(8);
+    expect(probes[0]).toContain('0:v:0');
+    // A failing probe keeps the audio edges.
+    const failing = service(lib, [], { probe: async () => Promise.reject(new Error('no ffmpeg')) });
+    await failing.scanSeason(lib.seriesId, 1, true);
+    expect(await effectiveSegments(lib.db, lib.files[1]!, [])).toEqual(before);
+  });
+
   it('a season with one file is marked done without ffmpeg', async () => {
     const lib = await seasonLib(1);
     const calls: string[] = [];
@@ -318,7 +396,7 @@ describe('routes', () => {
     const calls: string[] = [];
     const byPath = new Map<string, Int16Array>();
     const h = await appHarness((c) => {
-      backgroundServicesFor(c, { segments: { locate: async () => '/fake/ffmpeg', extract: fakeExtract(byPath, calls), pollMs: 5, liveBusy: () => false } });
+      backgroundServicesFor(c, { segments: { locate: async () => '/fake/ffmpeg', extract: fakeExtract(byPath, calls), probe: async () => '', pollMs: 5, liveBusy: () => false } });
     });
     open.push(h);
     const dir = mkdtempSync(join(tmp, 'routes-'));
@@ -368,5 +446,5 @@ describe('routes', () => {
     expect(off.statusCode).toBe(409);
     expect(off.json().code).toBe('DETECTION_OFF');
     expect((await h.app.inject({ method: 'POST', url: '/api/v1/playback/segments/scan', headers: { cookie: user.cookie }, payload: { seriesId: show.id } })).statusCode).toBe(403);
-  });
+  }, 120_000); // a real scan of three episodes, recaps included
 });

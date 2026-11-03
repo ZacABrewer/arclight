@@ -36,6 +36,12 @@ first (season/episode/date present) and otherwise movie (title + year).
 
 ## 1. Input preparation
 
+**R1.0 Length cap.** Every exported parse function reads at most the first 512 characters of a
+title (file systems cap a name at 255 bytes, so a longer one is hostile or broken). Path parsers keep
+the last 4096 characters of a path and cut each segment to 512. Every parse call finishes in well
+under 50 ms on any input, including long runs of separators (`- - - ...`, `-_-_...`); a fuzz test
+(`packages/parser/src/redos.test.ts`) holds every entry point to that.
+
 **R1.1 Extension stripping.** A trailing known media/NZB extension is removed from `releaseTitle`
 (`.mkv .avi .mp4 .m4v .ts .nzb .xvid .divx .webm .m2ts .iso`). `Series.S01E02.Chained.Title.mkv` ->
 releaseTitle `Series.S01E02.Chained.Title`. The extension is not part of any group:

@@ -1,6 +1,8 @@
+import { routeUnsafeRegexWarnings } from './regex-log.js';
 import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault, type RouteOptions } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import { WS_MAX_PAYLOAD } from './ws-limits.js';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -58,6 +60,7 @@ import { watchHistoryModule } from './modules/watch-history/index.js';
 import { jellyfinPluginModule } from './modules/jellyfin-plugin/index.js';
 import { watchStatsModule } from './modules/watch-stats/index.js';
 import { collectionsModule } from './modules/collections/index.js';
+import { tagSyncModule } from './modules/tag-sync/index.js';
 import { mediaAnalysisModule } from './modules/media-analysis/index.js';
 import { libraryHygieneModule } from './modules/library-hygiene/index.js';
 import { healthScanModule } from './modules/health-scan/index.js';
@@ -81,6 +84,9 @@ import { themesModule } from './modules/themes/index.js';
 import { searchModule } from './modules/search/index.js';
 import { playbackModule } from './modules/playback/index.js';
 import { wireModules } from './wiring.js';
+import { parseTrustedProxies } from './trust-proxy.js';
+import { OriginPolicy, parseCorsOrigins } from './origin-policy.js';
+import { installSecurityHeaders } from './security-headers.js';
 
 export interface AppContext {
   config: AppConfig;
@@ -118,9 +124,13 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // AVV_ERR_PLUGIN_EXEC_TIMEOUT and the container restarted in a loop, adding to the disk load.
   // ARCLIGHT_BASE_PATH: the prefix is stripped before routing (base-path.ts), so routes keep their paths.
   const basePath = config.basePath ?? '';
+  // ARCLIGHT_TRUSTED_PROXIES: which peers may set X-Forwarded-For/-Proto/-Host (trust-proxy.ts).
+  // Every per-address rate limit and lockout keys on req.ip, so it must not come from the client.
+  const trust = parseTrustedProxies(config.trustedProxies);
+  if (trust.invalid.length > 0) log.warn({ entries: trust.invalid }, 'ARCLIGHT_TRUSTED_PROXIES: ignoring entries that are not IP addresses or CIDRs');
   const app = Fastify({
     loggerInstance: log,
-    trustProxy: true,
+    trustProxy: trust.setting,
     pluginTimeout: 300_000,
     ...(basePath ? { rewriteUrl: basePathRewriter(basePath) } : {}),
   }).withTypeProvider<ZodTypeProvider>();
@@ -129,6 +139,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   if (opts.onRoute) app.addHook('onRoute', opts.onRoute);
   if (basePath) installBasePath(app as unknown as FastifyInstance, basePath);
 
+  routeUnsafeRegexWarnings(log);
   const bus = new EventBus();
   const scheduler = new Scheduler(db, bus, log.child({ component: 'scheduler' }));
   const ctx: AppContext = { config, db, bus, scheduler, log, startedAt: new Date() };
@@ -139,19 +150,30 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // Metrics first: its request hooks must see every route registered after it.
   // (Cast: the root instance carries the pino Logger and Zod provider types; the plugin only adds hooks and one route.)
   await installMetrics(app as unknown as FastifyInstance, ctx);
-  // Any origin may call the API (credentials: the session cookie is SameSite=Lax, so other sites'
-  // pages never send it). The Arclight player app runs at capacitor://localhost (iOS) and
-  // https://localhost / http://localhost (Android) and authenticates with `Authorization: Bearer`;
-  // it reads the download file name and the stream headers, so those are exposed. The methods are
-  // listed because @fastify/cors only allows GET/HEAD/POST by default, which blocks the app's
-  // progress and queue PUTs and its DELETEs.
-  await app.register(cors, {
-    origin: true,
-    credentials: true,
+  // CORS: only the page's own origin, the Application URL, the portal hostnames and
+  // ARCLIGHT_CORS_ORIGINS are answered with credentials; the Arclight player app (capacitor://localhost
+  // on iOS, https://localhost / http://localhost on Android) and signed media links get CORS without
+  // credentials (the app sends `Authorization: Bearer`); any other origin gets no CORS headers
+  // (origin-policy.ts). The app reads the download file name and the stream headers, so those are
+  // exposed. The methods are listed because @fastify/cors only allows GET/HEAD/POST by default,
+  // which blocks the app's progress and queue PUTs and its DELETEs.
+  const origins = new OriginPolicy(db, parseCorsOrigins(config.corsOrigins), { dev: !config.webDist });
+  const corsBase = {
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     exposedHeaders: ['content-disposition', 'content-length', 'content-range', 'accept-ranges', 'retry-after', 'x-arclight-backend', 'x-arclight-transcode'],
+  };
+  await app.register(cors, {
+    delegator: (req, cb) => {
+      const origin = req.headers.origin;
+      const verdict = origins.verdict(req, origin);
+      if (verdict === 'refused' || !origin) return cb(null, { ...corsBase, origin: false });
+      cb(null, { ...corsBase, origin, credentials: verdict === 'credentialed' });
+    },
   });
-  await app.register(websocket);
+  // nosniff, Referrer-Policy, frame protection on everything; a CSP on HTML pages; HSTS on the
+  // Application URL's https host (security-headers.ts).
+  installSecurityHeaders(app as unknown as FastifyInstance, db);
+  await app.register(websocket, { options: { maxPayload: WS_MAX_PAYLOAD } });
 
   // Dependency-safe order: providers before the pipeline modules that consume them.
   const modules: AppModule[] = [
@@ -222,6 +244,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     jellyfinPluginModule,
     watchStatsModule,
     collectionsModule,
+    tagSyncModule,
     // Slash commands and request channel posts over the requests service.
     discordBotModule,
     calendarModule,

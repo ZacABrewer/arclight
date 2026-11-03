@@ -116,7 +116,7 @@ services:
     restart: unless-stopped
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     network_mode: "service:gluetun"
     environment:
       - LOG_LEVEL=info

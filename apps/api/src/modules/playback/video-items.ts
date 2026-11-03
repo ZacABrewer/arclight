@@ -11,6 +11,7 @@ import { mediaChipsOf, tmdbScoreOf } from './media-chips.js';
 import { effectiveSegments } from './segments.js';
 import { Limiter, LimiterBusy } from './video-stream.js';
 import { baseRangeOf, compareVersions, durationOf, segmentsFromChapters, parseProbeChapters, videoInfoOf, versionLabel, type ExternalSubtitle, type VideoFileFacts } from './video-info.js';
+import { ffprobeArgs } from '../transcode/input-protocols.js';
 
 // Movies and episodes as playable items (GET /playback/item/movie:<id> | episode:<id>): the file
 // that plays by default (the best version), every version, the file's chapters (ffprobe, read
@@ -115,7 +116,7 @@ export function ffprobeChapters(locate: () => Promise<string | null> = () => loc
       return null;
     }
     return new Promise((resolve) => {
-      execFile(bin, ['-v', 'error', '-print_format', 'json', '-show_chapters', path], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? null : stdout));
+      execFile(bin, ffprobeArgs(['-v', 'error', '-print_format', 'json', '-show_chapters'], path), { timeout: 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? null : stdout));
     });
   };
 }

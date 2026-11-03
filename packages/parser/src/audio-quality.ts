@@ -1,5 +1,6 @@
 import { QUALITIES, type AudioCodec, type AudioVbrPreset, type QualityDefinition, type Revision } from '@arclight/shared';
 import { parseRevision } from './quality.js';
+import { clampTitle } from './normalize.js';
 
 // Audio quality detection for music releases and files.
 //
@@ -146,6 +147,7 @@ function bitrateFrom(name: string): number | null {
 
 /** Read the audio facts a release or file name states. Fields the name does not state are null. */
 export function readAudioFacts(name: string): AudioFacts & { stated: boolean } {
+  name = clampTitle(name);
   // Years and dates are never bitrates or depths: "2016-2020", "24.12.2019".
   const text = name.replace(/(?<!\d)(?:19|20)\d{2}(?:[-./](?:19|20)?\d{2}){0,2}(?!\d)/g, ' ');
   let codec = findCodec(text);
@@ -238,6 +240,7 @@ function build(facts: AudioFacts, revision: Revision, detectionSource: ParsedAud
  * extension wins, since it describes the actual file.
  */
 export function parseAudioQuality(name: string, extension: string | null = null): ParsedAudioQuality {
+  name = clampTitle(name);
   const facts = readAudioFacts(name);
   const revision = parseRevision(name);
   const fromExt = codecFromExtension(extension);

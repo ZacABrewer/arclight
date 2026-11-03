@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { TRASH_GUIDES_REPO_URL, type GuideApp, type GuidesFetchStats, type GuidesSettings } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { guidesCache } from './schema.js';
+import { readLimitedText } from '@arclight/net';
 
 // Reading a guide repository. Files come from raw-content URLs (`<repoUrl><branch>/<path>`);
 // directories are listed through the GitHub contents API for GitHub-hosted repos (which also
@@ -10,6 +11,9 @@ import { guidesCache } from './schema.js';
 // `guides_cache` with its ETag for conditional requests.
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** Largest guide file or API answer read. */
+const MAX_GUIDE_BYTES = 8 * 1024 * 1024;
 
 export class GuideSourceError extends Error {
   constructor(
@@ -105,7 +109,13 @@ export class GuideRepository {
       return cached.body;
     }
     if (!res.ok) throw new GuideSourceError('HTTP', `${url}: HTTP ${res.status}`);
-    const body = await res.text();
+    // Capped read: guide files are small; the timeout keeps running while the body streams.
+    let body: string;
+    try {
+      body = await readLimitedText(res, MAX_GUIDE_BYTES);
+    } catch (err) {
+      throw new GuideSourceError('NETWORK', `${url}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     const row = { etag: res.headers.get('etag'), sha, body, fetchedAt: now };
     this.opts.db
       .insert(guidesCache)

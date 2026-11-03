@@ -220,6 +220,26 @@ describe('audit hook', () => {
     expect(events[0]!.details).toMatchObject({ body: { username: 'eve', password: '********' } });
   });
 
+  it('never stores 2FA codes: the 2FA routes skip body capture and the masks cover code names', async () => {
+    const { app, db, auth } = await build();
+    const login = await auth.login('admin', 'correct-horse-battery');
+    const headers = { cookie: `${SESSION_COOKIE}=${login.token}` };
+    const results = [
+      await app.inject({ method: 'DELETE', url: '/api/v1/user/me/2fa/totp', headers, payload: { recoveryCode: 'abcd-efgh' } }),
+      await app.inject({ method: 'POST', url: '/api/v1/user/me/2fa/recovery', headers, payload: { recoveryCode: 'abcd-efgh' } }),
+      await app.inject({ method: 'POST', url: '/api/v1/user/me/2fa/totp/enable', headers, payload: { code: '123456' } }),
+    ];
+    // The routes exist (a 404 would skip the audit hook for the wrong reason).
+    for (const res of results) expect(res.statusCode).not.toBe(404);
+    const all = JSON.stringify(rows(db));
+    expect(all).not.toContain('abcd');
+    expect(all).not.toContain('123456');
+    // Indexer definition fields with short secret names are masked by the key-name rule.
+    expect(sanitizeDetails({ body: { recoveryCode: 'abcd-efgh', settings: { fields: { pass: 'p', authkey: 'a', pin: '1', languageCode: 'en' } } } })).toEqual({
+      body: { recoveryCode: '********', settings: { fields: { pass: '********', authkey: '********', pin: '********', languageCode: 'en' } } },
+    });
+  });
+
   it('records failed requests too (403 from a non-admin)', async () => {
     const { app, db, auth } = await build();
     await auth.createUser({ username: 'bob', password: 'bobs-long-password', role: 'user' });

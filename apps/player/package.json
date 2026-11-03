@@ -1,6 +1,6 @@
 {
   "name": "@arclight/player-app",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "private": true,
   "license": "GPL-3.0",
   "description": "Arclight for iOS and Android: plays music and audiobooks from your own Arclight server, with downloads for offline listening.",
@@ -12,7 +12,9 @@
     "assets": "node scripts/generate-assets.mjs",
     "sync": "pnpm build && cap sync",
     "sync:android": "pnpm build && cap sync android",
-    "sync:ios": "pnpm build && cap sync ios"
+    "sync:ios": "pnpm build && cap sync ios",
+    "ios:version": "node scripts/ios-version.mjs",
+    "capacitor:sync:after": "node scripts/ios-version.mjs --hook"
   },
   "dependencies": {
     "@arclight/shared": "workspace:*",

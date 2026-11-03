@@ -6,6 +6,23 @@ set -e
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
+# PUID=0 or PGID=0 would run the whole app as root (gosu accepts it). Refuse a new install unless
+# the owner opts in explicitly with ALLOW_ROOT=1. An install that already ran as root (a non-empty
+# /config) keeps starting after an update, with a warning, so a self-update never leaves it down.
+if [ "$PUID" = "0" ] || [ "$PGID" = "0" ]; then
+  if [ "${ALLOW_ROOT:-0}" != "1" ] && [ -d /config ] && [ -n "$(ls -A /config 2>/dev/null)" ]; then
+    echo "Arclight: WARNING: running as root (PUID=$PUID, PGID=$PGID). Set PUID/PGID to the host user and group" >&2
+    echo "that own your folders (\`id <user>\` on the host); new installs refuse root unless ALLOW_ROOT=1." >&2
+  elif [ "${ALLOW_ROOT:-0}" != "1" ]; then
+    echo "Arclight refuses to run as root (PUID=$PUID, PGID=$PGID)." >&2
+    echo "Set PUID/PGID to the host user and group that own your folders (\`id <user>\` on the host)," >&2
+    echo "or set ALLOW_ROOT=1 to run as root anyway (not recommended)." >&2
+    exit 1
+  else
+    echo "Arclight: WARNING: running as root because ALLOW_ROOT=1 (PUID=$PUID, PGID=$PGID)." >&2
+  fi
+fi
+
 if ! getent group "$PGID" >/dev/null; then
   groupadd -g "$PGID" arclight
 fi

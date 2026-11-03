@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NetworkInterfaceInfo } from 'node:os';
-import type { ShellResult, ShellRunner } from './shell.js';
+import type { ShellOptions, ShellResult, ShellRunner } from './shell.js';
 
 // Test-only helpers: recorded command outputs, a scripted shell runner, fake fetch and
 // network interface tables. Not used by production code.
@@ -15,13 +15,14 @@ export function fixture(name: string): string {
 export interface ShellCall {
   file: string;
   args: readonly string[];
+  opts?: ShellOptions;
 }
 
 /** A shell runner answering by the first matching rule; records every call. */
 export function scriptedShell(rules: Array<{ match: (file: string, args: readonly string[]) => boolean; reply: Partial<ShellResult> | (() => Partial<ShellResult>) }>) {
   const calls: ShellCall[] = [];
-  const run: ShellRunner = async (file, args) => {
-    calls.push({ file, args });
+  const run: ShellRunner = async (file, args, opts) => {
+    calls.push({ file, args, ...(opts?.env ? { opts } : {}) });
     const rule = rules.find((r) => r.match(file, args));
     if (!rule) return { code: 1, stdout: '', stderr: `unexpected command ${file}` };
     const reply = typeof rule.reply === 'function' ? rule.reply() : rule.reply;

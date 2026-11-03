@@ -24,6 +24,8 @@ describe('BooksHomePage', () => {
     const player = mockPlayer();
     renderBrowse('/player/books', player);
 
+    expect(await screen.findByRole('heading', { level: 1, name: 'Audiobooks' })).toBeTruthy();
+    expect(await screen.findByText('2 audiobooks')).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Continue listening' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Series: Star Maps' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Finished' })).toBeTruthy();

@@ -14,7 +14,7 @@
  * from Plex webhooks (`parsePlexWebhook`).
  */
 
-import { emptyIds, idsMatchQuery, isoFromSeconds, joinUrl, laterOf, list, normaliseBaseUrl, num, queryHasIds, rec, request, requestJson, str } from './http.js';
+import { emptyIds, idsMatchQuery, isoFromSeconds, joinUrl, laterOf, list, mergeTags, normaliseBaseUrl, num, queryHasIds, rec, request, requestJson, str } from './http.js';
 import type {
   FetchLike,
   FindItemsQuery,
@@ -291,10 +291,10 @@ const plexSectionKind = (kind: MediaKind): MediaKind => (kind === 'audiobook' ||
 
 export class PlexServerReadClient implements MediaServerClient {
   readonly kind = 'plex' as const;
-  private readonly base: string;
+  protected readonly base: string;
   private readonly token: string;
-  private readonly fetchImpl: FetchLike;
-  private readonly timeoutMs: number | undefined;
+  protected readonly fetchImpl: FetchLike;
+  protected readonly timeoutMs: number | undefined;
   private readonly pageSize: number;
   private readonly clientIdentifier: string;
   private readonly plexTvUrl: string;
@@ -315,7 +315,7 @@ export class PlexServerReadClient implements MediaServerClient {
     this.plexTvUrl = normaliseBaseUrl(opts.plexTvUrl ?? PLEX_TV_URL);
   }
 
-  private headers(token = this.token): Record<string, string> {
+  protected headers(token = this.token): Record<string, string> {
     return {
       'X-Plex-Token': token,
       'X-Plex-Client-Identifier': this.clientIdentifier,
@@ -324,7 +324,7 @@ export class PlexServerReadClient implements MediaServerClient {
     };
   }
 
-  private async container(path: string, query: Record<string, string> = {}, token?: string): Promise<Record<string, unknown>> {
+  protected async container(path: string, query: Record<string, string> = {}, token?: string): Promise<Record<string, unknown>> {
     const body = await requestJson(this.fetchImpl, 'plex', joinUrl(this.base, path), {
       headers: this.headers(token),
       query,
@@ -721,6 +721,81 @@ export class PlexServerReadClient implements MediaServerClient {
       });
     }
   }
+}
+
+/** Plex item types of the movie and show sections (`type` of the section edit endpoint). */
+const PLEX_ITEM_TYPE: Record<'movie' | 'series', string> = { movie: '1', series: '2' };
+
+/** Labels read and written in one request at most; Plex takes comma-separated ratingKeys. */
+const LABEL_BATCH = 50;
+
+/**
+ * The Plex client with the few writes Arclight makes: item labels (the tag sync). Kept apart
+ * from `PlexServerReadClient`, whose callers only ever read.
+ *
+ * Best-effort: Plex documents no public API for editing labels. The write uses the section edit
+ * endpoint the Plex web app uses, `PUT library/sections/{key}/all?type=&id=` with
+ * `label[i].tag.tag=` (the whole list, which replaces the item's labels) and `label.locked=1`;
+ * clearing the last labels uses the removal form `label[].tag.tag-=`.
+ */
+export class PlexServerClient extends PlexServerReadClient {
+  /** Labels of items by ratingKey, read in batches of 50 (`library/metadata/{id1,id2,...}`). */
+  async itemLabels(ratingKeys: readonly string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    for (let i = 0; i < ratingKeys.length; i += LABEL_BATCH) {
+      const ids = ratingKeys.slice(i, i + LABEL_BATCH).map((k) => encodeURIComponent(k)).join(',');
+      let mc: Record<string, unknown>;
+      try {
+        mc = await this.container(`library/metadata/${ids}`);
+      } catch (err) {
+        // Every key of the batch is gone.
+        if (err instanceof MediaServerError && err.code === 'notFound') continue;
+        throw err;
+      }
+      for (const raw of list(mc['Metadata']).map(rec)) {
+        const key = str(raw['ratingKey']);
+        if (key) out.set(key, labelsOf(raw));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Adds and removes labels on one movie or show (case-insensitive; existing labels keep their
+   * casing). Reads the item's labels first, because Plex replaces the whole list. Returns the
+   * labels now on the item. `lock` (default on) locks the labels against metadata refreshes.
+   */
+  async setItemLabels(sectionKey: string, ratingKey: string, type: 'movie' | 'series', add: readonly string[], remove: readonly string[], opts: { lock?: boolean } = {}): Promise<string[]> {
+    const current = (await this.itemLabels([ratingKey])).get(ratingKey);
+    if (current === undefined) throw new MediaServerError('plex', 'notFound', `item ${ratingKey} not found`);
+    const labels = mergeTags(current, add, remove);
+    const query: Record<string, string> = { type: PLEX_ITEM_TYPE[type], id: ratingKey };
+    if (labels.length > 0) {
+      labels.forEach((label, i) => {
+        query[`label[${i}].tag.tag`] = label;
+      });
+      if (opts.lock !== false) query['label.locked'] = '1';
+    } else {
+      const key = (v: string) => v.trim().toLowerCase();
+      const gone = current.filter((label) => remove.some((r) => key(r) === key(label)));
+      if (gone.length === 0) return labels;
+      query['label[].tag.tag-'] = gone.join(',');
+    }
+    await request(this.fetchImpl, 'plex', joinUrl(this.base, `library/sections/${encodeURIComponent(sectionKey)}/all`), {
+      method: 'PUT',
+      headers: this.headers(),
+      query,
+      ...(this.timeoutMs !== undefined ? { timeoutMs: this.timeoutMs } : {}),
+    });
+    return labels;
+  }
+}
+
+function labelsOf(raw: Record<string, unknown>): string[] {
+  return list(raw['Label']).flatMap((l) => {
+    const tag = str(rec(l)['tag']);
+    return tag ? [tag] : [];
+  });
 }
 
 function toItem(raw: Record<string, unknown>, mediaType: MediaKind, sectionId: string): MediaServerItem | null {

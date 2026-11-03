@@ -74,7 +74,7 @@ services:
       - flaresolverr
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     container_name: flaresolverr
     environment:
       - LOG_LEVEL=info
@@ -103,7 +103,7 @@ The built-in engine is all you need. If you also want qBittorrent, add a second 
 
 ```yaml
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent:5.3.0
     container_name: qbittorrent
     environment:
       - PUID=568

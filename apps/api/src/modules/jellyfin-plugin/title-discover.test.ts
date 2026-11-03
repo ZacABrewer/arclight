@@ -12,7 +12,7 @@ import { mediaServerUsers, watchHistoryModule } from '../watch-history/index.js'
 import { watchState } from '../watch-history/schema.js';
 import { addMovie, FakeJellyfin } from '../watch-history/test-support.js';
 import { jellyfinPluginModule } from './index.js';
-import { pickTrailer } from './service.js';
+import { httpUrlOrNull, pickTrailer } from './service.js';
 
 // Plugin 1.2: title pages, the bigger Discover (rows, recommended, genres) — all through the
 // linked account's content caps.
@@ -170,6 +170,14 @@ describe('Jellyfin plugin: title page', () => {
       ])?.key,
     ).toBe('y1');
     expect(pickTrailer([{ name: 'z', key: 'z1', site: 'YouTube', type: 'Teaser' }])?.key).toBe('z1');
+  });
+
+  it('keeps only http(s) provider links (a javascript: JustWatch link from TMDB becomes null)', () => {
+    expect(httpUrlOrNull('https://www.themoviedb.org/movie/550/watch?locale=US')).toBe('https://www.themoviedb.org/movie/550/watch?locale=US');
+    expect(httpUrlOrNull('http://example.com/x')).toBe('http://example.com/x');
+    for (const bad of ['javascript:alert(1)', ' javascript:alert(1)', 'data:text/html,x', '/relative', 'not a url', '', null, undefined]) {
+      expect(httpUrlOrNull(bad)).toBeNull();
+    }
   });
 });
 

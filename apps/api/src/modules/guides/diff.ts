@@ -31,17 +31,33 @@ export interface ResolvedMapping {
   local: QualityProfile;
 }
 
-/** Case-insensitive glob (`*`, `?`) match. */
+/**
+ * Case-insensitive glob (`*`, `?`) match. Matched by the two-pointer wildcard walk rather than
+ * a regex: `a*a*a*a*b` as `.*` repeats backtracks polynomially, this stays linear-ish (O(n*m)).
+ */
 export function matchesPattern(pattern: string, value: string): boolean {
-  const re = new RegExp(
-    `^${pattern
-      .trim()
-      .split('')
-      .map((c) => (c === '*' ? '.*' : c === '?' ? '.' : c.replace(/[.+^${}()|[\]\\]/g, '\\$&')))
-      .join('')}$`,
-    'i',
-  );
-  return re.test(value);
+  const p = pattern.trim().toLowerCase();
+  const v = value.toLowerCase();
+  let pi = 0;
+  let vi = 0;
+  let star = -1;
+  let mark = 0;
+  while (vi < v.length) {
+    if (pi < p.length && (p[pi] === '?' || p[pi] === v[vi])) {
+      pi++;
+      vi++;
+    } else if (pi < p.length && p[pi] === '*') {
+      star = pi++;
+      mark = vi;
+    } else if (star >= 0) {
+      pi = star + 1;
+      vi = ++mark;
+    } else {
+      return false;
+    }
+  }
+  while (p[pi] === '*') pi++;
+  return pi === p.length;
 }
 
 function matchesAny(patterns: readonly string[], f: Pick<GuideFormat, 'name' | 'guideId'>): boolean {

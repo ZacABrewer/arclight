@@ -126,6 +126,7 @@ Arclight also does step 1 for you. With **Recover stalled downloads** on (Settin
 - Incoming connections are impossible: no forwarded port, or the listening port is blocked. Outgoing connections still work, so you get fewer peers, not none.
 - You are on a private tracker and the tracker rejected the announce (passkey, ratio or account problem). DHT and peer exchange are not used for private torrents.
 - A transport setting is switched off. If both TCP and uTP are off, no peer can connect at all (Settings > Torrent Engine warns about this).
+- The tracker or the peers are on your local network. Trackers, web seeds and peers on loopback / LAN addresses are refused by default; the tracker row shows "tracker refused: ...". See [Local network addresses](using/download-clients.md#local-network-addresses).
 
 **How to confirm:**
 
@@ -262,6 +263,7 @@ More detail: [Cloudflare and other browser challenges](CLOUDFLARE.md).
 **How to confirm:**
 
 - Gluetun: `docker logs gluetun`. A healthy start ends with a public IP line; an auth error means the key is wrong. `docker compose ps` shows its health.
+- `docker compose` stops with "required variable GLUETUN_API_KEY is missing a value": the VPN compose files require a control-server key. Run `scripts/gluetun-auth.sh` (or `.ps1`), or put any long random string of letters and digits in `.env` as `GLUETUN_API_KEY`.
 - A 401 or 403 from the control server means Gluetun needs an API key: generate one with `scripts/gluetun-auth.sh` (or `.ps1`), put it in `.env` as `GLUETUN_API_KEY`, and recreate the containers. In Settings > VPN the same key goes into the API key field.
 - Settings > VPN shows Public IP, Last handshake (WireGuard), Last checked and any error text.
 - Press **Test** on the VPN page; "The test failed" comes with the reason.
@@ -389,7 +391,7 @@ Files already imported by copy stay duplicated until you delete the download cop
 
 **Cause:**
 
-- **Too many failures.** After 10 failed logins from one address within 15 minutes, further attempts are refused for the rest of that window. The counter is kept in memory, so restarting Arclight also clears it.
+- **Too many failures.** After 10 failed logins for one account from one address (or 50 from one address for any account) within 15 minutes, further attempts from that address are refused for the rest of that window. After 10 failures for one account from anywhere, each further try for it waits 30 seconds, doubling up to 5 minutes; the answer's `Retry-After` says how long. The counters are kept in memory, so restarting Arclight also clears them. If everyone is refused at once, your proxy may not be trusted: see [trusted proxies](using/users-and-security.md#trusted-proxies).
 - **Wrong or forgotten password.** There is no command-line password reset.
 - **Login loop behind a reverse proxy.** The session cookie is `al_session` (it is marked Secure when the request arrived over https). The proxy must forward `X-Forwarded-Proto` and must not strip cookies.
 - **Authentication method.** Settings > Security chooses the method (Forms, Basic or None) and whether local addresses may skip sign-in.
@@ -433,6 +435,7 @@ Files already imported by copy stay duplicated until you delete the download cop
 
 | Log shows | Cause |
 |---|---|
+| "Arclight refuses to run as root" | `PUID` or `PGID` is `0` on a new install (an existing install that already ran as root keeps starting, with a warning in the log). Set them to the user and group that own your folders (`id <user>` on the host). To run as root anyway, set `ALLOW_ROOT=1` under the Arclight service's `environment:` (not recommended). |
 | `chown` or "Operation not permitted"/"Read-only file system" right after the start line | The start script sets ownership of `/config` and stops if that fails. This happens on NFS shares with root squash, read-only mounts, or a config path the NAS refuses to chown. Use a normal local folder for the config location. |
 | Errors about the database or "unable to open" | The config folder is not writable or its disk is full. See [docker-puid-pgid-mismatch](#docker-puid-pgid-mismatch) and [config-disk-space-low](#config-disk-space-low). |
 | "address already in use" | Port 7878 (or 8080 for the optional qBittorrent) is taken. Change the published port, or in the VPN stack remember the ports are published on the `gluetun` container. |
@@ -756,7 +759,7 @@ Source: `RemoteEngineUnreachable` (error).
 
 **How to confirm:** the Health message includes the engine name, its address and the error. Settings > Download Clients > **Test**.
 
-**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. Setup details: [Remote engine](REMOTE-ENGINE.md).
+**Fix:** check the agent is running on the remote host and that its port is reachable from Arclight (firewall, VPN, Docker network). Press **Test** on the client. "rejected the token" means the Token field does not match: the agent's `AGENT_TOKEN`, or for another Arclight its agent token (from 0.24 its API key works only while that instance still accepts it). HTTP 429 means too many wrong tokens from this address; fix the token and wait for the back-off (up to 15 minutes). An `https://` agent with a self-signed certificate needs `NODE_EXTRA_CA_CERTS` on this Arclight. Setup details: [Remote engine](REMOTE-ENGINE.md).
 
 <a id="download-client-removes-completed-downloads"></a>
 ### Download client removes completed downloads
@@ -1203,7 +1206,7 @@ Source: `FfprobeMissing` (warning).
 **Fix:**
 
 - Docker: the image ships ffmpeg; check you are not overriding `PATH`.
-- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary.
+- Native: install ffmpeg and put it on `PATH`, or set `ARCLIGHT_FFPROBE` to the ffprobe binary. Use ffmpeg 6.0 or newer, see [Requirements](getting-started/requirements.md#ffmpeg-native-installs).
 - Restart Arclight, then press **Analyze** on a title or run the AnalyzeMedia task under System > Tasks.
 
 <a id="orphan-files-found"></a>

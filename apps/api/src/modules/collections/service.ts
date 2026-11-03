@@ -16,9 +16,10 @@ import {
   type SmartCollectionInputParsed,
   type SmartCollectionList,
 } from '@arclight/shared';
-import type { MediaBrowserServerClient, MediaServerItem } from '@arclight/media-servers';
+import type { MediaBrowserServerClient } from '@arclight/media-servers';
 import type { Db } from '../../db/index.js';
 import { mediaFiles, movies, retentionCandidates, retentionRules, series, watchState } from '../../db/schema.js';
+import { buildRemoteIndex, remoteIdFor } from '../media-servers/remote-index.js';
 import { getSection } from '../settings/service.js';
 import { collectionSyncs, smartCollections, type CollectionSyncRow, type SmartCollectionRow } from './schema.js';
 
@@ -516,7 +517,7 @@ export class CollectionsService {
       let index: Map<string, string>;
       let existing: Map<string, string>;
       try {
-        index = await this.remoteIndex(client, wanted);
+        index = await buildRemoteIndex(client, wanted.flatMap((w) => w.items.map((i) => i.mediaType)));
         existing = new Map((await client.collections()).map((c) => [c.name.trim().toLowerCase(), c.id]));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -539,27 +540,6 @@ export class CollectionsService {
       }
     }
     return result;
-  }
-
-  /** Remote item id per `movie:<tmdb>` / `series:<tmdb>` (also tvdb and imdb keys). */
-  private async remoteIndex(client: CollectionServer['client'], wanted: Desired[]): Promise<Map<string, string>> {
-    const kinds = new Set(wanted.flatMap((w) => w.items.map((i) => i.mediaType)));
-    const index = new Map<string, string>();
-    const add = (kind: string, item: MediaServerItem) => {
-      if (item.ids.tmdbId) index.set(`${kind}:tmdb:${item.ids.tmdbId}`, item.id);
-      if (item.ids.tvdbId) index.set(`${kind}:tvdb:${item.ids.tvdbId}`, item.id);
-      if (item.ids.imdbId) index.set(`${kind}:imdb:${item.ids.imdbId.toLowerCase()}`, item.id);
-    };
-    for (const kind of kinds) for (const item of await client.listItems(kind)) add(kind, item);
-    return index;
-  }
-
-  private remoteId(index: Map<string, string>, t: Candidate): string | undefined {
-    return (
-      index.get(`${t.mediaType}:tmdb:${t.tmdbId}`) ??
-      (t.tvdbId ? index.get(`${t.mediaType}:tvdb:${t.tvdbId}`) : undefined) ??
-      (t.imdbId ? index.get(`${t.mediaType}:imdb:${t.imdbId.toLowerCase()}`) : undefined)
-    );
   }
 
   private row(key: string, serverId: string): CollectionSyncRow | undefined {
@@ -588,7 +568,7 @@ export class CollectionsService {
     const ids: string[] = [];
     let missing = 0;
     for (const t of w.items) {
-      const id = this.remoteId(index, t);
+      const id = remoteIdFor(index, t.mediaType, t);
       if (id) ids.push(id);
       else missing++;
     }

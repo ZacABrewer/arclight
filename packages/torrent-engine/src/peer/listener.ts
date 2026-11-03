@@ -30,7 +30,16 @@ export interface PeerListenerOptions {
   encryption?: () => EncryptionMode;
   /** Maps HASH('req2', infoHash) to a known info-hash for MSE receivers. */
   findInfoHash?: (req2: Buffer) => Buffer | null;
+  /** Checked before reading anything (e.g. the session's global connection limit). Default: yes. */
+  canAccept?: () => boolean;
+  /** Connections still in the handshake at once (all addresses). Default 128. */
+  maxPending?: number;
+  /** Connections still in the handshake at once from one IP. Default 8. */
+  maxPendingPerIp?: number;
 }
+
+export const DEFAULT_MAX_PENDING = 128;
+export const DEFAULT_MAX_PENDING_PER_IP = 8;
 
 const PLAIN_PREFIX = Buffer.concat([Buffer.from([PROTOCOL.length]), PROTOCOL]);
 
@@ -42,6 +51,9 @@ const PLAIN_PREFIX = Buffer.concat([Buffer.from([PROTOCOL.length]), PROTOCOL]);
 export class PeerListener extends EventEmitter<PeerListenerEvents> {
   private server: net.Server | null = null;
   private readonly pending = new Set<Duplex>();
+  /** Handshakes in progress, in total and per remote IP (bounds idle / slow-loris sockets). */
+  private pendingCount = 0;
+  private readonly pendingByIp = new Map<string, number>();
 
   constructor(private readonly opts: PeerListenerOptions = {}) {
     super();
@@ -96,6 +108,8 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
     this.server = null;
     for (const s of this.pending) s.destroy();
     this.pending.clear();
+    this.pendingCount = 0;
+    this.pendingByIp.clear();
     // Stop accepting; established peer connections are owned by their torrents and are
     // not waited for (server.close's callback would only fire after they all end).
     if (server) {
@@ -112,10 +126,31 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
 
   /** Takes an incoming stream (TCP socket or uTP connection) through protocol detection. */
   accept(sock: Duplex, address: PeerAddress, transport: PeerTransport): void {
-    if (this.opts.isBlocked?.(address.host)) {
+    if (this.opts.isBlocked?.(address.host) || this.opts.canAccept?.() === false) {
       sock.destroy();
       return;
     }
+    const ip = address.host;
+    const perIp = this.pendingByIp.get(ip) ?? 0;
+    if (
+      this.pendingCount >= (this.opts.maxPending ?? DEFAULT_MAX_PENDING) ||
+      perIp >= (this.opts.maxPendingPerIp ?? DEFAULT_MAX_PENDING_PER_IP)
+    ) {
+      sock.destroy();
+      return;
+    }
+    // One slot per accepted stream, freed exactly once: on hand-over, drop or close.
+    this.pendingCount++;
+    this.pendingByIp.set(ip, perIp + 1);
+    let held = true;
+    const release = (): void => {
+      if (!held) return;
+      held = false;
+      this.pendingCount = Math.max(0, this.pendingCount - 1);
+      const left = (this.pendingByIp.get(ip) ?? 1) - 1;
+      if (left > 0) this.pendingByIp.set(ip, left);
+      else this.pendingByIp.delete(ip);
+    };
     this.pending.add(sock);
     let buf = Buffer.alloc(0);
     const timer = setTimeout(() => sock.destroy(), this.opts.handshakeTimeoutMs ?? 10_000);
@@ -134,13 +169,15 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
       sock.pause();
       if (plain) {
         if (mode === 'required') {
+          release();
           this.drop(sock);
           return;
         }
-        this.readHandshake(sock, buf, address, { transport, encrypted: false }, null);
+        this.readHandshake(sock, buf, address, { transport, encrypted: false }, null, release);
         return;
       }
       if (mode === 'disabled' || !this.opts.findInfoHash) {
+        release();
         this.drop(sock);
         return;
       }
@@ -150,12 +187,16 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
         timeoutMs: this.opts.handshakeTimeoutMs ?? 10_000,
       }).then(
         (res) => {
-          if (sock.destroyed) return;
+          if (sock.destroyed) {
+            release();
+            return;
+          }
           this.pending.delete(sock);
           this.pending.add(res.stream);
-          this.readHandshake(res.stream, Buffer.alloc(0), address, { transport, encrypted: res.method === 'rc4' }, res.infoHash);
+          this.readHandshake(res.stream, Buffer.alloc(0), address, { transport, encrypted: res.method === 'rc4' }, res.infoHash, release);
         },
         (err: unknown) => {
+          release();
           this.emit('warning', `incoming encrypted connection from ${address.host} failed: ${errorMessage(err)}`);
           this.drop(sock);
         },
@@ -165,6 +206,7 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
     sock.once('close', () => {
       clearTimeout(timer);
       this.pending.delete(sock);
+      release();
     });
   }
 
@@ -174,7 +216,14 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
   }
 
   /** Reads the plaintext BitTorrent handshake, then hands the paused stream over. */
-  private readHandshake(stream: Duplex, initial: Buffer, address: PeerAddress, info: IncomingInfo, expected: Buffer | null): void {
+  private readHandshake(
+    stream: Duplex,
+    initial: Buffer,
+    address: PeerAddress,
+    info: IncomingInfo,
+    expected: Buffer | null,
+    release: () => void,
+  ): void {
     let buf = initial;
     let finished = false;
     this.pending.add(stream);
@@ -184,6 +233,7 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
       finished = true;
       clearTimeout(timer);
       this.pending.delete(stream);
+      release();
       stream.off('data', onData);
     };
     const check = (): void => {
@@ -212,6 +262,7 @@ export class PeerListener extends EventEmitter<PeerListenerEvents> {
     stream.once('close', () => {
       clearTimeout(timer);
       this.pending.delete(stream);
+      release();
     });
     if (buf.length > 0) check();
     if (finished || stream.destroyed) return;

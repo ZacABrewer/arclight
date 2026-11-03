@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import {
   HOUSEHOLD_PROFILE_COLORS,
   MOVIE_CERTIFICATIONS,
@@ -11,20 +11,25 @@ import {
 import { cx } from '../../../../arclight/cx.js';
 import { useT } from '../../../../i18n/index.js';
 import { usePlayerController } from '../../player-context.js';
+import { useAddProfileView } from '../add-profile.js';
 import { useCreateProfile, useDeleteProfile, useSelectProfile, useUpdateProfile } from '../api.js';
 import { useLayout } from '../layout.js';
 import { ProfileAvatar } from '../profile-avatar.js';
-import { PinEntry, ProfilePicker, type PickerProfile } from '../profile-picker.js';
-import { markProfilePicked, parseProfilesSearch } from '../profile-session.js';
+import { PasswordEntry, PinEntry, ProfilePicker, type PickerProfile } from '../profile-picker.js';
+import { redesignPaths } from '../paths.js';
+import { canAddProfile, firstFreeColor, markProfilePicked, parseProfilesSearch } from '../profile-session.js';
 import { ChoiceRow, ToggleRow } from '../settings-rows.js';
 import { useProfilesView } from '../shell.js';
 import { RdLoading } from './common.js';
 
-// /player/profiles: "Who's watching?" (spec §4.2, §4.6, §9 Q1-Q5). `?select=<id>` opens the PIN
-// for that profile (the avatar menu sends PIN profiles here); `?manage=1` opens Manage profiles,
-// which only the owner profile may use: add, edit (name, colour, PIN, content limit) and delete.
+// /player/profiles: "Who's watching?" (spec §4.2, §4.6, §9 Q1-Q5; features spec §1). `?select=<id>`
+// opens the PIN for that profile (the avatar menu sends PIN profiles here); `?manage=1` opens edit
+// mode, which only the owner profile may use: tapping a tile edits it (name, colour, PIN, content
+// limit, delete) and the Add tile creates one; `&add=1` opens the new-profile editor straight away
+// (the account menu's "Add profile"). Edit mode is a history entry of its own, so Back (the
+// browser's, the phone's) or Escape returns to pick mode before it leaves the picker.
 
-const toPicker = (p: HouseholdProfile): PickerProfile => ({ id: p.id, name: p.name, color: p.color, initial: p.initial, hasPin: p.hasPin });
+const toPicker = (p: HouseholdProfile): PickerProfile => ({ id: p.id, name: p.name, color: p.color, initial: p.initial, hasPin: p.hasPin, isOwner: p.isOwner });
 
 /**
  * The picker page. `gate`: shown by the layout before the page that was asked for (no close
@@ -33,26 +38,68 @@ const toPicker = (p: HouseholdProfile): PickerProfile => ({ id: p.id, name: p.na
 export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onPicked?: () => void } = {}) {
   const t = useT();
   const navigate = useNavigate();
+  const router = useRouter();
   const layout = useLayout() === 'portrait' ? 'portrait' : 'wide';
   const search = parseProfilesSearch(useSearch({ strict: false }) as Record<string, unknown>);
   const { profiles, canManage, activeId, loaded } = useProfilesView();
+  const { max } = useAddProfileView();
   const select = useSelectProfile();
   const player = usePlayerController();
-  const [managing, setManaging] = useState(Boolean(search.manage) && !gate);
+  // The gate sits in front of another page's address: edit mode is local there.
+  const [gateManaging, setGateManaging] = useState(false);
   const [editing, setEditing] = useState<HouseholdProfile | 'new' | null>(null);
+  const [focusId, setFocusId] = useState<number | null>(null);
   const [pinTarget, setPinTarget] = useState<number | null>(gate ? null : (search.select ?? null));
+  // This page pushed the edit-mode entry: Done goes back to pick mode instead of adding another.
+  const pushed = useRef(false);
 
   useEffect(() => {
     document.title = `${t('player.redesign.profiles.title')} · ${t('player.documentTitle')}`;
   }, [t]);
+
+  const manageAllowed = canManage;
+  const canAdd = canAddProfile({ canManage, count: profiles.length, max });
+  const isManaging = manageAllowed && (gate ? gateManaging : Boolean(search.manage));
+
+  const toProfiles = (next: { manage?: 1 }, replace: boolean) => navigate({ to: redesignPaths.profiles as '/player', search: next as never, replace });
+  const setManaging = (on: boolean) => {
+    if (gate) setGateManaging(on);
+    else if (on) {
+      pushed.current = true;
+      void toProfiles({ manage: 1 }, false);
+    } else if (pushed.current) {
+      pushed.current = false;
+      router.history.back();
+    } else void toProfiles({}, true);
+  };
+
+  // Arriving in edit mode (the avatar menu, Settings): pick mode goes underneath, so Back returns
+  // to it first. `add=1` opens the new-profile editor and leaves the address.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (gate || !loaded || arrived.current) return;
+    arrived.current = true;
+    if (!search.manage || !manageAllowed) return;
+    if (search.add && canAdd) setEditing('new');
+    pushed.current = true;
+    void toProfiles({}, true).then(() => toProfiles({ manage: 1 }, false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gate, loaded, search.manage, search.add, manageAllowed, canAdd]);
+
+  // Back out of edit mode also closes the editor opened from it.
+  const wasManaging = useRef(isManaging);
+  useEffect(() => {
+    if (wasManaging.current && !isManaging && editing && editing !== 'new') setEditing(null);
+    wasManaging.current = isManaging;
+  }, [isManaging, editing]);
 
   const done = () => {
     markProfilePicked();
     if (onPicked) onPicked();
     else void navigate({ to: '/player' });
   };
-  const onSelect = async (p: PickerProfile, pin?: string) => {
-    const run = () => select.mutateAsync({ id: p.id, pin });
+  const onSelect = async (p: PickerProfile, pin?: string, password?: string) => {
+    const run = () => select.mutateAsync({ id: p.id, pin, password });
     // The queue is per profile: a switch hands the player over (the same profile just goes on).
     await (player && p.id !== activeId ? player.switchProfile(run) : run());
     done();
@@ -62,6 +109,14 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
 
   const pinProfile = pinTarget !== null ? profiles.find((p) => p.id === pinTarget) : undefined;
   if (pinProfile) {
+    // `?select=` for the owner profile without a PIN: the avatar menu's switch asked for the password.
+    if (pinProfile.isOwner && !pinProfile.hasPin) {
+      return (
+        <div className={cx('rd-picker', `rd-picker--${layout}`)}>
+          <PasswordEntry profile={toPicker(pinProfile)} size={layout === 'portrait' ? 96 : 132} onCancel={() => setPinTarget(null)} onSubmit={(password) => onSelect(toPicker(pinProfile), undefined, password)} />
+        </div>
+      );
+    }
     return (
       <div className={cx('rd-picker', `rd-picker--${layout}`)}>
         <PinEntry profile={toPicker(pinProfile)} size={layout === 'portrait' ? 96 : 132} onCancel={() => setPinTarget(null)} onSubmit={(pin) => onSelect(toPicker(pinProfile), pin)} />
@@ -69,12 +124,24 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
     );
   }
 
-  const manageAllowed = canManage;
-  if (editing && manageAllowed) {
-    return <ProfileEditor layout={layout} profile={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />;
+  if (editing && manageAllowed && (editing !== 'new' || canAdd)) {
+    const current = editing;
+    return (
+      <ProfileEditor
+        key={current === 'new' ? 'new' : current.id}
+        mode={current === 'new' ? 'create' : 'edit'}
+        layout={layout}
+        profile={current === 'new' ? null : current}
+        profiles={profiles}
+        onDone={(saved) => {
+          setEditing(null);
+          // The new (or edited) profile's tile takes focus; a new one is not switched to.
+          setFocusId(saved?.id ?? (current === 'new' ? null : current.id));
+        }}
+      />
+    );
   }
 
-  const isManaging = managing && manageAllowed;
   return (
     <ProfilePicker
       layout={layout}
@@ -82,25 +149,33 @@ export function RdProfilesPage({ gate = false, onPicked }: { gate?: boolean; onP
       activeId={activeId}
       onSelect={onSelect}
       canAdd={manageAllowed}
+      max={max}
       onAdd={() => setEditing('new')}
       managing={isManaging}
       onEdit={(p) => setEditing(profiles.find((x) => x.id === p.id) ?? null)}
+      onManage={manageAllowed ? () => setManaging(!isManaging) : undefined}
+      focusId={focusId}
       onClose={gate ? undefined : () => void navigate({ to: '/player' })}
-      footer={
-        manageAllowed ? (
-          <button type="button" className={cx('rd-btn', isManaging ? 'rd-btn--primary' : 'rd-btn--secondary', 'rd-picker__manage')} onClick={() => setManaging(!isManaging)}>
-            {isManaging ? t('player.redesign.profiles.done') : t('player.redesign.profiles.manage')}
-          </button>
-        ) : null
-      }
     />
   );
 }
 
 const ANY = 'any';
 
-/** Add or edit one profile (owner only). */
-function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile | null; layout: 'wide' | 'portrait'; onDone: () => void }) {
+export interface ProfileEditorProps {
+  /** create: a new profile (the Add tile); edit: `profile`. */
+  mode: 'create' | 'edit';
+  profile: HouseholdProfile | null;
+  /** The account's profiles (a new one starts with a colour none of them has). */
+  profiles: readonly HouseholdProfile[];
+  layout: 'wide' | 'portrait';
+  /** Closed: `saved` is the created or updated profile (nothing after Cancel or Delete). */
+  onDone: (saved?: HouseholdProfile) => void;
+}
+
+/** Add or edit one profile (owner only): name, colour, PIN and, on other profiles, the content limits. */
+export function ProfileEditor({ mode, profile: given, profiles, layout, onDone }: ProfileEditorProps) {
+  const profile = mode === 'edit' ? given : null;
   const t = useT();
   const nameId = useId();
   const pinId = useId();
@@ -108,7 +183,7 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
   const update = useUpdateProfile();
   const remove = useDeleteProfile();
   const [name, setName] = useState(profile?.name ?? '');
-  const [color, setColor] = useState<string>(profile?.color ?? HOUSEHOLD_PROFILE_COLORS[0]);
+  const [color, setColor] = useState<string>(() => profile?.color ?? firstFreeColor(profiles));
   const [pinOn, setPinOn] = useState(profile?.hasPin ?? false);
   const [pin, setPin] = useState('');
   const [limits, setLimits] = useState<ContentRestrictions | null>(profile?.contentRestrictions ?? null);
@@ -127,9 +202,8 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
     if (pinOn && pin) body.pin = pin;
     if (!pinOn && profile?.hasPin) body.pin = null;
     if (!isOwner) body.contentRestrictions = limits;
-    if (profile) await update.mutateAsync({ id: profile.id, body });
-    else await create.mutateAsync({ ...body, name: trimmed, pin: pinOn && pin ? pin : null });
-    onDone();
+    const saved = profile ? await update.mutateAsync({ id: profile.id, body }) : await create.mutateAsync({ ...body, name: trimmed, pin: pinOn && pin ? pin : null });
+    onDone(saved);
   };
 
   const movieCap = limits?.maxCertification.movie ?? ANY;
@@ -139,7 +213,7 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
     const next = { ...base, maxCertification: { ...base.maxCertification, [kind]: v === ANY ? null : v } } as ContentRestrictions;
     setLimits(!next.maxCertification.movie && !next.maxCertification.tv && !next.hideAdultContent ? null : next);
   };
-  const mode = layout === 'portrait' ? 'sheet' : 'cycle';
+  const choiceMode = layout === 'portrait' ? 'sheet' : 'cycle';
   const any = t('player.redesign.profiles.anyRating');
 
   return (
@@ -198,14 +272,14 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
                 label={t('player.redesign.profiles.movieLimit')}
                 value={movieCap}
                 options={[{ value: ANY, label: any }, ...MOVIE_CERTIFICATIONS.map((c) => ({ value: c, label: c }))]}
-                mode={mode}
+                mode={choiceMode}
                 onChange={(v) => setCap('movie', v)}
               />
               <ChoiceRow
                 label={t('player.redesign.profiles.tvLimit')}
                 value={tvCap}
                 options={[{ value: ANY, label: any }, ...TV_CERTIFICATIONS.map((c) => ({ value: c, label: c }))]}
-                mode={mode}
+                mode={choiceMode}
                 onChange={(v) => setCap('tv', v)}
               />
             </>
@@ -215,7 +289,7 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
           <button type="submit" className="rd-btn rd-btn--primary" disabled={!canSave}>
             {t('player.redesign.profiles.save')}
           </button>
-          <button type="button" className="rd-btn rd-btn--secondary" onClick={onDone}>
+          <button type="button" className="rd-btn rd-btn--secondary" onClick={() => onDone()}>
             {t('player.redesign.cancel')}
           </button>
         </div>
@@ -228,7 +302,7 @@ function ProfileEditor({ profile, layout, onDone }: { profile: HouseholdProfile 
                   type="button"
                   className="rd-btn rd-btn--danger"
                   disabled={busy}
-                  onClick={() => void remove.mutateAsync(profile.id).then(onDone)}
+                  onClick={() => void remove.mutateAsync(profile.id).then(() => onDone())}
                 >
                   {t('player.redesign.profiles.delete')}
                 </button>

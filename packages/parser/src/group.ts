@@ -1,3 +1,5 @@
+import { clampPath } from './normalize.js';
+
 // Release group detection. Where a group can sit, in the order we look:
 //
 //   [Group] Title - 01 [1080p]                  anime prefix
@@ -25,7 +27,8 @@ const JUNK_SUFFIX = new RegExp(
 const TRAILING_LANGUAGE = /[ ._](?:English|French|German|Spanish|Italian|Dutch|Multi)$/i;
 // Tracker/indexer bracket tags that are never the group.
 const TRACKER_TAG = /\s*\[(?:eztv|ettv|rartv|rarbg|TGx|PublicHD|ETRG|CTRG|GloDLS|AT-TEAM|SPARROW)\]\s*$/i;
-const SITE_TAG = /\s*[-–]?\s*\[\s*(?:www\.)?[a-z0-9-]+\.(?:com|net|org|info|biz|to|tv|cc|me|io|ws|xyz|ru|club|site)\s*\]\s*$/i;
+// Separator runs written so they cannot share characters (no cubic backtracking on long runs).
+const SITE_TAG = /(?<!\s)\s*(?:[-–]\s*)?\[\s*(?:www\.)?[a-z0-9-]+\.(?:com|net|org|info|biz|to|tv|cc|me|io|ws|xyz|ru|club|site)\s*\]\s*$/i;
 const SITE_PREFIX = /^\s*\[\s*(?:www\.)?[a-z0-9-]+\.(?:com|net|org|info|biz|to|tv|cc|me|io|ws|xyz|ru|club|site)\s*\]\s*[-–]?\s*/i;
 const HASH_TAG = /\s*\[[a-f0-9]{8}\]\s*$/i;
 const FILE_EXTENSION = /\.(?:mkv|mp4|avi|m4v|ts|m2ts|wmv|mov|webm|mpg|mpeg|divx|xvid|iso|img|srt|sub|idx|nfo)$/i;
@@ -101,6 +104,7 @@ function peel(title: string): string {
 }
 
 export function parseReleaseGroup(releaseTitle: string): string | null {
+  releaseTitle = clampPath(releaseTitle);
   let t = releaseTitle.trim().replace(FILE_EXTENSION, '').replace(SITE_PREFIX, '').trim();
   // A path: the group belongs to the file name.
   if (/^[a-z]:\\|\\/i.test(t)) t = t.slice(t.lastIndexOf('\\') + 1).replace(FILE_EXTENSION, '');

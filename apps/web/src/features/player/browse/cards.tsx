@@ -1,15 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { PlayerAlbum, PlayerArtist, PlayerAudiobook, UserPlaylistSummary } from '@arclight/shared';
+import type { PlayerAlbum, PlayerArtist, PlayerAudiobook, PlayerTrack, UserPlaylistSummary } from '@arclight/shared';
 import { Icon } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { useT } from '../../../i18n/index.js';
+import { Art, RoundTile, SquareTile } from '../redesign/tiles.js';
 import { browseKeys, playerBrowseApi } from './api.js';
 import { isInProgress, lengthLabel, names, progressShare, shuffled, timeLeftLabel } from './format.js';
 import { Artwork, FormatBadge, PlayerLink, playerPaths } from './kit.js';
 import { usePlayerActions } from './player-hooks.js';
 
-// Cards and rows for albums, artists, playlists and audiobooks. A card is a link (artwork +
-// text) with a separate play button beside it, never a button inside a link.
+// Tiles and list rows for albums, artists, playlists, tracks and audiobooks. Tiles follow the
+// redesign rule (redesign/tiles.tsx): a tile is one link or one button, with nothing drawn on the
+// artwork. Grids use the same tiles at full cell width (`fill`).
 
 /** Play an album or playlist that is only known by its summary: loads its tracks first. */
 export function usePlayCollection() {
@@ -29,36 +31,88 @@ export function usePlayCollection() {
   };
 }
 
-function PlayOverlay({ label, onPlay }: { label: string; onPlay: () => void }) {
-  return (
-    <button type="button" className="pb-card__play" aria-label={label} onClick={onPlay}>
-      <Icon name="play" size={20} />
-    </button>
-  );
+const fillClass = (fill: boolean | undefined) => (fill ? 'rd-music-tile--fill' : undefined);
+
+/** Album tile: opens the album. `sub` defaults to the artist (the template's album rows). */
+export function AlbumTile({ album, sub, fill }: { album: PlayerAlbum; sub?: string | undefined; fill?: boolean | undefined }) {
+  return <SquareTile title={album.title} sub={sub ?? album.artistName} image={album.artworkUrl} href={playerPaths.album(album.id)} className={fillClass(fill)} />;
 }
 
-export function AlbumCard({ album, as = 'li' }: { album: PlayerAlbum; as?: 'li' | 'div' }) {
+/** Album tile that plays the album (Jump back in: picking up where you were, like Continue Watching). */
+export function AlbumPlayTile({ album }: { album: PlayerAlbum }) {
   const t = useT();
   const play = usePlayCollection();
-  const As = as;
+  return <SquareTile title={album.title} sub={album.artistName} image={album.artworkUrl} label={t('player.browse.album.playNamed', { title: album.title })} onOpen={() => void play.album(album.id)} />;
+}
+
+/** Recently played track: plays the row from this track (or pauses it when it is the one playing). */
+export function TrackTile({ track, onPlay }: { track: PlayerTrack; onPlay: () => void }) {
+  const t = useT();
+  return <SquareTile title={track.title} sub={track.artistName} image={track.artworkUrl} label={t('player.browse.track.playBy', { title: track.title, artist: track.artistName })} onOpen={onPlay} />;
+}
+
+export function ArtistTile({ artist, fill }: { artist: PlayerArtist; fill?: boolean | undefined }) {
+  return <RoundTile title={artist.name} image={artist.imageUrl} href={playerPaths.artist(artist.id)} className={fillClass(fill)} />;
+}
+
+/** Audiobook tile: author under the title, the accent bar while in progress. */
+export function BookTile({ book, fill }: { book: PlayerAudiobook; fill?: boolean | undefined }) {
+  const t = useT();
   return (
-    <As className="pb-card">
-      <PlayerLink to={playerPaths.album(album.id)} className="pb-card__link">
-        <Artwork src={album.artworkUrl} alt="">
-          {album.formatLabel || album.lossless ? (
-            <span className="pb-card__badge">
-              <FormatBadge label={album.formatLabel} lossless={album.lossless} />
-            </span>
-          ) : null}
-        </Artwork>
-        <span className="pb-card__title">{album.title}</span>
-        <span className="pb-card__sub">{[album.artistName, album.year].filter(Boolean).join(' · ')}</span>
-      </PlayerLink>
-      <PlayOverlay label={t('player.browse.album.playNamed', { title: album.title })} onPlay={() => void play.album(album.id)} />
-    </As>
+    <SquareTile
+      title={book.title}
+      sub={names(book.authors) ?? t('player.browse.book.unknownAuthor')}
+      image={book.artworkUrl}
+      progress={isInProgress(book.progress) ? progressShare(book.progress, book.durationMs) : null}
+      href={playerPaths.book(book.id)}
+      className={fillClass(fill)}
+    />
   );
 }
 
+/** Continue listening: resumes the book; the sub says how long is left. */
+export function ContinueBookTile({ book }: { book: PlayerAudiobook }) {
+  const t = useT();
+  const player = usePlayerActions();
+  return (
+    <SquareTile
+      title={book.title}
+      sub={timeLeftLabel(book.progress, book.durationMs)}
+      image={book.artworkUrl}
+      progress={progressShare(book.progress, book.durationMs)}
+      label={t('player.browse.book.resumeNamed', { title: book.title })}
+      onOpen={() => player.playItem(book.itemKey)}
+    />
+  );
+}
+
+/** Up to four covers as a 2x2 mosaic over the placeholder; one cover fills the frame. */
+export function PlaylistArt({ name, urls, className }: { name: string; urls: readonly string[]; className?: string | undefined }) {
+  if (urls.length < 4) return <Art image={urls[0]} seed={name} className={className} />;
+  return (
+    <Art seed={name} className={cx('rd-music-mosaic', className)}>
+      {urls.slice(0, 4).map((u, i) => (
+        <img key={i} src={u} alt="" loading="lazy" decoding="async" draggable={false} />
+      ))}
+    </Art>
+  );
+}
+
+/** Playlist tile (the square tile with the mosaic art): opens the playlist. */
+export function PlaylistTile({ playlist, fill }: { playlist: UserPlaylistSummary; fill?: boolean | undefined }) {
+  const t = useT();
+  return (
+    <PlayerLink to={playerPaths.playlist(playlist.id)} className={cx('rd-tile rd-tile--square', fillClass(fill))}>
+      <PlaylistArt name={playlist.name} urls={playlist.artworkUrls} className="rd-tile__art" />
+      <span className="rd-tile__text">
+        <span className="rd-tile__name">{playlist.name}</span>
+        <span className="rd-tile__sub">{t('player.browse.playlist.meta', { count: playlist.trackCount, length: lengthLabel(playlist.durationMs) })}</span>
+      </span>
+    </PlayerLink>
+  );
+}
+
+/** List view row for an album: cover, title, counts, format and a play button. */
 export function AlbumRow({ album }: { album: PlayerAlbum }) {
   const t = useT();
   const play = usePlayCollection();
@@ -80,20 +134,6 @@ export function AlbumRow({ album }: { album: PlayerAlbum }) {
   );
 }
 
-export function ArtistCard({ artist, as = 'li' }: { artist: PlayerArtist; as?: 'li' | 'div' }) {
-  const t = useT();
-  const As = as;
-  return (
-    <As className="pb-card pb-card--artist">
-      <PlayerLink to={playerPaths.artist(artist.id)} className="pb-card__link">
-        <Artwork src={artist.imageUrl} alt="" shape="round" />
-        <span className="pb-card__title">{artist.name}</span>
-        <span className="pb-card__sub">{t('player.browse.artist.albumCount', { count: artist.albumCount })}</span>
-      </PlayerLink>
-    </As>
-  );
-}
-
 export function ArtistRow({ artist }: { artist: PlayerArtist }) {
   const t = useT();
   return (
@@ -107,65 +147,5 @@ export function ArtistRow({ artist }: { artist: PlayerArtist }) {
         {t('player.browse.artist.albumCount', { count: artist.albumCount })} · {t('player.browse.artist.trackCount', { count: artist.trackCount })}
       </span>
     </li>
-  );
-}
-
-export function PlaylistCard({ playlist }: { playlist: UserPlaylistSummary }) {
-  const t = useT();
-  const play = usePlayCollection();
-  return (
-    <li className="pb-card">
-      <PlayerLink to={playerPaths.playlist(playlist.id)} className="pb-card__link">
-        <PlaylistArt urls={playlist.artworkUrls} />
-        <span className="pb-card__title">{playlist.name}</span>
-        <span className="pb-card__sub">{t('player.browse.playlist.meta', { count: playlist.trackCount, length: lengthLabel(playlist.durationMs) })}</span>
-      </PlayerLink>
-      {playlist.trackCount > 0 ? (
-        <PlayOverlay label={t('player.browse.playlist.playNamed', { name: playlist.name })} onPlay={() => void play.playlist(playlist.id)} />
-      ) : null}
-    </li>
-  );
-}
-
-/** Up to four covers as a 2x2 mosaic; one cover fills the frame. */
-export function PlaylistArt({ urls, size }: { urls: readonly string[]; size?: number | string }) {
-  if (urls.length < 4) return <Artwork src={urls[0]} alt="" size={size} />;
-  return (
-    <div className="pb-art pb-mosaic" style={size === undefined ? undefined : { width: size }}>
-      {urls.slice(0, 4).map((u, i) => (
-        <img key={i} src={u} alt="" loading="lazy" decoding="async" />
-      ))}
-    </div>
-  );
-}
-
-export function BookCard({ book, as = 'li', showLeft = false }: { book: PlayerAudiobook; as?: 'li' | 'div'; showLeft?: boolean }) {
-  const t = useT();
-  const player = usePlayerActions();
-  const share = progressShare(book.progress, book.durationMs);
-  const As = as;
-  const resumable = isInProgress(book.progress);
-  return (
-    <As className={cx('pb-card', 'pb-card--book')}>
-      <PlayerLink to={playerPaths.book(book.id)} className="pb-card__link">
-        <Artwork src={book.artworkUrl} alt="" progress={share}>
-          {book.progress?.played ? (
-            <span className="pb-card__done" role="img" aria-label={t('player.browse.book.finished')}>
-              <Icon name="check" />
-            </span>
-          ) : null}
-        </Artwork>
-        <span className="pb-card__title">{book.title}</span>
-        <span className="pb-card__sub">{names(book.authors) ?? t('player.browse.book.unknownAuthor')}</span>
-        {showLeft && resumable ? <span className="pb-card__meta al-num">{timeLeftLabel(book.progress, book.durationMs)}</span> : null}
-        {!showLeft && book.seriesTitle ? (
-          <span className="pb-card__meta">{book.seriesPosition ? t('player.browse.book.seriesPosition', { series: book.seriesTitle, position: book.seriesPosition }) : book.seriesTitle}</span>
-        ) : null}
-      </PlayerLink>
-      <PlayOverlay
-        label={resumable ? t('player.browse.book.resumeNamed', { title: book.title }) : t('player.browse.book.playNamed', { title: book.title })}
-        onPlay={() => player.playItem(book.itemKey)}
-      />
-    </As>
   );
 }

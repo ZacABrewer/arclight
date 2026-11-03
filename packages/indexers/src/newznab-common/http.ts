@@ -1,7 +1,10 @@
+import { readLimitedText, SafeFetchError } from '@arclight/net';
 import { IndexerError, type ClientOptions } from '../types.js';
 import { parseResponse, type XmlNode } from './xml.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** Largest API response read: a full page of results with attributes is well under 1 MB. */
+export const MAX_XML_BYTES = 16 * 1024 * 1024;
 
 /** Replace the apikey query value so URLs are safe to put in errors and logs. */
 export function redactUrl(url: string): string {
@@ -29,9 +32,13 @@ export async function getXml(url: string, options: ClientOptions): Promise<XmlNo
       redirect: 'follow',
       signal,
     });
-    body = await response.text();
+    // The timeout signal stays attached while the body streams, and the read stops at the cap.
+    body = await readLimitedText(response, MAX_XML_BYTES);
   } catch (cause) {
     if (options.signal?.aborted) throw cause;
+    if (cause instanceof SafeFetchError && cause.code === 'tooLarge') {
+      throw new IndexerError('bad-response', `Indexer response is too large (${safeUrl})`, { cause });
+    }
     const timedOut = timeout.aborted;
     throw new IndexerError(
       'unreachable',

@@ -21,6 +21,7 @@ import {
   type HtmlElement,
   type HtmlParent,
 } from '../html/index.js';
+import { BlockedAddressError, readLimited, resolveAllowed, SafeFetchError, type TargetPolicy } from '@arclight/net';
 import { createProxiedFetch, isChallengeResponse, isFlareSolverr, type ProxyConfig } from '../proxy.js';
 import { createRateLimiter, defaultSleep } from '../rate-limit.js';
 import { IndexerError, type ReleaseInfo, type SearchRequest } from '../types.js';
@@ -58,6 +59,11 @@ export interface RuntimeOptions {
   interactive?: boolean;
   signal?: AbortSignal;
   log?: (level: LogLevel, message: string) => void;
+  /**
+   * Address policy for hosts outside the definition's own links (scraped download links,
+   * cross-host redirects). Private targets are refused there; tests inject a resolver.
+   */
+  foreignTargetPolicy?: TargetPolicy;
 }
 
 /** Torznab categories may be attached to any request. */
@@ -97,6 +103,12 @@ export const DEFAULT_USER_AGENT =
 
 const DEFAULT_TIMEOUT_MS = 100_000;
 const MAX_REDIRECTS = 10;
+/** Largest page (HTML / JSON / XML) read from a site. */
+export const MAX_PAGE_BYTES = 8 * 1024 * 1024;
+/** Largest .torrent file downloaded. */
+export const MAX_TORRENT_BYTES = 10 * 1024 * 1024;
+/** Request headers that only ever go to the definition's own hosts. */
+const SITE_ONLY_HEADERS = new Set(['authorization', 'cookie', 'proxy-authorization']);
 const COOKIE_LIFETIME_MS = 30 * 24 * 3600 * 1000;
 const SEEDER_CAP = 5_000_000;
 
@@ -144,6 +156,8 @@ interface HttpRequest {
   body?: string | Uint8Array;
   contentType?: string;
   followRedirects: boolean;
+  /** Body cap for this request; default MAX_PAGE_BYTES. */
+  maxBytes?: number;
 }
 
 interface HttpResult {
@@ -338,6 +352,15 @@ function todayVars(now: number): TemplateVars {
 // ---------------------------------------------------------------------------------------
 // Misc helpers
 
+/** Host part of a URL with any query string or path dropped (for logs: download URLs carry passkeys). */
+function logHost(url: string): string {
+  try {
+    return new URL(url).host || '(no host)';
+  } catch {
+    return '(invalid URL)';
+  }
+}
+
 function resolveUrl(value: string, base: string): string {
   try {
     return new URL(value.trim(), base).href;
@@ -429,7 +452,16 @@ export class DefinitionRuntime {
     this.currentLink = String(this.config['Config.sitelink']);
     this.categoryMap = buildCategoryMap(definition);
     const base = options.fetchImpl ?? globalThis.fetch;
-    this.fetchImpl = options.proxy ? createProxiedFetch(options.proxy, { fetchImpl: base, jar: this.jar }) : base;
+    // Through a network proxy, foreign hosts are resolved and vetted here and the proxy gets
+    // the IP, so a name rebinding to a LAN address is caught; the site's own hosts keep
+    // remote DNS (they may sit on the LAN or resolve only through the proxy).
+    this.fetchImpl = options.proxy
+      ? createProxiedFetch(options.proxy, {
+        fetchImpl: base,
+        jar: this.jar,
+        targetPolicy: (url) => (this.isSiteUrl(url.href) ? undefined : (this.options.foreignTargetPolicy ?? {})),
+      })
+      : base;
     const proxies: readonly ProxyConfig[] = options.proxy === undefined ? [] : Array.isArray(options.proxy) ? options.proxy : [options.proxy as ProxyConfig];
     this.hasFlareSolverr = proxies.some(isFlareSolverr);
     const delay = Math.max(options.rateLimitMs ?? 0, (definition.requestdelay ?? 0) * 1000);
@@ -458,6 +490,54 @@ export class DefinitionRuntime {
   /** The `links` entry on the given host, or undefined. */
   private linkForHost(host: string | undefined): string | undefined {
     return host === undefined ? undefined : this.definition.links.find((l) => hostOf(l) === host);
+  }
+
+  /**
+   * True when the URL is on one of the definition's own hosts (links, legacy links, the
+   * configured site link) or a subdomain of one. Only those get the session cookies and the
+   * definition's headers, and only those may sit on the LAN: everything else (a scraped
+   * absolute link, a redirect elsewhere) is treated as a foreign host.
+   */
+  private isSiteUrl(url: string): boolean {
+    let host: string;
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+    if (!host) return false;
+    const bases = [this.currentLink, String(this.config['Config.sitelink'] ?? ''), ...this.definition.links, ...(this.definition.legacylinks ?? [])];
+    for (const link of bases) {
+      let base: string;
+      try {
+        base = new URL(link).hostname.toLowerCase();
+      } catch {
+        continue;
+      }
+      if (!base) continue;
+      if (host === base || host.endsWith(`.${base}`)) return true;
+      const bare = base.replace(/^www\./, '');
+      if (bare !== base && (host === bare || host.endsWith(`.${bare}`))) return true;
+    }
+    return false;
+  }
+
+  /** Refuse a foreign host that is (or resolves to) a loopback / LAN / reserved address. */
+  private async guardForeign(url: string): Promise<void> {
+    let hostname: string;
+    try {
+      hostname = new URL(url).hostname;
+    } catch {
+      return; // fetch rejects it on its own
+    }
+    try {
+      await resolveAllowed(hostname, this.options.foreignTargetPolicy ?? {});
+    } catch (err) {
+      if (err instanceof BlockedAddressError) {
+        throw new IndexerError('bad-response', `Refusing to fetch ${logHost(url)}: it is outside the indexer's site and on a local or reserved address`, { cause: err });
+      }
+      // Resolution failures are left for the request itself to report.
+    }
   }
 
   private isDefinitionHost(host: string | undefined): boolean {
@@ -545,13 +625,20 @@ export class DefinitionRuntime {
     let crossHostFollowed = false;
 
     for (let hop = 0; ; hop++) {
+      // Session cookies and auth-style headers go only to the definition's own hosts; a
+      // foreign host (scraped link or redirect) gets a plain request and must be public.
+      const onSite = this.isSiteUrl(url);
+      if (!onSite) await this.guardForeign(url);
+      const extra = onSite
+        ? req.headers
+        : Object.fromEntries(Object.entries(req.headers ?? {}).filter(([k]) => !SITE_ONLY_HEADERS.has(k.toLowerCase())));
       const headers: Record<string, string> = {
         // With FlareSolverr the solved browser UA is injected by the proxy layer (S14.11).
         ...(this.options.userAgent || !this.hasFlareSolverr ? { 'User-Agent': this.options.userAgent ?? DEFAULT_USER_AGENT } : {}),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7',
-        ...req.headers,
+        ...extra,
       };
-      const cookie = this.jar.header();
+      const cookie = onSite ? this.jar.header() : undefined;
       if (cookie) headers['Cookie'] = cookie;
       if (contentType && body !== undefined) headers['Content-Type'] = contentType;
       let response: Response;
@@ -569,8 +656,18 @@ export class DefinitionRuntime {
         const message = `${cause instanceof Error ? cause.message : String(cause)}${inner}`;
         throw new NetworkFailure(`${timeout.aborted ? 'Timed out' : 'Request failed'}: ${message}`, timeout.aborted, cause);
       }
-      this.jar.importResponse(response, this.now());
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (onSite) this.jar.importResponse(response, this.now());
+      let bytes: Uint8Array;
+      try {
+        // Capped read; the timeout signal stays attached until the body is consumed.
+        bytes = new Uint8Array(await readLimited(response, req.maxBytes ?? MAX_PAGE_BYTES));
+      } catch (cause) {
+        if (cause instanceof SafeFetchError && cause.code === 'tooLarge') {
+          throw new IndexerError('bad-response', `Response from ${logHost(url)} is too large`, { cause });
+        }
+        if (this.options.signal?.aborted) throw cause;
+        throw new NetworkFailure(`${timeout.aborted ? 'Timed out' : 'Request failed'} reading the response: ${cause instanceof Error ? cause.message : String(cause)}`, timeout.aborted, cause);
+      }
       const location = response.headers.get('location') ?? undefined;
       const isRedirect = response.status >= 300 && response.status < 400 && location !== undefined;
       if (isRedirect && location.startsWith('magnet:')) {
@@ -1498,7 +1595,7 @@ export class DefinitionRuntime {
         try {
           return await this.fetchTorrent(candidate, finalMethod, headers, link);
         } catch (err) {
-          this.log('debug', `download candidate ${candidate} rejected: ${err instanceof Error ? err.message : String(err)}`);
+          this.log('debug', `download candidate on ${logHost(candidate)} rejected: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
       throw new IndexerError('bad-response', `Download selectors didn't match for ${link}`);
@@ -1512,6 +1609,7 @@ export class DefinitionRuntime {
       method,
       headers: referer ? { ...headers, Referer: referer } : headers,
       followRedirects: true,
+      maxBytes: MAX_TORRENT_BYTES,
     }));
     if (res.location?.startsWith('magnet:')) return { kind: 'magnet', magnetUrl: res.location };
     if (res.status === 404) throw new IndexerError('bad-response', 'Release unavailable (404)', { status: 404 });

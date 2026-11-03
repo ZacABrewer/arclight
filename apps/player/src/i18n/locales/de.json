@@ -72,6 +72,7 @@
   "app.tv.pin.entered": "{n} von 4 Ziffern eingegeben",
   "app.tv.pin.failed": "Das hat nicht geklappt. Versuch es noch einmal.",
   "app.tv.pin.locked": "Zu viele Fehlversuche. Versuch es in {count, plural, one {# Minute} other {# Minuten}} noch einmal.",
+  "app.tv.pin.passwordRequired": "{name} hat keine PIN, daher braucht der Wechsel das Kontopasswort. Melde dich auf diesem Gerät neu an oder gib {name} eine PIN.",
   "app.tv.pin.wrong": "Falsche PIN. Versuch es noch einmal.",
   "app.tv.play": "Abspielen",
   "app.tv.playEpisode": "S{s} F{e} abspielen",
@@ -164,5 +165,17 @@
   "app.tv.settings.size.medium": "Mittel",
   "app.tv.settings.size.large": "Groß",
   "app.error.serverTimeout": "{host} hat nicht innerhalb von {seconds} Sekunden geantwortet. Prüfe, ob der Server läuft und dieses Gerät im richtigen Netzwerk ist.",
-  "app.error.serverUnreachable": "{host} ist nicht erreichbar. Prüfe, ob der Server läuft und dieses Gerät im richtigen Netzwerk ist."
+  "app.error.serverUnreachable": "{host} ist nicht erreichbar. Prüfe, ob der Server läuft und dieses Gerät im richtigen Netzwerk ist.",
+  "app.serverCheck.server": "Server",
+  "app.serverCheck.secure": "Verschlüsselte Verbindung (https)",
+  "app.serverCheck.plain": "Unverschlüsselte Verbindung (http)",
+  "app.serverCheck.lanNotice": "Der Datenverkehr in deinem Netzwerk ist nicht verschlüsselt. Jeder im selben Netzwerk könnte sehen, was du abspielst.",
+  "app.serverCheck.publicWarning": "Dieser Server ist im Internet und verwendet kein HTTPS. Deine Anmeldung und alles, was du abspielst, würden unverschlüsselt übertragen, und jeder auf dem Weg könnte mitlesen.",
+  "app.serverCheck.downgrade": "{host} war bisher verschlüsselt erreichbar. Diese Adresse verbindet ohne Verschlüsselung.",
+  "app.serverCheck.typeHost": "Um trotzdem zu verbinden, gib {host} ein",
+  "app.serverCheck.savedTitle": "Server bestätigen",
+  "app.serverCheck.savedBody": "Dein Server wird über das Internet ohne Verschlüsselung erreicht. Arclight fragt jetzt einmal nach, bevor deine Anmeldung so gesendet wird.",
+  "app.serverCheck.continue": "Weiter",
+  "app.error.insecureServer": "Arclight sendet deine Anmeldung erst unverschlüsselt an {host}, wenn du es erlaubst.",
+  "app.signIn.error.insecure": "Erlaube zuerst die unverschlüsselte Verbindung zu diesem Server."
 }

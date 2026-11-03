@@ -31,7 +31,8 @@ import { t } from '../../../i18n/index.js';
 
 export const householdApi = {
   profiles: () => request('/households/profiles', HouseholdProfilesResponse),
-  select: (id: number, pin?: string) => request(`/households/profiles/${id}/select`, SelectProfileResponse, { method: 'POST', json: pin ? { pin } : {} }),
+  select: (id: number, pin?: string, password?: string) =>
+    request(`/households/profiles/${id}/select`, SelectProfileResponse, { method: 'POST', json: { ...(pin ? { pin } : {}), ...(password ? { password } : {}) } }),
   settings: () => request('/households/profiles/active/settings', ProfileSettings),
   saveSettings: (patch: ProfileSettingsPatch) => request('/households/profiles/active/settings', ProfileSettings, { method: 'PUT', json: patch }),
   create: (body: HouseholdProfileCreate) => request('/households/profiles', HouseholdProfile, { method: 'POST', json: body }),
@@ -131,7 +132,7 @@ function stripUndefined<T extends object>(o: T): Partial<T> {
 export function useSelectProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, pin }: { id: number; pin?: string | undefined }) => householdApi.select(id, pin),
+    mutationFn: ({ id, pin, password }: { id: number; pin?: string | undefined; password?: string | undefined }) => householdApi.select(id, pin, password),
     meta: { silent: true },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: authKeys.all });

@@ -160,7 +160,7 @@ describe('API key', () => {
     const { app, cookie, auth } = await readyApp();
     const old = auth.apiKey();
     const got = await app.inject({ method: 'GET', url: '/api/v1/settings/security', headers: { cookie } });
-    expect(got.json()).toEqual({ method: 'forms', requireForLocal: true, sessionDays: 30, apiKey: old });
+    expect(got.json()).toEqual({ method: 'forms', requireForLocal: true, sessionDays: 30, apiKey: `********${old.slice(-4)}` });
     const regen = await app.inject({ method: 'POST', url: '/api/v1/settings/security/apikey', headers: { cookie } });
     expect(regen.json().apiKey).not.toBe(old);
     expect((await app.inject({ method: 'GET', url: '/api/v1/probe', headers: { 'x-api-key': old } })).statusCode).toBe(401);

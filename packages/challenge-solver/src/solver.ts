@@ -1,12 +1,19 @@
 import { CdpConnection, type WebSocketFactory } from './cdp.js';
 import { detectChallenge, type ChallengeVerdict } from './challenge.js';
 import { SolverError } from './errors.js';
-import { launchBrowser, type LaunchedBrowser, type LaunchOptions } from './launch.js';
+import { ALLOW_ROOT_ENV, launchBrowser, runningAsRoot, type LaunchedBrowser, type LaunchOptions } from './launch.js';
 import { SerialQueue } from './queue.js';
 
 export const DEFAULT_SOLVE_TIMEOUT_MS = 60_000;
 export const DEFAULT_IDLE_CLOSE_MS = 300_000;
 export const DEFAULT_POLL_INTERVAL_MS = 500;
+/** Upper bound for a per-request timeout (FlareSolverr `maxTimeout`). */
+export const MAX_REQUEST_TIMEOUT_MS = 120_000;
+/** Named sessions kept at once; `sessions.create` beyond this is refused. */
+export const DEFAULT_MAX_SESSIONS = 20;
+/** A named session unused for this long is destroyed (its tab closed). */
+export const DEFAULT_SESSION_IDLE_MS = 30 * 60_000;
+const MAX_SESSION_NAME = 200;
 
 export interface SolverCookie {
   name: string;
@@ -53,6 +60,17 @@ export interface ChallengeSolverOptions {
   idleCloseMs?: number;
   pollIntervalMs?: number;
   headless?: boolean;
+  /** Default `DEFAULT_MAX_SESSIONS`. */
+  maxSessions?: number;
+  /** Default `DEFAULT_SESSION_IDLE_MS`; 0 keeps sessions until destroyed. */
+  sessionIdleMs?: number;
+  /**
+   * Vets every URL before it is loaded and the final URL before its page is returned (throw to
+   * refuse). Arclight passes a check that blocks loopback and LAN addresses.
+   */
+  checkTarget?: (url: URL) => Promise<void> | void;
+  /** Passed to the launcher (root without the sandbox); default from the environment. */
+  allowRoot?: boolean;
   /** Test seam: start a browser (default launches `executablePath`). */
   launch?: (opts: LaunchOptions) => Promise<LaunchedBrowser>;
   webSocketFactory?: WebSocketFactory;
@@ -142,7 +160,8 @@ export class ChallengeSolver {
   private browser: Browser | undefined;
   private starting: Promise<Browser> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
-  private readonly sessions = new Set<string>();
+  /** Named session -> last use (ms). */
+  private readonly sessions = new Map<string, number>();
 
   constructor(opts: ChallengeSolverOptions) {
     this.opts = opts;
@@ -169,17 +188,38 @@ export class ChallengeSolver {
   solve(req: SolveRequest): Promise<SolveResult> {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
+    this.pruneSessions();
+    if (req.session && this.sessions.has(req.session)) this.sessions.set(req.session, this.now());
     return this.queue.run(() => this.solveNow(req));
   }
 
   createSession(id?: string): string {
+    this.pruneSessions();
     const name = id?.trim() || `arclight-${this.now().toString(36)}-${this.sessions.size + 1}`;
-    this.sessions.add(name);
+    if (name.length > MAX_SESSION_NAME) throw new SolverError('bad-request', `Session names are limited to ${MAX_SESSION_NAME} characters`);
+    const max = this.opts.maxSessions ?? DEFAULT_MAX_SESSIONS;
+    if (!this.sessions.has(name) && this.sessions.size >= max) {
+      throw new SolverError('bad-request', `Too many sessions (${max}); destroy one with sessions.destroy first`);
+    }
+    this.sessions.set(name, this.now());
     return name;
   }
 
   listSessions(): string[] {
-    return [...this.sessions];
+    this.pruneSessions();
+    return [...this.sessions.keys()];
+  }
+
+  /** Destroys named sessions idle longer than `sessionIdleMs`. */
+  private pruneSessions(): void {
+    const ttl = this.opts.sessionIdleMs ?? DEFAULT_SESSION_IDLE_MS;
+    if (ttl <= 0) return;
+    const cutoff = this.now() - ttl;
+    for (const [name, used] of this.sessions) {
+      if (used > cutoff) continue;
+      this.log('debug', `closing idle solver session ${name}`);
+      void this.destroySession(name);
+    }
   }
 
   async destroySession(id: string): Promise<boolean> {
@@ -243,9 +283,13 @@ export class ChallengeSolver {
   private async startBrowser(): Promise<Browser> {
     const launch = this.opts.launch ?? launchBrowser;
     this.log('info', `starting solver browser ${this.opts.executablePath}`);
+    if (runningAsRoot()) {
+      this.log('warn', `The solver runs as root: its browser can only start without the Chromium sandbox (allowed only with ${ALLOW_ROOT_ENV}=1). Run Arclight as a regular user.`);
+    }
     const process = await launch({
       executablePath: this.opts.executablePath,
       userDataDir: this.opts.userDataDir,
+      ...(this.opts.allowRoot !== undefined ? { allowRoot: this.opts.allowRoot } : {}),
       ...(this.opts.headless !== undefined ? { headless: this.opts.headless } : {}),
     });
     let cdp: CdpConnection;
@@ -311,7 +355,8 @@ export class ChallengeSolver {
       throw new SolverError('bad-request', `"${req.url}" is not a valid URL`);
     }
     if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new SolverError('bad-request', `Unsupported URL scheme ${target.protocol}`);
-    const timeoutMs = req.timeoutMs ?? this.opts.timeoutMs ?? DEFAULT_SOLVE_TIMEOUT_MS;
+    await this.vet(target);
+    const timeoutMs = req.timeoutMs !== undefined ? Math.min(req.timeoutMs, MAX_REQUEST_TIMEOUT_MS) : (this.opts.timeoutMs ?? DEFAULT_SOLVE_TIMEOUT_MS);
     const deadline = this.now() + timeoutMs;
     const b = await this.ensureBrowser();
     const key = req.session && this.sessions.has(req.session) ? `session:${req.session}` : `host:${target.host}`;
@@ -370,6 +415,16 @@ export class ChallengeSolver {
         headers: doc?.headers ?? {},
       };
       if (req.method === 'POST') result = await this.post(b, page.sessionId, target.href, req.postData ?? '', Math.max(1000, deadline - this.now()));
+      // Redirects (or page scripts) may have ended somewhere the first check would refuse.
+      if (result.url !== target.href) {
+        let finalUrl: URL | undefined;
+        try {
+          finalUrl = new URL(result.url);
+        } catch {
+          finalUrl = undefined;
+        }
+        if (finalUrl) await this.vet(finalUrl);
+      }
       const cookiesRes = await b.cdp.send('Network.getCookies', { urls: [result.url, target.href] }, page.sessionId);
       const cookies = (Array.isArray(cookiesRes['cookies']) ? cookiesRes['cookies'] : [])
         .map(toSolverCookie)
@@ -377,6 +432,17 @@ export class ChallengeSolver {
       return { ...result, cookies, userAgent: b.userAgent, challenged };
     } finally {
       off();
+    }
+  }
+
+  /** Runs `checkTarget`; a refusal becomes a `bad-request` SolverError. */
+  private async vet(url: URL): Promise<void> {
+    if (!this.opts.checkTarget) return;
+    try {
+      await this.opts.checkTarget(url);
+    } catch (err) {
+      if (err instanceof SolverError) throw err;
+      throw new SolverError('bad-request', err instanceof Error ? err.message : String(err), { cause: err });
     }
   }
 

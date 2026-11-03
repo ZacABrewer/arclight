@@ -141,7 +141,7 @@ function columnsFor(
             <TestButton
               size="sm"
               label={t('common.test')}
-              onTest={async () => indexerTestOutcome(await indexersApi.test(toIndexerBody(indexer as unknown as Record<string, unknown>)))}
+              onTest={async () => indexerTestOutcome(await indexersApi.test({ ...toIndexerBody(indexer as unknown as Record<string, unknown>), id: indexer.id }))}
             />
             <Button
               size="sm"

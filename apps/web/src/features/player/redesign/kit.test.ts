@@ -4,7 +4,7 @@ import { chipLabels, formatScore } from './chips.js';
 import { placeholderArt, placeholderHue } from './placeholder.js';
 import { layoutFor, tileScale } from './layout.js';
 import { PLAYER_DEFAULT_THEME, playerThemeId } from './player-theme.js';
-import { clearProfilePicked, markProfilePicked, parseProfilesSearch, PROFILE_PICKED_KEY, profileRedirect, wasProfilePicked } from './profile-session.js';
+import { canAddProfile, clearProfilePicked, firstFreeColor, markProfilePicked, parseProfilesSearch, PROFILE_PICKED_KEY, profileRedirect, wasProfilePicked } from './profile-session.js';
 import { QUALITY_KEY_PREFIX, readStoredQuality, writeStoredQuality } from './quality.js';
 
 const t = (key: string, params?: Record<string, string | number>) => (params ? `${key}:${JSON.stringify(params)}` : key);
@@ -142,6 +142,24 @@ describe('parseProfilesSearch', () => {
     expect(parseProfilesSearch({ select: 'x', manage: 'yes' })).toEqual({ select: undefined, manage: undefined });
     expect(parseProfilesSearch({ select: '-1' })).toEqual({ select: undefined, manage: undefined });
     expect(parseProfilesSearch({ select: '1.5' })).toEqual({ select: undefined, manage: undefined });
+  });
+
+  it('reads add', () => {
+    expect(parseProfilesSearch({ manage: '1', add: '1' })).toEqual({ manage: 1, add: 1 });
+    expect(parseProfilesSearch({ add: 'yes' }).add).toBeUndefined();
+  });
+});
+
+describe('adding a profile', () => {
+  it('is for the owner profile below the maximum', () => {
+    expect(canAddProfile({ canManage: true, count: 1, max: 12 })).toBe(true);
+    expect(canAddProfile({ canManage: true, count: 12, max: 12 })).toBe(false);
+    expect(canAddProfile({ canManage: false, count: 1, max: 12 })).toBe(false);
+  });
+
+  it('starts with the first colour no profile has', () => {
+    expect(firstFreeColor([])).toBe('#7c6cf0');
+    expect(firstFreeColor([{ color: '#7C6CF0' }, { color: '#3aa37a' }])).toBe('#e0913a');
   });
 });
 

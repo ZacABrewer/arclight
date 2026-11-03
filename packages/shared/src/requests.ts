@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MediaType, MinimumAvailability, MonitorOption, SeriesType } from './library.js';
 import { PushPreferences } from './push.js';
 import { ListSearchParam } from './list-search.js';
+import type { PublicPlayerAddress } from './playback.js';
 
 // Requests, discover, issues, watchlists, override rules and per-user request settings.
 // Behaviour: docs/spec/requests.md (Seerr parity) and docs/API.md "Requests".
@@ -1338,6 +1339,43 @@ export const PublicPortalSettings = z.object({
 });
 export type PublicPortalSettings = z.infer<typeof PublicPortalSettings>;
 
+/** "Watch.Example.com." → "watch.example.com" (how addresses compare). */
+export function normalizeAddressHost(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\.+$/, '');
+}
+
+export interface AddressClash {
+  field: 'paths' | 'hosts';
+  /** The normalised path or hostname both sides use. */
+  value: string;
+}
+
+/** 400 from PUT /settings/player and PUT /settings/requests when the two address lists overlap. */
+export const AddressClashResponse = z.object({
+  error: z.string(),
+  code: z.literal('address-clash'),
+  clashes: z.array(z.object({ field: z.enum(['paths', 'hosts']), value: z.string() })),
+});
+export type AddressClashResponse = z.infer<typeof AddressClashResponse>;
+
+/**
+ * Paths and hostnames the request portal and the player address both claim. Each may belong to
+ * one of them only, so the server rejects a settings save with any clash (400 `address-clash`)
+ * and the settings pages flag the add rows. Paths compare as normalizePortalPath does, hostnames
+ * case-insensitively and without a trailing dot.
+ */
+export function addressClash(
+  portal: Pick<PublicPortalSettings, 'paths' | 'hosts'>,
+  player: Pick<PublicPlayerAddress, 'paths' | 'hosts'>,
+): AddressClash[] {
+  const out: AddressClash[] = [];
+  const portalPaths = new Set(portal.paths.map(normalizePortalPath));
+  for (const value of new Set(player.paths.map(normalizePortalPath))) if (portalPaths.has(value)) out.push({ field: 'paths', value });
+  const portalHosts = new Set(portal.hosts.map((h) => normalizeAddressHost(h.hostname)));
+  for (const value of new Set(player.hosts.map((h) => normalizeAddressHost(h.hostname)))) if (portalHosts.has(value)) out.push({ field: 'hosts', value });
+  return out;
+}
+
 export const RequestsSettings = z.object({
   movie: RequestTypeDefaults.default(RequestTypeDefaults.parse({})),
   series: RequestTypeDefaults.default(RequestTypeDefaults.parse({})),
@@ -1419,6 +1457,10 @@ export const PublicPortal = z.object({
   }),
   /** Which extra media types the catalogue offers, so anonymous visitors see Music/Audiobooks. */
   features: z.object({ music: z.boolean(), audiobooks: z.boolean(), podcasts: z.boolean().optional() }).optional(),
+  /** The portal's public address (first portal hostname, else applicationUrl + path); null: none set. */
+  portalUrl: z.string().nullable().default(null),
+  /** The player's public address, built the same way from Settings > Player; null: none set. */
+  playerUrl: z.string().nullable().default(null),
 });
 export type PublicPortal = z.infer<typeof PublicPortal>;
 

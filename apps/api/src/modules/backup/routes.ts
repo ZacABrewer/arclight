@@ -7,7 +7,8 @@ import multipart from '@fastify/multipart';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { Backup, BackupErrorResponse, BackupRestoreResponse, BackupSettings } from '@arclight/shared';
+import { Backup, BackupErrorResponse, BackupRestoreRequest, BackupRestoreResponse, BackupSettings } from '@arclight/shared';
+import { PRIVATE_FILE_MODE } from '../../file-modes.js';
 import { BackupError, type BackupService } from './service.js';
 
 export interface BackupRoutesOptions {
@@ -20,6 +21,8 @@ export interface BackupRoutesOptions {
 }
 
 const IdParams = z.object({ id: z.string().min(1).max(255) });
+/** PUT body: a client that leaves the passphrase out (older apps) keeps the stored one. */
+const BackupSettingsUpdate = BackupSettings.extend({ encryptionPassphrase: z.string().max(1024).optional() });
 const errors = { 400: BackupErrorResponse, 404: BackupErrorResponse, 409: BackupErrorResponse };
 
 const STATUS: Record<BackupError['code'], number> = {
@@ -27,6 +30,8 @@ const STATUS: Record<BackupError['code'], number> = {
   INVALID_BACKUP: 400,
   VALIDATION: 400,
   BUSY: 409,
+  PASSPHRASE_REQUIRED: 400,
+  BAD_PASSPHRASE: 400,
 };
 
 export function backupRoutes(
@@ -64,7 +69,7 @@ export function backupRoutes(
     app.get('/system/backup/:id/download', { schema: { params: IdParams } }, async (req, reply) => {
       const file = await service.resolve(req.params.id);
       return reply
-        .header('content-type', 'application/zip')
+        .header('content-type', file.name.endsWith('.enc') ? 'application/octet-stream' : 'application/zip')
         .header('content-length', String(file.size))
         .header('content-disposition', `attachment; filename="${file.name}"`)
         .send(createReadStream(file.path));
@@ -72,9 +77,9 @@ export function backupRoutes(
 
     app.post(
       '/system/backup/restore/:id',
-      { schema: { params: IdParams, response: { 200: BackupRestoreResponse, ...errors } } },
+      { schema: { params: IdParams, body: BackupRestoreRequest.nullish(), response: { 200: BackupRestoreResponse, ...errors } } },
       async (req) => {
-        const r = await service.restoreFromId(req.params.id);
+        const r = await service.restoreFromId(req.params.id, { passphrase: req.body?.passphrase });
         return { restored: true as const, configFiles: r.configFiles, restartRequired: true as const };
       },
     );
@@ -86,13 +91,17 @@ export function backupRoutes(
         if (!req.isMultipart()) throw new BackupError('VALIDATION', 'expected a multipart/form-data upload');
         const file = await req.file();
         if (!file) throw new BackupError('VALIDATION', 'no file uploaded');
+        // A `passphrase` field sent before the file is available here (encrypted backups).
+        const field = file.fields['passphrase'];
+        const passphraseField = field && !Array.isArray(field) && field.type === 'field' ? field.value : undefined;
+        const passphrase = typeof passphraseField === 'string' ? passphraseField.slice(0, 1024) : undefined;
         const staged = join(opts.uploadDir, `.upload-${randomUUID()}.zip`);
         try {
-          await pipeline(file.file, createWriteStream(staged));
+          await pipeline(file.file, createWriteStream(staged, { mode: PRIVATE_FILE_MODE }));
           if (file.file.truncated) {
             return reply.code(413).send({ error: 'upload too large', code: 'TOO_LARGE' });
           }
-          const r = await service.restoreFromFile(staged);
+          const r = await service.restoreFromFile(staged, { passphrase });
           return { restored: true as const, configFiles: r.configFiles, restartRequired: true as const };
         } finally {
           await rm(staged, { force: true });
@@ -100,9 +109,10 @@ export function backupRoutes(
       },
     );
 
-    app.get('/settings/backup', { schema: { response: { 200: BackupSettings } } }, async () => service.getSettings());
+    app.get('/settings/backup', { schema: { response: { 200: BackupSettings } } }, async () => service.publicSettings());
 
-    app.put('/settings/backup', { schema: { body: BackupSettings, response: { 200: BackupSettings, ...errors } } }, async (req) =>
+    // The body's passphrase may be SECRET_MASK or left out (keep the stored one) or '' (encryption off).
+    app.put('/settings/backup', { schema: { body: BackupSettingsUpdate, response: { 200: BackupSettings, ...errors } } }, async (req) =>
       service.updateSettings(req.body),
     );
   };

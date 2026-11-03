@@ -4,6 +4,7 @@ import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
 import { Button } from '../../../arclight/index.js';
 import { t } from '../../../i18n/index.js';
+import { externalHref } from '../../../lib/safe-url.js';
 
 // Simkl PIN flow: get a code from the api, show it with the verification URL, then poll at the
 // interval Simkl gave until it is authorized or the code expires. Styled like the Trakt flow.
@@ -94,7 +95,7 @@ export function SimklAuth({ clientId, importListId, onAuthorized }: SimklAuthPro
         <>
           <p className="al-trakt__step">
             {t('settings.importLists.simklAuth.openAndEnter')}{' '}
-            <a className="al-trakt__url" href={state.pin.verificationUrl} target="_blank" rel="noreferrer">
+            <a className="al-trakt__url" href={externalHref(state.pin.verificationUrl)} target="_blank" rel="noreferrer">
               {state.pin.verificationUrl}
             </a>
           </p>

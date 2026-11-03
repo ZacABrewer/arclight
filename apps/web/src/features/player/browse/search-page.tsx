@@ -1,116 +1,139 @@
-import { Input } from '../../../arclight/index.js';
+import { useEffect, useId } from 'react';
 import { useT } from '../../../i18n/index.js';
+import { RdIcon } from '../redesign/icons.js';
+import { RdError, RdLoading } from '../redesign/pages/common.js';
+import { WideTile } from '../redesign/tiles.js';
+import { watchPaths } from '../video/paths.js';
 import { usePlayerSearch } from './api.js';
-import { AlbumCard, ArtistCard, BookCard } from './cards.js';
-import { Empty, GridSkeleton, LoadError, PageTitle, useDebounced, useUrlQuery } from './kit.js';
+import { AlbumTile, ArtistTile, BookTile } from './cards.js';
+import { useDebounced, useUrlQuery } from './kit.js';
+import { AudioNotice, AudioPage, AudioSection } from './rd-audio.js';
 import { TrackList } from './tracks.js';
-import { MovieCard, SeriesCard } from '../video/cards.js';
-import '../video/watch.css';
 
 export const SEARCH_DEBOUNCE_MS = 300;
 
-/** /player/search: one box across movies, shows, tracks, albums, artists and audiobooks. */
+/**
+ * /player/search: one box across movies, shows, tracks, albums, artists and audiobooks. The bar
+ * is the redesign search bar; each kind is a titled section of the tiles its own pages use.
+ */
 export function PlayerSearchPage() {
   const t = useT();
+  const inputId = useId();
   const [text, setText] = useUrlQuery();
   const q = useDebounced(text.trim(), SEARCH_DEBOUNCE_MS);
   const res = usePlayerSearch(q);
 
+  useEffect(() => {
+    document.title = `${t('player.browse.search.title')} · ${t('player.documentTitle')}`;
+  }, [t]);
+
   let body;
-  if (!q) body = <Empty title={t('player.browse.search.startTitle')}>{t('player.browse.search.startBody')}</Empty>;
-  else if (res.isPending) body = <GridSkeleton count={6} label={t('player.browse.search.searching')} />;
-  else if (res.isError) body = <LoadError title={t('player.browse.search.failed')} error={res.error} onRetry={() => void res.refetch()} />;
+  if (!q) body = <AudioNotice title={t('player.browse.search.startTitle')}>{t('player.browse.search.startBody')}</AudioNotice>;
+  else if (res.isPending) body = <RdLoading />;
+  else if (res.isError) body = <RdError title={t('player.browse.search.failed')} error={res.error} onRetry={() => void res.refetch()} />;
   else {
     const d = res.data;
     const movies = d.movies ?? [];
     const series = d.series ?? [];
     const none = !d.tracks.length && !d.albums.length && !d.artists.length && !d.audiobooks.length && !movies.length && !series.length;
     body = none ? (
-      <Empty title={t('player.browse.search.noResults', { query: q })}>{t('player.browse.search.noResultsBody')}</Empty>
+      <AudioNotice title={t('player.browse.search.noResults', { query: q })}>{t('player.browse.search.noResultsBody')}</AudioNotice>
     ) : (
       <>
         {movies.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-movies">
-            <h2 className="pb-section__title" id="pb-s-movies">
-              {t('player.video.nav.movies')}
-            </h2>
-            <ul className="vw-grid">
+          <AudioSection title={t('player.video.nav.movies')}>
+            <ul className="rd-grid rd-grid--search" aria-label={t('player.video.nav.movies')}>
               {movies.map((m) => (
-                <MovieCard key={m.id} movie={m} />
+                <li key={m.id}>
+                  <WideTile size="grid" title={m.title} sub={m.year ? String(m.year) : null} image={m.backdropUrl ?? m.posterUrl} href={watchPaths.movie(m.id)} />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ) : null}
         {series.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-shows">
-            <h2 className="pb-section__title" id="pb-s-shows">
-              {t('player.video.nav.shows')}
-            </h2>
-            <ul className="vw-grid">
+          <AudioSection title={t('player.video.nav.shows')}>
+            <ul className="rd-grid rd-grid--search" aria-label={t('player.video.nav.shows')}>
               {series.map((sr) => (
-                <SeriesCard key={sr.id} series={sr} />
+                <li key={sr.id}>
+                  <WideTile size="grid" title={sr.title} sub={sr.year ? String(sr.year) : null} image={sr.backdropUrl ?? sr.posterUrl} href={watchPaths.show(sr.id)} />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ) : null}
         {d.artists.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-artists">
-            <h2 className="pb-section__title" id="pb-s-artists">
-              {t('player.browse.nav.artists')}
-            </h2>
-            <ul className="pb-grid">
+          <AudioSection title={t('player.browse.nav.artists')}>
+            <ul className="rd-music-grid rd-music-grid--round" aria-label={t('player.browse.nav.artists')}>
               {d.artists.map((a) => (
-                <ArtistCard key={a.id} artist={a} />
+                <li key={a.id}>
+                  <ArtistTile artist={a} fill />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ) : null}
         {d.tracks.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-tracks">
-            <h2 className="pb-section__title" id="pb-s-tracks">
-              {t('player.browse.search.tracks')}
-            </h2>
+          <AudioSection title={t('player.browse.search.tracks')}>
             <TrackList tracks={d.tracks} source={`search:${q}`.slice(0, 100)} label={t('player.browse.search.tracks')} showAlbum />
-          </section>
+          </AudioSection>
         ) : null}
         {d.albums.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-albums">
-            <h2 className="pb-section__title" id="pb-s-albums">
-              {t('player.browse.nav.albums')}
-            </h2>
-            <ul className="pb-grid">
+          <AudioSection title={t('player.browse.nav.albums')}>
+            <ul className="rd-music-grid" aria-label={t('player.browse.nav.albums')}>
               {d.albums.map((a) => (
-                <AlbumCard key={a.id} album={a} />
+                <li key={a.id}>
+                  <AlbumTile album={a} fill />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ) : null}
         {d.audiobooks.length ? (
-          <section className="pb-section" aria-labelledby="pb-s-books">
-            <h2 className="pb-section__title" id="pb-s-books">
-              {t('player.browse.books.title')}
-            </h2>
-            <ul className="pb-grid">
+          <AudioSection title={t('player.browse.books.title')}>
+            <ul className="rd-music-grid" aria-label={t('player.browse.books.title')}>
               {d.audiobooks.map((b) => (
-                <BookCard key={b.id} book={b} />
+                <li key={b.id}>
+                  <BookTile book={b} fill />
+                </li>
               ))}
             </ul>
-          </section>
+          </AudioSection>
         ) : null}
       </>
     );
   }
 
   return (
-    <div className="pb-page">
-      <PageTitle>{t('player.browse.search.title')}</PageTitle>
-      <form role="search" className="pb-search" onSubmit={(e) => e.preventDefault()}>
-        <label className="pb-filters__search">
-          <span className="pb-visually-hidden">{t('player.browse.search.label')}</span>
-          <Input type="search" size="lg" value={text} autoFocus onChange={(e) => setText(e.target.value)} placeholder={t('player.browse.search.placeholder')} />
+    <AudioPage className="rd-music-search">
+      <h1 className="rd-visually-hidden">{t('player.browse.search.title')}</h1>
+      <form role="search" className="rd-search__bar" onSubmit={(e) => e.preventDefault()}>
+        <label htmlFor={inputId} className="rd-visually-hidden">
+          {t('player.browse.search.label')}
         </label>
+        <RdIcon name="search" className="rd-search__icon" />
+        <input
+          id={inputId}
+          className="rd-search__input"
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus
+          placeholder={t('player.browse.search.placeholder')}
+          value={text}
+          onChange={(e) => setText(e.target.value.slice(0, 100))}
+        />
+        {text ? (
+          <button type="button" className="rd-iconbtn rd-search__clear" aria-label={t('player.redesign.search.clear')} onClick={() => setText('')}>
+            <RdIcon name="close" size={18} />
+          </button>
+        ) : null}
       </form>
-      {body}
-    </div>
+      <div className="rd-music-search__results" aria-live="polite" aria-busy={Boolean(q) && res.isPending}>
+        {body}
+      </div>
+    </AudioPage>
   );
 }

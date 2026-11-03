@@ -5,6 +5,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import {
+  HLS_MIME_TYPE,
   isVideoKind,
   parseItemKey,
   PlayerMovieDetails,
@@ -23,6 +24,7 @@ import {
   VideoWatchedResponse,
   type ContentRestrictions,
   type VideoInfo,
+  type VideoReason,
   type VideoSessionSubtitle,
   type VideoSubtitleTrack,
 } from '@arclight/shared';
@@ -43,9 +45,12 @@ import { videoFeatured, withHomeRows, withMovieExtras, withSeriesExtras, type Fe
 import { signedTrickplay } from './trickplay-routes.js';
 import type { TrickplayService } from './trickplay.js';
 import { markWatched, movieDetails, moviePage, seriesDetails, seriesPage, videoHome, type VideoBrowseContext } from './video-browse.js';
-import { buildVideoStreamArgs, decideVideo, defaultVideoKbps, durationOf, externalSubtitleCodec, isTextSubtitle, videoContainerOf, videoMimeOf, type LiveVideoSpec, type VideoPlan } from './video-info.js';
+import { buildVideoStreamArgs, decideVideo, defaultVideoKbps, durationOf, effectiveCap, externalSubtitleCodec, isTextSubtitle, videoContainerOf, videoMimeOf, type LiveVideoSpec, type VideoPlan } from './video-info.js';
 import { episodeFiles, mediaFileAllowed, playableFilesOf, videoInfoForFile, withinRestrictions, type MediaFileRow } from './video-items.js';
 import { firstOutput, MediaCacheError, type EncoderDetector, type MediaCache } from './video-stream.js';
+import { openHlsSession, type HlsDeps } from './hls-routes.js';
+import { copySeekTarget, keyframeAtOrBefore } from './hls/keyframes.js';
+import { planBitrates, segmentPlan } from './hls/plan.js';
 
 // Movies & TV routes of the player: the playback session (direct play / remux / transcode with
 // reason codes), GET|HEAD /stream/video/:mediaFileId (ranges for direct play; fragmented MP4 from
@@ -67,6 +72,8 @@ export interface VideoDeps {
   /** Trending source of the hero and home (tests); TMDB through the metadata cache by default. */
   trending?: TrendingSource;
   now?: () => number;
+  /** HLS delivery (0.24); absent: progressive only. */
+  hls?: HlsDeps;
 }
 
 const user = { access: { portal: true } } as const;
@@ -310,7 +317,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         return (info.audioTracks.find((a) => a.default) ?? info.audioTracks[0])?.index ?? 0;
       };
       const planFor = (f: (typeof files)[number]): VideoPlan =>
-        decideVideo({ info: f.info, baseRange: f.baseRange, profile: body.profile, audioTrack: audioOf(f.info), subtitle: subtitleOf(f.info), quality: body.quality, userCapKbps: decision.maxBitrateKbps });
+        decideVideo({ info: f.info, baseRange: f.baseRange, profile: body.profile, audioTrack: audioOf(f.info), subtitle: subtitleOf(f.info), quality: body.quality, userCapKbps: decision.maxVideoBitrateKbps });
       let chosen: (typeof files)[number];
       if (body.mediaFileId !== undefined) {
         const f = files.find((x) => x.file.id === body.mediaFileId);
@@ -326,10 +333,92 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
       const plan = planFor(chosen);
       const audioTrack = audioOf(chosen.info);
       const fileId = chosen.file.id;
-      const startMs = plan.method === 'direct' ? 0 : (body.startMs ?? 0);
-      const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
+      let startMs = plan.method === 'direct' ? 0 : (body.startMs ?? 0);
+      const settings = playerSettings(db);
+      const exp = Math.floor(now() / 1000) + settings.streamLinkHours * 3600;
       const sig = linkQuery(linkKey(deps.apiKey()), { userId, profileId: linkProfileOf(req), fileId, exp }, 'video');
       const origin = `${req.protocol}://${req.host}${deps.basePath}/api/v1`;
+      const durationMs = durationOf(chosen.file.mediaInfo ?? null, null);
+      const subtitles: VideoSessionSubtitle[] = chosen.info.subtitleTracks.flatMap((t, i) =>
+        t.text ? [{ id: t.id, label: subtitleLabel(t, i), language: t.language, forced: t.forced, default: t.default, url: `${origin}/stream/subtitle/${fileId}/${t.id}.vtt?${sig}` }] : [],
+      );
+      const trickplay = async () => (deps.trickplay ? await signedTrickplay({ db, apiKey: deps.apiKey, service: deps.trickplay, now }, fileId, { userId, profileId: linkProfileOf(req) }, origin) : null);
+
+      // HLS for clients that play it (0.24), unless Settings -> Player keeps progressive streams.
+      const hls = deps.hls;
+      if (hls && body.deliveries?.includes('hls') && settings.videoDelivery === 'hls') {
+        let reasons: VideoReason[] = plan.reasons;
+        let direct = plan.method === 'direct';
+        if (direct && body.quality !== 'original') {
+          // Auto plays the file as it is only with the bandwidth for it: 2x its average, and 1.3x
+          // its peak segment when the keyframe index is known. Without a measurement: LAN only.
+          const avg = chosen.info.bitrateKbps ?? 0;
+          const index = await hls.keyframes.get(fileId, chosen.file.path);
+          const rates = index ? planBitrates(segmentPlan(index, Math.max(1, durationMs / 1000)), index.fileSize) : null;
+          const hint = body.bandwidthKbps;
+          const fits = hint ? hint >= 2 * avg && (!rates || hint >= 1.3 * rates.peakKbps) : !decision.remote;
+          if (body.avoidDirect || !fits) {
+            direct = false;
+            if (!fits) reasons = ['bitrate'];
+          }
+        }
+        if (!direct) {
+          let opened;
+          try {
+            opened = await openHlsSession(hls, {
+              userId,
+              profileId: linkProfileOf(req),
+              deviceKey: body.deviceKey ?? `u${userId}`,
+              file: chosen.file,
+              info: chosen.info,
+              baseRange: chosen.baseRange,
+              profile: body.profile,
+              audioTrack,
+              subtitle: subtitleOf(chosen.info),
+              quality: body.quality,
+              capKbps: effectiveCap(body.profile, decision.maxVideoBitrateKbps),
+              ...(body.bandwidthKbps ? { bandwidthKbps: body.bandwidthKbps } : {}),
+              remote: decision.remote,
+              startMs: body.startMs ?? 0,
+              durationMs,
+              origin,
+              exp,
+              burnSource: (id) => burnSource(db, chosen.file, chosen.info, id) ?? null,
+            });
+          } catch (err) {
+            if (err instanceof TranscodeBusy) throw new VideoHttpError(503, err.code, err.message);
+            throw err;
+          }
+          const start = opened.ladder.rungs.find((r) => r.id === opened.ladder.startRung);
+          const burned = opened.ladder.burn?.id ?? null;
+          return {
+            itemKey: body.itemKey,
+            mediaFileId: fileId,
+            method: start?.mode === 'copy' ? ('remux' as const) : ('transcode' as const),
+            reasons: burned && !reasons.includes('burn-subtitle') ? [...reasons, 'burn-subtitle' as const] : reasons,
+            url: opened.hls.masterUrl,
+            mimeType: HLS_MIME_TYPE,
+            streamStartMs: 0,
+            seekable: true,
+            durationMs,
+            audioTrack,
+            subtitles,
+            burnedSubtitle: burned,
+            expiresAt: new Date(exp * 1000).toISOString(),
+            trickplay: await trickplay(),
+            delivery: 'hls' as const,
+            sessionId: opened.session.id,
+            hls: opened.hls,
+          };
+        }
+      }
+
+      // Progressive copy: it starts at a keyframe, and the stream's time 0 is that keyframe.
+      if (plan.method === 'remux' && startMs > 0 && hls) {
+        const index = await hls.keyframes.get(fileId, chosen.file.path);
+        const kf = index ? keyframeAtOrBefore(index, startMs / 1000 + (index.startTime ?? 0)) : null;
+        if (index && kf !== null) startMs = Math.max(0, Math.round((kf - (index.startTime ?? 0)) * 1000));
+      }
       const params = new URLSearchParams({ m: plan.method });
       if (plan.method !== 'direct') {
         params.set('a', String(audioTrack));
@@ -342,9 +431,6 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         if (plan.videoCodec) params.set('vc', plan.videoCodec);
         if (plan.burn) params.set('b', plan.burn);
       }
-      const subtitles: VideoSessionSubtitle[] = chosen.info.subtitleTracks.flatMap((t, i) =>
-        t.text ? [{ id: t.id, label: subtitleLabel(t, i), language: t.language, forced: t.forced, default: t.default, url: `${origin}/stream/subtitle/${fileId}/${t.id}.vtt?${sig}` }] : [],
-      );
       return {
         itemKey: body.itemKey,
         mediaFileId: fileId,
@@ -354,12 +440,14 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         mimeType: plan.method === 'direct' ? videoMimeOf(chosen.info.container) : 'video/mp4',
         streamStartMs: startMs,
         seekable: plan.method === 'direct',
-        durationMs: durationOf(chosen.file.mediaInfo ?? null, null),
+        durationMs,
         audioTrack,
         subtitles,
         burnedSubtitle: plan.burn,
         expiresAt: new Date(exp * 1000).toISOString(),
-        trickplay: deps.trickplay ? await signedTrickplay({ db, apiKey: deps.apiKey, service: deps.trickplay, now }, fileId, { userId, profileId: linkProfileOf(req) }, origin) : null,
+        trickplay: await trickplay(),
+        delivery: 'progressive' as const,
+        sessionId: null,
       };
     });
 
@@ -382,7 +470,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         const head = req.method === 'HEAD';
         const q = req.query;
         const vinfo = videoInfoForFile(db, file);
-        const cap = access.decision.maxBitrateKbps;
+        const cap = access.decision.maxVideoBitrateKbps;
         let method = q.m;
         // The cap is enforced here too: a stream over it is transcoded at the cap whatever the link says.
         if (method !== 'transcode' && cap > 0 && (vinfo.bitrateKbps ?? 0) > cap) method = 'transcode';
@@ -417,6 +505,13 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
           startMs: q.s ?? 0,
           sourceVideoCodec: vinfo.videoCodec,
         };
+        // A copy seeks a little past its keyframe: demuxers seek by decode time, and the exact
+        // keyframe time can land on the one before (B-frames).
+        if (method === 'remux' && spec.startMs > 0 && deps.hls) {
+          const index = await deps.hls.keyframes.get(file.id, file.path);
+          const kf = index ? keyframeAtOrBefore(index, spec.startMs / 1000 + (index.startTime ?? 0)) : null;
+          if (index && kf !== null) spec.startMs = Math.max(0, Math.round((copySeekTarget(index, kf) - (index.startTime ?? 0)) * 1000));
+        }
         if (method === 'transcode') {
           const height = Math.min(q.h ?? vinfo.height ?? 1080, vinfo.height ?? 4320);
           const audioKbps = spec.audioChannels >= 6 ? 384 : 192;
@@ -546,7 +641,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     });
 
     app.post('/playback/watched', { ...videoUser, schema: { body: VideoWatchedRequest, response: { 200: VideoWatchedResponse, ...errors } } }, async (req) => ({
-      updated: markWatched(browse, ownerOrThrow(req), req.body),
+      updated: markWatched(browse, ownerOrThrow(req), req.body, restrictionsOfRequest(req)),
     }));
   };
 }

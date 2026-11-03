@@ -283,8 +283,11 @@ export function parseLanguageTag(input: string): LanguageTag | undefined {
     const sub = parts[1]!;
     const known = variantByTag.get(`${head}-${sub}`);
     if (known) return known.tag;
-    if (sub.length === 4) return `${head}-${sub[0]!.toUpperCase()}${sub.slice(1)}`;
-    if (/^[a-z]{2}$/.test(sub) || /^\d{3}$/.test(sub)) return `${head}-${sub.toUpperCase()}`;
+    // Only a script ("Latn") or a region ("BR", "419") subtag is kept. The tag ends up in
+    // subtitle file names, so anything else ("/../", "a:bc") is refused, not passed through.
+    if (/^[a-z]{4}$/.test(sub)) return `${head}-${sub[0]!.toUpperCase()}${sub.slice(1)}`;
+    if (/^(?:[a-z]{2}|\d{3})$/.test(sub)) return `${head}-${sub.toUpperCase()}`;
+    if (!/^[a-z0-9]*$/.test(sub)) return undefined;
     return head;
   }
   return undefined;

@@ -58,7 +58,12 @@ describe('candidateUrls', () => {
   it('respects a typed scheme and drops default ports', () => {
     expect(candidateUrls('http://nas')).toEqual(['http://nas', 'http://nas:7878']);
     expect(candidateUrls('https://arclight.example.com:443')).toEqual(['https://arclight.example.com']);
-    expect(candidateUrls('http://example.com:80/x')).toEqual(['http://example.com/x']);
+    expect(candidateUrls('http://192.168.1.20:80/x')).toEqual(['http://192.168.1.20/x']);
+  });
+
+  it('tries https first even when http:// was typed for a public host', () => {
+    expect(candidateUrls('http://example.com:80/x')).toEqual(['https://example.com:80/x', 'http://example.com/x']);
+    expect(candidateUrls('http://arclight.example.com')).toEqual(['https://arclight.example.com', 'http://arclight.example.com', 'https://arclight.example.com:7878', 'http://arclight.example.com:7878']);
   });
 });
 

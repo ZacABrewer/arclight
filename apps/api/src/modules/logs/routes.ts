@@ -4,6 +4,7 @@ import { LogFile, LogPage, LogQuery, LogsErrorResponse } from '@arclight/shared'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { LogsError, type LogsService } from './service.js';
+import { admitSocket, sendBounded } from '../../ws-limits.js';
 
 const NameParams = z.object({ name: z.string().min(1) });
 
@@ -49,10 +50,9 @@ export function logsRoutes(
     });
 
     // Live tail: one LogRecord JSON per message, starting with records logged after connect.
-    app.get('/log/stream', { websocket: true }, (socket) => {
-      const unsubscribe = service.subscribe((record) => {
-        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(record));
-      });
+    app.get('/log/stream', { websocket: true }, (socket, req) => {
+      if (!admitSocket(socket, req.auth)) return;
+      const unsubscribe = service.subscribe((record) => sendBounded(socket, JSON.stringify(record)));
       socket.on('close', unsubscribe);
       socket.on('error', unsubscribe);
     });

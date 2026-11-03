@@ -8,6 +8,9 @@ import { TrackerManager, createTrackerClient } from './tracker-manager.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 import { UdpTracker } from './udp-tracker.js';
 
+/** The fake trackers listen on loopback, which the engine refuses by default. */
+const LOCAL = { allowPrivate: true } as const;
+
 const infoHash = Buffer.from('0123456789abcdef0123456789abcdef01234567', 'hex');
 function params(over: Partial<AnnounceParams> = {}): AnnounceParams {
   return { infoHash, peerId: randomBytes(20), port: 6881, uploaded: 0, downloaded: 0, left: 100, key: 0x1234abcd, ...over };
@@ -47,12 +50,12 @@ describe('HttpTracker', () => {
 
   it('announces against the in-process tracker and gets compact peers', async () => {
     const tr = await http({ interval: 900, trackerId: 'tid-1' });
-    const a = new HttpTracker(tr.url);
+    const a = new HttpTracker(tr.url, LOCAL);
     const first = await a.announce(params({ port: 1111, event: 'started' }));
     expect(first.peers).toEqual([]);
     expect(first.intervalSec).toBe(900);
     expect(first.trackerId).toBe('tid-1');
-    const b = new HttpTracker(tr.url);
+    const b = new HttpTracker(tr.url, LOCAL);
     const second = await b.announce(params({ port: 2222, left: 0, event: 'started' }));
     expect(second.peers).toEqual([{ host: '127.0.0.1', port: 1111 }]);
     expect(second.complete).toBe(1);
@@ -66,7 +69,7 @@ describe('HttpTracker', () => {
   it('surfaces failure reasons', async () => {
     const tr = await http();
     tr.failureReason = 'unregistered torrent';
-    await expect(new HttpTracker(tr.url).announce(params())).rejects.toThrow('tracker failure: unregistered torrent');
+    await expect(new HttpTracker(tr.url, LOCAL).announce(params())).rejects.toThrow('tracker failure: unregistered torrent');
   });
 
   it('parses dictionary peer lists, warnings and min interval via an injected requester', async () => {
@@ -96,16 +99,51 @@ describe('HttpTracker', () => {
 
   it('scrapes', async () => {
     const tr = await http();
-    await new HttpTracker(tr.url).announce(params({ left: 0, event: 'completed' }));
-    const s = await new HttpTracker(tr.url).scrape(infoHash);
+    await new HttpTracker(tr.url, LOCAL).announce(params({ left: 0, event: 'completed' }));
+    const s = await new HttpTracker(tr.url, LOCAL).scrape(infoHash);
     expect(s).toEqual({ complete: 1, incomplete: 0, downloaded: 1 });
     expect(new HttpTracker('http://x/a').scrapeUrl()).toBeNull();
     expect(new HttpTracker('http://x/announce.php?k=1').scrapeUrl()).toBe('http://x/scrape.php?k=1');
   });
 
+  it('refuses loopback / LAN trackers unless allowed (DATA-21)', async () => {
+    const tr = await http();
+    await expect(new HttpTracker(tr.url).announce(params())).rejects.toThrow('tracker refused');
+    await expect(new HttpTracker(tr.url.replace('127.0.0.1', 'localhost')).announce(params())).rejects.toThrow('tracker refused');
+    await expect(new HttpTracker('http://10.0.0.1:1/announce').announce(params())).rejects.toThrow('tracker refused');
+    await expect(new HttpTracker('http://[::1]:1/announce').announce(params())).rejects.toThrow('tracker refused');
+    expect(tr.announces).toHaveLength(0);
+    await new HttpTracker(tr.url, LOCAL).announce(params());
+    expect(tr.announces).toHaveLength(1);
+  });
+
+  it('re-vets every redirect hop (DATA-21)', async () => {
+    const tr = await http();
+    const { createServer } = await import('node:http');
+    const hop = createServer((req, res) => {
+      res.writeHead(302, { location: `http://127.0.0.1:${tr.port}${req.url ?? '/'}` });
+      res.end();
+    });
+    await new Promise<void>((r) => hop.listen(0, '127.0.0.1', () => r()));
+    cleanups.push(() => new Promise<void>((r) => hop.close(() => r())));
+    const port = (hop.address() as { port: number }).port;
+    // Allowed: both hops are followed.
+    await new HttpTracker(`http://127.0.0.1:${port}/announce`, LOCAL).announce(params());
+    expect(tr.announces).toHaveLength(1);
+    // A redirect to something unparsable is refused, not followed.
+    const bad = createServer((_req, res) => {
+      res.writeHead(302, { location: 'http://[bad' });
+      res.end();
+    });
+    await new Promise<void>((r) => bad.listen(0, '127.0.0.1', () => r()));
+    cleanups.push(() => new Promise<void>((r) => bad.close(() => r())));
+    const badPort = (bad.address() as { port: number }).port;
+    await expect(new HttpTracker(`http://127.0.0.1:${badPort}/announce`, LOCAL).announce(params())).rejects.toThrow();
+  });
+
   it('binds outgoing requests to a local address', async () => {
     const tr = await http();
-    const res = await new HttpTracker(tr.url, { localAddress: '127.0.0.1' }).announce(params());
+    const res = await new HttpTracker(tr.url, { ...LOCAL, localAddress: '127.0.0.1' }).announce(params());
     expect(res.peers).toEqual([]);
   });
 });
@@ -113,11 +151,11 @@ describe('HttpTracker', () => {
 describe('UdpTracker', () => {
   it('connects, announces and scrapes', async () => {
     const tr = await udp({ interval: 120 });
-    const a = new UdpTracker(tr.url, { baseTimeoutMs: 200 });
+    const a = new UdpTracker(tr.url, { ...LOCAL, baseTimeoutMs: 200 });
     const r1 = await a.announce(params({ port: 3333, event: 'started' }));
     expect(r1.intervalSec).toBe(120);
     expect(r1.peers).toEqual([]);
-    const r2 = await new UdpTracker(tr.url, { baseTimeoutMs: 200 }).announce(params({ port: 4444, left: 0, event: 'started' }));
+    const r2 = await new UdpTracker(tr.url, { ...LOCAL, baseTimeoutMs: 200 }).announce(params({ port: 4444, left: 0, event: 'started' }));
     expect(r2.peers).toEqual([{ host: '127.0.0.1', port: 3333 }]);
     expect(r2.complete).toBe(1);
     expect(r2.incomplete).toBe(1);
@@ -130,20 +168,27 @@ describe('UdpTracker', () => {
   it('retransmits after dropped packets', async () => {
     const tr = await udp();
     tr.dropNext = 2;
-    const res = await new UdpTracker(tr.url, { baseTimeoutMs: 50, maxRetries: 4 }).announce(params());
+    const res = await new UdpTracker(tr.url, { ...LOCAL, baseTimeoutMs: 50, maxRetries: 4 }).announce(params());
     expect(res.peers).toEqual([]);
   });
 
   it('times out after max retries', async () => {
     const tr = await udp();
     tr.dropNext = 100;
-    await expect(new UdpTracker(tr.url, { baseTimeoutMs: 20, maxRetries: 2 }).announce(params())).rejects.toThrow('did not respond');
+    await expect(new UdpTracker(tr.url, { ...LOCAL, baseTimeoutMs: 20, maxRetries: 2 }).announce(params())).rejects.toThrow('did not respond');
+  });
+
+  it('refuses loopback / LAN trackers unless allowed (DATA-21)', async () => {
+    const tr = await udp();
+    await expect(new UdpTracker(tr.url, { baseTimeoutMs: 50, maxRetries: 1 }).announce(params())).rejects.toThrow('tracker refused');
+    await expect(new UdpTracker('udp://192.168.1.1:1', { baseTimeoutMs: 50, maxRetries: 1 }).announce(params())).rejects.toThrow('tracker refused');
+    expect(tr.announces).toHaveLength(0);
   });
 
   it('reports tracker errors', async () => {
     const tr = await udp();
     tr.failureReason = 'nope';
-    await expect(new UdpTracker(tr.url, { baseTimeoutMs: 100 }).announce(params())).rejects.toThrow('tracker failure: nope');
+    await expect(new UdpTracker(tr.url, { ...LOCAL, baseTimeoutMs: 100 }).announce(params())).rejects.toThrow('tracker failure: nope');
   });
 
   it('rejects non-udp urls', () => {
@@ -297,15 +342,15 @@ describe('TrackerManager', () => {
     const h = await http({ interval: 60 });
     const u = await udp({ interval: 60 });
     // pre-populate both swarms with another peer
-    await new HttpTracker(h.url).announce(params({ port: 9001 }));
-    await new UdpTracker(u.url, { baseTimeoutMs: 200 }).announce(params({ port: 9002 }));
+    await new HttpTracker(h.url, LOCAL).announce(params({ port: 9001 }));
+    await new UdpTracker(u.url, { ...LOCAL, baseTimeoutMs: 200 }).announce(params({ port: 9002 }));
     const m = new TrackerManager({
       infoHash,
       peerId: randomBytes(20),
       tiers: [[h.url], [u.url]],
       getPort: () => 7000,
       getStats: () => ({ uploaded: 0, downloaded: 0, left: 1 }),
-      clientFactory: (url) => createTrackerClient(url, { udpBaseTimeoutMs: 200 }),
+      clientFactory: (url) => createTrackerClient(url, { ...LOCAL, udpBaseTimeoutMs: 200 }),
     });
     const got = new Set<number>();
     m.on('peers', (ps) => ps.forEach((p) => got.add(p.port)));

@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@arclight/net": "workspace:*",
     "@arclight/shared": "workspace:*",
     "zod": "^4.1.12"
   },

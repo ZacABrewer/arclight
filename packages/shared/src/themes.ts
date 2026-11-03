@@ -110,7 +110,7 @@ export const ThemeSettings = z.object({
   syncEnabled: z.boolean().default(true),
   /** 1-168 hours between automatic syncs. */
   syncIntervalHours: z.number().int().min(1).max(168).default(24),
-  sourceUrl: z.string().url().default(DEFAULT_THEMES_URL),
+  sourceUrl: z.string().url({ protocol: /^https?$/ }).default(DEFAULT_THEMES_URL),
 });
 export type ThemeSettings = z.infer<typeof ThemeSettings>;
 export type ThemeSettingsInput = z.input<typeof ThemeSettings>;

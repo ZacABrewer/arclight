@@ -1,11 +1,12 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import { sealedJson } from './secret-box.js';
 
 // Phase 0 tables only. Each module adds its own tables in later phases; they all live in
 // this one file so drizzle-kit sees the whole schema.
 
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
-  value: text('value', { mode: 'json' }).notNull(),
+  value: sealedJson('value').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 
@@ -80,3 +81,4 @@ export * from '../modules/collections/schema.js';
 export * from '../modules/playback/schema.js';
 export * from '../modules/households/schema.js';
 export * from '../modules/playback/segments-schema.js';
+export * from '../modules/tag-sync/schema.js';

@@ -26,6 +26,7 @@ import { ApiError, ContractError, type QueryParams, type RequestOptions } from '
 import { t } from '@web/i18n/index';
 import { CONNECT_TIMEOUT_MS } from '../config';
 import { absoluteUrl, getSession } from './session';
+import { transportPolicy } from './transport';
 
 export { ApiError, ContractError };
 export type { QueryParams, RequestOptions };
@@ -51,6 +52,19 @@ export interface AppRequestOptions extends RequestOptions {
 
 /** Thrown when the server could not be reached at all (status 0). */
 export const NETWORK_ERROR = 'NETWORK';
+
+/**
+ * Thrown (status 0, nothing was sent) when a request would carry credentials over plain http that
+ * the cleartext policy (core/transport.ts) does not allow yet.
+ */
+export const INSECURE_TRANSPORT_ERROR = 'INSECURE_TRANSPORT';
+
+export function isInsecureTransportError(err: unknown): boolean {
+  return err instanceof ApiError && err.code === INSECURE_TRANSPORT_ERROR;
+}
+
+/** Sign-in, pairing and device codes: what is sent (password, code) or answered (token) is a credential. */
+const carriesCredentials = (path: string, token: string | null) => !!token || path.startsWith('/app/');
 
 type UnauthorizedHandler = (path: string) => void;
 let onUnauthorized: UnauthorizedHandler | null = null;
@@ -98,6 +112,11 @@ export async function request(path: string, schema: z.ZodType | null, init: AppR
   const { json, query, headers, body: rawBody, target: explicit, timeoutMs = CONNECT_TIMEOUT_MS, signal, ...rest } = init;
   const target = explicit ?? currentTarget();
   const url = buildApiUrl(target.serverUrl, path, query);
+  // Enforced here, not only on the screens: no token, password or pair code over plain http to a
+  // host the user has not allowed.
+  if (carriesCredentials(path, target.token) && !transportPolicy.allowsCredentials(url)) {
+    throw new ApiError(0, t('app.error.insecureServer', { host: hostOf(target.serverUrl) }), path, INSECURE_TRANSPORT_ERROR);
+  }
   const finalHeaders = new Headers(headers);
   if (!finalHeaders.has('accept')) finalHeaders.set('accept', 'application/json');
   if (target.token) finalHeaders.set('authorization', `Bearer ${target.token}`);
@@ -131,6 +150,8 @@ export async function request(path: string, schema: z.ZodType | null, init: AppR
 
   if (res.status === 401 && target.token && !explicit && onUnauthorized && triggersSignOut(path)) onUnauthorized(path);
   if (!res.ok) throw await toApiError(res, path);
+  // The account's server answered over https: never fall back to http for this host silently.
+  if (carriesCredentials(path, target.token)) void transportPolicy.pinHttps(url).catch(() => undefined);
   if (schema === null || res.status === 204) return undefined;
 
   const data: unknown = await res.json();

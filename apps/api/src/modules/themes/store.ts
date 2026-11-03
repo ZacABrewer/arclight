@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BASE_THEME_ID, THEME_IMAGE_EXTENSIONS, THEME_LIMITS, ThemeManifest, checkThemeCss, compareThemeVersions, type ThemeInfo } from '@arclight/shared';
+import { externalReferenceProblems } from './css-guard.js';
 
 // Theme packs on disk. Two roots: the packs bundled with the app (`themes/` in the repository,
 // `/app/themes` in the image) and the ones the sync downloaded (`<config>/themes`). A pack is a
@@ -86,7 +87,9 @@ export function readPack(dir: string, id: string, source: ThemePack['source']): 
     }
   }
   if (total > THEME_LIMITS.packBytes) throw new ThemePackError(`the pack is larger than ${THEME_LIMITS.packBytes} bytes`);
-  const problems = checkThemeCss(readFileSync(cssPath, 'utf8'), id, new Set([...fonts, ...images]));
+  const css = readFileSync(cssPath, 'utf8');
+  const assets = new Set([...fonts, ...images]);
+  const problems = [...checkThemeCss(css, id, assets), ...externalReferenceProblems(css, assets)];
   if (problems.length > 0) throw new ThemePackError(`theme.css: ${problems[0]}${problems.length > 1 ? ` (and ${problems.length - 1} more)` : ''}`);
   return { manifest, dir, source, fonts, images };
 }

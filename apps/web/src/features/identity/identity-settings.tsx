@@ -405,6 +405,9 @@ export function ForwardAuthSection({ form }: { form: IdentitySettingsForm }) {
       <FormRow label={t('identity.settings.autoCreate')} captionInline caption={t('identity.forward.autoCreateHint')}>
         <Toggle aria-label={t('identity.settings.autoCreate')} checked={fa.autoCreate} onChange={(e) => set({ autoCreate: e.currentTarget.checked })} />
       </FormRow>
+      <FormRow label={t('identity.forward.allowAdmins')} captionInline caption={t('identity.forward.allowAdminsHint')}>
+        <Toggle aria-label={t('identity.forward.allowAdmins')} checked={fa.allowAdmins} onChange={(e) => set({ allowAdmins: e.currentTarget.checked })} />
+      </FormRow>
       <FormRow label={t('identity.settings.defaultRole')} htmlFor={`${id}-role`}>
         <Select id={`${id}-role`} className="al-select--fit" value={fa.defaultRole} options={ROLE_OPTIONS} onChange={(e) => set({ defaultRole: e.currentTarget.value as UserRole })} />
       </FormRow>

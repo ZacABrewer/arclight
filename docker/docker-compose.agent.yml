@@ -3,13 +3,16 @@
 # The agent shares Gluetun's network namespace, binds every torrent socket to the tunnel
 # interface (tun0; loopback while the tunnel is down, a kill switch) and follows the port the VPN
 # forwards (Gluetun writes it to /tmp/gluetun/forwarded_port, shared through a volume).
-# The main Arclight adds a "Remote Engine" download client with URL http://<seedbox>:7879 and
-# the same token. Expose 7879 only to the main Arclight: a private network (WireGuard,
-# Tailscale), a firewall rule, or a TLS reverse proxy. Never publish it to the internet in plain
-# HTTP: the token travels in a header.
+# The main Arclight adds a "Remote Engine" download client with URL http://<seedbox>:7879 (or
+# https:// with AGENT_TLS_CERT/AGENT_TLS_KEY below) and the same token. Expose 7879 only to the
+# main Arclight: a private network (WireGuard, Tailscale), a firewall rule, TLS on the agent or a
+# TLS reverse proxy. Never publish it to the internet in plain HTTP: the token travels in a
+# header. Without TLS the agent logs a SECURITY warning at start; AGENT_INSECURE_OK=1 silences it
+# once the port is private.
+# Third-party images are pinned to release tags (CI rejects the floating "latest" tag); Arclight releases bump them.
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun-agent
     cap_add:
       - NET_ADMIN
@@ -32,8 +35,10 @@ services:
       - ${AGENT_ROOT:-./agent}/gluetun:/gluetun
       - gluetun-tmp:/tmp/gluetun
     ports:
-      # Agent API. Bind to a private address (e.g. "10.0.0.5:7879:7879") when the host has one.
-      - "${AGENT_API_BIND:-7879}:7879"
+      # Agent API, loopback only by default. Set AGENT_API_BIND to the host's private address
+      # (WireGuard/Tailscale, e.g. "10.0.0.5:7879") so only the main Arclight reaches it, or keep
+      # loopback and put a TLS reverse proxy in front (docs/REMOTE-ENGINE.md).
+      - "${AGENT_API_BIND:-127.0.0.1:7879}:7879"
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
@@ -63,6 +68,11 @@ services:
       - AGENT_UTP=${AGENT_UTP:-1}
       - AGENT_MAX_ACTIVE_DOWNLOADS=${AGENT_MAX_ACTIVE_DOWNLOADS:-3}
       - AGENT_MAX_ACTIVE_SEEDS=${AGENT_MAX_ACTIVE_SEEDS:-5}
+      # HTTPS: PEM certificate and key (mount them, e.g. ${AGENT_ROOT}/tls:/tls:ro); set both.
+      # - AGENT_TLS_CERT=/tls/cert.pem
+      # - AGENT_TLS_KEY=/tls/key.pem
+      # Plain HTTP on purpose (private network or TLS proxy in front): silence the warning.
+      # - AGENT_INSECURE_OK=1
       - TZ=${TZ:-UTC}
     volumes:
       # Fast-resume data and saved .torrent files.

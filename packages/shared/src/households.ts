@@ -105,8 +105,11 @@ export const HouseholdProfileUpdate = z.object({
 });
 export type HouseholdProfileUpdate = z.infer<typeof HouseholdProfileUpdate>;
 
-/** POST /households/profiles/:id/select. */
-export const SelectProfileRequest = z.object({ pin: ProfilePin.optional() });
+/**
+ * POST /households/profiles/:id/select. `password`: the account password, needed to go back to
+ * an owner profile without a PIN from another profile (answered 401 password-required).
+ */
+export const SelectProfileRequest = z.object({ pin: ProfilePin.optional(), password: z.string().min(1).max(256).optional() });
 export type SelectProfileRequest = z.infer<typeof SelectProfileRequest>;
 export const SelectProfileResponse = z.object({ activeProfile: HouseholdProfile });
 export type SelectProfileResponse = z.infer<typeof SelectProfileResponse>;
@@ -115,6 +118,7 @@ export type SelectProfileResponse = z.infer<typeof SelectProfileResponse>;
 export const HouseholdErrorCode = z.enum([
   'pin-required', 'pin-wrong', 'pin-locked', 'unsupported-credential', 'not-found',
   'profile-forbidden', 'limit-reached', 'owner-immutable', 'manage-forbidden',
+  'password-required', 'password-wrong', 'reauth-required',
 ]);
 export type HouseholdErrorCode = z.infer<typeof HouseholdErrorCode>;
 export const HouseholdError = z.object({

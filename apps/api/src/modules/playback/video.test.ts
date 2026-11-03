@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import pino from 'pino';
+import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { QUALITIES, type MediaInfo, type QualityModel } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
@@ -16,7 +17,9 @@ import { parseFfprobeOutput } from '../media-analysis/parse.js';
 import { locateFfprobe } from '../media-analysis/runner.js';
 import { setSection } from '../settings/service.js';
 import { locateFfmpeg } from '../transcode/runner.js';
-import { backgroundServicesFor, videoPartsFor, videoTranscoderFor } from './index.js';
+import { AUDIO_TS, fragment, initSegment, VIDEO_TS } from './hls/fmp4.fixtures.js';
+import type { HlsProc } from './hls/jobs.js';
+import { backgroundServicesFor, hlsPartsFor, videoPartsFor, videoTranscoderFor } from './index.js';
 import type { RunningTranscode } from './transcode.js';
 import { ChapterReader } from './video-items.js';
 import { isUtf8, Limiter, LimiterBusy, MediaCache } from './video-stream.js';
@@ -85,6 +88,8 @@ interface Harness {
   probes: string[];
   /** With `hold`, live streams keep their slot until these are called. */
   release: Array<() => void>;
+  /** HLS encoder runs (fake ffmpeg argv). */
+  hlsRuns: string[][];
 }
 const open: Harness[] = [];
 afterEach(async () => {
@@ -100,12 +105,44 @@ async function harness(opts: { real?: boolean; hold?: boolean; silent?: boolean;
   const release: Array<() => void> = [];
   let ctx: AppContext | undefined;
   const cacheDir = mkdtempSync(join(tmp, 'cache-'));
+  const hlsRuns: string[][] = [];
   const app = await buildApp(config, db, pino({ level: process.env.VT_LOG ?? 'silent' }), {
     probe: false,
     onContext: (c) => {
       ctx = c;
       // Scrub thumbnails asked for by sessions go to the test's own cache (real runs make them).
       backgroundServicesFor(c, { trickplay: { dir: join(cacheDir, 'trickplay') } });
+      // HLS segments, keyframe indexes and capacity history stay in the test's cache too; the
+      // fake ffmpeg writes three 6 s fragments and exits.
+      hlsPartsFor(c, {
+        sessions: {
+          root: () => join(cacheDir, 'hls'),
+          ...(opts.real
+            ? {}
+            : {
+                locate: async () => '/fake/ffmpeg',
+                launcher: (_bin: string, args: readonly string[]): HlsProc => {
+                  hlsRuns.push([...args]);
+                  const stdout = new PassThrough();
+                  const stderr = new PassThrough();
+                  let finish!: (code: number | null) => void;
+                  const done = new Promise<number | null>((r) => (finish = r));
+                  setImmediate(() => {
+                    stdout.write(initSegment());
+                    for (let k = 0; k < 3; k++) stdout.write(fragment(BigInt(k * 6 * VIDEO_TS), BigInt(k * 6 * AUDIO_TS)));
+                    stdout.end();
+                    stderr.end();
+                    finish(0);
+                  });
+                  return { stdout, stderr, done, pause: () => false, resume: () => undefined, kill: () => finish(null) };
+                },
+              }),
+        },
+        keyframes: { dir: join(cacheDir, 'keyframes'), ...(opts.real ? {} : { locateProbe: async () => null }) },
+        capacityFile: null,
+        // The capacity seeds scale with the CPU count: fix it so the ladder is the same on any machine.
+        cpus: 8,
+      });
       if (opts.real) {
         videoPartsFor(c, { cache: { dir: cacheDir }, encoders: { detect: async () => ({ hwaccel: 'none', zscale: false }) } });
         return;
@@ -150,7 +187,7 @@ async function harness(opts: { real?: boolean; hold?: boolean; silent?: boolean;
   });
   await app.ready();
   setSection(db, 'player', { enabled: true });
-  const h = { app, ctx: ctx!, db, launches, converts, probes, release };
+  const h = { app, ctx: ctx!, db, launches, converts, probes, release, hlsRuns };
   open.push(h);
   return h;
 }
@@ -392,7 +429,7 @@ describe('the playback session', () => {
 
   it('the remote bitrate cap forces a transcode, also on a link that asked for direct play', async () => {
     const h = await harness();
-    setSection(h.db, 'player', { enabled: true, allowRemote: true, remoteMaxBitrateKbps: 2000 });
+    setSection(h.db, 'player', { enabled: true, allowRemote: true, remoteVideoMaxBitrateKbps: 2000 });
     const user = await signIn(h);
     const { movie } = addMovie(h.db, { title: 'Far', tmdbId: 6, files: [{ name: 'a.mp4', info: H264_AAC }] });
     const res = await h.app.inject({ method: 'POST', url: '/api/v1/playback/video/session', payload: { itemKey: `movie:${movie.id}`, profile: BROWSER }, headers: { cookie: user.cookie }, remoteAddress: '203.0.113.9' });
@@ -405,6 +442,70 @@ describe('the playback session', () => {
     expect(h.launches.at(-1)!.join(' ')).toMatch(/-b:v (\d+)k/);
     const kbps = Number(/-b:v (\d+)k/.exec(h.launches.at(-1)!.join(' '))![1]);
     expect(kbps).toBeLessThanOrEqual(2000);
+  });
+
+  it('old clients keep progressive streams; HLS clients get a signed master playlist, segments, health and DELETE', async () => {
+    const h = await harness();
+    const user = await signIn(h);
+    const { movie } = addMovie(h.db, { title: 'Ladder', tmdbId: 40, files: [{ name: 'b.mkv', info: HEVC10_AC3 }] });
+    const old = (await session(h, user.cookie, { itemKey: `movie:${movie.id}` })).json();
+    expect(old).toMatchObject({ method: 'transcode', delivery: 'progressive', sessionId: null });
+    expect(old.hls).toBeUndefined();
+
+    const res = await session(h, user.cookie, { itemKey: `movie:${movie.id}`, deliveries: ['hls', 'progressive'], deviceKey: 'tv-1', startMs: 30_000 });
+    expect(res.statusCode).toBe(200);
+    const s = res.json();
+    expect(s).toMatchObject({ delivery: 'hls', method: 'transcode', mimeType: 'application/vnd.apple.mpegurl', streamStartMs: 0, seekable: true });
+    expect(s.sessionId).toMatch(/^[0-9a-f]{32}$/);
+    expect(s.url).toBe(s.hls.masterUrl);
+    expect(s.hls.rungs.every((r: { codec: string }) => r.codec === 'h264')).toBe(true);
+    const master = await get(h, pathOf(s.url));
+    expect(master.statusCode).toBe(200);
+    expect(master.headers['content-type']).toContain('mpegurl');
+    expect(master.body).toContain('#EXT-X-STREAM-INF');
+    // A tampered signature is refused.
+    expect((await get(h, pathOf(s.url).replace(/sig=[^&]+/, 'sig=AAAA'))).statusCode).toBe(403);
+    const rungUrl = master.body.split('\n').find((l) => l && !l.startsWith('#'))!;
+    const base = pathOf(s.url).replace(/master\.m3u8\?.*$/, '');
+    const media = await get(h, base + rungUrl);
+    expect(media.statusCode).toBe(200);
+    expect(media.body).toContain('#EXT-X-PLAYLIST-TYPE:VOD');
+    expect(media.body).toContain('#EXT-X-MAP:URI="init.mp4');
+    const rungBase = (base + rungUrl).replace(/index\.m3u8.*$/, '');
+    const segLine = media.body.split('\n').find((l) => l.startsWith('5.m4s'))!;
+    // Segment 5 (30 s) was prewarmed: the fake ffmpeg ran from there.
+    const seg = await get(h, rungBase + segLine);
+    expect(seg.statusCode).toBe(200);
+    expect(seg.headers['content-type']).toBe('video/iso.segment');
+    expect(seg.headers['access-control-expose-headers']).toBe('x-arclight-encode');
+    const initLine = /#EXT-X-MAP:URI="([^"]+)"/.exec(media.body)![1]!;
+    expect((await get(h, rungBase + initLine)).statusCode).toBe(200);
+    expect(h.hlsRuns.length).toBeGreaterThan(0);
+    expect(h.hlsRuns[0]!.join(' ')).toContain('-c:v libx264');
+    const health = await get(h, pathOf(s.hls.healthUrl));
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({ hwaccel: 'none' });
+    // Ending the session: 204, then its links are gone.
+    const del = await h.app.inject({ method: 'DELETE', url: `/api/v1/playback/video/session/${s.sessionId}`, headers: { cookie: user.cookie } });
+    expect(del.statusCode).toBe(204);
+    expect((await get(h, pathOf(s.url))).statusCode).toBe(404);
+  });
+
+  it('HLS: Auto declines direct play without the bandwidth for it; Settings can keep progressive streams', async () => {
+    const h = await harness();
+    setSection(h.db, 'player', { enabled: true, allowRemote: true });
+    const user = await signIn(h);
+    const { movie } = addMovie(h.db, { title: 'Bw', tmdbId: 41, files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const body = { itemKey: `movie:${movie.id}`, profile: BROWSER, deliveries: ['hls'] };
+    expect((await session(h, user.cookie, body)).json()).toMatchObject({ method: 'direct', delivery: 'progressive' });
+    expect((await session(h, user.cookie, { ...body, bandwidthKbps: 8000 })).json()).toMatchObject({ delivery: 'hls', reasons: ['bitrate'] });
+    expect((await session(h, user.cookie, { ...body, bandwidthKbps: 20_000 })).json()).toMatchObject({ method: 'direct' });
+    expect((await session(h, user.cookie, { ...body, bandwidthKbps: 20_000, avoidDirect: true })).json()).toMatchObject({ delivery: 'hls' });
+    expect((await session(h, user.cookie, { ...body, bandwidthKbps: 100, quality: 'original' })).json()).toMatchObject({ method: 'direct' });
+    const far = await h.app.inject({ method: 'POST', url: '/api/v1/playback/video/session', payload: body, headers: { cookie: user.cookie }, remoteAddress: '203.0.113.9' });
+    expect(far.json()).toMatchObject({ delivery: 'hls' });
+    setSection(h.db, 'player', { enabled: true, videoDelivery: 'progressive' });
+    expect((await session(h, user.cookie, { ...body, bandwidthKbps: 100 })).json()).toMatchObject({ delivery: 'progressive' });
   });
 
   it('live video slots: the newest of a user replaces their oldest; others get 503 and HEAD reports it', async () => {
@@ -521,11 +622,12 @@ describe('helper process limits', () => {
     // the second waits, so the third (not the second, under a loaded suite) is the one refused.
     await waitFor(() => pending.length === 1 && cache.limiter.waiting === 1);
     await expect(cache.thumbnail(3, files[2]!, 60_000)).rejects.toMatchObject({ code: 'BUSY' });
+    // Either of the first two may have got the slot (whichever finished its file work first):
+    // finish the running one, then the one that queued behind it.
     pending.shift()!();
-    await a;
     await waitFor(() => pending.length === 1);
     pending.shift()!();
-    await b;
+    await Promise.all([a, b]);
     expect(peak).toBe(1);
   });
 
@@ -658,6 +760,23 @@ describe('browse, watched and search', () => {
     const kid = await signIn(h, { restrictions: { maxCertification: { movie: 'PG', tv: null } } });
     expect((await get(h, '/api/v1/playback/movies', kid.cookie)).json().items.map((m: { title: string }) => m.title)).toEqual(['Kids']);
     expect((await get(h, '/api/v1/playback/search?q=adults', kid.cookie)).json().movies).toEqual([]);
+  });
+
+  it('mark watched only touches items the caller can browse', async () => {
+    const h = await harness();
+    const { movie: kids } = addMovie(h.db, { title: 'Kids', tmdbId: 14, certification: 'G', files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const { movie: adults } = addMovie(h.db, { title: 'Adults', tmdbId: 15, certification: 'R', files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const { show, episodes } = addSeries(h.db, { certification: 'TV-MA' });
+    const kid = await signIn(h, { restrictions: { maxCertification: { movie: 'PG', tv: 'TV-PG' } } });
+    const marked = await post(h, '/api/v1/playback/watched', { itemKeys: [`movie:${kids.id}`, `movie:${adults.id}`, `episode:${episodes[0]!.id}`, 'movie:99999', 'track:1'], played: true }, kid.cookie);
+    expect(marked.json()).toEqual({ updated: 1 });
+    expect((await post(h, '/api/v1/playback/watched', { seriesId: show.id, played: true }, kid.cookie)).json()).toEqual({ updated: 0 });
+    const rows = h.db.select({ itemKey: schema.playbackProgress.itemKey }).from(schema.playbackProgress).where(eq(schema.playbackProgress.userId, kid.id)).all();
+    expect(rows.map((r) => r.itemKey)).toEqual([`movie:${kids.id}`]);
+    // Without limits the same calls reach everything that exists.
+    const adult = await signIn(h);
+    expect((await post(h, '/api/v1/playback/watched', { itemKeys: [`movie:${adults.id}`, `episode:${episodes[0]!.id}`, 'movie:99999'], played: true }, adult.cookie)).json()).toEqual({ updated: 2 });
+    expect((await post(h, '/api/v1/playback/watched', { seriesId: show.id, played: true }, adult.cookie)).json()).toEqual({ updated: 2 });
   });
 
   it('non-player users are turned away', async () => {

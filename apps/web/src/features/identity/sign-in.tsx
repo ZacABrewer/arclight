@@ -27,6 +27,8 @@ export function ssoErrorMessage(code: string): string {
       return t('identity.ssoError.disabled');
     case 'link_conflict':
       return t('identity.ssoError.linkConflict');
+    case 'rate_limited':
+      return t('identity.ssoError.rateLimited');
     default:
       return t('identity.ssoError.other');
   }

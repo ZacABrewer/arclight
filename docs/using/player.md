@@ -8,6 +8,8 @@ The player is a preview. It is off until an admin turns it on.
 
 For the layouts, profiles, settings and the video controls in the browser, see [The player in the browser](../player/web.md).
 
+While your own (owner) profile is active you can add and edit profiles right in the player: the round **Add profile** tile and the pencil **Manage profiles** button on the **Who's watching?** screen, or **Add profile** in the avatar menu and under **Settings > Profiles** when you have only one profile so far. See [Household profiles](../guides/profiles.md#adding-and-editing-profiles-in-the-player).
+
 ## Turning the player on (admins)
 
 1. Open **Settings > General > Features** and make sure **Movies**, **TV**, **Music** and **Audiobooks** are on as you need them. The player only shows the sections you have enabled.
@@ -28,7 +30,12 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Jellyfin server | Which Jellyfin or Emby server to stream through. Shown when the engine is Jellyfin. | First enabled server |
 | Movies & TV | Lets the player show and play movies and episodes. | On |
 | Live video slots | How many videos the server may convert or repackage at once, for everyone together. Each one costs CPU or GPU time. | 3 |
-| Live video slots per user | How many of those one person may use. Starting a new video replaces that person's oldest one. | 1 |
+| Live video slots per user | How many of those one person may use on one device. Starting a new video on that device replaces its oldest one; a phone and a TV of the same person each have their own. | 1 |
+| Player address | Extra paths (such as `/watch`) and hostnames (such as `watch.example.com`) that open the player. See [Player address](../player/address.md). | Only `/player` |
+| Video streaming | **Adaptive** sends converted video as HLS: the quality follows the connection and a jump starts playing again quickly. **Single stream** is the older way (one stream that restarts on every seek). Apps and browsers that cannot play HLS always get a single stream. | Adaptive |
+| Video segment cache | Disk space for converted video, so a replay or a jump back is instant. When it is full, the parts furthest behind what people are watching go first. 1 to 10,000 GB. | 100 GB |
+| Video segment folder | Where that cache lives. Empty: `cache/player/hls` in the config folder. In Docker, point it at a mounted volume. | Empty |
+| Remote video bitrate limit | Movies and episodes watched away from home stay under this, and the picture size follows it. The audio limit above stays for music and audiobooks. `0` means no limit. | 8000 kbps |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -104,7 +111,7 @@ The video player fills the screen. Move the mouse, tap or press a key to show th
 - Play and pause, back and forward 10 seconds, and a seek bar with marks for chapters.
 - Volume and mute, picture in picture and full screen.
 - **Audio & subtitles**: pick the audio track and the subtitles. If subtitles are early or late, nudge them in steps of a quarter second.
-- **Playback settings**: the version, the quality (Auto, Original, 1080p, 720p or 480p) and the speed. It also shows how the video reaches you (see below).
+- **Playback settings**: the version, the quality and the speed. It also shows how the video reaches you (see below). When the video comes as HLS, the quality list is the stream's own steps (for example Original, 1080p, 720p, 480p, 360p) and picking one switches in place.
 - **Skip intro**, **Skip recap** and **Skip credits** appear when the file's chapters mark those parts, when Arclight found the intro and credits by comparing a season's audio, or when an admin entered the times. Dragging the progress bar shows scrub thumbnails. See [Scrub thumbnails and intro detection](../player/scrub-thumbnails-and-intros.md).
 - Near the end of an episode, an **Up next** card counts down 10 seconds and then plays the next episode. Press **Cancel** to stay, or **Play now** to go straight away.
 
@@ -122,7 +129,11 @@ TV remotes and game pads work too: the arrows move between buttons, and **OK** p
 
 ### How video reaches you
 
-Arclight sends the original file when your browser can play it (**direct play**). When it cannot, for example because of the file type, the video or audio format, HDR, or your bitrate limit, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power. A converted stream starts again from the new point when you seek, which can take a moment.
+Arclight sends the original file when your browser can play it (**direct play**) and the connection is fast enough for it. When it cannot, for example because of the file type, the video or audio format, HDR, your bitrate limit or a slow connection, Arclight repacks or converts it on the fly. **Playback settings** shows which one is in use and why. Converting needs ffmpeg on the server and costs server power.
+
+Repacked and converted video goes out as an adaptive stream (**HLS**) of 6-second pieces the browser fetches as it plays. Seeking, going back and changing quality happen in place, without starting a new stream. **Auto** starts at a quality the connection and the server can keep up with and moves up or down as they change, so playback does not stop to buffer. The server only offers a quality it can convert at least 1.3 times faster than real time, and 4K only after it has measured that speed. A jump inside what is already converted is instant; a jump further ahead starts a new conversion from there, which takes a second or two. Converted pieces stay in the segment cache, so watching again costs nothing. Picking a fixed quality (1080p, 720p, 480p) keeps that quality.
+
+The video badge shows the stream, for example `HLS · 1080p · QSV`: the last part is the encoder the server uses, a graphics encoder such as QSV or VAAPI, or `CPU` when it converts in software. If direct play keeps stalling on Auto, the player switches to HLS by itself. Safari plays HLS itself, so there Auto is the only quality that switches in place.
 
 Subtitles that are text (SRT, ASS, WebVTT) are drawn by the player. Picture subtitles (PGS, VobSub) are burned into the video, which means converting it.
 
@@ -184,7 +195,9 @@ How a video reaches you depends on what your device can play:
 - **Remux**: the video and audio are fine for your device but the file type is not (often MKV). Arclight repackages it as MP4 on the fly without changing the picture. This uses little CPU.
 - **Transcode**: Arclight converts the video, for example a 10-bit HEVC or HDR file for a browser, or to stay under a remote bitrate limit. HDR is turned into SDR when your screen cannot show it. Arclight uses the server's Intel graphics (Quick Sync or VAAPI) when ffmpeg can reach it, and falls back to the CPU otherwise.
 
-The player says which one it uses and why. Remuxed and converted streams cannot be fetched in ranges, so seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+The player says which one it uses and why. In a browser, remuxed and converted video comes as an adaptive stream (HLS), so seeking stays in place (see [How video reaches you](#how-video-reaches-you)). Older apps get one stream instead, and there seeking starts a new stream from that point. When every live video slot is in use, the player says the server is busy. Try again in a moment, or pick a lower quality.
+
+Subtitles that are forced (signs and foreign-language lines only) and are pictures are burned in when subtitles are off, so those lines still show.
 
 Text subtitles (SRT, ASS, WebVTT, embedded or next to the file) can be turned on and off at any time. Picture subtitles (PGS, VobSub) have to be burned into the picture, which means a transcode.
 
@@ -194,7 +207,7 @@ To run conversions in Docker with Intel graphics, pass the GPU into the containe
 
 The Arclight app is the player on its own, for phones and tablets. It can keep music and books on the device to play offline. To sign it in:
 
-1. In the player, open the account menu (top right) and choose **Sign in to the Arclight app**.
+1. In the player, open the [account menu](../player/web.md#account-menu) (top right) and choose **Sign in to the Arclight app**.
 2. In the app, choose to scan a code and point the camera at the QR code. Or type the **server address** and the **code** shown under it.
 
 The code works once and expires after five minutes. Press **New code** for another one. You can also sign in in the app with your Arclight username and password (and your authenticator code, if you use two-factor sign-in). Accounts that sign in through a media server or only with a passkey use the code.
@@ -208,7 +221,7 @@ The app needs the same player access as the browser. If the player is off, or yo
 The Arclight app on a TV signs in with a code, so you never type a password with a remote.
 
 1. On the TV, open Arclight and choose **Enter server address**. Type your Arclight address with the remote and press **Continue**.
-2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`) and a QR code.
+2. The TV shows a code, the address to open (your Arclight address followed by `/player/link`, or the [player address](../player/address.md) followed by `/link` when one is set) and a QR code.
 3. On your phone or computer, scan the QR code, or open that address and type the code. Sign in there if asked.
 4. Press **Sign in the TV**. The TV signs in as you within a few seconds.
 

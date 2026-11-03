@@ -257,7 +257,7 @@ A pack that fails any rule is not offered, whether it is local, bundled or synce
 | Scoping | Every style rule names `[data-theme="<id>"]` |
 | Allowed at-rules | `@font-face`, `@keyframes`, and `@media` / `@supports` / `@container` groups (checked inside) |
 | Not allowed | `@import`, `@namespace`, `@charset`, any other at-rule |
-| URLs | `url()` only to the pack's own fonts and images (`url(fonts/x.woff2)`, `url(images/bg.webp)`); nothing remote, no `image-set()` or `src()` |
+| URLs | `url()` only to the pack's own fonts and images (`url(fonts/x.woff2)`, `url(images/bg.webp)`); nothing remote, no `image-set()`, `src()`, `image()`, `cross-fade()` or `element()`. Every `url(` must be complete and closed: an unfinished `url(` (for example at the end of the file) refuses the pack. Packs from a remote catalogue get no exceptions, because a remote URL in a stylesheet could leak what is typed into a page |
 | Images | `images/*.webp`, `.png`, `.jpg`, `.jpeg` or `.avif`, and the file must really be that type (checked by its first bytes). No SVG, which can carry script |
 | Hooks and escapes | No `expression()`, `javascript:`, `behavior:`, `-moz-binding`, and no backslash anywhere in the CSS |
 | Files | Only `theme.json`, `theme.css`, `fonts/*.woff2` and `images/*` are used |

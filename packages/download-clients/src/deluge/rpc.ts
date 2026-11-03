@@ -9,6 +9,7 @@
  */
 import type { z } from 'zod';
 import { httpStatusError, sendHttp, validate } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 import {
   DelugeAny,
@@ -275,7 +276,7 @@ export class DelugeRpc {
       headers,
       body: JSON.stringify({ method, params, id }),
     });
-    const text = await response.text();
+    const text = await readBodyText(CLIENT_NAME, response);
     if (!response.ok) {
       if (response.status === 404) {
         throw new DownloadClientError(

@@ -24,6 +24,9 @@ export const FAST: Partial<SessionSettings> = {
   dhtAnnounceIntervalMs: 300,
   connectTimeoutMs: 2000,
   dhtBootstrapNodes: [],
+  // Every test peer, tracker and web seed lives on loopback.
+  allowLocalPeers: true,
+  allowLocalTrackers: true,
 };
 
 export interface Payload {

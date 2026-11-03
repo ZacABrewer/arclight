@@ -64,9 +64,9 @@ describe('PlayerSearchPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Play Glass Floor' }));
     expect(player.playItems).toHaveBeenCalledWith(['track:1', 'track:2'], { startIndex: 1, source: 'search:glass' });
-
-    await userEvent.click(screen.getByRole('button', { name: 'Play Glass Ages' }));
-    expect(player.playItem).toHaveBeenCalledWith('audiobook:5');
+    // Albums and books are the same tiles as their own pages: one link each, no play overlay.
+    expect(screen.getByRole('link', { name: /Glass House/ }).getAttribute('href')).toBe('/player/music/album/3');
+    expect(screen.queryByRole('button', { name: 'Play Glass Ages' })).toBeNull();
   });
 
   it('says when nothing matched', async () => {

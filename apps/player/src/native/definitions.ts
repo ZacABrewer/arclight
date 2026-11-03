@@ -1,5 +1,5 @@
 import type { PluginListenerHandle } from '@capacitor/core';
-import type { VideoDeviceProfile } from '@arclight/shared';
+import type { VideoDelivery, VideoDeviceProfile, VideoHlsInfo } from '@arclight/shared';
 
 /**
  * The ArclightPlayer native plugin: the contract between the app's TypeScript (this package)
@@ -332,6 +332,8 @@ export interface DeviceInfo {
   /** Google TV / Android TV (leanback / television UI mode). */
   isTv: boolean;
   videoProfile: VideoDeviceProfile;
+  /** How this build takes converted video (VideoSessionRequest.deliveries); absent: progressive only. */
+  deliveries?: VideoDelivery[];
 }
 
 /** A side-loaded WebVTT subtitle track (cues in media time; native adds the stream offset). */
@@ -477,6 +479,15 @@ export interface PlayVideoOptions {
   theme?: NativeVideoTheme;
   /** Overlay strings, translated in JS (R.string.video_* stay as fallbacks). */
   strings?: Record<NativeVideoString, string>;
+  // ---- 0.24 HLS (all optional; absent = progressive) ----
+  /** 'hls': `url` is the session's master playlist, seeks stay in the player. */
+  delivery?: VideoDelivery;
+  sessionId?: string | null;
+  hls?: VideoHlsInfo;
+  /** The viewer's quality setting ('auto', 'original', '1080p', ...): Auto adapts, others pin a variant. */
+  quality?: string;
+  /** Last measured throughput on this network (kbit/s), the bandwidth meter's start. */
+  bandwidthKbps?: number;
 }
 
 export interface ReplaceVideoStreamOptions {
@@ -492,10 +503,24 @@ export interface ReplaceVideoStreamOptions {
   selectedAudio?: number;
   /** The "Direct play · 1080p" line for the new stream (it can change with the audio track). */
   streamInfo?: string;
+  delivery?: VideoDelivery;
+  sessionId?: string | null;
+  hls?: VideoHlsInfo;
+}
+
+/** Playback health native adds to progress and close events (0.24). */
+export interface VideoPlaybackStats {
+  /** Rebuffers after startup (not seeks), counted from 500 ms. */
+  stalls?: number;
+  stallMs?: number;
+  /** Open to first frame. */
+  startupMs?: number;
+  /** The bandwidth meter's estimate (kbit/s). */
+  bandwidthKbps?: number;
 }
 
 /** Every 10 s while playing, on pause, and once before `videoNext`. Times are media time. */
-export interface VideoProgressEvent {
+export interface VideoProgressEvent extends VideoPlaybackStats {
   itemKey: string;
   positionMs: number;
   durationMs: number;
@@ -514,6 +539,8 @@ export interface VideoSeekRequestEvent {
   audioTrack?: number;
   /** The subtitle shown (null = off), so the new session keeps it. */
   subtitle?: string | null;
+  /** Direct play keeps stalling (Auto quality): wanted is a converted stream at `positionMs`. */
+  avoidDirect?: boolean;
 }
 
 /**
@@ -529,7 +556,7 @@ export interface VideoNextEvent {
   completed?: boolean;
 }
 
-export interface VideoClosedEvent {
+export interface VideoClosedEvent extends VideoPlaybackStats {
   itemKey: string;
   positionMs: number;
   durationMs: number;

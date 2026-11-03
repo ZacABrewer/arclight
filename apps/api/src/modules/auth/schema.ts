@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sealedJson, sealedText } from '../../db/secret-box.js';
 import type { AppArea, UserRole, UserSettings } from '@arclight/shared';
 import { householdProfiles } from '../households/schema.js';
 
@@ -17,6 +18,11 @@ export const users = sqliteTable(
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name'),
     email: text('email'),
+    /**
+     * The email was set by an admin or vouched for by an identity provider (or predates 0.24).
+     * false after the user changed it themselves; sign-in by email match skips such accounts.
+     */
+    emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(true),
     role: text('role').$type<UserRole>().notNull(),
     /** Permission bitfield (Permission in @arclight/shared). */
     permissions: integer('permissions').notNull().default(0),
@@ -32,7 +38,8 @@ export const users = sqliteTable(
      */
     localPassword: integer('local_password', { mode: 'boolean' }).notNull().default(true),
     avatar: text('avatar'),
-    settings: text('settings', { mode: 'json' }).$type<UserSettings>().notNull(),
+    /** Secret-looking keys inside (the media-server link's accessToken) are sealed at rest. */
+    settings: sealedJson('settings').$type<UserSettings>().notNull(),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastLoginAt: text('last_login_at'),
@@ -116,7 +123,7 @@ export const userTwoFactor = sqliteTable('user_two_factor', {
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   /** Base32 TOTP secret. */
-  totpSecret: text('totp_secret').notNull(),
+  totpSecret: sealedText('totp_secret').notNull(),
   enabledAt: text('enabled_at'),
   lastStep: integer('last_step').notNull().default(0),
   recoveryCodes: text('recovery_codes', { mode: 'json' }).$type<string[]>().notNull().default([]),

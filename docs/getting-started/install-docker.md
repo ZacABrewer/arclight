@@ -82,14 +82,14 @@ Copy `docker/.env.example` to `docker/.env` (next to the compose file) and edit 
 | Variable | Default if unset | What it does |
 |---|---|---|
 | `PUID` | `1000` | Numeric user id the containers run as. Must own your folders. |
-| `PGID` | `1000` | Numeric group id for the same purpose. |
+| `PGID` | `1000` | Numeric group id for the same purpose. `0` (root) for either is refused on a new install; see `ALLOW_ROOT` below. |
 | `TZ` | `UTC` | Time zone for schedules and the calendar, for example `Etc/UTC` or `Europe/London`. |
 | `CONFIG_ROOT` | `./data` | Parent folder for each container's settings: `<CONFIG_ROOT>/arclight`, `/gluetun`, and `/qbittorrent` and `/whisper` if you enable those. Example: `/srv/arclight/appdata`. |
 | `DATA_ROOT` | `./data/share` | The one share mounted at `/data`. Contains `downloads`, `media/tv`, `media/movies`. Example: `/srv/arclight/data`. |
 | `PROTON_WIREGUARD_KEY` | none (required in VPN layouts) | The `PrivateKey` from a Proton WireGuard configuration. Treat it like a password. |
 | `VPN_COUNTRIES` | `Netherlands` | Comma-separated Proton server countries. Use a country that allows P2P. |
 | `LAN_SUBNET` | `192.168.1.0/24` | Your home network, so you can still reach the web UIs through Gluetun's firewall. Change it if your network is not `192.168.1.x`. |
-| `GLUETUN_API_KEY` | empty | Key for Gluetun's control server. Written for you by the helper script in step 5. |
+| `GLUETUN_API_KEY` | none (required in VPN layouts) | Key for Gluetun's control server. Written for you by the helper script in step 5. Compose stops with an error while it is empty. |
 
 Advanced variables you normally leave alone:
 
@@ -98,6 +98,9 @@ Advanced variables you normally leave alone:
 | `ARCLIGHT_IMAGE` | the project's published image, `latest` | Release files only. Pin a version, for example `ghcr.io/zacabrewer/arclight:v0.21.0`, to stop the image moving. |
 | `ARCLIGHT_SUBNET` | `172.30.53.0/24` | VPN layouts: fixed Docker subnet so Gluetun's firewall can allow it and the optional Whisper container can have a fixed address. Change only if it collides with another Docker network. |
 | `ARCLIGHT_SUBNET_DYNAMIC` | `172.30.53.0/25` | Lower half of that subnet, used for automatically assigned addresses. |
+| `ALLOW_ROOT` | `0` | Set to `1` under the Arclight service's `environment:` to let it start with `PUID=0` or `PGID=0`. Without it a new install exits with "Arclight refuses to run as root" (an install that already ran as root keeps starting, with a warning in the log). Running as root is not recommended: give the folders to a normal user instead. |
+| `ARCLIGHT_TRUSTED_PROXIES` | loopback and private networks | Set under the Arclight service's `environment:`. Which connections may set `X-Forwarded-For` and friends. Leave it unset for a proxy on the same machine, the LAN or a Docker network; set your proxy's address when it connects from a public address. See [trusted proxies](../using/users-and-security.md#trusted-proxies). |
+| `ARCLIGHT_CORS_ORIGINS` | empty | Set under `environment:`. Extra browser origins, comma-separated, whose pages may use your sign-in (for example a dashboard on another hostname). Arclight's own address, the Application URL and portal hostnames are always allowed. |
 | `ARCLIGHT_BASE_PATH` | empty | Set under the Arclight service's `environment:` (not `.env`) to serve it below a path such as `/arclight` behind a reverse proxy. See [sub-path-hosting.md](sub-path-hosting.md). |
 | `WHISPER_IP` | `172.30.53.200` | VPN layouts: fixed address of the optional Whisper container. |
 
@@ -139,7 +142,7 @@ Things to know:
 <a id="4-set-up-the-gluetun-control-key-vpn-layouts-only"></a>
 ## 5. Set up the Gluetun control key (VPN layouts)
 
-Current Gluetun releases protect their control server with an API key. Arclight reads VPN status, your public IP and the forwarded port from it. A helper script generates a key and writes everything both sides need. Run it once, from the repository root:
+Gluetun's control server can stop the VPN and change its settings, so the VPN compose files require an API key for it: `docker compose` refuses to start while `GLUETUN_API_KEY` is empty. Arclight reads VPN status, your public IP and the forwarded port with the same key. A helper script generates a key and writes everything both sides need. Run it once, from the repository root:
 
 | Platform | Command |
 |---|---|
@@ -152,7 +155,7 @@ It does three things:
 2. Generates a random key and stores it as `GLUETUN_API_KEY` in `docker/.env`. Running it again keeps the existing key.
 3. Writes `<CONFIG_ROOT>/gluetun/auth/config.toml` for Gluetun, with a read-only role for Arclight. `CONFIG_ROOT` is read from `docker/.env`; pass a folder as the first argument (`-ConfigRoot` on Windows) to override.
 
-Set `CONFIG_ROOT` in `.env` before running it so the file lands in the folder Gluetun mounts. The compose files hand `GLUETUN_API_KEY` to Arclight as `ARCLIGHT_VPN_API_KEY`, so you type nothing into Settings > VPN. If you change the key later, run `docker compose down` and `docker compose up -d`, because containers that share Gluetun's network must be recreated whenever Gluetun restarts.
+Set `CONFIG_ROOT` in `.env` before running it so the file lands in the folder Gluetun mounts. The compose files hand `GLUETUN_API_KEY` to Gluetun (as its default control-server role, `HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE`, which covers every route the auth file does not) and to Arclight as `ARCLIGHT_VPN_API_KEY`, so you type nothing into Settings > VPN. If you cannot run the script (a NAS GUI, Portainer), any long random string of letters and digits works as the key, for example the output of `openssl rand -hex 24`: the compose files configure Gluetun with it directly. If you change the key later, run `docker compose down` and `docker compose up -d`, because containers that share Gluetun's network must be recreated whenever Gluetun restarts.
 
 ## 6. Start the stack
 

@@ -4,6 +4,7 @@ import { FlareSolverrClient, isChallengeResponse } from './flaresolverr.js';
 import type { FlareSolverrCookie } from './flaresolverr.js';
 import { fetchWithProxy } from './http-client.js';
 import { isFlareSolverr, isNetworkProxy } from './types.js';
+import type { ProxyTargetPolicy } from './target.js';
 import type { ProxyConfig } from './types.js';
 
 export interface ProxiedFetchOptions {
@@ -13,6 +14,12 @@ export interface ProxiedFetchOptions {
   jar?: CookieJar;
   /** Per-host User-Agent cache (S14.10-S14.11); created internally if absent. */
   userAgents?: Map<string, string>;
+  /**
+   * Per-URL address policy for the network proxy: a URL it returns a policy for must be public,
+   * so its name is resolved and vetted locally and the proxy is handed the IP (DNS rebinding
+   * through the proxy). Undefined for a URL keeps remote DNS. See `proxyDialHost`.
+   */
+  targetPolicy?: ProxyTargetPolicy;
 }
 
 const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
@@ -83,7 +90,7 @@ export function createProxiedFetch(proxies: ProxyConfig | readonly ProxyConfig[]
     : undefined;
 
   const send = (url: URL, init: RequestInit): Promise<Response> =>
-    network ? fetchWithProxy(url, init, network, options.fetchImpl) : (options.fetchImpl ?? globalThis.fetch)(url, init);
+    network ? fetchWithProxy(url, init, network, options.fetchImpl, options.targetPolicy ? { targetPolicy: options.targetPolicy } : {}) : (options.fetchImpl ?? globalThis.fetch)(url, init);
 
   const proxied = async (input: Parameters<typeof fetch>[0], rawInit?: RequestInit): Promise<Response> => {
     const { url, init } = await normalizeInput(input, rawInit);

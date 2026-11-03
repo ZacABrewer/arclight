@@ -392,13 +392,77 @@ function asString(value: TemplateValue | undefined): string {
   return value.join(',');
 }
 
-const regexCache = new Map<string, RegExp>();
+/** Compiled definition regexes, least recently used first; bounded so user definitions cannot grow it. */
+const regexCache = new Map<string, RegExp | SyntaxError>();
+const REGEX_CACHE_SIZE = 256;
+/** Longest definition regex accepted; real ones are a few dozen characters. */
+export const MAX_DEFINITION_REGEX_LENGTH = 1000;
 
-/** Compile a definition regex (ECMAScript, optional leading `(?i)`), cached. */
+/**
+ * True when a group that itself holds a repeat is repeated, as in `(a+)+` or `(\w*\s?){1,50}`
+ * (a repeat here means more than ten times). Those backtrack exponentially on a near-miss,
+ * and the text they run on comes from the indexer's page. A deliberately small check (the
+ * full one lives in @arclight/shared, which this package does not depend on): character
+ * classes and escapes are skipped, every group is tracked.
+ */
+export function hasNestedQuantifier(source: string): boolean {
+  // One entry per open group: does it contain an unbounded repeat?
+  const stack: boolean[] = [];
+  let i = 0;
+  // Reads a quantifier at i; returns its maximum (Infinity when unbounded), or 0 when none.
+  const quantifier = (): number => {
+    const c = source[i];
+    if (c === '*' || c === '+') return (i++, Infinity);
+    if (c === '?') return (i++, 1);
+    if (c === '{') {
+      const m = /^\{(\d+)(,(\d*))?\}/.exec(source.slice(i, i + 24));
+      if (!m) return 0;
+      i += m[0].length;
+      return m[2] === undefined ? Number(m[1]) : m[3] === '' ? Infinity : Number(m[3]);
+    }
+    return 0;
+  };
+  while (i < source.length) {
+    const c = source[i]!;
+    let atomHadRepeat = false;
+    if (c === '\\') {
+      i += 2;
+    } else if (c === '[') {
+      i++;
+      if (source[i] === '^') i++;
+      if (source[i] === ']') i++;
+      while (i < source.length && source[i] !== ']') i += source[i] === '\\' ? 2 : 1;
+      i++;
+    } else if (c === '(') {
+      stack.push(false);
+      i++;
+      continue;
+    } else if (c === ')') {
+      atomHadRepeat = stack.pop() ?? false;
+      i++;
+    } else {
+      i++;
+      if (c === '|' || c === '^' || c === '$') continue;
+    }
+    const max = quantifier();
+    if (source[i] === '?' && max > 0) i++; // lazy
+    if (atomHadRepeat && max > 10) return true;
+    if ((atomHadRepeat || max > 10) && stack.length > 0) stack[stack.length - 1] = true;
+  }
+  return false;
+}
+
+/**
+ * Compile a definition regex (ECMAScript, optional leading `(?i)`), cached. Throws a
+ * SyntaxError, as for any invalid regex, when the pattern is over-long or has a nested repeat.
+ */
 export function definitionRegex(pattern: string, flags = ''): RegExp {
   const key = `${flags}/${pattern}`;
   let re = regexCache.get(key);
-  if (!re) {
+  if (re) {
+    regexCache.delete(key);
+    regexCache.set(key, re);
+  } else {
     let source = pattern;
     let f = flags;
     if (source.startsWith('(?i)')) {
@@ -407,9 +471,21 @@ export function definitionRegex(pattern: string, flags = ''): RegExp {
     }
     // .NET named groups `(?<name>` are the same in JS; `(?'name'` is not.
     source = source.replace(/\(\?'([A-Za-z_]\w*)'/g, '(?<$1>');
-    re = new RegExp(source, f);
+    if (source.length > MAX_DEFINITION_REGEX_LENGTH) re = new SyntaxError(`Definition regex is longer than ${MAX_DEFINITION_REGEX_LENGTH} characters`);
+    else if (hasNestedQuantifier(source)) re = new SyntaxError(`Definition regex repeats a repeat and could hang on a hostile page: ${pattern.slice(0, 120)}`);
+    else {
+      try {
+        re = new RegExp(source, f);
+      } catch (err) {
+        re = err instanceof SyntaxError ? err : new SyntaxError(String(err));
+      }
+    }
     regexCache.set(key, re);
+    if (regexCache.size > REGEX_CACHE_SIZE) regexCache.delete(regexCache.keys().next().value!);
   }
+  if (re instanceof SyntaxError) throw re;
+  // A cached global regex keeps lastIndex between exec() calls; start every use fresh.
+  re.lastIndex = 0;
   return re;
 }
 

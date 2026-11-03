@@ -14,7 +14,7 @@ describe('buildFfmpegArgs', () => {
   it('remux to mkv: exact argv with progress on stdout', () => {
     expect(build('remux', {}, null)).toEqual([
       '-hide_banner', '-nostdin', '-y',
-      '-i', '/in/a.mkv',
+      '-protocol_whitelist', 'file,pipe', '-i', '/in/a.mkv',
       '-map', '0:v:0', '-map', '0:a?', '-map', '0:s?', '-map', '0:t?',
       '-map_metadata', '0', '-map_chapters', '0',
       '-c:v', 'copy', '-c:a', 'copy', '-c:s', 'copy', '-c:t', 'copy',
@@ -62,7 +62,8 @@ describe('buildFfmpegArgs', () => {
     const args = build('transcode', { videoCodec: codec, hwaccel, crf: 22, preset: 'slow' });
     expect(after(args, '-c:v')).toBe(encoder);
     const iIdx = args.indexOf('-i');
-    expect(args.slice(3, iIdx)).toEqual(input);
+    expect(args.slice(3, iIdx - 2)).toEqual(input);
+    expect(args.slice(iIdx - 2, iIdx)).toEqual(['-protocol_whitelist', 'file,pipe']);
     const tail = args.slice(args.indexOf('-c:v'));
     if (quality.length) expect(tail.join(' ')).toContain(quality.join(' '));
     if (preset.length) expect(tail.join(' ')).toContain(preset.join(' '));

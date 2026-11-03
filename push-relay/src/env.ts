@@ -3,6 +3,11 @@ export interface Env {
   REGISTER_LIMITER: RateLimit;
   DEVICE_LIMITER: RateLimit;
   SEND_IP_LIMITER: RateLimit;
+  /**
+   * Registrations accepted per UTC day across all callers (a backstop against address rotation
+   * filling the database). Positive integer; default DEFAULT_REGISTER_DAILY_CAP in src/index.ts.
+   */
+  REGISTER_DAILY_CAP?: string;
 
   /**
    * APNs topics (iOS bundle IDs) this relay sends for, comma-separated. A device registers with

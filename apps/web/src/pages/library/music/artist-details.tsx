@@ -47,6 +47,7 @@ import '../library.css';
 import './music.css';
 import { t } from '../../../i18n/index.js';
 import { usePaletteContext } from '../../../features/command-palette/registry.js';
+import { externalHref } from '../../../lib/safe-url.js';
 
 const route = getRouteApi('/library/music/artist/$id');
 
@@ -142,7 +143,7 @@ function ArtistDetailsView() {
           <ul className="music-links" aria-label={t('music.links')}>
             {links.map((l) => (
               <li key={l.url}>
-                <a href={l.url} target="_blank" rel="noopener noreferrer">
+                <a href={externalHref(l.url)} target="_blank" rel="noopener noreferrer">
                   {l.label}
                 </a>
               </li>

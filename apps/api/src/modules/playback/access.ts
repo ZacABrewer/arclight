@@ -31,6 +31,8 @@ export interface PlayerDecision {
   canStream: boolean;
   /** Effective bitrate cap in kbps; 0: none. */
   maxBitrateKbps: number;
+  /** The cap for video (remote: Settings → Player remote video cap); 0: none. */
+  maxVideoBitrateKbps: number;
   denial: PlayerDenial | null;
 }
 
@@ -72,11 +74,13 @@ export function decide(settings: PlayerSettings, subject: PlayerSubject, remote:
   const userCap = access?.maxBitrateKbps ?? 0;
   // Remote: the stricter of the user's cap and the server-wide remote cap (0 on either: none).
   const maxBitrateKbps = remote ? stricterCap(userCap, settings.remoteMaxBitrateKbps) : userCap;
+  // Video has its own remote cap (the audio one is far too low for pictures).
+  const maxVideoBitrateKbps = remote ? stricterCap(userCap, settings.remoteVideoMaxBitrateKbps) : userCap;
   let denial: PlayerDenial | null = null;
   if (!settings.enabled) denial = 'PLAYER_DISABLED';
   else if (!allowed) denial = 'PLAYER_NOT_ALLOWED';
   else if (remote && (!settings.allowRemote || (!subject.isAdmin && access?.allowRemote === false))) denial = 'REMOTE_NOT_ALLOWED';
-  return { enabled: settings.enabled, allowed: settings.enabled && allowed, remote, canStream: denial === null, maxBitrateKbps, denial };
+  return { enabled: settings.enabled, allowed: settings.enabled && allowed, remote, canStream: denial === null, maxBitrateKbps, maxVideoBitrateKbps, denial };
 }
 
 export function subjectOf(req: FastifyRequest): PlayerSubject {
@@ -102,6 +106,11 @@ export function capabilitiesOf(db: Db, decision: PlayerDecision): PlayerCapabili
       books: on && features.books === true,
       video: on && playerSettings(db).video,
     },
+    playerUrl: null,
+    portalUrl: null,
+    canRequest: false,
+    appHome: null,
+    appUrl: null,
   };
 }
 

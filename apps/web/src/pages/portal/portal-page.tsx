@@ -85,6 +85,8 @@ const SIGNED_IN_FALLBACK: PublicPortal = {
   message: '',
   allowAnonymousDiscover: false,
   loginMethods: { local: true, mediaServer: null, plex: false },
+  portalUrl: null,
+  playerUrl: null,
 };
 
 function usePortal() {

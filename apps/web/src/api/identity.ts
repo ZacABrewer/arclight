@@ -46,13 +46,14 @@ export const loginApi = {
 /** The signed-in user's own second factors, passkeys, linked sign-ins and API keys. */
 export const myIdentityApi = {
   twoFactor: () => request('/user/me/2fa', TwoFactorStatus),
-  totpSetup: () => request('/user/me/2fa/totp/setup', TotpSetup, { method: 'POST', json: {} }),
+  /** `currentPassword`: the re-authentication of an older session (ReauthRequest). */
+  totpSetup: (currentPassword?: string) => request('/user/me/2fa/totp/setup', TotpSetup, { method: 'POST', json: currentPassword ? { currentPassword } : {} }),
   totpEnable: (code: string) => request('/user/me/2fa/totp/enable', RecoveryCodes, { method: 'POST', json: { code } }),
   totpDisable: (proof: TwoFactorProof) => request('/user/me/2fa/totp', null, { method: 'DELETE', json: proof }),
   regenerateRecovery: (proof: TwoFactorProof) => request('/user/me/2fa/recovery', RecoveryCodes, { method: 'POST', json: proof }),
 
   passkeys: () => request('/user/me/passkeys', PasskeyRecord.array()),
-  passkeyOptions: () => request('/user/me/passkeys/options', PasskeyOptions, { method: 'POST', json: {} }),
+  passkeyOptions: (currentPassword?: string) => request('/user/me/passkeys/options', PasskeyOptions, { method: 'POST', json: currentPassword ? { currentPassword } : {} }),
   addPasskey: (body: PasskeyRegister) => request('/user/me/passkeys', PasskeyRecord, { method: 'POST', json: body }),
   renamePasskey: (id: number, name: string) => request(`/user/me/passkeys/${id}`, z.unknown(), { method: 'PUT', json: { name } }),
   removePasskey: (id: number) => request(`/user/me/passkeys/${id}`, null, { method: 'DELETE' }),

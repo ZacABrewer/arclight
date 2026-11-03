@@ -47,7 +47,7 @@ function VideoHomeBlock() {
   };
 
   if (home.isPending) return <RdLoading />;
-  if (home.isError) return <RdError title={t('player.video.homeFailed')} onRetry={() => void home.refetch()} />;
+  if (home.isError) return <RdError title={t('player.video.homeFailed')} error={home.error} onRetry={() => void home.refetch()} />;
   const d = home.data;
   // Next up (the next episode of a show in progress) belongs with Continue Watching.
   const seen = new Set(d.continueWatching.map((c) => c.seriesId ?? `${c.kind}:${c.id}`));

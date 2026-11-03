@@ -36,9 +36,8 @@ function header(req: AgentRequest, name: string): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-/** Constant-time comparison of the presented token (x-agent-token or Bearer) with `expected`. */
-export function tokenMatches(headers: AgentRequest['headers'], expected: string): boolean {
-  if (!expected) return false;
+/** The token a request presents: `x-agent-token`, else `Authorization: Bearer`. */
+export function presentedToken(headers: AgentRequest['headers']): string | undefined {
   const raw = headers[AGENT_TOKEN_HEADER];
   let presented = Array.isArray(raw) ? raw[0] : raw;
   if (!presented) {
@@ -46,11 +45,28 @@ export function tokenMatches(headers: AgentRequest['headers'], expected: string)
     const value = Array.isArray(auth) ? auth[0] : auth;
     if (value?.toLowerCase().startsWith('bearer ')) presented = value.slice(7).trim();
   }
-  if (!presented) return false;
-  // Hash both so the comparison is constant-time regardless of length.
+  return presented || undefined;
+}
+
+/** Constant-time comparison of two secrets (hashed first, so lengths do not leak). */
+export function secretEquals(presented: string | undefined, expected: string | undefined): boolean {
+  if (!presented || !expected) return false;
   const a = createHash('sha256').update(presented).digest();
   const b = createHash('sha256').update(expected).digest();
   return timingSafeEqual(a, b);
+}
+
+/** Constant-time comparison of the presented token (x-agent-token or Bearer) with `expected`. */
+export function tokenMatches(headers: AgentRequest['headers'], expected: string): boolean {
+  return secretEquals(presentedToken(headers), expected);
+}
+
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch (error) {
+    throw new AgentError('bad-request', 'The request path has a malformed percent escape.', { cause: error });
+  }
 }
 
 export function errorResponse(error: AgentError): AgentResponse {
@@ -94,7 +110,7 @@ export async function handleAgentRequest(core: EngineAgentCore, req: AgentReques
 
 async function route(core: EngineAgentCore, req: AgentRequest): Promise<AgentResponse> {
   const method = req.method.toUpperCase();
-  const parts = req.path.split('?')[0]!.split('/').filter(Boolean).map(decodeURIComponent);
+  const parts = req.path.split('?')[0]!.split('/').filter(Boolean).map(decodeSegment);
   const notFound = () => new AgentError('not-found', `No route ${method} /${parts.join('/')}.`);
 
   if (parts.length === 1 && parts[0] === 'status' && method === 'GET') return json(200, core.status());

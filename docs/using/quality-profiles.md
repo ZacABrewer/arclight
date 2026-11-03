@@ -76,6 +76,12 @@ The format matches when every required condition matches and, for each kind of c
 
 The editor has a **test box**: paste a release title and see which formats match and what each profile would score it. Tests run against saved formats, so save first. **Export JSON** and **Import custom formats** use the same JSON shape as Sonarr and Radarr/TRaSH exports (pick the source app on import, because some numeric values differ between them).
 
+### Regular expressions that are refused
+
+Release titles come from indexers, so a pattern is checked before it is saved. Arclight refuses a pattern that is longer than 1000 characters, or that could take seconds or minutes to test against a crafted title. That means a repeat inside a repeat, such as `(a+)+` or `(\w+\s?)+$`; alternatives that can match the same text, inside a repeat, such as `(\w|\d)+`; and two open-ended repeats that can match the same characters next to each other, such as `.*.*` or `\s*\s+`. The error names the problem. Rewrite the pattern so each character can be matched only one way, for example `\w+(?:\s\w+)*` instead of `(\w+\s?)+`.
+
+The same check runs when formats come in through **Import custom formats**, the Guides sync, a migration from Sonarr or Radarr, and a config import. A guide or imported format with such a pattern is refused as a whole, because dropping only that condition would change what it matches. A pattern saved by an older version that fails the check is not deleted: it simply never matches, and the log says `regex disabled` once with the pattern. Edit the format to fix it.
+
 ## Scoring explained
 
 On each quality profile's **Custom format scores** list, give each format a number. Positive numbers are good, negative are bad, and a big negative number (for example -10000) effectively bans a release as long as **Minimum score** is above it.
@@ -129,6 +135,8 @@ Settings > Profiles > **Release profiles** reject or require words in the releas
 | Tags | Only apply to series and movies carrying these tags. Empty applies to everything |
 
 A profile needs at least one required or ignored term. Typical use: ignore `/\bHDR\b/` for one tagged series, or require `NF` for a show you only want from one service.
+
+`/.../` terms follow the same rules as custom format patterns (see [Regular expressions that are refused](#regular-expressions-that-are-refused)): a term that could hang on a crafted title is refused on save, and one stored by an older version never matches.
 
 ## Guides sync (TRaSH Guides)
 

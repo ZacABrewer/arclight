@@ -69,6 +69,7 @@ export {
   type SessionSource,
 } from './builtin/client.js';
 export { hashFromMagnet, hashFromTorrentFile, TorrentParseError } from './torrent-hash.js';
+export { safeUrl, scrubError, scrubUrl } from './redact.js';
 export { RemoteEngineSettings, type RemoteEngineSettingsInput } from './remote-engine/settings.js';
 export { RemoteEngineClient, type RemoteEngineDeps } from './remote-engine/client.js';
 export { PullManager, pullManagerFor, PULL_STATE_DIR, PART_SUFFIX, type PullManifest, type PullProgress, type PullState } from './remote-engine/pull.js';
@@ -77,6 +78,7 @@ export {
   SlskdClient,
   remoteBaseName,
   remoteDirName,
+  safeRemoteSegment,
   transferPhase,
   type SlskdDownload,
   type SlskdSearchOptions,

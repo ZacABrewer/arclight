@@ -338,6 +338,34 @@ describe('fetchWithProxy over SOCKS5', () => {
     expect(await res.text()).toBe('compressed payload '.repeat(50));
   });
 
+  it('rejects a brotli bomb with ProxyError protocol (DATA-08)', async () => {
+    // ~1 GiB of zeros in a few KB of brotli.
+    const bomb = zlib.brotliCompressSync(Buffer.alloc(256 * 1024 * 1024), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } });
+    const origin = await startOrigin((_req, res) => {
+      res.setHeader('content-encoding', 'br');
+      res.end(bomb);
+    });
+    const { proxy } = await startSocks5();
+    await expect(fetchWithProxy(`http://origin.test:${origin}/`, {}, proxy)).rejects.toMatchObject({ name: 'ProxyError', code: 'protocol' });
+    // Building the bomb is CPU-bound (256 MiB through brotli): slow when the whole workspace runs at once.
+  }, 30_000);
+
+  it('stops an endless raw body at the cap (DATA-08)', async () => {
+    const origin = await startOrigin((_req, res) => {
+      const chunk = Buffer.alloc(1024 * 1024);
+      const pump = (): void => {
+        while (res.write(chunk)) {
+          /* keep the socket full */
+        }
+        res.once('drain', pump);
+      };
+      res.on('error', () => {});
+      pump();
+    });
+    const { proxy } = await startSocks5();
+    await expect(fetchWithProxy(`http://origin.test:${origin}/`, {}, proxy)).rejects.toMatchObject({ name: 'ProxyError', code: 'protocol' });
+  }, 20_000);
+
   it('follows redirects, re-tunnelling per hop', async () => {
     const origin = await startOrigin();
     const { proxy, log } = await startSocks5();

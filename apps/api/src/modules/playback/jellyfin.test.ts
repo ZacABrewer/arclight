@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import pino from 'pino';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { QUALITIES, type QualityModel } from '@arclight/shared';
+import { PlayerSettings, QUALITIES, type QualityModel } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import type { Db } from '../../db/index.js';
@@ -322,7 +322,7 @@ describe('JellyfinEngine cache', () => {
       log: { warn: () => undefined },
       now: () => now,
     });
-    const target = engine.target({ enabled: true, allowRemote: false, remoteMaxBitrateKbps: 0, streamLinkHours: 6, backend: 'jellyfin', jellyfinServerId: null, video: true, videoMaxStreams: 3, videoMaxStreamsPerUser: 1, trickplay: 'on-play', segmentDetection: true })!;
+    const target = engine.target(PlayerSettings.parse({ enabled: true, remoteMaxBitrateKbps: 0, backend: 'jellyfin' }))!;
     const file = { id: 1, path: '/m/a/b.flac', title: 'B' };
     expect(await engine.resolve(target, file)).toBeNull();
     const first = lookups.length;

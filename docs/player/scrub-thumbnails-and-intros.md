@@ -3,7 +3,7 @@
 Two things help you move around inside a video in the [player](../using/player.md):
 
 - **Scrub thumbnails**: small pictures above the progress bar while you drag or seek.
-- **Skip Intro and Skip Credits**: buttons that show up during an episode's intro and credits.
+- **Skip Intro, Skip Recap and Skip Credits**: buttons that show up during an episode's intro, its "Previously on" recap and its credits.
 
 Both are made on your server from the files you already have. Nothing is downloaded, and no outside service is used.
 
@@ -32,20 +32,37 @@ Set this under **Settings > Player > Scrub thumbnails and intros > Scrub thumbna
 
 Sheets live in `cache/player/trickplay/` inside your config folder, one folder per file. When a file is replaced (an upgrade), its old sheets are deleted and new ones are made. Folders of files that left the library are removed by the nightly job.
 
+Episode thumbnails and subtitles converted for the player are kept next to them, in `cache/player/thumbs/` and `cache/player/subtitles/`. When a file changes, the copies made for its old version are deleted as the new ones are made. Every six hours the oldest of these are removed while the two folders hold more than 2 GB; they are made again when needed.
+
 **Settings > Player** shows how much space the sheets use. **Clear scrub thumbnails** deletes them all. They are made again when needed.
 
 Apps and TVs load the sheets through signed links that expire like stream links, so they work without a sign-in cookie.
 
-## Intro and credits detection
+## Intro, recap and credits detection
 
-Most shows play the same intro and the same end credits music in every episode of a season. Arclight listens for that.
+Most shows play the same intro and the same end credits music in every episode of a season, and many open with a short "Previously on" recap of clips from earlier episodes. Arclight listens for both.
 
 ### How it works
 
 1. For each episode it reads the audio of the **start** (the first 40 %, at most 10 minutes) and the **end** (the last 35 %, at most 7 minutes), mixed down to low-quality mono.
-2. It turns that audio into a compact "fingerprint" and compares each episode with its nearest neighbours in the season (up to three).
+2. It turns that audio into two compact fingerprints and compares each episode with its nearest neighbours in the season (up to three):
+   - a **sound** fingerprint, which follows the exact recording, and
+   - a **harmony** fingerprint, which follows the notes and chords of the music. Speech has no steady notes, so this one still matches when characters talk over the theme song.
 3. A stretch of at least 15 seconds that matches near the start is the **intro** (at most 2.5 minutes). A matching stretch near the end is the **credits**; if it runs to within 5 seconds of the end, the credits run to the end of the file.
 4. An episode gets a segment only when at least half of its comparisons agree. The time stored is the middle value of those comparisons.
+5. The start and end of an intro or recap then move onto a **black frame or a moment of silence** when there is one within 2 seconds, since that is usually where the cut really is.
+
+### Recaps
+
+With recap detection on, Arclight also reads the **middle** of each episode (sound fingerprint only), so that it knows every scene of the season. A recap is found when the minutes before an episode's intro (at most 3) are made of clips from up to three earlier episodes:
+
+- the clips must start within the first 30 seconds,
+- together they must last at least 10 seconds and cover at least 40 % of the recap,
+- the earlier episodes' own intros and credits never count as recap clips.
+
+The first episodes of a season are compared with the last three episodes of the season before, once that season has been scanned.
+
+Recap detection is **on** by default. Turn it off with **Settings > Player > Detect recaps** (it is only available while intro and credits detection is on). With it off, the middle of each episode is not read. Changing it rescans every season at the next run.
 
 A season needs **at least two episodes with files**. Specials (season 0) are checked like any other season, but they rarely share an intro.
 
@@ -58,6 +75,10 @@ A season needs **at least two episodes with files**. Specials (season 0) are che
 Seasons that did not change are skipped. Detection uses the same single background ffmpeg slot as scrub thumbnails and waits for live streams the same way.
 
 Turn it off with **Settings > Player > Detect intros and credits**. Times already found stay in place; nothing new is scanned.
+
+### Space and time
+
+Fingerprints are kept in the database, so a rescan after a settings change does not read the files again unless they changed. The sound fingerprint takes about 3.75 KB per minute of audio read, the harmony fingerprint about 1.4 KB per minute. A 45-minute episode needs roughly 190 KB with recaps on (it reads all 45 minutes) and about 90 KB with them off (it reads the first 10 and last 7 minutes). Reading the middle of each episode makes a scan with recaps take longer, mostly the time ffmpeg needs to decode the extra audio.
 
 ### Where segment times come from
 
@@ -82,9 +103,10 @@ Open the show, find the season, and press **Intro & credits** in the season head
 
 ### What it does not catch
 
-- Intros with **dialogue or sound effects over the music** that differ between episodes may match too little to count. Use chapters or manual times for those.
+- Intros with **dialogue over the music** are found by the harmony fingerprint, but where the talking covers the start of the theme the intro may be found a few seconds late. Loud sound effects over the music can still hide it. Use chapters or manual times for those.
 - Intros that change every episode (for example a different song each week) are not found.
-- **Recaps** are not detected. They come from chapters or manual times only.
+- Recaps made of clips that are not in the earlier three episodes (or that were re-edited with new music) may be found shorter or not at all.
+- A recap that is only a few seconds long, or that starts later than 30 seconds into the episode, is not detected.
 - When an episode has more than one file (versions), only its main file is checked.
 - Episodes whose length is unknown (no media info yet) are skipped until the library scan reads them.
 
@@ -92,7 +114,7 @@ Open the show, find the season, and press **Intro & credits** in the season head
 
 **No scrub thumbnails after playing a file.** They are made in the background and can take a few minutes, longer while all live video slots are busy. Check that the setting is not **Off**, and that ffmpeg is found (**System > Status**). A file ffmpeg cannot read gets none.
 
-**Skip Intro shows at the wrong time.** Open **Intro & credits** for the season, correct the times and press **Save**. If a whole season is off, check whether the files have chapters with misleading names; manual times beat chapters.
+**Skip Intro or Skip Recap shows at the wrong time.** Open **Intro & credits** for the season, correct the times and press **Save**. If a whole season is off, check whether the files have chapters with misleading names; manual times beat chapters.
 
 **A season never gets intro times.** It needs two or more episodes that share the intro audio. Open the dialog and look at the scan line: "Not scanned yet" means it has not run (try **Scan this season**); a failure message names the cause, often ffmpeg missing or an unreadable file.
 

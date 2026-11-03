@@ -28,12 +28,13 @@ import { pluginApiKeys, sessions, users } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
 import { dummyHash, hashPassword, needsRehash, verifyPassword } from './password.js';
 import { allLocal } from './network.js';
+import { LoginLimiter, LoginLimitedError } from './login-limiter.js';
 import { TwoFactorError, TwoFactorService, type RelyingParty } from './two-factor.js';
 import { ApiKeyNotFoundError } from './api-keys.js';
 import { UserApiKeyService } from './api-keys.js';
 import { audit } from '../audit/recorder.js';
 import { hashToken } from './hash.js';
-import { householdsFor, type RequestProfile } from '../households/service.js';
+import { FRESH_CREDENTIAL_MS, householdsFor, type RequestProfile } from '../households/service.js';
 import { ownerProfileOf } from '../households/backfill.js';
 
 export type AuthErrorCode =
@@ -43,6 +44,7 @@ export type AuthErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'USER_EXISTS'
+  | 'EMAIL_IN_USE'
   | 'LAST_ADMIN'
   | 'RATE_LIMITED'
   | 'SETUP_COMPLETE'
@@ -54,12 +56,15 @@ export type AuthErrorCode =
   | 'LAST_SIGN_IN_METHOD'
   | 'TOTP_REQUIRED'
   | 'TOTP_INVALID'
-  | 'PAIRING_REQUIRED';
+  | 'PAIRING_REQUIRED'
+  | 'REAUTH_REQUIRED';
 
 export class AuthError extends Error {
   constructor(
     readonly code: AuthErrorCode,
     message: string,
+    /** RATE_LIMITED: seconds until the next try (sent as Retry-After). */
+    readonly retryAfter?: number,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -73,6 +78,7 @@ export const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   USER_EXISTS: 409,
+  EMAIL_IN_USE: 409,
   LAST_ADMIN: 409,
   RATE_LIMITED: 429,
   SETUP_COMPLETE: 409,
@@ -85,6 +91,7 @@ export const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   TOTP_REQUIRED: 401,
   TOTP_INVALID: 401,
   PAIRING_REQUIRED: 403,
+  REAUTH_REQUIRED: 401,
 };
 
 /**
@@ -119,6 +126,11 @@ export interface RequestAuth {
   /** `via: 'app'`: the app device (app_devices.id) whose token this is. */
   appDeviceId?: number;
   /**
+   * `via: 'app'`: the device confirmed its user's password (POST /app/reauth) within the last
+   * APP_REAUTH_MS, so it may write the command routes (hook.ts COMMAND_WRITE_ROUTES).
+   */
+  reauthenticated?: boolean;
+  /**
    * The active household profile; set for every credential with a user (sessions and app
    * devices: the one they selected, else the owner profile; every other credential: the owner
    * profile). A non-owner profile is never admin: `isAdmin`, `appAccess` and the user's role
@@ -144,6 +156,8 @@ export interface RequestCredentials {
   bearer?: string | undefined;
   /** Socket peer followed by every forwarded address. */
   addresses: readonly (string | undefined)[];
+  /** The request came from this Arclight process itself: never the local bypass (DATA-01). */
+  selfRequest?: boolean | undefined;
   /** The TCP peer alone (forward-auth trusts only this). */
   peer?: string | undefined;
   /** Reads a request header (forward-auth). */
@@ -209,9 +223,11 @@ export interface AuthServiceOptions {
   db: Db;
   log?: Logger;
   now?: () => Date;
-  /** Failed logins per address allowed inside `lockoutWindowMs` before 429. */
+  /** Failed logins per address and account allowed inside `lockoutWindowMs` before 429 (login-limiter.ts). */
   maxFailures?: number;
   lockoutWindowMs?: number;
+  /** Failed logins per account, from any address, before the per-account backoff starts. */
+  accountMaxFailures?: number;
 }
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -293,9 +309,7 @@ export class AuthService {
   readonly db: Db;
   private readonly log: Logger | undefined;
   private readonly now: () => Date;
-  private readonly maxFailures: number;
-  private readonly lockoutWindowMs: number;
-  private readonly failures = new Map<string, { count: number; first: number }>();
+  private readonly limiter: LoginLimiter;
   /** Media-server sign-in (set by the requests module); absent: only local logins work. */
   externalLogin: ExternalLoginProvider | undefined;
   /** Media-server sign-in shown on the login page (set by the requests module); absent: none. */
@@ -317,8 +331,12 @@ export class AuthService {
     this.db = opts.db;
     this.log = opts.log;
     this.now = opts.now ?? (() => new Date());
-    this.maxFailures = opts.maxFailures ?? 10;
-    this.lockoutWindowMs = opts.lockoutWindowMs ?? 15 * 60_000;
+    this.limiter = new LoginLimiter({
+      maxFailures: opts.maxFailures ?? 10,
+      windowMs: opts.lockoutWindowMs ?? 15 * 60_000,
+      ...(opts.accountMaxFailures !== undefined ? { accountMaxFailures: opts.accountMaxFailures } : {}),
+      now: () => this.now().getTime(),
+    });
     this.twoFactor = new TwoFactorService(this.db, this.now, this.log);
     this.apiKeys = new UserApiKeyService(this.db, this.now);
   }
@@ -556,7 +574,11 @@ export class AuthService {
       patch.localPassword = true;
     }
     if (input.displayName !== undefined) patch.displayName = input.displayName;
-    if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
+    if (input.email !== undefined) {
+      // An email an admin sets counts as verified for sign-in matching.
+      patch.email = input.email?.toLowerCase() ?? null;
+      patch.emailVerified = true;
+    }
     if (input.avatar !== undefined) patch.avatar = input.avatar;
     if (input.settings !== undefined) patch.settings = { ...current.settings, ...checkedSettings(input.settings) };
     patch.permissions = permissionsFor(role, input.permissions ?? current.permissions);
@@ -576,11 +598,24 @@ export class AuthService {
     this.db.delete(users).where(eq(users.id, id)).run();
   }
 
+  /**
+   * The caller's own profile. A changed email must not belong to another account and is
+   * unverified from then on: identity-provider and forward-auth sign-ins never match it by email.
+   */
   updateSelf(id: number, input: UserSelfUpdate): User {
     const current = this.row(id);
     const patch: Partial<typeof users.$inferInsert> = { updatedAt: this.now().toISOString() };
     if (input.displayName !== undefined) patch.displayName = input.displayName;
-    if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
+    if (input.email !== undefined) {
+      const email = input.email?.toLowerCase() ?? null;
+      if (email !== current.email) {
+        if (email !== null && this.findUsersByEmail(email).some((u) => u.id !== id)) {
+          throw new AuthError('EMAIL_IN_USE', 'another account already uses this email');
+        }
+        patch.email = email;
+        patch.emailVerified = email === null;
+      }
+    }
     if (input.avatar !== undefined) patch.avatar = input.avatar;
     if (input.settings !== undefined) {
       // Manager-owned keys (quota, content caps, approval overrides, Discord link) keep their stored value.
@@ -591,10 +626,17 @@ export class AuthService {
     return toUser(this.db.update(users).set(patch).where(eq(users.id, id)).returning().get()!);
   }
 
-  /** Changes the caller's password and ends every other session of theirs. */
-  async changePassword(id: number, currentPassword: string, newPassword: string, keepSessionId?: number): Promise<void> {
+  /**
+   * Changes the caller's password and ends every other session of theirs. A wrong current
+   * password counts as a failed sign-in from `address` for this account (no brute force through
+   * a stolen session).
+   */
+  async changePassword(id: number, currentPassword: string, newPassword: string, keepSessionId?: number, address = 'unknown'): Promise<void> {
     const row = this.row(id);
+    this.checkRateLimit(address, row.username);
     if (!(await verifyPassword(currentPassword, row.passwordHash))) {
+      this.recordFailure(address, row.username);
+      audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: address, details: { method: 'password-change' } });
       throw new AuthError('INVALID_CREDENTIALS', 'current password is incorrect');
     }
     this.db
@@ -609,25 +651,34 @@ export class AuthService {
   // login, sessions
   // -------------------------------------------------------------------------------------
 
-  /** 429 RATE_LIMITED while `address` has too many failed sign-ins (shared by every sign-in path). */
-  checkRateLimit(address: string): void {
-    const entry = this.failures.get(address);
-    if (!entry) return;
-    if (this.now().getTime() - entry.first > this.lockoutWindowMs) {
-      this.failures.delete(address);
-      return;
-    }
-    if (entry.count >= this.maxFailures) {
-      throw new AuthError('RATE_LIMITED', 'too many failed logins; try again later');
+  /**
+   * 429 RATE_LIMITED while `address` has too many failed sign-ins, or `account` (a username) is in
+   * its backoff (shared by every sign-in path; login-limiter.ts).
+   */
+  checkRateLimit(address: string, account?: string | null): void {
+    try {
+      this.limiter.check(address, account);
+    } catch (err) {
+      if (err instanceof LoginLimitedError) throw new AuthError('RATE_LIMITED', err.message, err.retryAfter);
+      throw err;
     }
   }
 
-  /** Counts a failed sign-in (wrong password, code or pair code) for `address`. */
-  recordFailure(address: string): void {
-    const t = this.now().getTime();
-    const entry = this.failures.get(address);
-    if (!entry || t - entry.first > this.lockoutWindowMs) this.failures.set(address, { count: 1, first: t });
-    else entry.count++;
+  /** Counts a failed sign-in (wrong password, code or pair code) for `address` and, when known, `account`. */
+  recordFailure(address: string, account?: string | null): void {
+    this.limiter.fail(address, account);
+  }
+
+  /** A successful sign-in: clears the counter of this address for this account only (and the account's backoff). */
+  recordSuccess(address: string, account?: string | null): void {
+    this.limiter.succeed(address, account);
+  }
+
+  /** The username of a live 2FA challenge (its per-account limit); null when unknown. */
+  private challengeAccount(challenge: string | undefined): string | null {
+    const userId = challenge ? this.twoFactor.challengeUserId(challenge) : null;
+    if (userId === null) return null;
+    return this.db.select({ username: users.username }).from(users).where(eq(users.id, userId)).get()?.username ?? null;
   }
 
   /** Checks a username/password pair. Unknown users cost the same as wrong passwords. */
@@ -650,15 +701,15 @@ export class AuthService {
     meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
   ): Promise<LoginResult> {
     const address = meta.ip ?? 'unknown';
-    this.checkRateLimit(address);
+    this.checkRateLimit(address, username);
     const row = await this.verifyCredentials(username, password);
     if (!row) {
-      this.recordFailure(address);
+      this.recordFailure(address, username);
       this.log?.warn({ username, ip: meta.ip }, 'failed login');
       audit(this.db).record({ action: 'login.failed', username, ip: meta.ip ?? null, details: { method: 'local' } });
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
-    this.failures.delete(address);
+    this.recordSuccess(address, username);
     if (!this.localLoginAllowed(row)) {
       audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local', reason: 'local sign-in off' } });
       throw new AuthError('FORBIDDEN', 'signing in with an Arclight password is turned off for user accounts; sign in with your media server');
@@ -678,18 +729,20 @@ export class AuthService {
   /** POST /auth/login/2fa: finishes a parked password sign-in with a TOTP or recovery code. */
   completeTwoFactor(challenge: string, proof: { code?: string | undefined; recoveryCode?: string | undefined }, ip?: string): LoginResult {
     const address = ip ?? 'unknown';
-    this.checkRateLimit(address);
+    // Per account too: a fresh challenge (from a fresh password sign-in) does not reset the count.
+    const account = this.challengeAccount(challenge);
+    this.checkRateLimit(address, account);
     let pending;
     try {
       pending = this.twoFactor.completeChallenge(challenge, proof);
     } catch (err) {
       if (err instanceof TwoFactorError && err.code === 'INVALID_CREDENTIALS') {
-        this.recordFailure(address);
+        this.recordFailure(address, account);
         audit(this.db).record({ action: 'login.failed', ip: ip ?? null, details: { method: 'two-factor' } });
       }
       throw toAuthError(err);
     }
-    this.failures.delete(address);
+    this.recordSuccess(address, account);
     const row = this.row(pending.userId);
     const factor = proof.code !== undefined ? 'totp' : 'recovery';
     audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: pending.meta.ip ?? null, details: { method: pending.method, factor } });
@@ -711,18 +764,19 @@ export class AuthService {
    */
   async loginWithPasskey(ceremony: string, response: Record<string, unknown>, challenge: string | undefined, meta: SessionMeta): Promise<LoginResult> {
     const address = meta.ip ?? 'unknown';
-    this.checkRateLimit(address);
+    const account = this.challengeAccount(challenge);
+    this.checkRateLimit(address, account);
     let result;
     try {
       result = await this.twoFactor.authenticate(ceremony, response, challenge);
     } catch (err) {
       if (err instanceof TwoFactorError && err.code === 'INVALID_CREDENTIALS') {
-        this.recordFailure(address);
+        this.recordFailure(address, account);
         audit(this.db).record({ action: 'login.failed', ip: meta.ip ?? null, details: { method: 'passkey' } });
       }
       throw toAuthError(err);
     }
-    this.failures.delete(address);
+    this.recordSuccess(address, account);
     const row = this.row(result.userId);
     // Passwordless passkeys are an Arclight sign-in: the same switch as passwords for non-admins.
     if (!result.pending && !this.localLoginAllowed(row)) {
@@ -745,22 +799,22 @@ export class AuthService {
   ): Promise<LoginResult> {
     if (method === 'local') return this.login(username, password, meta);
     const address = meta.ip ?? 'unknown';
-    this.checkRateLimit(address);
+    this.checkRateLimit(address, username);
     if (!this.externalLogin) throw new AuthError('VALIDATION', 'media server sign-in is not available');
     let userId: number | null;
     try {
       userId = await this.externalLogin.login(method, username, password);
     } catch (err) {
-      if (err instanceof AuthError && err.code === 'INVALID_CREDENTIALS') this.recordFailure(address);
+      if (err instanceof AuthError && err.code === 'INVALID_CREDENTIALS') this.recordFailure(address, username);
       throw err;
     }
     if (userId === null) {
-      this.recordFailure(address);
+      this.recordFailure(address, username);
       this.log?.warn({ username, ip: meta.ip, method }, 'failed media server login');
       audit(this.db).record({ action: 'login.failed', username, ip: meta.ip ?? null, details: { method } });
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
-    this.failures.delete(address);
+    this.recordSuccess(address, username);
     if (this.row(userId).role !== 'admin') this.requireNoSecondStep(userId, method, meta);
     const result = this.loginExternal(userId, { ...meta, method });
     audit(this.db).record({ action: 'login.success', userId, username, ip: meta.ip ?? null, details: { method } });
@@ -778,10 +832,10 @@ export class AuthService {
     ip?: string,
   ): Promise<User> {
     const address = ip ?? 'unknown';
-    this.checkRateLimit(address);
+    this.checkRateLimit(address, input.username);
     const row = await this.verifyCredentials(input.username, input.password);
     if (!row) {
-      this.recordFailure(address);
+      this.recordFailure(address, input.username);
       this.log?.warn({ username: input.username, ip }, 'failed app sign-in');
       audit(this.db).record({ action: 'login.failed', username: input.username, ip: ip ?? null, details: { method: 'app' } });
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
@@ -802,7 +856,7 @@ export class AuthService {
       }
       const ok = input.totp ? this.twoFactor.checkTotp(row.id, input.totp) : this.twoFactor.useRecoveryCode(row.id, input.recoveryCode!);
       if (!ok) {
-        this.recordFailure(address);
+        this.recordFailure(address, input.username);
         audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: ip ?? null, details: { method: 'app', factor: input.totp ? 'totp' : 'recovery' } });
         throw new AuthError('TOTP_INVALID', 'that code is not right; check the time on your phone and try again');
       }
@@ -810,7 +864,7 @@ export class AuthService {
     } else if (row.role === 'admin' && this.identitySettings().requireTwoFactorForAdmins) {
       throw new AuthError('TWO_FACTOR_SETUP_REQUIRED', 'set up two-factor sign-in on your account first (Profile → Security), then sign in again');
     }
-    this.failures.delete(address);
+    this.recordSuccess(address, input.username);
     const now = this.now().toISOString();
     this.db.update(users).set({ lastLoginAt: now }).where(eq(users.id, row.id)).run();
     audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: ip ?? null, details: { method: 'app', ...(factor ? { factor } : {}) } });
@@ -1026,6 +1080,52 @@ export class AuthService {
     return householdsFor(this.db, { now: this.now }).summary(auth.user.id, auth.profile.id);
   }
 
+  // -------------------------------------------------------------------------------------
+  // re-authentication (adding a passkey, an authenticator app or a personal API key)
+  // -------------------------------------------------------------------------------------
+
+  /**
+   * Passes when the caller proved who they are recently, so a stolen or forgotten session cannot
+   * add a lasting way in: a session opened within FRESH_CREDENTIAL_MS, Basic auth (the password
+   * rides on every request), forward-auth of an account without a password (the proxy signs in
+   * every request), or the account's current password. Otherwise 401 REAUTH_REQUIRED. A wrong
+   * password counts as a failed sign-in from `address`. Accounts without a password of their own
+   * (media server or identity provider users) can only sign in again.
+   */
+  async requireRecentAuth(auth: RequestAuth | null | undefined, currentPassword: string | undefined, address: string): Promise<void> {
+    if (!auth?.user) throw new AuthError('UNAUTHORIZED', 'sign in first');
+    if (auth.via === 'basic') return;
+    if (auth.via !== 'session' && auth.via !== 'forward') throw new AuthError('FORBIDDEN', 'adding sign-in methods and keys needs a browser session');
+    if (auth.via === 'session' && auth.credentialCreatedAt) {
+      const age = this.now().getTime() - Date.parse(auth.credentialCreatedAt);
+      if (Number.isFinite(age) && age >= 0 && age < FRESH_CREDENTIAL_MS) return;
+    }
+    const row = this.row(auth.user.id);
+    if (!row.localPassword) {
+      if (auth.via === 'forward') return;
+      throw new AuthError('REAUTH_REQUIRED', 'this account has no password: sign out and sign in again, then try again within 10 minutes');
+    }
+    await this.confirmPassword(auth, currentPassword, address);
+  }
+
+  /**
+   * Checks the account's own password for a caller that is already signed in (re-authentication).
+   * Missing: 401 REAUTH_REQUIRED; wrong: 401 INVALID_CREDENTIALS, counted as a failed sign-in from
+   * `address`; an account without a password of its own: 403 FORBIDDEN.
+   */
+  async confirmPassword(auth: RequestAuth | null | undefined, currentPassword: string | undefined, address: string): Promise<void> {
+    if (!auth?.user) throw new AuthError('UNAUTHORIZED', 'sign in first');
+    const row = this.row(auth.user.id);
+    if (!row.localPassword) throw new AuthError('FORBIDDEN', 'this account has no Arclight password to confirm; use the web app');
+    if (!currentPassword) throw new AuthError('REAUTH_REQUIRED', 'confirm your current password to continue');
+    this.checkRateLimit(address, row.username);
+    if (!(await verifyPassword(currentPassword, row.passwordHash))) {
+      this.recordFailure(address, row.username);
+      audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: address, details: { method: 'reauth' } });
+      throw new AuthError('INVALID_CREDENTIALS', 'current password is incorrect');
+    }
+  }
+
   private async resolveCredentials(creds: RequestCredentials): Promise<ResolvedRequest> {
     // An app token is decisive: a revoked one is anonymous (401), never the local bypass, so the
     // app knows to sign in again.
@@ -1052,7 +1152,7 @@ export class AuthService {
     }
     if (creds.basic && this.security().method === 'basic') {
       const address = creds.addresses[0] ?? 'unknown';
-      this.checkRateLimit(address);
+      this.checkRateLimit(address, creds.basic.username);
       const row = await this.verifyCredentials(creds.basic.username, creds.basic.password);
       // Basic cannot carry a second factor: accounts with one use an API key instead.
       if (row && this.localLoginAllowed(row) && !this.twoFactor.hasSecondFactor(row.id)) {
@@ -1060,7 +1160,7 @@ export class AuthService {
         const isAdmin = user.role === 'admin';
         return { auth: { user, via: 'basic', isAdmin, appAccess: effectiveAppAccess(user, isAdmin) } };
       }
-      if (!row) this.recordFailure(address);
+      if (!row) this.recordFailure(address, creds.basic.username);
     }
     if (creds.apiKey && this.verifyApiKey(creds.apiKey)) {
       return { auth: { user: null, via: 'apikey', isAdmin: true, appAccess: APP_AREAS } };
@@ -1079,7 +1179,7 @@ export class AuthService {
       const forwarded = await this.forwardAuth(creds);
       if (forwarded) return { auth: forwarded };
     }
-    if (this.bypasses(creds.addresses)) {
+    if (!creds.selfRequest && this.bypasses(creds.addresses)) {
       return { auth: { user: null, via: 'bypass', isAdmin: true, appAccess: APP_AREAS } };
     }
     return { auth: null };

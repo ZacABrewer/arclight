@@ -69,6 +69,8 @@ export const securityApi = {
   get: () => request('/settings/security', SecuritySettingsResponse),
   update: (body: AuthSettings) => request('/settings/security', SecuritySettingsResponse, { method: 'PUT', json: body }),
   regenerateApiKey: () => request('/settings/security/apikey', ApiKeyResponse, { method: 'POST' }),
+  /** The full key (GET masks it); audited. */
+  revealApiKey: () => request('/settings/security/apikey/reveal', ApiKeyResponse, { method: 'POST' }),
 };
 
 /** How non-admins sign in (Settings > Users, and the setup wizard's "User defaults" step). */

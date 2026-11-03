@@ -6,6 +6,7 @@ import { EventBus } from '../../events.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { rootFolders } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
+import { UpdatesService } from '../updates/service.js';
 import { ConfigParseError, coerceEnvValue, parseConfigText, parseEnvOverrides, toYaml } from './overlay.js';
 import { ConfigService } from './service.js';
 import { buildDocument } from './engine.js';
@@ -96,6 +97,25 @@ describe('boot overlay (managed mode)', () => {
     expect(getSection(db, 'audit').retentionDays).toBe(7);
     expect(managed.settings['audit']).toEqual(['retentionDays']);
     expect([...managed.env].sort()).toEqual(['ARCLIGHT_SETTING__audit__retentionDays', 'ARCLIGHT_SETTING__metadata__region']);
+  });
+
+  it('reaches the updates section (ARCLIGHT_SETTING__updates__*), read back by the updates module', async () => {
+    const db = await createTestDb();
+    const managed = new ConfigService({
+      db,
+      env: {
+        ARCLIGHT_SETTING__updates__channel: 'develop',
+        ARCLIGHT_SETTING__UPDATES__CHECKINTERVALHOURS: '6',
+        ARCLIGHT_SETTING__updates__autoUpdateWindow__startHour: '1',
+      },
+    }).applyBootOverlay();
+    expect(managed.errors).toEqual([]);
+    expect([...managed.settings['updates']!].sort()).toEqual(['autoUpdateWindow.startHour', 'channel', 'checkIntervalHours']);
+    const read = new UpdatesService({ db, currentVersion: '0.24.0', isDocker: false }).settings();
+    expect(read).toMatchObject({ channel: 'develop', checkIntervalHours: 6, autoUpdateWindow: { startHour: 1, endHour: 6 }, enabled: true });
+    const bad = new ConfigService({ db, env: { ARCLIGHT_SETTING__updates__channel: 'nightly' } }).applyBootOverlay();
+    expect(bad.errors.map((e) => e.path)).toEqual(['ARCLIGHT_SETTING__updates__channel']);
+    expect(new UpdatesService({ db, currentVersion: '0.24.0', isDocker: false }).settings().channel).toBe('develop');
   });
 
   it('an invalid env value is reported and skipped', async () => {

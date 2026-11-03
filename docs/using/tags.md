@@ -156,6 +156,10 @@ New installs get five rules, all switched off. Turn one on, or edit it first:
 
 Deleted starter rules do not come back.
 
+## Sync to Jellyfin, Emby or Plex
+
+Tags can be copied to your media servers, so Jellyfin and Emby show them as item tags and Plex as labels. Turn on **Sync tags** on the server in **Settings > Media servers**, choose all tags or only some, and optionally a prefix such as `arclight:`. Arclight only removes tags it added itself. Synced tags can drive Jellyfin's parental controls, for example allowing a child's account only items tagged `arclight:kids`. See [Media servers: Sync tags](media-servers.md#sync-tags).
+
 ## Examples
 
 - **Anime to its own root folder**: Series type is any of `anime` → add `anime`; then use the tag in a delay profile or download client.

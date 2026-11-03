@@ -1,103 +1,84 @@
-import { useMemo, useState } from 'react';
-import type { BrowseSort, PlayerAudiobook } from '@arclight/shared';
-import { Button, Icon, Input, Meter, Select } from '../../../arclight/index.js';
+import { useEffect, useMemo, useState } from 'react';
+import type { BrowseSort } from '@arclight/shared';
+import { Input, Select } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
+import { Row } from '../redesign/row.js';
+import { RdError, RdLoading } from '../redesign/pages/common.js';
 import { useAudiobookHome, useAudiobooks, type BrowseFilters } from './api.js';
-import { BookCard } from './cards.js';
-import { names, progressShare, timeLeftLabel } from './format.js';
-import { Artwork, Empty, GridSkeleton, LoadError, LoadMore, PageTitle, PlayerLink, Shelf, playerPaths, useDebounced } from './kit.js';
-import { usePlayerActions } from './player-hooks.js';
+import { BookTile, ContinueBookTile } from './cards.js';
+import { PlayerLink, playerPaths, useDebounced } from './kit.js';
+import { AudioHead, AudioLoadMore, AudioNotice, AudioPage, AudioSection } from './rd-audio.js';
 
 const BOOK_SORTS: readonly BrowseSort[] = ['name', 'artist', 'added', 'played'];
 const DESC: ReadonlySet<BrowseSort> = new Set(['added', 'played']);
+/** The full list's opening filters (the head's count reads the same first page). */
+const BOOKS_DEFAULT_FILTERS: BrowseFilters = { sort: 'name', desc: false };
 
-/** /player/books: the audiobook shelf. */
+/**
+ * /player/books (the template's Books screen): the head with the audiobook count, Continue
+ * listening (time left and progress), the server's shelves, then the whole library as a grid.
+ */
 export function BooksHomePage() {
   const t = useT();
   const home = useAudiobookHome();
+  const all = useAudiobooks(BOOKS_DEFAULT_FILTERS);
+  const total = all.data?.pages[0]?.total;
 
-  let shelves;
-  if (home.isPending) shelves = <GridSkeleton count={6} label={t('player.browse.loading')} />;
-  else if (home.isError) shelves = <LoadError title={t('player.browse.books.loadFailed')} error={home.error} onRetry={() => void home.refetch()} />;
+  useEffect(() => {
+    document.title = `${t('player.browse.books.title')} · ${t('player.documentTitle')}`;
+  }, [t]);
+
+  let rows;
+  if (home.isPending) rows = <RdLoading />;
+  else if (home.isError) rows = <RdError title={t('player.browse.books.loadFailed')} error={home.error} onRetry={() => void home.refetch()} />;
   else {
     const d = home.data;
-    shelves = (
-      <>
-        {d.continueListening.length ? (
-          <section className="pb-section" aria-labelledby="pb-continue">
-            <h2 className="pb-section__title" id="pb-continue">
-              {t('player.browse.books.continue')}
-            </h2>
-            <ul className="pb-continue">
-              {d.continueListening.map((b) => (
-                <ContinueCard key={b.id} book={b} />
-              ))}
-            </ul>
-          </section>
-        ) : null}
-        {d.recentlyAdded.length ? (
-          <Shelf title={t('player.browse.books.recentlyAdded')}>
-            {d.recentlyAdded.map((b) => (
-              <BookCard key={b.id} book={b} />
-            ))}
-          </Shelf>
-        ) : null}
+    rows = (
+      <div className="rd-rows rd-music-rows">
+        <Row title={t('player.browse.books.continue')}>
+          {d.continueListening.map((b) => (
+            <ContinueBookTile key={b.id} book={b} />
+          ))}
+        </Row>
+        <Row title={t('player.browse.books.recentlyAdded')}>
+          {d.recentlyAdded.map((b) => (
+            <BookTile key={b.id} book={b} />
+          ))}
+        </Row>
         {d.series.map((s) => (
-          <Shelf key={s.id} title={t('player.browse.books.seriesShelf', { series: s.title })}>
+          <Row key={s.id} title={t('player.browse.books.seriesShelf', { series: s.title })}>
             {s.books.map((b) => (
-              <BookCard key={b.id} book={b} />
+              <BookTile key={b.id} book={b} />
             ))}
-          </Shelf>
+          </Row>
         ))}
-        {d.finished.length ? (
-          <Shelf title={t('player.browse.books.finished')}>
-            {d.finished.map((b) => (
-              <BookCard key={b.id} book={b} />
-            ))}
-          </Shelf>
-        ) : null}
-      </>
+        <Row title={t('player.browse.books.finished')}>
+          {d.finished.map((b) => (
+            <BookTile key={b.id} book={b} />
+          ))}
+        </Row>
+      </div>
     );
   }
 
   return (
-    <div className="pb-page">
-      <PageTitle actions={<PlayerLink to={playerPaths.search} className="al-btn al-btn--secondary">{t('player.browse.search.open')}</PlayerLink>}>
-        {t('player.browse.books.title')}
-      </PageTitle>
-      {shelves}
+    <AudioPage>
+      <AudioHead
+        title={t('player.browse.books.title')}
+        sub={total !== undefined ? t('player.browse.booksCount', { count: total }) : null}
+        actions={
+          <PlayerLink to={playerPaths.search} className="rd-btn rd-btn--secondary">
+            {t('player.browse.search.open')}
+          </PlayerLink>
+        }
+      />
+      {rows}
       <AllBooks />
-    </div>
+    </AudioPage>
   );
 }
 
-/** "Continue listening" card: cover, progress bar, time left, Resume. */
-function ContinueCard({ book }: { book: PlayerAudiobook }) {
-  const t = useT();
-  const player = usePlayerActions();
-  const share = progressShare(book.progress, book.durationMs);
-  const left = timeLeftLabel(book.progress, book.durationMs);
-  return (
-    <li className="pb-continue__card">
-      <PlayerLink to={playerPaths.book(book.id)} className="pb-continue__art">
-        <Artwork src={book.artworkUrl} alt={book.title} />
-      </PlayerLink>
-      <div className="pb-continue__body">
-        <PlayerLink to={playerPaths.book(book.id)} className="pb-card__title">
-          {book.title}
-        </PlayerLink>
-        <span className="pb-card__sub">{names(book.authors) ?? t('player.browse.book.unknownAuthor')}</span>
-        <Meter value={Math.round(share * 100)} label={t('player.browse.book.progressLabel', { title: book.title })} />
-        <span className="pb-card__meta al-num">{left}</span>
-        <Button variant="primary" size="sm" icon={<Icon name="play" />} onClick={() => player.playItem(book.itemKey)} aria-label={t('player.browse.book.resumeNamed', { title: book.title })}>
-          {t('player.browse.book.resume')}
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-/** Every audiobook, sortable and searchable. */
+/** Every audiobook as a grid of the same tiles, sortable and searchable. */
 function AllBooks() {
   const t = useT();
   const [search, setSearch] = useState('');
@@ -109,11 +90,9 @@ function AllBooks() {
   const total = q.data?.pages[0]?.total ?? 0;
 
   return (
-    <section className="pb-section" aria-labelledby="pb-all-books">
-      <h2 className="pb-section__title" id="pb-all-books">
-        {t('player.browse.books.all')}
-      </h2>
-      <div className="pb-filters__row">
+    <AudioSection title={t('player.browse.books.all')} className="rd-book-library">
+      <div className="pb-filters rd-music-filters">
+        <div className="pb-filters__row">
         <label className="pb-filters__search">
           <span className="pb-visually-hidden">{t('player.browse.books.searchLabel')}</span>
           <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('player.browse.books.searchLabel')} />
@@ -126,27 +105,30 @@ function AllBooks() {
             options={BOOK_SORTS.map((s) => ({ value: s, label: s === 'artist' ? t('player.browse.sort.author') : t(`player.browse.sort.${s}`) }))}
           />
         </label>
+        </div>
       </div>
       {q.isPending ? (
-        <GridSkeleton label={t('player.browse.loading')} />
+        <RdLoading />
       ) : q.isError ? (
-        <LoadError title={t('player.browse.books.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
+        <RdError title={t('player.browse.books.loadFailed')} error={q.error} onRetry={() => void q.refetch()} />
       ) : items.length === 0 ? (
         filters.search ? (
-          <Empty title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</Empty>
+          <AudioNotice title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</AudioNotice>
         ) : (
-          <Empty title={t('player.browse.books.emptyTitle')}>{t('player.browse.books.emptyBody')}</Empty>
+          <AudioNotice title={t('player.browse.books.emptyTitle')}>{t('player.browse.books.emptyBody')}</AudioNotice>
         )
       ) : (
         <>
-          <ul className="pb-grid" aria-label={t('player.browse.books.all')}>
+          <ul className="rd-music-grid" aria-label={t('player.browse.books.all')}>
             {items.map((b) => (
-              <BookCard key={b.id} book={b} showLeft />
+              <li key={b.id}>
+                <BookTile book={b} fill />
+              </li>
             ))}
           </ul>
-          <LoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
+          <AudioLoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
         </>
       )}
-    </section>
+    </AudioSection>
   );
 }

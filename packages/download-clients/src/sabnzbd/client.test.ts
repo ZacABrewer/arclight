@@ -117,6 +117,25 @@ describe('error mapping', () => {
     expect((await expectError(client().getStatus(), 'unreachable')).message).toMatch(/timed out/);
   });
 
+  it('never puts the API key or web password in an error, its cause or its stack', async () => {
+    // Some fetch failures quote the request URL, which for SABnzbd carries the credentials.
+    const failing: ClientRuntime = {
+      ...runtime(),
+      fetch: async (input) => {
+        const href = String(input);
+        throw new TypeError(`fetch failed for ${href}`, { cause: new Error(`connect ECONNREFUSED (${href})`) });
+      },
+    };
+    const sabClient = new SabnzbdClient(
+      SabnzbdSettings.parse({ host: 'sab.example.com', apiKey: 'abc123apikey', username: 'sabuser', password: 'hunter2pass' }),
+      failing,
+    );
+    const e = await expectError(sabClient.getStatus(), 'unreachable');
+    expect(e.message).toMatch(/^Unable to reach SABnzbd at http:\/\/sab\.example\.com:8080\/[^?]*: /);
+    const everything = JSON.stringify({ message: e.message, stack: e.stack, cause: String(e.cause), inner: String((e.cause as Error).cause), innerStack: (e.cause as Error).stack });
+    for (const secret of ['abc123apikey', 'sabuser', 'hunter2pass', 'apikey=', 'ma_password']) expect(everything).not.toContain(secret);
+  });
+
   it('maps invalid JSON, wrong shapes and HTTP errors to bad-response / not-found / auth', async () => {
     sab.onceMode('queue', { body: '<html>login</html>' });
     await expectError(client().getItems(''), 'bad-response');

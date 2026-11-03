@@ -2,7 +2,9 @@
 # Three stages: build (pnpm workspace -> web dist + esbuild api bundle), externals (the few
 # packages the bundle leaves out, i.e. the better-sqlite3 native addon) and a slim runtime
 # that holds only the node binary, the bundle, the addon and the runtime-read assets.
-FROM node:24-bookworm-slim AS build
+# Base images are pinned by multi-arch index digest (tag kept for readability); bump both the
+# tag and the digest together, e.g. from `docker buildx imagetools inspect node:24-bookworm-slim`.
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
 ENV CI=true
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
@@ -15,7 +17,7 @@ RUN pnpm install --offline --frozen-lockfile
 # Web: vite build. Api: scripts/bundle.mjs -> apps/api/dist/{server.mjs,drizzle,definitions,package.json}.
 RUN pnpm --filter @arclight/web build && pnpm --filter @arclight/api build
 
-FROM node:24-bookworm-slim AS externals
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS externals
 WORKDIR /ext
 # dist/package.json lists only the bundle's externals (scripts/bundle.mjs EXTERNALS).
 COPY --from=build /src/apps/api/dist/package.json ./package.json
@@ -28,7 +30,7 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
 
 # 7-Zip (7zz) for archive unpacking: the official static Linux build, which reads RAR/RAR5 (the
 # Debian 7zip package has no RAR codec). Both archives are pinned by checksum; TARGETARCH picks one.
-FROM debian:bookworm-slim AS sevenzip
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS sevenzip
 ARG TARGETARCH
 ADD --checksum=sha256:dc99eff5008f1ab79bd7084c68513701547a808a89502bf4133683535ab3c695 \
     https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-x64.tar.xz /dl/7z-amd64.tar.xz
@@ -41,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends xz-utils && rm 
 # Runtime: the node:24-bookworm-slim userland minus npm/corepack/yarn. Starting from
 # debian:bookworm-slim and copying just the node binary avoids inheriting those layers
 # (deleting files in a later layer would not shrink the image).
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=sevenzip /out/7zz /usr/local/bin/7zz
 ARG VERSION=0.1.0-dev
@@ -71,7 +73,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu tini ca-ce
 # on amd64, ships the Intel iHD VA driver and the oneVPL GPU runtime under
 # /usr/lib/jellyfin-ffmpeg/lib, so VA-API, Quick Sync and NVENC work once the GPU is passed in
 # (docs/using/hardware-transcoding.md). Debian's own ffmpeg package drags ~470 MB of libraries.
-ADD https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
+# The signing key is checksum-pinned like 7zz: a changed key file fails the build instead of
+# silently trusting new packages (update the sha256 after checking Jellyfin's announcement).
+ADD --checksum=sha256:a0cde241ae297fa6f0265c0bf15ce9eb9ee97c008904a59ab367a67d59532839 \
+    https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
 RUN chmod 644 /etc/apt/keyrings/jellyfin.asc \
  && printf '%s\n' 'Types: deb' 'URIs: https://repo.jellyfin.org/debian' 'Suites: bookworm' 'Components: main' \
       'Architectures: amd64 arm64' 'Signed-By: /etc/apt/keyrings/jellyfin.asc' > /etc/apt/sources.list.d/jellyfin.sources \

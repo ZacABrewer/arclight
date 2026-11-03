@@ -83,6 +83,8 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-session:$media3Version"
     implementation "androidx.media3:media3-datasource:$media3Version"
+    // Converted video (0.24): HLS with fMP4 segments, adaptive across the server's ladder.
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     // Video (movies & TV): PlayerView for the surface and subtitles; the controls are our own.
     implementation "androidx.media3:media3-ui:$media3Version"
     implementation "androidx.work:work-runtime:$workManagerVersion"

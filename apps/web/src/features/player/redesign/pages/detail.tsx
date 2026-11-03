@@ -3,6 +3,9 @@ import type { PlayerEpisode, PlayerMovieDetails, PlayerSeriesDetails, PlayerVide
 import { cx } from '../../../../arclight/cx.js';
 import { useT } from '../../../../i18n/index.js';
 import { useNumericParam } from '../../browse/kit.js';
+import { useToast } from '../../../../components/toast.js';
+import { usePlaybackCapabilities } from '../../api.js';
+import { copyText, shareUrlFor, type ShareTarget } from '../../share.js';
 import { useMarkWatched, useMovie, useShow } from '../../video/api.js';
 import { resumePoint } from '../../video/format.js';
 import { seasonTitle } from '../../video/show-page.js';
@@ -22,7 +25,7 @@ import { RdError, RdLoading, RdPage, minutesLeft, shareOf, useCardActions, useCa
 // blurb, Play / Start over / My List, then Episodes (season chips and 300 px cards) or More
 // like this. Portrait: 16:9 backdrop, full-width Play, three icon actions, a 4-line blurb with
 // More, season chips and 128x72 episode rows. Both have a small "more" menu with Mark watched /
-// unwatched and, when the title has more than one file, Versions (which file Play starts).
+// unwatched, Copy link and, when the title has more than one file, Versions (which file Play starts).
 
 interface PlayTarget {
   itemKey: string;
@@ -69,7 +72,7 @@ export function RdMoviePage() {
   const q = useMovie(id);
   if (Number.isNaN(id)) return <NotFound />;
   if (q.isPending) return <RdPage><RdLoading /></RdPage>;
-  if (q.isError) return <RdPage><RdError title={t('player.video.movieFailed')} onRetry={() => void q.refetch()} /></RdPage>;
+  if (q.isError) return <RdPage><RdError title={t('player.video.movieFailed')} error={q.error} onRetry={() => void q.refetch()} /></RdPage>;
   return <MovieDetail movie={q.data} />;
 }
 
@@ -80,7 +83,7 @@ export function RdShowPage() {
   const q = useShow(Number.isNaN(id) ? null : id);
   if (Number.isNaN(id)) return <NotFound />;
   if (q.isPending) return <RdPage><RdLoading /></RdPage>;
-  if (q.isError) return <RdPage><RdError title={t('player.video.showFailed')} onRetry={() => void q.refetch()} /></RdPage>;
+  if (q.isError) return <RdPage><RdError title={t('player.video.showFailed')} error={q.error} onRetry={() => void q.refetch()} /></RdPage>;
   return <SeriesDetail show={q.data} />;
 }
 
@@ -151,7 +154,7 @@ function DetailFrame(p: DetailFrameProps) {
   const fileOpt = versions.length > 1 && versionId !== null ? { mediaFileId: versionId } : {};
   const play = () => p.target && open(p.target.itemKey, p.target.resumeMs !== null ? { startMs: p.target.resumeMs, ...fileOpt } : { restart: true, ...fileOpt });
   const restart = () => p.target && open(p.target.itemKey, { restart: true, ...fileOpt });
-  const moreMenu = <DetailMore layout={layout === 'portrait' ? 'portrait' : 'wide'} title={p.title} played={p.played} markTarget={p.markTarget} versions={versions} versionId={versionId} onVersion={setVersionId} />;
+  const moreMenu = <DetailMore layout={layout === 'portrait' ? 'portrait' : 'wide'} title={p.title} share={{ kind: p.kind === 'series' ? 'show' : 'movie', id: p.id }} played={p.played} markTarget={p.markTarget} versions={versions} versionId={versionId} onVersion={setVersionId} />;
   const kicker = [p.kind === 'series' ? t('player.redesign.detail.series') : t('player.redesign.detail.movie'), p.genres.join(', ')].filter(Boolean).join(' · ');
   const art = artBackground(p.backdropUrl ?? p.posterUrl, p.title);
   const hasProgress = Boolean(p.target && p.target.resumeMs !== null);
@@ -254,15 +257,19 @@ interface DetailMoreProps {
   title: string;
   played: boolean;
   markTarget: Omit<VideoWatchedRequest, 'played'>;
+  /** What Copy link points at. */
+  share: ShareTarget;
   versions: readonly PlayerVideoVersion[];
   versionId: number | null;
   onVersion: (id: number) => void;
 }
 
-/** The "more" menu next to the main actions: Mark watched / unwatched, then Versions (2+ files). */
-function DetailMore({ layout, title, played, markTarget, versions, versionId, onVersion }: DetailMoreProps) {
+/** The "more" menu next to the main actions: Mark watched / unwatched, Copy link, then Versions (2+ files). */
+function DetailMore({ layout, title, played, markTarget, share, versions, versionId, onVersion }: DetailMoreProps) {
   const t = useT();
   const mark = useMarkWatched();
+  const toast = useToast();
+  const playerUrl = usePlaybackCapabilities().data?.playerUrl;
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const label = t('player.redesign.detail.moreActions');
@@ -290,6 +297,10 @@ function DetailMore({ layout, title, played, markTarget, versions, versionId, on
     setOpen(false);
     mark.mutate({ ...markTarget, played: !played });
   };
+  const copyLink = () => {
+    setOpen(false);
+    void copyText(shareUrlFor(share, playerUrl)).then((ok) => (ok ? toast.push({ tone: 'ok', title: t('player.share.copied') }) : toast.error(t('player.share.copyFailed'))));
+  };
   const pick = (id: number) => {
     onVersion(id);
     setOpen(false);
@@ -301,6 +312,10 @@ function DetailMore({ layout, title, played, markTarget, versions, versionId, on
       <button type="button" className={item} role={wide ? 'menuitem' : undefined} disabled={mark.isPending} onClick={toggleWatched}>
         {wide ? <RdIcon name={played ? 'restart' : 'check'} /> : null}
         <span>{played ? t('player.video.markUnwatched') : t('player.video.markWatched')}</span>
+      </button>
+      <button type="button" className={item} role={wide ? 'menuitem' : undefined} onClick={copyLink}>
+        {wide ? <RdIcon name="link" /> : null}
+        <span>{t('player.share.copyLink')}</span>
       </button>
       {versions.length > 1 ? (
         <div className={wide ? 'rd-menu__group rd-menu__group--top' : 'rd-sheet__list'} role="group" aria-label={t('player.video.versions')}>

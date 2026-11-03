@@ -69,4 +69,23 @@ describe('launch', () => {
     await expect(p).rejects.toThrow(/DevTools endpoint within 150 ms/);
     expect(child.killed.length).toBe(1);
   });
+
+  it('refuses to start as root unless allowed, and only then drops the sandbox', async () => {
+    let spawned = 0;
+    const spawnImpl = () => {
+      spawned++;
+      return new FakeChild() as unknown as ChildProcess;
+    };
+    await expect(launchBrowser({ executablePath: 'chrome', userDataDir: tempProfile(), isRoot: () => true, allowRoot: false, spawnImpl })).rejects.toMatchObject({
+      code: 'launch',
+      message: expect.stringContaining('ARCLIGHT_SOLVER_ALLOW_ROOT=1'),
+    });
+    expect(spawned).toBe(0);
+    expect(browserArgs({ userDataDir: 'x', isRoot: () => true })).toContain('--no-sandbox');
+    expect(browserArgs({ userDataDir: 'x', isRoot: () => false })).not.toContain('--no-sandbox');
+    const child = new FakeChild();
+    const p = launchBrowser({ executablePath: 'chrome', userDataDir: tempProfile(), isRoot: () => true, allowRoot: true, spawnImpl: spawnOf(child) });
+    child.stderr.write('DevTools listening on ws://127.0.0.1:9333/devtools/browser/root\n');
+    expect((await p).wsEndpoint).toContain('/root');
+  });
 });

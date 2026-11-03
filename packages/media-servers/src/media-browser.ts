@@ -16,6 +16,7 @@ import {
   joinUrl,
   laterOf,
   list,
+  mergeTags,
   normaliseBaseUrl,
   normaliseIsbn,
   num,
@@ -585,6 +586,60 @@ export class MediaBrowserServerClient implements MediaServerClient {
     });
   }
 
+  // ---- item tags (Arclight's tag sync; the same fields on Jellyfin and Emby) ----------------
+
+  /** Tags of items by id, read in batches of 50 (unknown ids are left out). */
+  async itemTags(ids: readonly string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    for (let i = 0; i < ids.length; i += COLLECTION_BATCH) {
+      const body = rec(await this.get('Items', { Ids: ids.slice(i, i + COLLECTION_BATCH).join(','), Fields: 'Tags', EnableImages: 'false', EnableUserData: 'false' }));
+      for (const r of list(body['Items']).map(rec)) {
+        const id = str(r['Id']);
+        if (id) out.set(id, stringsOf(r['Tags']));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Adds and removes tags on one item, leaving every other tag as it is. Read-modify-write like
+   * `setCollectionOverview`: the item is read, `Tags = (current - remove) + add` is computed
+   * case-insensitively (a tag already there keeps its casing, nothing is duplicated) and the
+   * whole item is sent back. With `lock`, `Tags` joins LockedFields so a metadata refresh keeps
+   * them; with `unlock`, `Tags` leaves LockedFields; with neither, LockedFields is sent back
+   * unchanged. Returns the tags now on the item.
+   */
+  async setItemTags(itemId: string, add: readonly string[], remove: readonly string[], opts: ItemTagsWriteOptions = {}): Promise<string[]> {
+    return (await this.updateItemTags(itemId, add, remove, opts)).tags;
+  }
+
+  /**
+   * `setItemTags`, also saying whether this write put `Tags` into LockedFields (`lockAdded`: it
+   * was not locked before) and whether it took the lock off (`unlocked`), so a caller can record
+   * which locks are its own.
+   */
+  async updateItemTags(itemId: string, add: readonly string[], remove: readonly string[], opts: ItemTagsWriteOptions = {}): Promise<ItemTagsWriteResult> {
+    const body = rec(await this.get('Items', { Ids: itemId, Fields: UPDATE_FIELDS }));
+    const item = list(body['Items']).map(rec)[0];
+    if (!item) throw new MediaServerError(this.kind, 'notFound', `item ${itemId} not found`);
+    const tags = mergeTags(stringsOf(item['Tags']), add, remove);
+    const locked = stringsOf(item['LockedFields']);
+    const wasLocked = locked.includes('Tags');
+    const lockedFields = opts.lock ? [...new Set([...locked, 'Tags'])] : opts.unlock ? locked.filter((f) => f !== 'Tags') : locked;
+    await this.send('POST', `Items/${encodeURIComponent(itemId)}`, {}, {
+      ...item,
+      Tags: tags,
+      LockedFields: lockedFields,
+      // Fields the update endpoint iterates over; absent ones would be read as null.
+      Genres: list(item['Genres']),
+      Studios: list(item['Studios']),
+      People: list(item['People']),
+      ProviderIds: rec(item['ProviderIds']),
+      Taglines: list(item['Taglines']),
+    });
+    return { tags, lockAdded: opts.lock === true && !wasLocked, unlocked: opts.lock !== true && opts.unlock === true && wasLocked };
+  }
+
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {
     if (options.path) {
       await this.post('Library/Media/Updated', { Updates: [{ Path: options.path, UpdateType: options.updateType ?? 'Modified' }] });
@@ -592,6 +647,25 @@ export class MediaBrowserServerClient implements MediaServerClient {
       await this.post('Library/Refresh');
     }
   }
+}
+
+/** `lock`: put `Tags` into LockedFields. `unlock`: take it out (ignored with `lock`). */
+export interface ItemTagsWriteOptions {
+  lock?: boolean;
+  unlock?: boolean;
+}
+
+export interface ItemTagsWriteResult {
+  /** The tags now on the item. */
+  tags: string[];
+  /** This write locked `Tags` (it was not locked before). */
+  lockAdded: boolean;
+  /** This write took the `Tags` lock off. */
+  unlocked: boolean;
+}
+
+function stringsOf(value: unknown): string[] {
+  return list(value).flatMap((v) => (typeof v === 'string' ? [v] : []));
 }
 
 function isPresent(ep: Record<string, unknown>): boolean {

@@ -101,6 +101,7 @@ export {
   writeZip,
   gunzip,
   extractSubtitle,
+  MAX_SUBTITLE_BYTES,
   pickEntry,
   parseEntryEpisode,
   ArchiveError,

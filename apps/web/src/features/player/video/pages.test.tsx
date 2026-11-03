@@ -177,6 +177,16 @@ describe('RdMoviePage (/player/watch/movies/$id)', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === api('/watched'))?.body).toEqual({ itemKeys: ['movie:7'], played: true }));
   });
 
+  it('the more menu copies a link on the player address', async () => {
+    stubFetch({ [api('/me')]: { ...me, playerUrl: 'https://watch.example.com' }, [api('/movies/8')]: movieDetails(8) });
+    const user = userEvent.setup();
+    renderBrowse('/player/watch/movies/8');
+    await user.click(await screen.findByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+    await waitFor(async () => expect(await navigator.clipboard.readText()).toBe('https://watch.example.com/watch/movies/8'));
+    expect(screen.queryByRole('menu', { name: 'More actions' })).toBeNull();
+  });
+
   it('a single version has no Versions list and Play sends no file', async () => {
     stubFetch({ [api('/me')]: me, [api('/movies/8')]: movieDetails(8, { played: true }) });
     renderBrowse('/player/watch/movies/8');

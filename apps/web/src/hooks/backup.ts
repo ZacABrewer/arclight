@@ -37,8 +37,8 @@ export function useDeleteBackup() {
 export function useRestoreBackup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (source: { id: string } | { file: File }) =>
-      'id' in source ? backupApi.restore(source.id) : backupApi.restoreUpload(source.file),
+    mutationFn: (source: ({ id: string } | { file: File }) & { passphrase?: string | undefined }) =>
+      'id' in source ? backupApi.restore(source.id, source.passphrase) : backupApi.restoreUpload(source.file, source.passphrase),
     meta: { silent: true },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.systemStatus }),
   });

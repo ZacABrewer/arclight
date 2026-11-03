@@ -34,6 +34,8 @@ import {
   INDEXER_HEALTH_DEFAULT_DAYS,
   INDEXER_PRIORITY_DEFAULT,
   indexerFlagsFromVolumeFactors,
+  IndexerTestRequest,
+  PASSWORD_MASK,
   protocolForImplementation,
   SearchGrabRequest,
   type DefinitionFieldValue,
@@ -55,6 +57,7 @@ import {
 import type { Db } from '../../db/index.js';
 import { artists } from '../music/schema.js';
 import { authors } from '../audiobooks/schema.js';
+import { isSecretKey } from '../config-export/secrets.js';
 import { getFeatureSettings } from '../settings/service.js';
 import { DefinitionStore } from './definitions.js';
 import { IndexersError, parseOrThrow } from './errors.js';
@@ -62,6 +65,7 @@ import { ProxiesService, type TunnelOpener } from './proxies.js';
 import { indexerCapsCache, indexerRssState, indexers, indexerStatus } from './schema.js';
 import { summarizeHealth } from './health.js';
 import { IndexerStatsRecorder } from './stats.js';
+import { readReleaseFile } from './release-file.js';
 
 export { IndexersError, type IndexersErrorCode } from './errors.js';
 /** Domain hint for a release's categories (`series | movie | music | audiobook | auto`). */
@@ -272,7 +276,8 @@ export class IndexersService {
 
   create(input: IndexerCreate): Indexer {
     const data = parseOrThrow(IndexerCreate, input);
-    const settings = this.validateFor(data.implementation, data.settings);
+    // Nothing is stored behind a mask yet: a copied mask is dropped, never saved as the secret.
+    const settings = this.validateFor(data.implementation, restoreIndexerSecrets(data.settings, undefined));
     this.assertUniqueName(data.name);
     const proxyId = this.checkedProxyId(data.proxyId);
     const row = this.db
@@ -302,7 +307,8 @@ export class IndexersService {
     if (name.toLowerCase() !== current.name.toLowerCase()) this.assertUniqueName(name, id);
 
     const implementation = patch.implementation ?? current.implementation;
-    const mergedRaw = { ...current.settings, ...withoutUndefined(patch.settings ?? {}) };
+    const incoming = restoreIndexerSecrets(withoutUndefined(patch.settings ?? {}), current.settings);
+    const mergedRaw = { ...current.settings, ...incoming };
     const settings = this.validateFor(implementation, parseOrThrow(IndexerSettings, mergedRaw));
     const proxyId = patch.proxyId === undefined ? current.proxyId : this.checkedProxyId(patch.proxyId);
 
@@ -464,11 +470,15 @@ export class IndexersService {
 
   // ---- testing ----------------------------------------------------------------------
 
-  /** Test an unsaved definition: fresh caps + an RSS query. Never throws for indexer errors. */
-  async test(input: IndexerCreate, signal?: AbortSignal): Promise<IndexerTestResult> {
-    const data = parseOrThrow(IndexerCreate, input);
+  /**
+   * Test an unsaved definition: fresh caps + an RSS query. Never throws for indexer errors.
+   * With `id`, masked secrets are tested with the saved indexer's stored values.
+   */
+  async test(input: IndexerTestRequest, signal?: AbortSignal): Promise<IndexerTestResult> {
+    const { id, ...data } = parseOrThrow(IndexerTestRequest, input);
+    const stored = id === undefined ? undefined : this.requireRow(id).settings;
     if (data.implementation === 'definition') await this.definitions.ready();
-    const settings = this.validateFor(data.implementation, data.settings);
+    const settings = this.validateFor(data.implementation, restoreIndexerSecrets(data.settings, stored));
     const result = await this.probe(
       { id: 0, name: data.name, implementation: data.implementation, settings, proxyId: data.proxyId ?? null, tags: data.tags },
       signal,
@@ -771,6 +781,7 @@ export class IndexersService {
       });
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location');
+        await res.body?.cancel().catch(() => undefined);
         if (!location) break;
         if (location.startsWith('magnet:')) {
           if (protocol === 'usenet') throw new IndexersError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
@@ -783,7 +794,10 @@ export class IndexersService {
         throw new IndexersError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${res.status})`);
       }
       if (!res.ok) throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
-      const data = new Uint8Array(await res.arrayBuffer());
+      // Capped read (torrent 10 MB, NZB 50 MB); the timeout covers the body too.
+      const data = await readReleaseFile(res, protocol).catch((err: unknown) => {
+        throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      });
       if (data.length === 0) throw new IndexersError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
       const ext = protocol === 'usenet' ? 'nzb' : 'torrent';
       return {
@@ -1154,6 +1168,34 @@ export class IndexersService {
     return proxyId;
   }
 
+  // ---- secrets ----------------------------------------------------------------------
+
+  /**
+   * The resource as the API returns it: the API key, every definition field of type password
+   * and every secret-named field (cookie, passkey, ...) replaced by PASSWORD_MASK. In-process
+   * callers (releases, cross-seed, compat) keep using list()/get(), which are unmasked.
+   */
+  masked(indexer: Indexer): Indexer {
+    const s = indexer.settings;
+    const settings: IndexerSettings = { ...s };
+    if (s.apiKey) settings.apiKey = PASSWORD_MASK;
+    if (s.fields) {
+      const passwords = this.passwordFieldNames(s.definitionId);
+      const fields: Record<string, DefinitionFieldValue> = {};
+      for (const [key, value] of Object.entries(s.fields)) {
+        fields[key] = typeof value === 'string' && value !== '' && (passwords.has(key) || isSecretKey(key)) ? PASSWORD_MASK : value;
+      }
+      settings.fields = fields;
+    }
+    return { ...indexer, settings };
+  }
+
+  /** Names of the definition's `password` settings (none when the definition is not loaded). */
+  private passwordFieldNames(definitionId: string | undefined): Set<string> {
+    const def = definitionId ? this.definitions.get(definitionId) : undefined;
+    return new Set(def?.settings.filter((f) => f.type === 'password').map((f) => f.name) ?? []);
+  }
+
   private toResource(row: IndexerRow, status: StatusRow | undefined): Indexer {
     const out: Indexer = {
       id: row.id,
@@ -1271,6 +1313,27 @@ export class IndexersService {
 }
 
 // ---- helpers ------------------------------------------------------------------------
+
+/**
+ * Secrets sent back as PASSWORD_MASK keep the stored value (`apiKey`, any definition field);
+ * a mask with nothing stored behind it is dropped.
+ */
+export function restoreIndexerSecrets<T extends Partial<IndexerSettings>>(incoming: T, stored: IndexerSettings | undefined): T {
+  const out: T = { ...incoming };
+  if (out.apiKey === PASSWORD_MASK) {
+    if (stored?.apiKey) out.apiKey = stored.apiKey;
+    else delete out.apiKey;
+  }
+  if (out.fields) {
+    const fields: Record<string, DefinitionFieldValue> = {};
+    for (const [key, value] of Object.entries(out.fields)) {
+      if (value !== PASSWORD_MASK) fields[key] = value;
+      else if (stored?.fields?.[key] !== undefined && stored.fields[key] !== PASSWORD_MASK) fields[key] = stored.fields[key];
+    }
+    out.fields = fields;
+  }
+  return out;
+}
 
 function withoutUndefined<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as {

@@ -4,10 +4,12 @@ import { Input, Segmented, Select } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { useT } from '../../../i18n/index.js';
 import { useAlbums, useArtists, type BrowseFilters } from './api.js';
-import { AlbumCard, AlbumRow, ArtistCard, ArtistRow } from './cards.js';
+import { RdError, RdLoading } from '../redesign/pages/common.js';
+import { AlbumRow, AlbumTile, ArtistRow, ArtistTile } from './cards.js';
 import { LETTERS } from './format.js';
-import { Empty, GridSkeleton, LoadError, LoadMore, PageTitle, useDebounced, useStoredChoice } from './kit.js';
+import { useDebounced, useStoredChoice } from './kit.js';
 import { MusicNav } from './music-nav.js';
+import { AudioHead, AudioLoadMore, AudioNotice, AudioPage, AudioSection } from './rd-audio.js';
 
 export type ViewMode = 'grid' | 'list';
 const VIEWS: readonly ViewMode[] = ['grid', 'list'];
@@ -39,7 +41,7 @@ function useLibraryControls(kind: 'albums' | 'artists', sorts: readonly BrowseSo
   const bar = (genres: readonly string[]) => {
     const genreOptions = [...new Set([...genres, ...(genre ? [genre] : [])])].sort((a, b) => a.localeCompare(b));
     return (
-      <div className="pb-filters">
+      <div className="pb-filters rd-music-filters">
         <div className="pb-filters__row">
           <label className="pb-filters__search">
             <span className="pb-visually-hidden">{t(`player.browse.library.search.${kind}`)}</span>
@@ -105,29 +107,40 @@ export function AlbumsPage() {
   const filtered = !!(c.filters.search || c.filters.genre || c.filters.letter);
 
   return (
-    <div className="pb-page">
-      <PageTitle>{t('player.browse.nav.albums')}</PageTitle>
-      <MusicNav />
-      {c.bar(genres)}
-      {q.isPending ? (
-        <GridSkeleton label={t('player.browse.loading')} />
-      ) : q.isError ? (
-        <LoadError title={t('player.browse.library.albumsFailed')} error={q.error} onRetry={() => void q.refetch()} />
-      ) : items.length === 0 ? (
-        filtered ? (
-          <Empty title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</Empty>
+    <AudioPage>
+      <AudioHead title={t('player.browse.nav.albums')} sub={q.data ? t('player.browse.albumsCount', { count: total }) : null}>
+        <MusicNav />
+      </AudioHead>
+      <AudioSection>
+        {c.bar(genres)}
+        {q.isPending ? (
+          <RdLoading />
+        ) : q.isError ? (
+          <RdError title={t('player.browse.library.albumsFailed')} error={q.error} onRetry={() => void q.refetch()} />
+        ) : items.length === 0 ? (
+          filtered ? (
+            <AudioNotice title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</AudioNotice>
+          ) : (
+            <AudioNotice title={t('player.browse.music.emptyTitle')}>{t('player.browse.music.emptyBody')}</AudioNotice>
+          )
         ) : (
-          <Empty title={t('player.browse.music.emptyTitle')}>{t('player.browse.music.emptyBody')}</Empty>
-        )
-      ) : (
-        <>
-          <ul className={cx(c.view === 'grid' ? 'pb-grid' : 'pb-list')} aria-label={t('player.browse.nav.albums')} data-view={c.view}>
-            {items.map((a) => (c.view === 'grid' ? <AlbumCard key={a.id} album={a} /> : <AlbumRow key={a.id} album={a} />))}
-          </ul>
-          <LoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
-        </>
-      )}
-    </div>
+          <>
+            <ul className={cx(c.view === 'grid' ? 'rd-music-grid' : 'pb-list rd-music-list')} aria-label={t('player.browse.nav.albums')} data-view={c.view}>
+              {items.map((a) =>
+                c.view === 'grid' ? (
+                  <li key={a.id}>
+                    <AlbumTile album={a} fill />
+                  </li>
+                ) : (
+                  <AlbumRow key={a.id} album={a} />
+                ),
+              )}
+            </ul>
+            <AudioLoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
+          </>
+        )}
+      </AudioSection>
+    </AudioPage>
   );
 }
 
@@ -142,28 +155,39 @@ export function ArtistsPage() {
   const filtered = !!(c.filters.search || c.filters.genre || c.filters.letter);
 
   return (
-    <div className="pb-page">
-      <PageTitle>{t('player.browse.nav.artists')}</PageTitle>
-      <MusicNav />
-      {c.bar(genres)}
-      {q.isPending ? (
-        <GridSkeleton label={t('player.browse.loading')} />
-      ) : q.isError ? (
-        <LoadError title={t('player.browse.library.artistsFailed')} error={q.error} onRetry={() => void q.refetch()} />
-      ) : items.length === 0 ? (
-        filtered ? (
-          <Empty title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</Empty>
+    <AudioPage>
+      <AudioHead title={t('player.browse.nav.artists')} sub={q.data ? t('player.browse.artistsCount', { count: total }) : null}>
+        <MusicNav />
+      </AudioHead>
+      <AudioSection>
+        {c.bar(genres)}
+        {q.isPending ? (
+          <RdLoading />
+        ) : q.isError ? (
+          <RdError title={t('player.browse.library.artistsFailed')} error={q.error} onRetry={() => void q.refetch()} />
+        ) : items.length === 0 ? (
+          filtered ? (
+            <AudioNotice title={t('player.browse.library.noMatch')}>{t('player.browse.library.noMatchBody')}</AudioNotice>
+          ) : (
+            <AudioNotice title={t('player.browse.music.emptyTitle')}>{t('player.browse.music.emptyBody')}</AudioNotice>
+          )
         ) : (
-          <Empty title={t('player.browse.music.emptyTitle')}>{t('player.browse.music.emptyBody')}</Empty>
-        )
-      ) : (
-        <>
-          <ul className={cx(c.view === 'grid' ? 'pb-grid' : 'pb-list')} aria-label={t('player.browse.nav.artists')} data-view={c.view}>
-            {items.map((a) => (c.view === 'grid' ? <ArtistCard key={a.id} artist={a} /> : <ArtistRow key={a.id} artist={a} />))}
-          </ul>
-          <LoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
-        </>
-      )}
-    </div>
+          <>
+            <ul className={cx(c.view === 'grid' ? 'rd-music-grid rd-music-grid--round' : 'pb-list rd-music-list')} aria-label={t('player.browse.nav.artists')} data-view={c.view}>
+              {items.map((a) =>
+                c.view === 'grid' ? (
+                  <li key={a.id}>
+                    <ArtistTile artist={a} fill />
+                  </li>
+                ) : (
+                  <ArtistRow key={a.id} artist={a} />
+                ),
+              )}
+            </ul>
+            <AudioLoadMore shown={items.length} total={total} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => void q.fetchNextPage()} />
+          </>
+        )}
+      </AudioSection>
+    </AudioPage>
   );
 }

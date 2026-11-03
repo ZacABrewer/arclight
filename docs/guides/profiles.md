@@ -31,6 +31,24 @@ A profile that has a content limit shows a **Kids** badge, and one that has a PI
 
 Account holders can also add, edit and delete their own profiles while the owner profile is active.
 
+## Adding and editing profiles in the player
+
+The player's **Who's watching?** screen (in the browser, the phone app and on a TV) is where the owner profile adds and edits profiles:
+
+- **Add profile** is the round tile with a plus at the end of the row. It shows while the owner profile is active and the account has fewer than 12 profiles. It opens the full profile page: name, colour (the first one no other profile uses is picked for you), PIN and the movie and TV rating limits. **Save** creates the profile with all of them at once. The new profile is not switched to; its tile is selected so you can choose it straight away.
+- **Manage profiles** is the round pencil button under the row. It turns the screen into edit mode: the title changes to **Manage profiles**, each avatar shows a pencil, and choosing one opens its page instead of switching to it (no PIN is asked). The button becomes **Done**. **Back**, **Esc** or **Done** returns to choosing a profile.
+
+Other profiles see neither the Add tile nor the pencil.
+
+### Adding a second profile
+
+The picker only appears once an account has two or more profiles, so an account with just the owner profile adds its second one elsewhere:
+
+- in the browser and the phone app: **Add profile** in the avatar menu, or **Settings > Profiles > Add profile**;
+- on a TV: **Settings > Profiles > Add profile**.
+
+Each opens **Manage profiles** with the new-profile page already open.
+
 ## Content limits
 
 A profile's limit is added to the account's caps, and the stricter of the two wins for each rating. For example, if the account is capped at R and the profile at PG, the profile sees PG and below. If the account is capped at PG-13 and the profile has no limit, the profile sees PG-13 and below.
@@ -43,6 +61,7 @@ A PIN keeps someone from switching into a profile they shouldn't use, such as th
 
 - After 5 wrong PINs in a row, switching to that profile is locked for 15 minutes. Each further lockout without a right PIN in between doubles the wait, up to 24 hours. Arclight tells the app how long to wait. The count belongs to the profile, so signing in again or restarting Arclight does not reset it. The right PIN resets it, and the account owner can lift a lockout at once by setting a new PIN (or removing it) for that profile.
 - There is one exception for a sign-in less than 10 minutes old: it may re-select the profile it is already on without the PIN, because the password was just entered.
+- The owner profile without a PIN asks for the **account password** instead, when someone switches to it from another profile on a sign-in older than 10 minutes. Wrong passwords count toward the same lockout as wrong PINs. The TV and phone apps can't ask for the password: give the owner profile a PIN, or sign in again on that device. An account that signs in through a media server or single sign-on and has no Arclight password of its own must sign in again.
 - PINs are stored hashed. They are never shown again and never written to the logs or the audit log.
 
 ## Which sign-ins can switch profiles

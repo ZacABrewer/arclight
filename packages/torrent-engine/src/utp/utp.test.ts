@@ -158,3 +158,76 @@ describe('Session over uTP', () => {
     sock.destroy();
   });
 });
+
+describe('uTP limits (DATA-02)', () => {
+  /** A raw UDP "peer" that speaks just enough uTP to open a connection and flood it. */
+  async function attacker(): Promise<{ sock: dgram.Socket; send: (p: Parameters<typeof encodePacket>[0], port: number) => Promise<void> }> {
+    const sock = dgram.createSocket('udp4');
+    await new Promise<void>((r) => sock.bind(0, '127.0.0.1', () => r()));
+    env.defer(() => sock.close());
+    return {
+      sock,
+      send: (p, port) => new Promise<void>((r) => sock.send(encodePacket(p), port, '127.0.0.1', () => r())),
+    };
+  }
+  const pkt = (type: number, connectionId: number, seq: number, payload = Buffer.alloc(0)) => ({
+    type,
+    connectionId,
+    timestamp: 0,
+    timestampDiff: 0,
+    wndSize: 1 << 20,
+    seq,
+    ack: 0,
+    payload,
+  });
+
+  it('caps incoming connections per IP and in total', async () => {
+    const b = await endpoint({ maxIncomingPerIp: 4 });
+    const a = await attacker();
+    for (let i = 0; i < 20; i++) await a.send(pkt(ST_SYN, 1000 + i * 2, 1), b.port);
+    await waitFor(() => b.mgr.incomingCount >= 4);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(b.mgr.incomingCount).toBe(4);
+    const c = await endpoint({ maxIncoming: 3, maxIncomingPerIp: 100 });
+    for (let i = 0; i < 20; i++) await a.send(pkt(ST_SYN, 5000 + i * 2, 1), c.port);
+    await waitFor(() => c.mgr.incomingCount >= 3);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(c.mgr.incomingCount).toBe(3);
+  });
+
+  it('drops half-open connections that never send their first packet', async () => {
+    let clock = 0;
+    const b = await endpoint({ now: () => clock, tickMs: 10 });
+    const a = await attacker();
+    await a.send(pkt(ST_SYN, 42, 1), b.port);
+    await waitFor(() => b.mgr.incomingCount === 1);
+    clock += 11_000;
+    await waitFor(() => b.mgr.incomingCount === 0);
+  });
+
+  it('bounds buffered bytes from a peer that ignores the window, and drops oversized payloads', async () => {
+    const b = await endpoint();
+    const a = await attacker();
+    const accepted = new Promise<UtpSocket>((r) => b.mgr.once('connection', (s) => r(s)));
+    const synSeq = 100;
+    await a.send(pkt(ST_SYN, 7000, synSeq), b.port);
+    const server = await accepted; // never read: everything it gets stays buffered
+    const connId = 7001;
+    // Out of order: seq synSeq+2 onwards (synSeq+1 is missing), 8000 bytes each = 16 MB offered.
+    for (let i = 0; i < 2000; i++) await a.send(pkt(ST_DATA, connId, synSeq + 2 + i, Buffer.alloc(8000, 1)), b.port);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(server.debugState().oooBytes as number).toBeLessThanOrEqual(1024 * 1024);
+    // Oversized payload in order: dropped.
+    await a.send(pkt(ST_DATA, connId, synSeq + 1, Buffer.alloc(20_000, 2)), b.port);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(server.readableLength).toBe(0);
+    // In order, never read: capped near the receive window.
+    const fresh = new Promise<UtpSocket>((r) => b.mgr.once('connection', (s) => r(s)));
+    await a.send(pkt(ST_SYN, 8000, synSeq), b.port);
+    const s2 = await fresh;
+    for (let i = 0; i < 400; i++) await a.send(pkt(ST_DATA, 8001, synSeq + 1 + i, Buffer.alloc(8000, 3)), b.port);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(s2.readableLength).toBeGreaterThan(0);
+    expect(s2.readableLength).toBeLessThanOrEqual(1024 * 1024 + 256 * 1024 + 8000);
+  });
+});

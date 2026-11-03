@@ -9,6 +9,7 @@ import { DHT, type DhtOptions } from './dht/dht.js';
 import { errorMessage, TorrentEngineError } from './errors.js';
 import { type MagnetLink, parseMagnet } from './magnet.js';
 import { type Metainfo, parseTorrent } from './metainfo.js';
+import { isBlockedAddress } from './net-guard.js';
 import { PeerListener } from './peer/listener.js';
 import { mseReq2 } from './peer/mse.js';
 import { TokenBucket } from './rate.js';
@@ -201,6 +202,7 @@ export class Session extends EventEmitter<SessionEvents> {
     const lOpts: ConstructorParameters<typeof PeerListener>[0] = {
       encryption: () => this.settingsValue.encryption,
       findInfoHash: (req2) => this.findInfoHashByReq2(req2),
+      canAccept: () => !this.stopping && this.canConnect(),
     };
     if (opts.isBlocked) lOpts.isBlocked = opts.isBlocked;
     this.listener = new PeerListener(lOpts);
@@ -210,7 +212,11 @@ export class Session extends EventEmitter<SessionEvents> {
     });
     this.listener.on('warning', (m) => this.emit('warning', m));
     const userAccept = opts.utp?.accept;
-    this.utp = new UtpManager({ ...opts.utp, accept: () => this.settingsValue.utp && !this.stopping && (userAccept?.() ?? true) });
+    // Blocked IPs are refused at the SYN, before a uTP connection exists (TCP: in the listener).
+    this.utp = new UtpManager({
+      ...opts.utp,
+      accept: (address) => this.settingsValue.utp && !this.stopping && !(opts.isBlocked?.(address.host) ?? false) && (userAccept?.(address) ?? true),
+    });
     this.utp.on('connection', (sock, address) => this.listener.accept(sock, address, 'utp'));
     this.utp.on('warning', (m) => this.emit('warning', m));
   }
@@ -343,6 +349,7 @@ export class Session extends EventEmitter<SessionEvents> {
       const dOpts: DhtOptions = {
         bootstrap: this.settingsValue.dhtBootstrapNodes,
         uploadRateLimit: this.settingsValue.dhtUploadRateLimit,
+        allowAddress: (host) => this.settingsValue.allowLocalPeers || !isBlockedAddress(host),
         ...this.opts.dht,
         family,
       };
@@ -454,6 +461,7 @@ export class Session extends EventEmitter<SessionEvents> {
       isBlocked: (ip) => this.opts.isBlocked?.(ip) ?? false,
       trackerFactory: (url) => {
         const fOpts: TrackerClientFactoryOptions = { userAgent: this.settingsValue.userAgent };
+        if (this.settingsValue.allowLocalTrackers) fOpts.allowPrivate = true;
         if (this.settingsValue.listenAddress) fOpts.localAddress = this.settingsValue.listenAddress;
         return (this.opts.trackerClientFactory ?? createTrackerClient)(url, fOpts);
       },

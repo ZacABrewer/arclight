@@ -23,6 +23,7 @@ import type {
   IndexerDefinitionReloadResult,
   IndexerDefinitionSummary,
 } from '@arclight/shared';
+import { isSecretKey } from '../config-export/secrets.js';
 
 // The definition catalogue as the api serves it, in four layers that override by id: the
 // community catalogue in `<config>/definitions/community` (see community-catalogue.ts; lowest,
@@ -383,7 +384,8 @@ const INFORMATIONAL = (type: string) => type.startsWith('info') || type === 'car
 export function settingField(s: SettingDefinition): DefinitionSettingField {
   const out: DefinitionSettingField = {
     name: s.name,
-    type: s.type,
+    // Secret-named text settings (cookie, passkey, ...) come back masked: edit them as passwords.
+    type: s.type === 'text' && isSecretKey(s.name) ? 'password' : s.type,
     label: s.label ?? s.name,
     informational: INFORMATIONAL(s.type),
   };

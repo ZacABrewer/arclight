@@ -5,7 +5,7 @@ import { MediaServerError, type FetchLike, type MediaServerErrorCode, type Media
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   query?: Record<string, string>;
   body?: unknown;
@@ -163,3 +163,21 @@ export function queryHasIds(q: FindItemsQueryIds): boolean {
 }
 
 type FindItemsQueryIds = Partial<Pick<ProviderIds, 'tmdbId' | 'tvdbId' | 'imdbId' | 'mbReleaseGroupId' | 'mbArtistId' | 'asin' | 'isbn'>>;
+
+/**
+ * `(current - remove) + add`, compared case-insensitively: current tags keep their casing and
+ * order, adds already present (in any case) are not repeated.
+ */
+export function mergeTags(current: readonly string[], add: readonly string[], remove: readonly string[]): string[] {
+  const key = (v: string) => v.trim().toLowerCase();
+  const drop = new Set(remove.map(key));
+  const out = current.filter((tag) => !drop.has(key(tag)));
+  const have = new Set(out.map(key));
+  for (const tag of add) {
+    const k = key(tag);
+    if (!k || have.has(k)) continue;
+    have.add(k);
+    out.push(tag.trim());
+  }
+  return out;
+}

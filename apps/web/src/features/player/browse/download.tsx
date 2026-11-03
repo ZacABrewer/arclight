@@ -1,6 +1,6 @@
-import { Button, Icon } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
 import { useDownloadState, usePlayerActions, type DownloadState } from './player-hooks.js';
+import { DetailAction } from './rd-audio.js';
 
 const LABEL: Record<DownloadState, string> = {
   none: 'player.browse.download.action',
@@ -16,8 +16,9 @@ export function downloadLabelKey(state: DownloadState): string {
 }
 
 /**
- * Download button for an album, playlist or book page. Renders nothing when the player has no
- * downloads (the web player); the mobile app provides them through BrowsePlayerContext.
+ * Download action for an album, playlist or book page (one of the title page's secondary
+ * buttons). Renders nothing when the player has no downloads (the web player); the mobile app
+ * provides them through BrowsePlayerContext.
  */
 export function DownloadButton({ itemKeys }: { itemKeys: readonly string[] }) {
   const t = useT();
@@ -26,15 +27,13 @@ export function DownloadButton({ itemKeys }: { itemKeys: readonly string[] }) {
   if (state === null || !player.download) return null;
   const busy = state === 'queued' || state === 'downloading';
   return (
-    <Button
-      variant="ghost"
-      icon={<Icon name={state === 'done' ? 'check' : 'download'} />}
-      loading={busy}
+    <DetailAction
+      icon={state === 'done' ? 'check' : 'download'}
+      label={t(LABEL[state])}
+      busy={busy}
       disabled={itemKeys.length === 0 || state !== 'none'}
       data-download-state={state}
       onClick={() => player.download?.([...itemKeys])}
-    >
-      {t(LABEL[state])}
-    </Button>
+    />
   );
 }

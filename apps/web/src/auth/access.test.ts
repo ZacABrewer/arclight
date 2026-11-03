@@ -3,7 +3,7 @@ import { Permission, type Session } from '@arclight/shared';
 import { flagsFromPermissions, permissionsFromFlags, quotaFromText } from '../features/users/user-defaults.js';
 import { appAccessOfDraft, appAccessSummary, promotionNeedsPassword, validateUserDraft, type UserDraft } from '../pages/settings/security/security-page.js';
 import { openAppHref } from '../pages/portal/portal-page.js';
-import { ADMIN_ACCESS, PORTAL_ACCESS, accessOf, appHomeFor, canOpenAppPath, hasAppPages, portalTargetFor } from './access.js';
+import { ADMIN_ACCESS, PORTAL_ACCESS, accessOf, appHomeFor, canOpenAppPath, canRequest, hasAppPages, portalTargetFor } from './access.js';
 
 const user = { id: 2, username: 'amy', role: 'user' as const, permissions: Permission.REQUEST as number, createdAt: '2026-01-01T00:00:00.000Z', settings: {} };
 const session = (over: Partial<typeof user> & { appAccess?: Array<'library' | 'calendar' | 'activity' | 'wanted'> } = {}, isAdmin = false): Session => ({
@@ -95,5 +95,21 @@ describe('user defaults', () => {
     expect(quotaFromText({ movieLimit: '5', movieDays: '7', tvLimit: '', tvDays: ' ' })).toEqual({ movieLimit: 5, movieDays: 7, tvLimit: null, tvDays: null });
     expect(quotaFromText({ movieLimit: '-1', movieDays: '', tvLimit: '', tvDays: '' })).toBeNull();
     expect(quotaFromText({ movieLimit: '1.5', movieDays: '', tvLimit: '', tvDays: '' })).toBeNull();
+  });
+});
+
+describe('account menu links (player)', () => {
+  it('offers the request portal to people who may request, admins included', () => {
+    expect(canRequest(ADMIN_ACCESS)).toBe(true);
+    expect(canRequest(accessOf(session({ permissions: Permission.REQUEST })))).toBe(true);
+    expect(canRequest(accessOf(session({ permissions: Permission.REQUEST_VIEW })))).toBe(false);
+    expect(canRequest(accessOf(session({ permissions: 0 })))).toBe(false);
+  });
+
+  it('sends "Open Arclight" to the first page the account may open, or nowhere', () => {
+    expect(appHomeFor(ADMIN_ACCESS)).toBe('/');
+    expect(appHomeFor(accessOf(session({ permissions: Permission.REQUEST })))).toBeNull();
+    expect(appHomeFor(accessOf(session({ permissions: Permission.REQUEST | Permission.REQUEST_VIEW })))).toBe('/requests');
+    expect(appHomeFor(accessOf(session({ permissions: 0, appAccess: ['calendar'] })))).toBe('/calendar');
   });
 });

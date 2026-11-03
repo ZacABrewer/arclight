@@ -13,6 +13,7 @@ import type { Transport } from './http.js';
 import { podcastEpisodes, podcasts } from './schema.js';
 import { PodcastsError, PodcastsService } from './service.js';
 import { PodcastSuggestions } from './suggestions.js';
+import { transportFor } from './http.js';
 import type { TagRequest, Tagger } from './tagger.js';
 
 // Service flows against an in-memory database, a temp podcast root and a scripted transport.
@@ -279,8 +280,8 @@ describe('downloading', () => {
         { guid: 'b', title: 'Same', date: '2025-01-20T12:00:00Z' },
       ]),
     );
-    routes['https://cdn.example.com/a.mp3'] = ok('a');
-    routes['https://cdn.example.com/b.mp3'] = ok('b');
+    routes['https://cdn.example.com/a.mp3'] = ok('a', { 'content-type': 'audio/mpeg' });
+    routes['https://cdn.example.com/b.mp3'] = ok('b', { 'content-type': 'audio/mpeg' });
     const s = service();
     const p = await s.add({ feedUrl: FEED });
     await s.downloadWanted();
@@ -338,6 +339,13 @@ describe('retention and played state', () => {
     expect(s.setPlayed(id, true).played).toBe(true);
     expect(s.setPlayed(id, false).played).toBe(false);
     expect(s.episodes({ podcastId: p.id, played: false }).totalRecords).toBe(4);
+    // LIKE wildcards in the search term match literally.
+    expect(s.episodes({ podcastId: p.id, term: '%' }).totalRecords).toBe(0);
+    expect(s.episodes({ podcastId: p.id, term: '_' }).totalRecords).toBe(0);
+    expect(s.episodes({ podcastId: p.id, term: 'tw' }).totalRecords).toBe(1);
+    const e1 = episodesOf(p.id).find((e) => e.guid === 'e1')!;
+    db.update(podcastEpisodes).set({ title: '100% On_e' }).where(eq(podcastEpisodes.id, e1.id)).run();
+    expect(s.episodes({ podcastId: p.id, term: '0% on_' }).records.map((e) => e.id)).toEqual([e1.id]);
   });
 });
 
@@ -410,6 +418,48 @@ describe('suggestions', () => {
     expect(approved.podcastId).toBe(s.list()[0]!.id);
     // Already subscribed now.
     await expect(sug.create(user, { feedUrl: secretUrl })).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('never fetches a LAN address for a suggestion and answers with one generic error (DATA-06)', async () => {
+    const policies: Array<{ trustedHost?: string }> = [];
+    let direct = 0;
+    // The real transport, with a counting wrapper: a loopback suggestion must not get a socket.
+    const s = service({
+      transport: (_tags, policy = {}) => {
+        policies.push(policy);
+        const real = transportFor(undefined, undefined, policy);
+        return async (url, init) => {
+          direct += 1;
+          return real(url, init);
+        };
+      },
+    });
+    const sug = new PodcastSuggestions({ db, podcasts: s });
+    const uid = addUser('prober', Permission.REQUEST);
+    for (const feedUrl of ['http://127.0.0.1:1/', 'http://nas.lan/feed.xml', 'http://[::ffff:127.0.0.1]:1/']) {
+      const err = await sug.create({ userId: uid, permissions: Permission.REQUEST }, { feedUrl }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'FEED', message: 'that address could not be read as a podcast feed' });
+    }
+    expect(policies.every((p) => p.trustedHost === undefined)).toBe(true);
+    expect(direct).toBe(3);
+  });
+
+  it('trusts a LAN feed host only for admins and only for that host', async () => {
+    const policies: Array<{ trustedHost?: string }> = [];
+    const lan = 'http://nas.lan:8080/feed.xml';
+    routes[lan] = routes[FEED]!;
+    const s = service({
+      transport: (_tags, policy = {}) => {
+        policies.push(policy);
+        return transport;
+      },
+    });
+    await s.preview(lan);
+    expect(policies.pop()).toEqual({});
+    await s.preview(lan, { trusted: true });
+    expect(policies.pop()).toEqual({ trustedHost: 'nas.lan' });
+    await s.preview(FEED, { trusted: true });
+    expect(policies.pop()).toEqual({});
   });
 
   it('respects the per-user request-type filter and the permission bits', async () => {

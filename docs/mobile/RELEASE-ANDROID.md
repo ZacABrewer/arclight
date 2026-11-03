@@ -35,7 +35,7 @@ Arclight Admin is a **companion app**, like the Home Assistant and Jellyfin apps
 - [ ] `applicationId`, version name (`1.0.0`) and version code (`1`, increased on every upload) set.
 - [ ] Target SDK at the level Play currently requires for new apps (API 36 / Android 16 from August 2026). Check "Target API level requirements" in the Play Console help.
 - [ ] Release build is an **Android App Bundle (.aab)**; Play no longer accepts APKs for new apps.
-- [ ] Network security config: Arclight servers are often plain `http://` on a home network. Allow cleartext traffic only as needed (for example private address ranges), keep HTTPS the default, and explain it in the app's server screen.
+- [x] Network security config: Arclight servers are often plain `http://` on a home network, at addresses not known at build time, so the platform allows cleartext and the app enforces its own policy (`apps/mobile/src/core/transport.ts`): https first, a one-time notice for plain http on a private network, the host name typed to confirm plain http on a public host or a host that has worked over https before. See `apps/mobile/README.md`.
 - [ ] Permissions reviewed: only what is used. Expected: `INTERNET`, `POST_NOTIFICATIONS` (Android 13+, asked at runtime), optionally `CAMERA` for scanning a pairing QR code. No storage, location or contacts permissions.
 - [ ] No ads SDKs, no analytics SDKs (keeps the data safety form simple). If crash reporting is added, it must be declared in section 6.
 - [ ] Licenses screen lists open-source dependencies (GPL-3.0 app; include the source link).

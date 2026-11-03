@@ -21,7 +21,7 @@ export type VpnProviderType = z.infer<typeof VpnProviderType>;
 export const GluetunProviderSettings = z.object({
   type: z.literal('gluetun'),
   /** Absent: ARCLIGHT_VPN_CONTROL_URL, then DEFAULT_GLUETUN_CONTROL_URL. */
-  controlUrl: z.string().url().optional(),
+  controlUrl: z.string().url({ protocol: /^https?$/ }).optional(),
   /** Sent as `X-API-Key`. */
   apiKey: z.string().min(1).optional(),
   /** HTTP basic auth (older Gluetun / reverse proxies). */
@@ -68,7 +68,7 @@ export const VpnSettings = z.object({
   /** Your ISP address; a public IP equal to it means traffic bypasses the VPN. */
   homePublicIp: z.string().min(1).optional(),
   /** Used by the native providers (Gluetun reports its own public IP). */
-  publicIpCheckUrl: z.string().url().default(DEFAULT_PUBLIC_IP_CHECK_URL),
+  publicIpCheckUrl: z.string().url({ protocol: /^https?$/ }).default(DEFAULT_PUBLIC_IP_CHECK_URL),
   pollIntervalSeconds: z.number().int().min(10).max(3600).default(60),
 });
 export type VpnSettings = z.infer<typeof VpnSettings>;
@@ -87,7 +87,7 @@ export const VpnSettingsUpdate = z.object({
   provider: z
     .discriminatedUnion('type', [
       GluetunProviderSettings.extend({
-        controlUrl: z.string().url().or(z.literal('')).optional(),
+        controlUrl: z.string().url({ protocol: /^https?$/ }).or(z.literal('')).optional(),
         apiKey: z.string().optional(),
         username: z.string().optional(),
         password: z.string().optional(),
@@ -99,7 +99,7 @@ export const VpnSettingsUpdate = z.object({
   syncForwardedPortToDownloadClient: z.boolean().optional(),
   pauseGrabsWhenDown: z.boolean().optional(),
   homePublicIp: z.string().nullable().optional(),
-  publicIpCheckUrl: z.string().url().optional(),
+  publicIpCheckUrl: z.string().url({ protocol: /^https?$/ }).optional(),
   pollIntervalSeconds: z.number().int().min(10).max(3600).optional(),
 });
 export type VpnSettingsUpdate = z.infer<typeof VpnSettingsUpdate>;

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
-import { and, asc, desc, eq, gte, inArray, isNotNull, like, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { isNetworkProxy } from '@arclight/indexers';
 import type { NotificationEvent } from '@arclight/notifications';
@@ -32,15 +32,16 @@ import {
   PodcastSubscriptionSettings as SubscriptionSchema,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { likeContains } from '../../db/like-contains.js';
 import type { EventBus } from '../../events.js';
 import { ProxiesService } from '../indexers/proxies.js';
 import { getSection } from '../settings/service.js';
 import { applePodcastsId, lookupItunes, searchDirectory, type DirectoryOptions } from './directory.js';
 import { chooseEnclosure, FeedParseError, parseFeed, type ParsedEpisode, type ParsedFeed } from './feed.js';
-import { downloadFile, fetchBytes, fetchFeed, fetchText, PodcastHttpError, transportFor, type Transport } from './http.js';
+import { downloadFile, fetchBytes, fetchFeed, fetchText, lanFeedHost, PodcastHttpError, transportFor, type Transport, type TransportPolicy } from './http.js';
 import { enclosureExtension, episodePath, podcastFolder, stem } from './naming.js';
 import { buildOpml, parseOpml } from './opml.js';
-import { podcastEpisodes, podcasts, type PodcastEpisodeRowDb, type PodcastRow } from './schema.js';
+import { podcastEpisodes, podcasts, podcastSuggestions, type PodcastEpisodeRowDb, type PodcastRow } from './schema.js';
 import type { Chapter, Tagger } from './tagger.js';
 
 // Podcasts (docs/using/podcasts.md): subscriptions, feed polling, episode downloads, tags,
@@ -83,7 +84,7 @@ export interface PodcastsServiceOptions {
   log?: Logger;
   now?: () => Date;
   /** Test seam: the transport for a podcast's tags (default: indexer proxy resolution). */
-  transport?: (tags: readonly number[]) => Transport;
+  transport?: (tags: readonly number[], policy?: TransportPolicy) => Transport;
   tagger?: Tagger;
   notify?: (event: NotificationEvent) => Promise<unknown>;
   /** Ask media servers (Jellyfin/Emby/Audiobookshelf/Plex) to rescan a podcast folder. */
@@ -299,6 +300,17 @@ export class PodcastsService {
     this.now = opts.now ?? (() => new Date());
   }
 
+  /**
+   * Where a subscribed podcast's fetches may go: public hosts, plus the feed's own host when
+   * that is a LAN name or address and the podcast did not come from a suggestion.
+   */
+  private podcastPolicy(row: PodcastRow): TransportPolicy {
+    const host = lanFeedHost(row.feedUrl);
+    if (!host) return {};
+    const suggested = this.db.select({ id: podcastSuggestions.id }).from(podcastSuggestions).where(eq(podcastSuggestions.podcastId, row.id)).get();
+    return suggested ? {} : { trustedHost: host };
+  }
+
   settings(): PodcastSettings {
     return getSection(this.db, 'podcasts');
   }
@@ -308,14 +320,14 @@ export class PodcastsService {
   }
 
   /** The HTTP transport for a podcast: a proxy sharing its tags, else the settings' proxy, else direct. */
-  transport(tags: readonly number[] = []): Transport {
-    if (this.opts.transport) return this.opts.transport(tags);
+  transport(tags: readonly number[] = [], policy: TransportPolicy = {}): Transport {
+    if (this.opts.transport) return this.opts.transport(tags, policy);
     const proxies = new ProxiesService({ db: this.db });
     const byTags = tags.length > 0 ? proxies.resolve({ proxyId: null, tags }) : undefined;
     const fromTags = byTags?.find(isNetworkProxy);
     const proxyId = this.settings().proxyId;
     const fallback = !fromTags && proxyId ? proxies.resolve({ proxyId, tags: [] })?.find(isNetworkProxy) : undefined;
-    return transportFor(fromTags ?? fallback);
+    return transportFor(fromTags ?? fallback, undefined, policy);
   }
 
   private directory(): DirectoryOptions {
@@ -364,7 +376,7 @@ export class PodcastsService {
     if (q.podcastId) conds.push(eq(podcastEpisodes.podcastId, q.podcastId));
     if (q.status) conds.push(eq(podcastEpisodes.status, q.status));
     if (q.played !== undefined) conds.push(eq(podcastEpisodes.played, q.played));
-    if (q.term) conds.push(like(podcastEpisodes.title, `%${q.term.replace(/[%_]/g, (c) => `\\${c}`)}%`));
+    if (q.term) conds.push(likeContains(podcastEpisodes.title, q.term));
     const where = conds.length > 0 ? and(...conds) : undefined;
     const total = this.db.select({ n: sql<number>`count(*)` }).from(podcastEpisodes).where(where).get()?.n ?? 0;
     const col = {
@@ -408,8 +420,14 @@ export class PodcastsService {
    * Fetch and parse a feed. Follows `<itunes:new-feed-url>` once (when the new feed parses);
    * `moved` is true for that and for a permanent redirect chain.
    */
-  private async fetchFeed(url: string, tags: readonly number[], cond: { etag?: string | null; lastModified?: string | null } = {}, signal?: AbortSignal): Promise<FetchOutcome> {
-    const transport = this.transport(tags);
+  private async fetchFeed(
+    url: string,
+    tags: readonly number[],
+    cond: { etag?: string | null; lastModified?: string | null } = {},
+    signal?: AbortSignal,
+    policy: TransportPolicy = {},
+  ): Promise<FetchOutcome> {
+    const transport = this.transport(tags, policy);
     const res = await fetchFeed(transport, url, cond, signal);
     let current = res.permanent ? carryCredentials(url, res.url) : url;
     if (res.status === 'notModified') return { url: current, moved: res.permanent, notModified: true, feed: null, etag: null, lastModified: null };
@@ -435,9 +453,9 @@ export class PodcastsService {
     return { url: current, moved, notModified: false, feed, etag, lastModified };
   }
 
-  private async fetchForUser(url: string, tags: readonly number[] = []): Promise<FetchOutcome & { feed: ParsedFeed }> {
+  private async fetchForUser(url: string, tags: readonly number[] = [], policy: TransportPolicy = {}): Promise<FetchOutcome & { feed: ParsedFeed }> {
     try {
-      const out = await this.fetchFeed(url, tags);
+      const out = await this.fetchFeed(url, tags, {}, undefined, policy);
       return out as FetchOutcome & { feed: ParsedFeed };
     } catch (err) {
       if (err instanceof FeedParseError || err instanceof PodcastHttpError) throw new PodcastsError('FEED', err.message);
@@ -445,9 +463,13 @@ export class PodcastsService {
     }
   }
 
-  async preview(feedUrl: string): Promise<PodcastPreview> {
+  /**
+   * Fetch a feed for a preview. `trusted` (an admin adding a feed) lets a feed on a LAN host
+   * through; anyone else, and suggestions, reach public hosts only (DATA-06).
+   */
+  async preview(feedUrl: string, opts: AddOptions = {}): Promise<PodcastPreview> {
     const { url } = await this.resolveFeedUrl(feedUrl);
-    const out = await this.fetchForUser(url);
+    const out = await this.fetchForUser(url, [], trustPolicy(url, opts));
     const feed = out.feed;
     const existing = this.findByFeed(out.url, feed.podcastGuid) ?? this.findByFeed(url);
     const latest = [...feed.episodes].sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? '')).slice(0, 5);
@@ -466,13 +488,13 @@ export class PodcastsService {
 
   // ---- subscribe / update / delete --------------------------------------------------------
 
-  async add(req: AddPodcastRequest): Promise<Podcast> {
+  async add(req: AddPodcastRequest, opts: AddOptions = {}): Promise<Podcast> {
     const s = this.settings();
     if (!s.rootFolder) throw new PodcastsError('NO_ROOT_FOLDER', 'set a podcast root folder first (Settings → Podcasts)');
     const resolved = await this.resolveFeedUrl(req.feedUrl);
     if (this.findByFeed(resolved.url)) throw new PodcastsError('CONFLICT', 'that podcast is already in the library');
     const tags = req.tags ?? [];
-    const out = await this.fetchForUser(resolved.url, tags);
+    const out = await this.fetchForUser(resolved.url, tags, trustPolicy(resolved.url, opts));
     const feed = out.feed;
     if (this.findByFeed(out.url, feed.podcastGuid)) throw new PodcastsError('CONFLICT', 'that podcast is already in the library');
 
@@ -601,7 +623,7 @@ export class PodcastsService {
     const now = this.now();
     let out: FetchOutcome;
     try {
-      out = await this.fetchFeed(row.feedUrl, row.tags, { etag: row.etag, lastModified: row.lastModified }, signal);
+      out = await this.fetchFeed(row.feedUrl, row.tags, { etag: row.etag, lastModified: row.lastModified }, signal, this.podcastPolicy(row));
     } catch (err) {
       const gone = err instanceof PodcastHttpError && err.gone;
       const message = errMessage(err);
@@ -905,7 +927,7 @@ export class PodcastsService {
     this.active.add(id);
     this.db.update(podcastEpisodes).set({ status: 'downloading', error: null }).where(eq(podcastEpisodes.id, id)).run();
     this.publish('episodes', podcast.id);
-    const transport = this.transport(podcast.tags);
+    const transport = this.transport(podcast.tags, this.podcastPolicy(podcast));
     const ext = enclosureExtension(enclosure.url, enclosure.type);
     const target = this.uniqueEpisodePath(
       episodePath(
@@ -1173,7 +1195,7 @@ export class PodcastsService {
     });
   }
 
-  async importOpml(req: PodcastOpmlImportRequest): Promise<PodcastOpmlImportResult> {
+  async importOpml(req: PodcastOpmlImportRequest, opts: AddOptions = {}): Promise<PodcastOpmlImportResult> {
     let feeds;
     try {
       feeds = parseOpml(req.opml);
@@ -1191,7 +1213,7 @@ export class PodcastsService {
           continue;
         }
         try {
-          const p = await this.add({ feedUrl: f.feedUrl, ...(req.settings ? { settings: req.settings } : {}), tags: req.tags ?? [] });
+          const p = await this.add({ feedUrl: f.feedUrl, ...(req.settings ? { settings: req.settings } : {}), tags: req.tags ?? [] }, opts);
           result.added.push({ id: p.id, title: p.title });
         } catch (err) {
           if (err instanceof PodcastsError && err.code === 'CONFLICT') {
@@ -1282,3 +1304,14 @@ function episodeValues(e: ParsedEpisode) {
 }
 
 export type { PodcastSubscriptionSettings };
+
+/** Who is adding a feed: `trusted` is an admin, whose LAN feed hosts are allowed. */
+export interface AddOptions {
+  trusted?: boolean;
+}
+
+function trustPolicy(url: string, opts: AddOptions): TransportPolicy {
+  if (!opts.trusted) return {};
+  const host = lanFeedHost(url);
+  return host ? { trustedHost: host } : {};
+}

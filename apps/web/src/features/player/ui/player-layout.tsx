@@ -3,6 +3,10 @@ import { Outlet, useRouterState } from '@tanstack/react-router';
 import { EmptyState, ErrorBlock, Pane, buttonClass, cx, isTypingTarget } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { appHomeFor } from '../../../auth/access.js';
+import { readPortalDocument } from '../../discover/portal-location.js';
+import { portalHref } from '../../discover/portal-href.js';
+import { appHref, playerOffLink } from '../app-href.js';
+import { readPlayerDocument } from '../player-location.js';
 import { errorMessage } from '../../../api/client.js';
 import { t } from '../../../i18n/index.js';
 import { usePlaybackCapabilities } from '../api.js';
@@ -133,7 +137,10 @@ function DockedMiniPlayer() {
 /** Shown when the player is off, or this account may not use it. */
 export function PlayerOff({ error }: { error?: unknown }) {
   const { access } = useAuth();
-  const back = appHomeFor(access) ?? '/portal';
+  // The guard's answer, read from the cache: refetching a failed one here would loop.
+  const caps = usePlaybackCapabilities(false);
+  const app = appHref(appHomeFor(access), readPlayerDocument(), caps.data?.appUrl, location.origin);
+  const back = playerOffLink(app, portalHref(caps.data?.portalUrl, location.origin, readPortalDocument()), caps.data?.appUrl, location.origin);
   return (
     <Pane chamfer="both" strong className="pl-card pl-off">
       {error && !isAccessError(error) ? (
@@ -142,9 +149,11 @@ export function PlayerOff({ error }: { error?: unknown }) {
         <EmptyState
           title={t('player.off.title')}
           action={
-            <a href={back} className={buttonClass({ variant: 'primary' })}>
-              {back === '/portal' ? t('player.off.backPortal') : t('player.off.backApp')}
-            </a>
+            back ? (
+              <a href={back.href} className={buttonClass({ variant: 'primary' })}>
+                {back.kind === 'portal' ? t('player.off.backPortal') : t('player.off.backApp')}
+              </a>
+            ) : undefined
           }
         >
           {t('player.off.help')}

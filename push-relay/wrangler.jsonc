@@ -22,9 +22,10 @@
     }
   ],
 
-  // Abuse limits keyed by client IP. Counters live in Cloudflare's rate-limiting service, not in
-  // our database, and are approximate per Cloudflare location. Per-device send limits are a
-  // token bucket stored on the device row (see src/index.ts).
+  // Abuse limits keyed by client IP (IPv6 by its /64; requests without an address get 400).
+  // Counters live in Cloudflare's rate-limiting service, not in our database, and are
+  // approximate per Cloudflare location. Per-device send limits are a token bucket stored on the
+  // device row (see src/index.ts).
   "ratelimits": [
     // POST /v1/devices: new registrations per IP.
     { "name": "REGISTER_LIMITER", "namespace_id": "47001", "simple": { "limit": 10, "period": 60 } },
@@ -39,8 +40,11 @@
 
   // APNs topics (iOS bundle IDs) the relay sends for, default first: Arclight Admin, then the
   // Arclight player app. Devices registered without an appId use the first one.
+  // REGISTER_DAILY_CAP: registrations accepted per UTC day from all callers together, a backstop
+  // behind the per-IP limit (counted in D1, table registration_days); 429 once reached.
   "vars": {
-    "APNS_TOPICS": "com.moviemethat.arclight.admin,com.moviemethat.arclight"
+    "APNS_TOPICS": "com.moviemethat.arclight.admin,com.moviemethat.arclight",
+    "REGISTER_DAILY_CAP": "2000"
   },
   // Secrets (set with `wrangler secret put`, never in this file):
   //   APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID   Apple token-based auth key (.p8 PEM, key ID, team ID)

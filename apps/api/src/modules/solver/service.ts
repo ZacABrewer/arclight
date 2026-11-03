@@ -7,6 +7,7 @@ import {
   type ChallengeSolverOptions,
   type FlareSolverrHttpResult,
 } from '@arclight/challenge-solver';
+import { assertAllowedUrl } from '@arclight/net';
 import { SolverSettings, type SolverSettingsUpdate, type SolverStatus } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
@@ -110,6 +111,8 @@ export class SolverService {
       userDataDir: this.profileDir,
       timeoutMs: s.timeoutSeconds * 1000,
       idleCloseMs: s.idleCloseSeconds * 1000,
+      // Read live so toggling the setting needs no browser restart.
+      checkTarget: (url) => assertAllowedUrl(url, { allowPrivate: this.settings().allowPrivateTargets }),
       ...(log ? { log: (level, message) => log[level](message) } : {}),
     });
     this.current = { key, solver };

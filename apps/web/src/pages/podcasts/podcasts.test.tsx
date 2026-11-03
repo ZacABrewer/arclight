@@ -164,6 +164,16 @@ describe('podcast pages', () => {
     await waitFor(() => expect(api.calls.some((c) => c.method === 'POST' && c.path === '/api/v1/podcast/episode/52/download')).toBe(true));
   });
 
+  it('renders feed links with a javascript: URL without an href', async () => {
+    const evil = makePodcast({ id: 6, title: 'Poisoned Feed', link: 'javascript:alert(document.cookie)', funding: [{ url: ' javascript:alert(1)', title: 'Tip jar' }, { url: 'https://example.com/support', title: 'Real support' }] });
+    podApi({ '/api/v1/podcast/6': evil, '/api/v1/podcast/episode': episodePage([]) });
+    renderAt('/podcasts/6');
+    expect(await screen.findByRole('heading', { name: 'Poisoned Feed' })).toBeTruthy();
+    expect(screen.getByText('Website').closest('a')?.hasAttribute('href')).toBe(false);
+    expect(screen.getByText('Tip jar').closest('a')?.hasAttribute('href')).toBe(false);
+    expect(screen.getByRole('link', { name: 'Real support' }).getAttribute('href')).toBe('https://example.com/support');
+  });
+
   it('shows the show header: kicker, author line, Following and the auto-download chip', async () => {
     const show = makePodcast({ id: 5, title: 'Members Cast' });
     const api = podApi({

@@ -1,0 +1,247 @@
+name: Player app release
+
+# Builds, signs and uploads the Arclight player app (apps/player, com.moviemethat.arclight) to the
+# stores: a signed App Bundle to a Google Play track, and an App Store Connect build (TestFlight).
+# Manual runs only (Actions > Player app release > Run workflow), so it never runs for a pull
+# request and fork PRs never reach the signing secrets. Only runs started from the main branch
+# build or upload; a run from any other branch or tag fails in the guard job. Each step that needs a
+# secret is skipped with a notice when that secret is missing.
+#
+# Build numbers are the run number + 30000 on both platforms, above the codes derived locally from
+# the version (major*10000 + minor*100 + patch), so CI uploads never collide with them.
+#
+# Secrets (see docs/mobile/RELEASE-PLAYER-ANDROID.md and RELEASE-PLAYER-IOS.md):
+#   Android, player only: PLAYER_ANDROID_KEYSTORE_BASE64, PLAYER_ANDROID_KEYSTORE_PASSWORD,
+#     PLAYER_ANDROID_KEY_ALIAS, PLAYER_ANDROID_KEY_PASSWORD, PLAYER_PLAY_SERVICE_ACCOUNT_JSON
+#   Apple, shared with Arclight Admin: APPSTORE_API_KEY_ID, APPSTORE_API_ISSUER_ID,
+#     APPSTORE_API_KEY_P8, APPLE_TEAM_ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Google Play track'
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      android:
+        description: 'Build and upload Android'
+        type: boolean
+        default: true
+      ios:
+        description: 'Build and upload iOS (TestFlight)'
+        type: boolean
+        default: true
+      play_status:
+        description: 'Play release status (draft until the app has been published once)'
+        type: choice
+        options: [draft, completed]
+        default: draft
+
+concurrency:
+  group: player-app-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Main branch only
+        run: |
+          echo "::error::Player app releases run only from main (this run is on $GITHUB_REF)."
+          exit 1
+
+  android:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.android
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      HAS_KEYSTORE: ${{ secrets.PLAYER_ANDROID_KEYSTORE_BASE64 != '' && secrets.PLAYER_ANDROID_KEYSTORE_PASSWORD != '' && secrets.PLAYER_ANDROID_KEY_ALIAS != '' && secrets.PLAYER_ANDROID_KEY_PASSWORD != '' }}
+      HAS_PLAY: ${{ secrets.PLAYER_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    defaults:
+      run:
+        working-directory: apps/player
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Typecheck and unit tests
+        run: pnpm typecheck && pnpm test
+      - name: Build number (run number + 30000)
+        run: echo "ARCLIGHT_VERSION_CODE=$((GITHUB_RUN_NUMBER + 30000))" >> "$GITHUB_ENV"
+      - name: Build web assets
+        run: pnpm --filter ./apps/player build
+        working-directory: .
+      - name: Capacitor sync
+        run: |
+          npx cap sync android
+          chmod +x android/gradlew
+      - name: Missing signing secrets
+        if: env.HAS_KEYSTORE != 'true'
+        run: echo "::notice::PLAYER_ANDROID_* signing secrets are not set; skipping the signed bundle and the Play upload."
+
+      - name: Release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          umask 077
+          printf '%s' "$PLAYER_ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/player-upload.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/player-upload.keystore" >> "$GITHUB_ENV"
+        env:
+          PLAYER_ANDROID_KEYSTORE_BASE64: ${{ secrets.PLAYER_ANDROID_KEYSTORE_BASE64 }}
+      - name: Signed release bundle (AAB)
+        if: env.HAS_KEYSTORE == 'true'
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+        working-directory: apps/player/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PLAYER_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.PLAYER_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.PLAYER_ANDROID_KEY_PASSWORD }}
+      - name: Check the bundle is signed
+        if: env.HAS_KEYSTORE == 'true'
+        run: jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab > /dev/null
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          name: arclight-player-android-release-aab
+          path: apps/player/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Missing Play secret
+        if: env.HAS_KEYSTORE == 'true' && env.HAS_PLAY != 'true'
+        run: echo "::notice::PLAYER_PLAY_SERVICE_ACCOUNT_JSON is not set; the signed bundle is an artifact of this run but was not uploaded."
+      - name: Upload to Google Play
+        if: env.HAS_KEYSTORE == 'true' && env.HAS_PLAY == 'true'
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAYER_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.moviemethat.arclight
+          releaseFiles: apps/player/android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ inputs.track }}
+          status: ${{ inputs.play_status }}
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/player-upload.keystore"
+
+  ios:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.ios
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      HAS_ASC: ${{ secrets.APPSTORE_API_KEY_ID != '' && secrets.APPSTORE_API_ISSUER_ID != '' && secrets.APPSTORE_API_KEY_P8 != '' && secrets.APPLE_TEAM_ID != '' }}
+    defaults:
+      run:
+        working-directory: apps/player
+    steps:
+      - name: Missing App Store Connect secrets
+        if: env.HAS_ASC != 'true'
+        working-directory: .
+        run: echo "::notice::APPSTORE_API_KEY_ID, APPSTORE_API_ISSUER_ID, APPSTORE_API_KEY_P8 or APPLE_TEAM_ID is not set; skipping the iOS archive and upload."
+      - uses: actions/checkout@v4
+        if: env.HAS_ASC == 'true'
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: env.HAS_ASC == 'true'
+        with:
+          xcode-version: latest-stable
+      - name: Enable corepack (pnpm from packageManager)
+        if: env.HAS_ASC == 'true'
+        run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        if: env.HAS_ASC == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: env.HAS_ASC == 'true'
+        working-directory: .
+      - name: Build number (run number + 30000)
+        if: env.HAS_ASC == 'true'
+        run: echo "ARCLIGHT_VERSION_CODE=$((GITHUB_RUN_NUMBER + 30000))" >> "$GITHUB_ENV"
+      - name: Version and build number (version.xcconfig)
+        if: env.HAS_ASC == 'true'
+        run: node scripts/ios-version.mjs
+      - name: Build web assets
+        if: env.HAS_ASC == 'true'
+        run: pnpm --filter ./apps/player build
+        working-directory: .
+      - name: Capacitor sync
+        if: env.HAS_ASC == 'true'
+        run: npx cap sync ios
+
+      # Signing is cloud-managed (-allowProvisioningUpdates with the API key): no certificates or
+      # profiles to store. The key needs the Admin role (or App Manager with access to
+      # cloud-managed distribution certificates). CarPlay stays off until Apple grants it.
+      - name: App Store Connect API key
+        if: env.HAS_ASC == 'true'
+        run: |
+          umask 077
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$APPSTORE_API_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$APPSTORE_API_KEY_ID.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey_$APPSTORE_API_KEY_ID.p8" >> "$GITHUB_ENV"
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+      - name: Archive
+        if: env.HAS_ASC == 'true'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/ArclightPlayer.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CARPLAY_ENABLED=NO \
+            -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            archive | tail -n 50
+      - name: Check the archived app
+        if: env.HAS_ASC == 'true'
+        run: |
+          APP=build/ArclightPlayer.xcarchive/Products/Applications/App.app
+          test -f "$APP/PrivacyInfo.xcprivacy" || { echo "::error::PrivacyInfo.xcprivacy is missing from the app bundle"; exit 1; }
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          WANT_VERSION=$(node -p "require('./package.json').version.replace(/-.*/, '')")
+          GOT_VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Info.plist")
+          GOT_BUILD=$(plutil -extract CFBundleVersion raw "$APP/Info.plist")
+          echo "Version $GOT_VERSION, build $GOT_BUILD"
+          test "$GOT_VERSION" = "$WANT_VERSION" || { echo "::error::CFBundleShortVersionString is $GOT_VERSION, expected $WANT_VERSION"; exit 1; }
+          test "$GOT_BUILD" = "$ARCLIGHT_VERSION_CODE" || { echo "::error::CFBundleVersion is $GOT_BUILD, expected $ARCLIGHT_VERSION_CODE"; exit 1; }
+      - name: Export and upload to App Store Connect
+        if: env.HAS_ASC == 'true'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          cp ios/ExportOptions-player.plist "$RUNNER_TEMP/ExportOptions-player.plist"
+          plutil -insert teamID -string "$APPLE_TEAM_ID" "$RUNNER_TEMP/ExportOptions-player.plist"
+          xcodebuild -exportArchive -archivePath build/ArclightPlayer.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-player.plist" -exportPath build/export \
+            -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            | tail -n 50
+      - name: Remove API key
+        if: always()
+        working-directory: .
+        run: rm -rf "$RUNNER_TEMP/asc" "$RUNNER_TEMP/ExportOptions-player.plist"

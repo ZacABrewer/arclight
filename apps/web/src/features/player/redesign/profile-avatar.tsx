@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react';
 import { cx } from '../../../arclight/cx.js';
 
-// A profile's circle (redesign spec §4.2): its colour with the initial in the page colour,
-// weight 800. Sizes: 34 header, 32 phone top bar, 132 picker, 96 phone picker.
+// A profile's circle (redesign spec §4.2): its colour with the initial in the page colour
+// (the text colour on light themes, redesign.css), weight 800. Sizes: 34 header, 32 phone top bar, 132 picker, 96 phone picker.
 
 export interface ProfileAvatarProps {
   color: string;

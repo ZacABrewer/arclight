@@ -4,10 +4,12 @@ import type { WrappedShare } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { API_PREFIX } from '../auth/hook.js';
 import { wrappedShares, type WrappedShareRow } from './schema.js';
+import { shareTokenHash } from './token-hash.js';
 
 // Share links to a Year in review. A link is a random token; it answers until it expires or the
 // owner revokes it. The public routes (routes.ts) render the page and image from live stats, so
-// the link shows the year as it is when opened.
+// the link shows the year as it is when opened. The token is sealed at rest; lookups go by its
+// sha256 (`token_hash`).
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -40,10 +42,12 @@ export class WrappedShares {
 
   create(userId: number, year: number, days: number): WrappedShare {
     const now = this.now();
+    const token = randomBytes(18).toString('base64url');
     const row = this.db
       .insert(wrappedShares)
       .values({
-        token: randomBytes(18).toString('base64url'),
+        token,
+        tokenHash: shareTokenHash(token),
         userId,
         year,
         createdAt: now.toISOString(),
@@ -76,7 +80,7 @@ export class WrappedShares {
   /** The live link for a token; undefined when unknown or expired. */
   resolve(token: string): WrappedShareRow | undefined {
     if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return undefined;
-    const row = this.db.select().from(wrappedShares).where(eq(wrappedShares.token, token)).get();
+    const row = this.db.select().from(wrappedShares).where(eq(wrappedShares.tokenHash, shareTokenHash(token))).get();
     if (!row || row.expiresAt <= this.now().toISOString()) return undefined;
     return row;
   }

@@ -171,7 +171,7 @@ The movie page has the same buttons (**Search movie**, **Interactive search**, *
 | Series type | series | Standard, Daily or Anime. |
 | Season folders | series | Whether seasons get their own folder. |
 | Minimum availability | movies | Announced, In cinemas or Released. |
-| Path | both | The folder Arclight records for the title. Changing it only updates where Arclight looks; it does not move files on disk, and two titles cannot share a path. |
+| Path | both | The folder Arclight records for the title. Changing it only updates where Arclight looks; it does not move files on disk, and two titles cannot share a path. A new path must be inside one of your root folders. |
 | Tags | both | Labels. |
 | Versions | both | Extra copies (below). |
 
@@ -181,7 +181,7 @@ Save with **Save changes**.
 
 **Delete** opens a dialog. By default it only removes the title from Arclight. Two options:
 
-- **Delete files and folder from disk**: also deletes the title's folder and everything in it. A red warning shows the path. This cannot be undone through Arclight, so double-check it.
+- **Delete files and folder from disk**: also deletes the title's folder and everything in it. A red warning shows the path. This cannot be undone through Arclight, so double-check it. Arclight only deletes folders and files that are inside a registered root folder; anything else is refused and the title stays in the library.
 - **Add to import exclusions**: import lists and requests will not add this title again.
 
 ## Multiple versions (1080p and 4K)

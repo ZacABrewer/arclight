@@ -148,7 +148,7 @@ const INT_KEYS = [
 ] as const;
 const NULLABLE_KEYS = ['defaultSeedRatio', 'defaultSeedTimeMinutes'] as const;
 /** Optional transport switches; rows saved before they existed read as the engine defaults. */
-const TRANSPORT_KEYS = ['tcp', 'utp', 'ipv6'] as const;
+const TRANSPORT_KEYS = ['tcp', 'utp', 'ipv6', 'localPeers', 'localTrackers'] as const;
 
 type BoolKey = (typeof BOOL_KEYS)[number] | (typeof TRANSPORT_KEYS)[number];
 type NumKey = (typeof INT_KEYS)[number] | (typeof NULLABLE_KEYS)[number] | 'webSeedConnectionsPerTorrent';
@@ -353,6 +353,12 @@ function TorrentForm({
           f={{ key: 'webSeedConnectionsPerTorrent', label: t('settings.torrent.webSeedConnections'), caption: t('settings.torrent.webSeedConnectionsCaption'), min: 0, max: 32 }}
           value={d.webSeedConnectionsPerTorrent}
           onChange={(v) => set('webSeedConnectionsPerTorrent', v)}
+        />
+        <BoolRow f={{ key: 'localPeers', label: t('settings.torrent.localPeers'), caption: t('settings.torrent.localPeersCaption') }} checked={d.localPeers} onChange={(v) => set('localPeers', v)} />
+        <BoolRow
+          f={{ key: 'localTrackers', label: t('settings.torrent.localTrackers'), caption: t('settings.torrent.localTrackersCaption') }}
+          checked={d.localTrackers}
+          onChange={(v) => set('localTrackers', v)}
         />
       </FormSection>
       <FormSection label={t('settings.torrent.encryption')}>

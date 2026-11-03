@@ -1,24 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { originOf } from '../core/address.js';
 import { probeServer, failureMessage, type ProbeFailure } from '../core/probe.js';
-import type { RouteTarget } from '../core/routing.js';
+import { isSafePath, routeNotification, type RouteTarget } from '../core/routing.js';
 import type { Server } from '../core/servers.js';
 import { loadSettings } from '../core/settings.js';
-import { createRuntime, isNative, openInWebView, syncServerOrigins, type Runtime } from '../platform/capacitor.js';
+import { confirmsHost, httpsAlternatives, type Verdict } from '../core/transport.js';
+import { createRuntime, currentPushToken, isNative, openInWebView, type Runtime } from '../platform/capacitor.js';
 import { ensureNotificationChannels, installHandlers, launchUrl, verifyBiometric } from '../platform/handlers.js';
 import stingUrl from '../../../../design/brand/intro/arclight-sting.m4a?url';
 import { IntroOverlay } from '../intro/IntroOverlay.js';
 import { decideIntro, introSoundOn, markPlayed, readPlayed, type IntroMode } from '../intro/policy.js';
 import { loadSting, type Sting } from '../intro/sting.js';
 import { parseRoute, routeHash, type Route } from './route.js';
-import { AboutScreen, AddServerScreen, LicensesScreen, LockScreen, ServerListScreen, SettingsScreen } from './screens.js';
+import { AboutScreen, AddServerScreen, LicensesScreen, LockScreen, ServerListScreen, SettingsScreen, TransportScreen } from './screens.js';
 import { Mark, TopBar, haptic } from './ui.js';
 
 type View =
   | { kind: 'route'; route: Route }
   | { kind: 'connecting'; server: Server }
   | { kind: 'unreachable'; server: Server; reason: ProbeFailure }
+  /** A saved plain-http server that needs the one-time notice or the typed confirmation first. */
+  | { kind: 'transport'; server: Server; verdict: Exclude<Verdict, { kind: 'ok' }>; path: string }
   | { kind: 'locked' }
   | { kind: 'booting' };
 
@@ -49,6 +53,7 @@ export function App() {
   const rt = useRef<Runtime>(createRuntime()).current;
   const [view, setView] = useState<View>({ kind: 'booting' });
   const navigatedByEvent = useRef(false);
+  const [typed, setTyped] = useState('');
   const lockWaiters = useRef<Array<() => void>>([]);
   const beforeLock = useRef<View | null>(null);
   // Startup intro (cold start only). A notification tap, share or deep link ends it at once.
@@ -72,16 +77,52 @@ export function App() {
     async (server: Server, path = '/') => {
       setView({ kind: 'connecting', server });
       await rt.servers.select(server.id);
-      const result = await probeServer(rt.http, server.url);
+      let target = server;
+      let verdict = await rt.transport.verdict(server.url);
+      if (verdict.kind === 'confirm' && verdict.reason === 'public') {
+        // Prefer https: a saved plain-http server that answers over https now is moved there.
+        const alts = await Promise.all(httpsAlternatives(server.url).map((u) => probeServer(rt.http, u)));
+        const hit = alts.find((r) => r.ok);
+        if (hit) {
+          try {
+            await rt.servers.updateUrl(server.id, hit.url);
+            target = (await rt.servers.get(server.id)) ?? server;
+            verdict = await rt.transport.verdict(target.url);
+          } catch {
+            /* another saved server already uses that address: ask instead */
+          }
+        }
+      }
+      if (verdict.kind !== 'ok') {
+        setTyped('');
+        setView({ kind: 'transport', server: target, verdict, path });
+        return;
+      }
+      const result = await probeServer(rt.http, target.url);
       if (result.ok) {
         void haptic.tap();
-        await openInWebView(rt, `${server.url}${path}`);
+        await rt.transport.pinHttps(target.url);
+        await openInWebView(rt, `${target.url}${path}`);
       } else {
         void haptic.error();
-        setView({ kind: 'unreachable', server, reason: result.reason });
+        setView({ kind: 'unreachable', server: target, reason: result.reason });
       }
     },
     [rt],
+  );
+
+  /**
+   * #/open?id=..&path=..: a server page handed over a notification tap for another server. id is
+   * a saved server's id, or the base URL a notification named.
+   */
+  const openRoute = useCallback(
+    async (id: string, path: string) => {
+      const server = (await rt.servers.get(id)) ?? routeNotification({ server: id }, await rt.servers.list(), null)?.server;
+      if (!server) return go({ name: 'servers' });
+      navigatedByEvent.current = true;
+      await connectTo(server, isSafePath(path) ? path : '/');
+    },
+    [rt, go, connectTo],
   );
 
   const lock = useCallback(
@@ -114,8 +155,20 @@ export function App() {
         void ensureNotificationChannels();
       }
       const servers = await rt.servers.list();
-      await syncServerOrigins(servers);
-      rt.servers.onChange((s) => void syncServerOrigins(s));
+      await rt.syncNative();
+      rt.servers.onChange(() => void rt.syncNative());
+
+      // Push: move a pre-0.24 shared registration into the secure store, follow a token that
+      // rotated while the app was closed, drop the shared relay device once nothing uses it.
+      const origins = servers.map((s) => originOf(s.url));
+      void (async () => {
+        await rt.push.migrateLegacy(rt.kv);
+        if ((await rt.push.states(origins)).length > 0) {
+          const token = await currentPushToken();
+          if (token) await rt.push.onTokenRefresh(token, origins);
+        }
+        await rt.push.reconcile(origins);
+      })().catch(() => undefined);
 
       await installHandlers(rt, {
         currentServer: async () => null,
@@ -127,6 +180,7 @@ export function App() {
         },
         pair: (url) => go({ name: 'add', url }),
         lock,
+        pushScopes: async () => (await rt.servers.list()).map((s) => originOf(s.url)),
         onLaunchEvent: () => {
           launchEvent.current = true;
           endIntro();
@@ -168,6 +222,7 @@ export function App() {
       if (cancelled) return;
 
       const route = parseRoute(window.location.hash);
+      if (route.name === 'open') return void (await openRoute(route.id, route.path));
       if (route.name !== 'auto' && route.name !== 'unreachable') return go(route);
       if (servers.length === 0) return go({ name: 'add' });
       const selected = (await rt.servers.selected()) ?? servers[0]!;
@@ -177,13 +232,17 @@ export function App() {
       await new Promise((r) => setTimeout(r, LAUNCH_EVENT_GRACE_MS));
       if (!navigatedByEvent.current && !cancelled) await connectTo(selected);
     })();
-    const onHash = () => setView({ kind: 'route', route: parseRoute(window.location.hash) });
+    const onHash = () => {
+      const route = parseRoute(window.location.hash);
+      if (route.name === 'open') void openRoute(route.id, route.path);
+      else setView({ kind: 'route', route });
+    };
     window.addEventListener('hashchange', onHash);
     return () => {
       cancelled = true;
       window.removeEventListener('hashchange', onHash);
     };
-  }, [rt, go, connectTo, lock, unlock, endIntro]);
+  }, [rt, go, connectTo, openRoute, lock, unlock, endIntro]);
 
   return (
     <>
@@ -191,6 +250,12 @@ export function App() {
       {intro && <IntroOverlay mode={intro.mode} sting={intro.sting} onDone={endIntro} />}
     </>
   );
+
+  async function acceptTransport(v: Extract<View, { kind: 'transport' }>) {
+    if (v.verdict.kind === 'confirm' && !confirmsHost(typed, v.verdict.host)) return;
+    await rt.transport.accept(v.server.url, v.verdict);
+    await connectTo(v.server, v.path);
+  }
 
   function renderView() {
     switch (view.kind) {
@@ -243,8 +308,18 @@ export function App() {
             </div>
           </main>
         );
+      case 'transport':
+        return <TransportScreen server={view.server} verdict={view.verdict} typed={typed} setTyped={setTyped} onAccept={() => void acceptTransport(view)} go={go} />;
       case 'route':
         switch (view.route.name) {
+          case 'open':
+            return (
+              <main className="screen">
+                <div className="center">
+                  <Mark />
+                </div>
+              </main>
+            );
           case 'servers':
           case 'auto':
           case 'unreachable':

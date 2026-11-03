@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { basicAuth, httpStatusError, sendHttp, validate } from '../http.js';
+import { readBodyText } from '../body.js';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
 import {
   decodeMethodResponse,
@@ -57,7 +58,7 @@ export class RTorrentRpc {
       headers,
       body: encodeMethodCall(method, params),
     });
-    const text = await response.text();
+    const text = await readBodyText(CLIENT_NAME, response);
     if (!response.ok) throw httpStatusError(CLIENT_NAME, response.status, method, text);
     try {
       return decodeMethodResponse(text);

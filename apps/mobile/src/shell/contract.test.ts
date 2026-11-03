@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { memoryStore } from '../core/kv.js';
-import { PushService } from '../core/push.js';
+import { PushService, memoryScopedStore } from '../core/push.js';
 import { createArclightShell, type ArclightShellPlugin, type ShellDeps } from './contract.js';
 
 function make(over: Partial<ShellDeps> = {}, http = vi.fn(async () => ({ status: 200, url: '', data: { deviceId: 'dev1', secret: 's' } }))) {
   const push = new PushService({
-    kv: memoryStore(),
+    store: memoryScopedStore(),
     http,
     relayUrl: 'https://arclight-push.moviemethat.com',
     platform: 'android',
@@ -43,10 +42,11 @@ describe('ArclightShell contract', () => {
     expect(await make({ build: async () => Promise.reject(new Error('x')), pushAvailable: async () => false }).shell.info()).toEqual({ platform: 'android', appVersion: '1.0.0', build: '0', pushAvailable: false });
   });
 
-  it('registerPush() resolves the agreed shape and records the calling server', async () => {
+  it('registerPush() resolves the agreed shape and stores the device in the scope of the calling server', async () => {
     const { shell, push } = make();
     expect(await shell.registerPush()).toEqual({ relayDeviceId: 'dev1', relaySecret: 's', platform: 'android', deviceName: 'Pixel 9', appId: 'com.moviemethat.arclight.admin' });
-    expect((await push.state())?.servers).toEqual(['https://a.example.com']);
+    expect((await push.state('https://a.example.com'))?.deviceId).toBe('dev1');
+    expect(await push.state('https://b.example.com')).toBeNull();
   });
 
   it('registerPush() rejects with { code, message }', async () => {
@@ -55,12 +55,12 @@ describe('ArclightShell contract', () => {
     expect(err).toMatchObject({ code: 'relay', message: expect.stringContaining('offline') });
   });
 
-  it('unregisterPush() deletes the device for the last server', async () => {
+  it('unregisterPush() deletes the device of the calling server', async () => {
     const { shell, http, push } = make();
     await shell.registerPush();
     await shell.unregisterPush();
     expect(http).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'DELETE', url: 'https://arclight-push.moviemethat.com/v1/devices/dev1' }));
-    expect(await push.state()).toBeNull();
+    expect(await push.state('https://a.example.com')).toBeNull();
   });
 
   it('switchServer() and openExternal()', async () => {

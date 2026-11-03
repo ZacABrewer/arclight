@@ -16,7 +16,8 @@ in `App/App/`:
 | `DownloadManager.swift` | Background `URLSession` downloads with resume data, Wi-Fi-only, persistence across relaunches. |
 | `CarPlay.swift` | CarPlay audio scene: tab bar, browse lists, Now Playing. |
 | `CastController.swift` | AirPlay state (`castState`) and the system route picker. |
-| `MainViewController.swift` | The bridge view controller; registers the plugin. |
+| `TokenVaultPlugin.swift` | The app-local `ArclightVault` plugin: device tokens as Keychain items that stay on this device (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, never synced). |
+| `MainViewController.swift` | The bridge view controller; registers the plugins. |
 
 Build it like any Capacitor app:
 
@@ -114,6 +115,17 @@ car shows a "open Arclight on your iPhone" message. CarPlay voice search (SiriKi
   and as a manual download. There is no official Swift Package, and this project uses SPM only,
   so no casting to Chromecast from iOS. `castState.kind` is never `chromecast` on iOS.
 
+## Keychain
+
+Device tokens are generic-password Keychain items (service `com.moviemethat.arclight.tokens`, one
+per account id) written by `TokenVaultPlugin.swift` with
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and `kSecAttrSynchronizable` off. They are
+readable after the first unlock, so playback in the background can still reach the server, but are
+never synced to iCloud Keychain or restored from a backup onto another phone. Versions before
+0.24.0 stored them through `@capgo/capacitor-native-biometric`; the JS side (`migratingVault` in
+`src/core/accounts.ts`) copies each one to the new item on first read and then deletes the old one,
+so nobody is signed out by the upgrade.
+
 ## App Transport Security
 
 People connect to their own servers, often over plain `http://` on the home network. `Info.plist`
@@ -133,6 +145,18 @@ App Store review: the two "arbitrary loads" exceptions may need a short justific
 Connect ("connects to user-hosted media servers whose address the user enters; many run without
 TLS on the local network"). A stricter build could drop them and keep only
 `NSAllowsLocalNetworking`. That would require https for every server outside the LAN.
+
+Reviewed for 0.24.0 and kept as they are:
+
+- Dropping `NSAllowsArbitraryLoadsInWebContent` would break every http server outside the
+  networks that `NSAllowsLocalNetworking` covers (a VPN address, a DNS name for a LAN box), and the
+  WebView fetch is how the whole UI talks to the server.
+- Dropping `NSAllowsArbitraryLoadsForMedia` would make AVPlayer refuse streams from those same
+  servers after sign-in worked.
+- ATS cannot tell a host the user allowed from any other host, so the decision is made in the app:
+  the cleartext policy in `src/core/transport.ts` (see the player README's Security section). A
+  device token never goes to an http host on the internet unless the user typed that host's name,
+  and the app prefers https wherever the server answers there.
 
 `NSLocalNetworkUsageDescription` explains the local network prompt that iOS shows the first time
 the app reaches a LAN address.

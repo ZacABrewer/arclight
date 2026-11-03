@@ -18,6 +18,8 @@ export const DiscordBotSettings = z.object({
   requestChannelId: Snowflake.nullable().default(null),
   /** Members with this role may use /pending and its approve/decline buttons. */
   adminRoleId: Snowflake.nullable().default(null),
+  /** Let Discord users who have not run /link use /search (off: /search needs a linked account). */
+  allowUnlinkedSearch: z.boolean().default(false),
 });
 export type DiscordBotSettings = z.infer<typeof DiscordBotSettings>;
 

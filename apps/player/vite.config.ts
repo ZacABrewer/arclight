@@ -140,5 +140,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
+    // jsdom tests are CPU-heavy, and `pnpm -r test` runs this package next to the api and web
+    // suites: one worker per core each oversubscribes the machine and times tests out.
+    maxWorkers: '50%',
   },
 });

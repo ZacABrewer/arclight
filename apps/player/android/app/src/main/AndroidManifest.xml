@@ -66,7 +66,9 @@
         <!--
           Native player (ArclightPlayerPlugin): Media3 MediaLibraryService for background audio,
           the media notification, lock screen, headset buttons and the Android Auto browse tree.
-          Exported so system media controllers and Android Auto can bind to it.
+          Exported so system media controllers and Android Auto can bind to it; who may connect is
+          decided in car/ControllerPolicy.java (this app, trusted system controllers, genuine car
+          hosts; other apps are refused).
         -->
         <service
             android:name=".player.PlaybackService"
@@ -101,6 +103,7 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
+        <!-- Capacitor's WebView camera capture only; scoped in res/xml/file_paths.xml. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

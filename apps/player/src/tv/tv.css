@@ -1455,15 +1455,91 @@
 }
 
 .tv-prof__add {
-  border: 2px dashed rgba(255, 255, 255, 0.35);
+  border: 2px solid var(--tv-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tv-t3);
 }
 
-/* Full-screen panels over a screen (PIN, name keyboard, profile editor, confirm). */
+.tv-prof__add:focus-visible,
+.tv-prof__add:hover {
+  border-color: var(--tv-text);
+  color: var(--tv-text);
+}
+
+/* Edit mode: a pencil over each avatar (features spec §1, D1). */
+.tv-prof__scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(17, 19, 22, 0.55);
+  color: #fff;
+}
+
+.tv-prof__avatar:focus-visible .tv-prof__scrim {
+  background: rgba(17, 19, 22, 0.3);
+}
+
+/* The pencil "Manage profiles" button under the row; a check and "Done" in edit mode. */
+.tv-profiles__manage {
+  display: flex;
+  justify-content: center;
+  margin-top: -8px;
+}
+
+.tv-prof-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tv-t3);
+  cursor: pointer;
+}
+
+.tv-prof-manage__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--tv-line);
+}
+
+.tv-prof-manage.is-on .tv-prof-manage__icon {
+  background: var(--tv-text);
+  border-color: var(--tv-text);
+  color: var(--tv-bg);
+}
+
+.tv-prof-manage:focus-visible {
+  color: var(--tv-hi);
+}
+
+.tv-prof-manage:focus-visible .tv-prof-manage__icon {
+  border-color: var(--tv-text);
+}
+
+.tv-manage__save {
+  margin-top: 12px;
+}
+
+/* Full-screen panels over a screen (PIN, name keyboard, profile editor, confirm). Above the
+   header (21) too: a panel opened from a page (the title page's "more") covers the whole screen. */
 .tv-panel,
 .tv-manage__editor {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 30;
   background: color-mix(in srgb, var(--tv-bg) 97%, transparent);
 }
 
@@ -1473,13 +1549,12 @@
   justify-content: center;
 }
 
+/* The backdrop covers the whole screen; the padding keeps the rows in a centred 1000px column. */
 .tv-manage__editor {
-  padding: 108px 56px 40px;
+  padding: 108px max(56px, calc((100% - 1000px) / 2 + 56px)) 40px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 1000px;
-  margin: 0 auto;
 }
 
 .tv-manage__head {

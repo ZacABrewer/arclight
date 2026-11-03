@@ -24,7 +24,8 @@ beforeEach(() => {
       let body: unknown;
       if (key === 'GET /api/v1/settings/metadata') body = { tmdbApiKey: SECRET_MASK, language: 'en-US', region: 'US' };
       else if (key === 'PUT /api/v1/settings/metadata') body = { tmdbApiKey: SECRET_MASK, language: 'fr-FR', region: 'FR' };
-      else if (key === 'GET /api/v1/settings/security') body = { method: 'forms', requireForLocal: true, sessionDays: 30, apiKey };
+      else if (key === 'GET /api/v1/settings/security') body = { method: 'forms', requireForLocal: true, sessionDays: 30, apiKey: `********${apiKey.slice(-4)}` };
+      else if (key === 'POST /api/v1/settings/security/apikey/reveal') body = { apiKey };
       else if (key === 'POST /api/v1/settings/security/apikey') {
         apiKey = 'new-key-789';
         body = { apiKey };
@@ -81,6 +82,18 @@ describe('Settings -> General', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Regenerate API key' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/settings/security/apikey')).toBe(true));
     await waitFor(() => expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('new-key-789'));
+  });
+
+  it('shows the masked key until Show fetches the full one from the reveal route', async () => {
+    renderPage();
+    const input = (await screen.findByLabelText('API key')) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toBe('********f456'));
+    expect(calls.some((c) => c.url.endsWith('/apikey/reveal'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+    await waitFor(() => expect(input.value).toBe('abc123def456'));
+    expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/settings/security/apikey/reveal')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(input.value).toBe('********f456');
   });
 
   it('round-trips the masked TMDB key: an unchanged mask is omitted from the save', async () => {
