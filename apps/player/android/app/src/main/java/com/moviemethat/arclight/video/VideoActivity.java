@@ -1606,12 +1606,15 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             return;
         }
         controlsShown = false;
-        skip.setControlsShown(false);
-        upNext.setControlsShown(false);
-        liftSubtitles(false);
         controls.animate().cancel();
         long d = ui.anim(200);
+        // Skip, up next and the captions drop once the controls have faded: moved at the start,
+        // Skip sat on top of the fading Audio & Subtitles button for the length of the fade.
+        // A show during the fade cancels this (no end action) and lifts them again.
         Runnable done = () -> {
+            skip.setControlsShown(false);
+            upNext.setControlsShown(false);
+            liftSubtitles(false);
             controls.setVisibility(View.INVISIBLE);
             if (skip.getVisibility() == View.VISIBLE) skip.requestFocus();
             else if (upNext.getVisibility() == View.VISIBLE) upNext.playNow.requestFocus();
