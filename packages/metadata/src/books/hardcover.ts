@@ -27,6 +27,7 @@ import {
   numberFrom,
   partialDate,
 } from './util.js';
+import { readLimitedJson } from '../body.js';
 
 export const HARDCOVER_DEFAULT_URL = 'https://api.hardcover.app/v1/graphql';
 export const HARDCOVER_PROVIDER = 'hardcover';
@@ -515,7 +516,7 @@ export function createHardcoverClient(options: HardcoverClientOptions): Hardcove
     }
     let json: unknown;
     try {
-      json = await response.json();
+      json = await readLimitedJson(response);
     } catch (cause) {
       throw new MetadataError('bad-response', 'Hardcover returned non-JSON content', { cause });
     }
