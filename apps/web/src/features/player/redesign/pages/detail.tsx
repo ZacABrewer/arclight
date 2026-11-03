@@ -69,7 +69,7 @@ export function RdMoviePage() {
   const q = useMovie(id);
   if (Number.isNaN(id)) return <NotFound />;
   if (q.isPending) return <RdPage><RdLoading /></RdPage>;
-  if (q.isError) return <RdPage><RdError title={t('player.video.movieFailed')} onRetry={() => void q.refetch()} /></RdPage>;
+  if (q.isError) return <RdPage><RdError title={t('player.video.movieFailed')} error={q.error} onRetry={() => void q.refetch()} /></RdPage>;
   return <MovieDetail movie={q.data} />;
 }
 
@@ -80,7 +80,7 @@ export function RdShowPage() {
   const q = useShow(Number.isNaN(id) ? null : id);
   if (Number.isNaN(id)) return <NotFound />;
   if (q.isPending) return <RdPage><RdLoading /></RdPage>;
-  if (q.isError) return <RdPage><RdError title={t('player.video.showFailed')} onRetry={() => void q.refetch()} /></RdPage>;
+  if (q.isError) return <RdPage><RdError title={t('player.video.showFailed')} error={q.error} onRetry={() => void q.refetch()} /></RdPage>;
   return <SeriesDetail show={q.data} />;
 }
 

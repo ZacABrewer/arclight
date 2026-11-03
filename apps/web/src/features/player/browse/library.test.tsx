@@ -26,12 +26,15 @@ describe('AlbumsPage', () => {
     expect(q?.get('desc')).toBeNull();
   });
 
-  it('marks only the Albums section current, not the Home above it', async () => {
-    stubFetch({ [api('/music/albums')]: page([album(1)]) });
+  it('shows the page head with the count and the section chips, Albums current', async () => {
+    stubFetch({ [api('/music/albums')]: page([album(1)], { total: 42 }) });
     renderBrowse('/player/music/albums');
-    const nav = await screen.findByRole('navigation', { name: 'Music sections' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Albums' })).toBeTruthy();
+    expect(await screen.findByText('42 albums')).toBeTruthy();
+    const nav = screen.getByRole('navigation', { name: 'Music sections' });
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Albums', 'Artists', 'Playlists']);
     expect(within(nav).getByRole('link', { name: 'Albums' }).getAttribute('aria-current')).toBe('page');
-    expect(within(nav).getByRole('link', { name: 'Home' }).getAttribute('aria-current')).toBeNull();
+    expect(within(nav).getByRole('link', { name: 'Artists' }).getAttribute('aria-current')).toBeNull();
   });
 
   it('remembers the list view across visits', async () => {
@@ -91,7 +94,8 @@ describe('AlbumsPage', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
-  it('plays an album from its card', async () => {
+  it('plays an album from its list row', async () => {
+    localStorage.setItem(`${VIEW_STORAGE_KEY}.albums`, 'list');
     stubFetch({ [api('/music/albums')]: page([album(1, { title: 'Alpha' })]), [api('/music/albums/1')]: albumDetails(1, [track(5), track(6)]) });
     const player = mockPlayer();
     renderBrowse('/player/music/albums', player);

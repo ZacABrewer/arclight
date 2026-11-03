@@ -2,6 +2,7 @@ import { useCallback, type ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PlayerAudiobook, VideoCard, VideoProgress } from '@arclight/shared';
+import { errorMessage } from '../../../../api/client.js';
 import { cx } from '../../../../arclight/cx.js';
 import { useT } from '../../../../i18n/index.js';
 import { browseKeys, playerBrowseApi } from '../../browse/api.js';
@@ -122,11 +123,14 @@ export function RdLoading() {
   );
 }
 
-export function RdError({ title, onRetry }: { title: string; onRetry: () => void }) {
+/** A load failure: what failed, why (the server's or the network's own message) and a retry. */
+export function RdError({ title, error, onRetry }: { title: string; error?: unknown; onRetry: () => void }) {
   const t = useT();
+  const reason = error == null ? '' : errorMessage(error).trim();
   return (
     <div className="rd-empty" role="alert">
       <p className="rd-empty__title">{title}</p>
+      {reason ? <p className="rd-empty__body">{reason}</p> : null}
       <button type="button" className="rd-btn rd-btn--secondary" onClick={onRetry}>
         {t('player.redesign.retry')}
       </button>

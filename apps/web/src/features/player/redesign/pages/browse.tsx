@@ -85,7 +85,7 @@ function LibraryPage({ kind, genre, setGenre, q }: { kind: Kind; genre: string; 
       {q.isPending ? (
         <RdLoading />
       ) : q.isError ? (
-        <RdError title={t('player.redesign.browse.failed')} onRetry={() => void q.refetch()} />
+        <RdError title={t('player.redesign.browse.failed')} error={q.error} onRetry={() => void q.refetch()} />
       ) : items.length ? (
         <ul className="rd-grid">
           {items.map((it) => {
@@ -144,7 +144,7 @@ export function RdMyListPage() {
       {list.isPending ? (
         <RdLoading />
       ) : list.isError ? (
-        <RdError title={t('player.redesign.browse.failed')} onRetry={() => void list.refetch()} />
+        <RdError title={t('player.redesign.browse.failed')} error={list.error} onRetry={() => void list.refetch()} />
       ) : items.length ? (
         <ul className="rd-grid">
           {items.map((c) => {

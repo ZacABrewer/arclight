@@ -31,8 +31,8 @@ interface Tab {
   match: (path: string) => boolean;
 }
 
-/** Gives the web browse pages the actions they use from the shared player. */
-function BrowsePlayerBridge({ children }: { children: ReactNode }) {
+/** Gives the web browse pages the actions they use from the shared player (exported for its test). */
+export function BrowsePlayerBridge({ children }: { children: ReactNode }) {
   const { state, playItems, playItem, playNext, addToQueue, toggle } = usePlayer();
   const services = useServices();
   const browseDownloads = useBrowseDownloads();

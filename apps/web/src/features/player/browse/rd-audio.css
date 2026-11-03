@@ -1,0 +1,140 @@
+/* Music and audiobook pages in the /player redesign (features spec §5.1, the template's Music
+   and Books screens). Tokens only (--al-pl-*, --rd-*), so every theme pack applies. The older
+   list, track, chapter and filter pieces (browse.css) are restyled here only inside .rd-music. */
+
+/* ---------- page head ---------- */
+.rd-music { padding-bottom: 64px; }
+.rd-music-head { display: flex; flex-direction: column; gap: 8px; padding: 36px var(--rd-gutter) 26px; }
+.rd-music-head__line { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
+.rd-music-head__title { flex: 1 1 auto; min-width: 0; font-size: 40px; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.rd-music-head__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.rd-music-head__sub { font-size: 15px; color: var(--al-pl-text-3); }
+.rd-music-head .rd-chips { margin-top: 14px; }
+.rd-music > .rd-empty:first-child { padding-top: 36px; }
+.rd-music > .rd-loading:first-child { padding-top: 36px; }
+
+/* ---------- rows, sections, grids ---------- */
+.rd-music-rows { padding-bottom: 30px; }
+.rd-music-seeall { font-size: 14px; font-weight: 600; color: var(--al-pl-text-3); white-space: nowrap; }
+.rd-root .rd-music-seeall:hover { color: var(--al-pl-text); }
+.rd-music-section { display: flex; flex-direction: column; gap: 16px; padding: 0 var(--rd-gutter) 30px; min-width: 0; }
+.rd-music-section__title { font-size: 19px; font-weight: 700; }
+.rd-music-section > .rd-empty { padding-left: 0; padding-right: 0; }
+.rd-music-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(168px * var(--rd-scale)), 1fr)); gap: calc(26px * var(--rd-scale)) calc(18px * var(--rd-scale)); }
+.rd-music-grid--round { grid-template-columns: repeat(auto-fill, minmax(calc(150px * var(--rd-scale)), 1fr)); }
+.rd-music-grid > li { min-width: 0; }
+.rd-root .rd-music-tile--fill { width: 100%; }
+.rd-music-mosaic { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.rd-music-mosaic > img { position: static; width: 100%; height: 100%; object-fit: cover; }
+.rd-music-more { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 8px; }
+.rd-music-more__count { font-size: 14px; color: var(--al-pl-text-3); }
+.rd-music-notice { padding-left: var(--rd-gutter); padding-right: var(--rd-gutter); }
+
+/* ---------- filters, lists (Albums and Artists list view) ---------- */
+.rd-music .pb-filters__label { font-family: inherit; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--al-pl-text-3); }
+.rd-music .al-input, .rd-music .al-select { height: 44px; border: 1px solid var(--al-pl-line); border-radius: var(--al-pl-radius); background-color: color-mix(in srgb, var(--al-pl-text) 6%, transparent); color: var(--al-pl-text); font-family: var(--al-pl-font); font-size: 15px; }
+.rd-music .al-input:focus, .rd-music .al-select:focus { border-color: var(--al-pl-text-3); box-shadow: none; }
+.rd-music .al-seg { border-color: var(--al-pl-line); border-radius: var(--al-pl-radius); overflow: hidden; }
+.rd-music .al-seg button { color: var(--al-pl-text-2); font-family: var(--al-pl-font); }
+.rd-music .al-seg button[aria-pressed="true"], .rd-music .al-seg button[aria-checked="true"] { background: var(--al-pl-text); color: var(--al-pl-bg); }
+.rd-music .pb-rail__btn { border-radius: 999px; color: var(--al-pl-text-3); font-family: var(--al-pl-font); font-weight: 600; }
+.rd-music .pb-rail__btn:hover { border-color: transparent; background: color-mix(in srgb, var(--al-pl-text) 8%, transparent); color: var(--al-pl-text); }
+.rd-music .pb-rail__btn[aria-pressed="true"] { background: var(--al-pl-text); color: var(--al-pl-bg); }
+.rd-music .pb-row { border-bottom-color: var(--al-pl-line); border-radius: var(--al-pl-radius); }
+.rd-music .pb-row:hover { background: var(--al-pl-surface); }
+.rd-music .pb-row__title { color: var(--al-pl-text); }
+.rd-music .pb-row__sub, .rd-music .pb-row__detail { color: var(--al-pl-text-3); }
+.rd-music .pb-art { border: 0; border-radius: var(--al-pl-radius); background: var(--al-pl-surface); }
+.rd-music .pb-art--round { border-radius: 50%; }
+.rd-music .pb-badge { border: 0; border-radius: 6px; background: var(--al-pl-fill); color: var(--al-pl-text-2); font-family: var(--al-pl-font); font-weight: 600; letter-spacing: .02em; }
+.rd-music .pb-badge[data-lossless] { color: var(--al-pl-text); }
+.rd-music .pb-badge__diamond { background: var(--al-pl-accent); }
+.rd-music .pb-muted { color: var(--al-pl-text-3); }
+
+/* ---------- track list (tracks.tsx) ---------- */
+.rd-music .pb-tracks__disc-title { font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--al-pl-text-3); }
+.rd-music .pb-track { border-bottom-color: var(--al-pl-line); border-radius: var(--al-pl-radius); }
+.rd-music .pb-track:hover { background: var(--al-pl-surface); }
+.rd-music .pb-track__num { color: var(--al-pl-text-4); }
+.rd-music .pb-track__title { color: var(--al-pl-text); font-family: var(--al-pl-font); }
+.rd-music .pb-track__title:hover, .rd-music .pb-track--current .pb-track__title { color: var(--al-pl-accent); }
+.rd-music .pb-track__sub, .rd-music .pb-track__time { color: var(--al-pl-text-3); }
+.rd-root .rd-music .pb-track__sub a:hover, .rd-root .rd-music .pb-series a:hover { color: var(--al-pl-text); text-decoration: underline; }
+.rd-music .pb-track .al-btn { color: var(--al-pl-text-2); border-radius: 50%; }
+.rd-music .pb-eq span { background: var(--al-pl-accent); }
+.rd-music-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--al-pl-text-2); cursor: pointer; }
+.rd-music-iconbtn:disabled { opacity: .4; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .rd-music-iconbtn:not(:disabled):hover { background: var(--al-pl-surface); color: var(--al-pl-text); } }
+
+/* ---------- title page (album, artist, playlist, book) ---------- */
+.rd-music-detail__hero { position: relative; isolation: isolate; }
+.rd-music-detail__backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.rd-music-detail__blur { position: absolute; inset: -40px; background-size: cover !important; background-position: center !important; filter: blur(48px) saturate(1.2); opacity: .55; transform: scale(1.1); }
+.rd-music-detail__fade { position: absolute; inset: 0; background: linear-gradient(0deg, var(--al-pl-bg) 0%, color-mix(in srgb, var(--al-pl-bg) 55%, transparent) 60%, color-mix(in srgb, var(--al-pl-bg) 30%, transparent) 100%); }
+.rd-music-detail__top { display: flex; align-items: flex-end; gap: 36px; padding: 48px var(--rd-gutter) 36px; }
+.rd-root .rd-music-detail__cover { width: 240px; flex: none; aspect-ratio: 1; border-radius: var(--al-pl-radius-lg); box-shadow: 0 18px 48px color-mix(in srgb, var(--al-pl-bg) 70%, transparent); }
+.rd-root .rd-music-detail__cover.is-round { border-radius: 50%; }
+.rd-music-detail__body { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.rd-music-detail__title { font-size: clamp(34px, 4.2vw, 56px); font-weight: 800; line-height: 1.05; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.rd-music-detail__line { font-size: 17px; font-weight: 600; color: var(--al-pl-text); }
+.rd-root .rd-music-detail__line a:hover { text-decoration: underline; }
+.rd-music-detail__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 15px; color: var(--al-pl-text-3); }
+.rd-music-detail__blurb { font-size: 15px; line-height: 1.5; color: var(--al-pl-text-2); max-width: 640px; text-wrap: pretty; }
+.rd-music-detail .rd-detail__buttons { margin-top: 10px; }
+.rd-root .rd-music-action--danger { color: var(--al-danger-text, var(--al-pl-text)); }
+.rd-music-detail__content { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.rd-music-detail__content > .pb-tracks { padding: 0 var(--rd-gutter) 24px; }
+.rd-music-detail__content > .rd-empty { padding-left: var(--rd-gutter); padding-right: var(--rd-gutter); }
+
+/* audiobook progress, about, series, chapters */
+.rd-book-progress { display: flex; align-items: center; gap: 12px; max-width: 420px; margin-top: 6px; }
+.rd-book-progress__bar { flex: 1 1 auto; display: block; }
+.rd-book-progress__fill { height: 4px; }
+.rd-book-progress__text { flex: none; font-size: 14px; color: var(--al-pl-text-3); }
+.rd-book-about { font-size: 15px; line-height: 1.55; color: var(--al-pl-text-2); max-width: 760px; white-space: pre-line; text-wrap: pretty; }
+.rd-music .pb-series__item, .rd-music .pb-chapter { border-bottom-color: var(--al-pl-line); }
+.rd-music .pb-series__pos, .rd-music .pb-chapter__num { color: var(--al-pl-text-4); }
+.rd-music .pb-series__here, .rd-music .pb-chapter[aria-current='true'] .pb-chapter__title { color: var(--al-pl-accent); }
+.rd-music .pb-chapter__title { color: var(--al-pl-text-2); }
+.rd-music .pb-chapter__time { color: var(--al-pl-text-3); }
+
+/* ---------- search ---------- */
+.rd-music-search { display: flex; flex-direction: column; gap: 28px; padding-top: 36px; }
+.rd-music-search .rd-search__bar { margin: 0 var(--rd-gutter); }
+.rd-music-search__results > .rd-empty { padding-left: var(--rd-gutter); padding-right: var(--rd-gutter); }
+
+/* ---------- phones ---------- */
+[data-layout="portrait"] .rd-music { padding-bottom: 24px; }
+[data-layout="portrait"] .rd-music-head { padding: 16px; gap: 6px; }
+[data-layout="portrait"] .rd-music-head__title { font-size: 28px; }
+[data-layout="portrait"] .rd-music-head__sub { font-size: 14px; }
+[data-layout="portrait"] .rd-music-head .rd-chips { margin-top: 10px; }
+[data-layout="portrait"] .rd-music-head__actions .rd-btn { height: 40px; padding: 0 16px; font-size: 15px; }
+[data-layout="portrait"] .rd-music > .rd-empty:first-child, [data-layout="portrait"] .rd-music > .rd-loading:first-child { padding-top: 16px; }
+[data-layout="portrait"] .rd-music-rows { padding-bottom: 24px; }
+[data-layout="portrait"] .rd-music-section { padding: 0 16px 24px; gap: 12px; }
+[data-layout="portrait"] .rd-music-section__title { font-size: 18px; }
+[data-layout="portrait"] .rd-music .rd-tile--square:not(.rd-music-tile--fill) { width: 132px; }
+[data-layout="portrait"] .rd-music .rd-tile--round:not(.rd-music-tile--fill) { width: 112px; }
+[data-layout="portrait"] .rd-music-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 16px 12px; }
+[data-layout="portrait"] .rd-music-grid--round { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+[data-layout="portrait"] .rd-music-notice { padding: 16px; }
+[data-layout="portrait"] .rd-music-detail__top { flex-direction: column; align-items: stretch; gap: 18px; padding: 16px 16px 24px; }
+[data-layout="portrait"] .rd-music-detail__cover { width: min(64vw, 260px); align-self: center; }
+[data-layout="portrait"] .rd-music-detail__title { font-size: 28px; }
+[data-layout="portrait"] .rd-music-detail__line { font-size: 16px; }
+[data-layout="portrait"] .rd-music-detail__meta { font-size: 14px; }
+[data-layout="portrait"] .rd-music-detail__actions { margin-top: 4px; }
+[data-layout="portrait"] .rd-music-detail__content > .pb-tracks { padding: 0 16px 16px; }
+[data-layout="portrait"] .rd-music-detail__content > .rd-empty { padding-left: 16px; padding-right: 16px; }
+[data-layout="portrait"] .rd-book-progress { max-width: none; }
+[data-layout="portrait"] .rd-music-search { padding-top: 16px; gap: 16px; }
+[data-layout="portrait"] .rd-music-search .rd-search__bar { margin: 0 16px; }
+[data-layout="portrait"] .rd-music-search .rd-grid--search { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+[data-layout="portrait"] .rd-music-search .rd-music-section .rd-grid { padding: 0; }
+@media (max-height: 429px) {
+  .rd-root[data-layout="wide"] .rd-music-head { padding-top: 20px; }
+  .rd-root[data-layout="wide"] .rd-music-detail__top { padding-top: 24px; }
+  .rd-root[data-layout="wide"] .rd-music-detail__cover { width: 160px; }
+}
+@media (max-width: 999px) { .rd-music-search .rd-grid--search { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
