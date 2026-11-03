@@ -323,6 +323,14 @@ Relay secrets never leave the server: no API response includes them, the audit l
 them, and backup archives leave the `mobile_devices` table empty (overwritten, not just
 unlinked). Routes: [API.md](API.md#mobile-arclight-admin-app).
 
+## Secrets at rest and file permissions
+
+Since 0.24, Arclight seals the secrets it stores (API key, two-factor secrets, and the credentials in settings, indexers, download clients, notifications and VPN) with AES-256-GCM. The key is `secrets.key` in the config folder. Arclight's own files in the config folder (the database, logs, backups, `secrets.key`) are owner-only: files `0600`, folders `0700`. Media and download folders are left alone. For details on restoring, losing the key file and encrypted backups, see [Back up and restore](getting-started/backup-restore.md#secrets-at-rest).
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ARCLIGHT_SECRETS_AT_REST` | on | `0` writes the stored secrets back in the clear on the next start and stops sealing new ones. Use it once before downgrading to a version older than 0.24. |
+
 ## Metrics
 
 `GET /metrics` at the server root (not under `/api/v1`; below `ARCLIGHT_BASE_PATH` when that is set) serves the Prometheus text format.

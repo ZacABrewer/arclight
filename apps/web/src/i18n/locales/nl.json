@@ -8597,5 +8597,11 @@
   "player.redesign.profiles.couldNotDelete": "Het profiel kon niet worden verwijderd",
   "player.redesign.pin.title": "Voer de pincode voor {name} in",
   "player.redesign.pin.wrong": "Verkeerde pincode. Probeer het opnieuw.",
-  "player.redesign.pin.locked": "Te veel pogingen. Wacht een minuut en probeer het opnieuw."
+  "player.redesign.pin.locked": "Te veel pogingen. Wacht een minuut en probeer het opnieuw.",
+  "system.backups.encrypted": "Versleuteld",
+  "system.backups.encryption": "Versleuteling",
+  "system.backups.passphrase": "Back-upwachtwoordzin",
+  "system.backups.passphraseTooShort": "Gebruik minstens {min} tekens, of laat leeg voor geen versleuteling",
+  "system.backups.enterThePassphrase": "Deze back-up is versleuteld. Voer de wachtwoordzin in.",
+  "system.backups.wrongPassphrase": "Verkeerde wachtwoordzin voor deze back-up."
 }

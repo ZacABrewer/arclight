@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SystemStatus } from '@arclight/shared';
+import { SECRET_MASK, SystemStatus } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { EventBus } from '../../events.js';
 import { Scheduler } from '../../scheduler.js';
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 async function build(opts: { admin?: boolean; exit?: () => void } = {}) {
-  h = harness();
+  h = harness({ scrypt: { log2N: 12, r: 8, p: 1 } });
   const ctx: AppContext = {
     config: h.config,
     db: h.db,
@@ -47,9 +47,10 @@ async function build(opts: { admin?: boolean; exit?: () => void } = {}) {
   return { app, ctx, h };
 }
 
-function multipart(file: Buffer, filename = 'backup.zip') {
+function multipart(file: Buffer, filename = 'backup.zip', fields: Record<string, string> = {}) {
   const boundary = '----mt-test-boundary';
   const payload = Buffer.concat([
+    ...Object.entries(fields).map(([k, v]) => Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`)),
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: application/zip\r\n\r\n`),
     file,
     Buffer.from(`\r\n--${boundary}--\r\n`),
@@ -122,13 +123,54 @@ describe('backup routes', () => {
     const { app, h } = await build();
     const get = await app.inject({ method: 'GET', url: '/api/v1/settings/backup' });
     const current = get.json() as Record<string, unknown>;
-    expect(current).toEqual({ folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28 });
+    expect(current).toEqual({ folder: '', intervalDays: 1, hour: 4, retentionCount: 7, retentionDays: 28, encryptionPassphrase: '' });
     const folder = join(h.dir, 'bk');
     const put = await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, folder, hour: 3 } });
     expect(put.statusCode).toBe(200);
     expect(put.json()).toMatchObject({ folder, hour: 3 });
     expect((await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, folder: 'rel' } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, hour: 25 } })).statusCode).toBe(400);
+  });
+
+  it('masks the backup passphrase and restores encrypted backups with it (DATA-16)', async () => {
+    const { app, h } = await build();
+    const current = (await app.inject({ method: 'GET', url: '/api/v1/settings/backup' })).json() as Record<string, unknown>;
+    const put = await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, encryptionPassphrase: 'correct horse battery' } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ encryptionPassphrase: SECRET_MASK });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/settings/backup' })).json()).toMatchObject({ encryptionPassphrase: SECRET_MASK });
+    // An older client that leaves the field out keeps the passphrase; a short one is refused.
+    const { encryptionPassphrase: _omit, ...older } = current;
+    expect((await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...older, hour: 5 } })).statusCode).toBe(200);
+    expect(h.service.getSettings().encryptionPassphrase).toBe('correct horse battery');
+    expect((await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, encryptionPassphrase: 'short' } })).statusCode).toBe(400);
+
+    settingsService.setSection(h.db, 'metadata', { tmdbApiKey: 'sealed-before', language: 'en-US', region: 'US' });
+    const b = (await app.inject({ method: 'POST', url: '/api/v1/system/backup' })).json();
+    expect(b).toMatchObject({ encrypted: true, id: expect.stringMatching(/\.zip\.enc$/) });
+    const dl = await app.inject({ method: 'GET', url: `/api/v1/system/backup/${b.id}/download` });
+    expect(dl.headers['content-type']).toBe('application/octet-stream');
+    const bytes = dl.rawPayload;
+    settingsService.setSection(h.db, 'metadata', { tmdbApiKey: 'sealed-after', language: 'en-US', region: 'US' });
+
+    const wrong = await app.inject({ method: 'POST', url: `/api/v1/system/backup/restore/${b.id}`, payload: { passphrase: 'not the one' } });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json()).toMatchObject({ code: 'BAD_PASSPHRASE' });
+    await app.inject({ method: 'PUT', url: '/api/v1/settings/backup', payload: { ...current, encryptionPassphrase: '' } });
+    const ask = await app.inject({ method: 'POST', url: '/api/v1/system/backup/restore/upload', ...multipart(bytes, b.id) });
+    expect(ask.statusCode).toBe(400);
+    expect(ask.json()).toMatchObject({ code: 'PASSPHRASE_REQUIRED' });
+    expect(settingsService.getSection(h.db, 'metadata').tmdbApiKey).toBe('sealed-after');
+
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/v1/system/backup/restore/upload',
+      ...multipart(bytes, b.id, { passphrase: 'correct horse battery' }),
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(settingsService.getSection(h.db, 'metadata').tmdbApiKey).toBe('sealed-before');
+    const byId = await app.inject({ method: 'POST', url: `/api/v1/system/backup/restore/${b.id}`, payload: { passphrase: 'correct horse battery' } });
+    expect(byId.statusCode).toBe(200);
   });
 
   it('is admin only', async () => {

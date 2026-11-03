@@ -215,7 +215,8 @@ export class RotatingFileStream implements DestinationStream {
   }
 
   private open(): number {
-    const fd = openSync(this.path, 'a');
+    // Owner-only (logs can carry request details); the mode applies when the file is created.
+    const fd = openSync(this.path, 'a', 0o600);
     this.fd = fd;
     this.bytes = fstatSync(fd).size;
     return fd;

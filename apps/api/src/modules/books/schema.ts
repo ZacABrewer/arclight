@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sealedText } from '../../db/secret-box.js';
 import type { BooksFormat, BooksKind, BooksLibraryAppImplementation, BooksLibraryAppKind, BooksRequestStatus } from '@arclight/shared';
 import { bookSeries } from '../audiobooks/schema.js';
 
@@ -289,9 +290,9 @@ export const bookLibraryApps = sqliteTable('book_library_apps', {
   implementation: text('implementation').$type<BooksLibraryAppImplementation>().notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   url: text('url').notNull(),
-  apiKey: text('api_key').notNull().default(''),
+  apiKey: sealedText('api_key').notNull().default(''),
   username: text('username').notNull().default(''),
-  password: text('password').notNull().default(''),
+  password: sealedText('password').notNull().default(''),
   libraryId: text('library_id').notNull().default(''),
   kinds: text('kinds', { mode: 'json' }).$type<BooksLibraryAppKind[]>().notNull(),
 });

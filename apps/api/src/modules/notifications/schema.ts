@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { sealedJson } from '../../db/secret-box.js';
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
 import type {
   NotificationDeliveryState,
@@ -57,7 +58,7 @@ export const notifications = sqliteTable('notifications', {
   includeHealthWarnings: flag('include_health_warnings'),
   respectQuietHours: integer('respect_quiet_hours', { mode: 'boolean' }).notNull().default(true),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
-  settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  settings: sealedJson('settings').$type<Record<string, unknown>>().notNull(),
   /** Media kind / quality / user filters on top of the flags and tags. */
   filters: text('filters', { mode: 'json' })
     .$type<NotificationFilters>()
@@ -113,7 +114,7 @@ export const userNotificationDestinations = sqliteTable(
     implementation: text('implementation').$type<PersonalNotificationImplementation>().notNull(),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     events: text('events', { mode: 'json' }).$type<PersonalNotificationEvent[]>().notNull(),
-    settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    settings: sealedJson('settings').$type<Record<string, unknown>>().notNull(),
     templates: text('templates', { mode: 'json' }).$type<NotificationTemplates>().notNull().default(sql`'{}'`),
     /** null: no quiet hours. */
     quietHours: text('quiet_hours', { mode: 'json' }).$type<QuietHoursSettings | null>(),

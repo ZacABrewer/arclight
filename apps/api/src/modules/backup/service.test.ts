@@ -26,7 +26,7 @@ describe('backup names and retention', () => {
     const at = new Date('2026-10-25T04:05:06Z');
     expect(backupFileName('scheduled', at)).toBe('arclight_scheduled_2026.10.25_04.05.06.zip');
     expect(backupFileName('manual', at, 2)).toBe('arclight_manual_2026.10.25_04.05.06_2.zip');
-    expect(parseBackupFileName('arclight_update_2026.10.25_04.05.06_3.zip')).toEqual({ type: 'update', time: at });
+    expect(parseBackupFileName('arclight_update_2026.10.25_04.05.06_3.zip')).toEqual({ type: 'update', time: at, encrypted: false });
     for (const bad of ['../arclight_manual_2026.10.25_04.05.06.zip', 'evil.zip', 'arclight_other_2026.10.25_04.05.06.zip', 'arclight.db']) {
       expect(parseBackupFileName(bad)).toBeNull();
     }

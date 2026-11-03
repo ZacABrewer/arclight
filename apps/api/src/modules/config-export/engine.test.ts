@@ -331,6 +331,18 @@ describe('secret helpers', () => {
     expect(missing).toEqual([]);
   });
 
+  it('never copies __proto__ keys from imported JSON (DATA-51)', () => {
+    const hostile = JSON.parse('{"__proto__": {"polluted": true}, "a": {"__proto__": {"password": "x"}, "token": "' + SECRET_MASK + '"}}');
+    const masked = maskSecrets(hostile) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(masked)).toBe(Object.prototype);
+    expect(Object.keys(masked)).toEqual(['a']);
+    const resolved = resolveMasks(hostile, { a: { token: 'stored' } }, () => undefined) as Record<string, Record<string, unknown>>;
+    expect(Object.getPrototypeOf(resolved)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(resolved['a'])).toBe(Object.prototype);
+    expect(resolved).toEqual({ a: { token: 'stored' } });
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
   it('diffs leaves with paths', () => {
     expect(diffValues({ a: { b: 1, c: [1] } }, { a: { b: 2, c: [1] }, d: true })).toEqual([
       { path: 'a.b', before: 1, after: 2 },

@@ -1,4 +1,5 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { sealedJson } from '../../db/secret-box.js';
 import type { TrackerAccountSettings } from '@arclight/shared';
 
 // Tracker-stats module tables: per-indexer private-tracker settings and the statistics the
@@ -7,7 +8,7 @@ import type { TrackerAccountSettings } from '@arclight/shared';
 export const trackerAccounts = sqliteTable('tracker_accounts', {
   /** indexers.id (no FK: rows of deleted indexers are ignored and pruned by the sync). */
   indexerId: integer('indexer_id').primaryKey(),
-  settings: text('settings', { mode: 'json' }).$type<TrackerAccountSettings>().notNull(),
+  settings: sealedJson('settings').$type<TrackerAccountSettings>().notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 

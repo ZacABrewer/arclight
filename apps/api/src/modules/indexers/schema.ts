@@ -1,4 +1,5 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import { sealedJson, sealedText } from '../../db/secret-box.js';
 import type {
   IndexerCapabilitiesResource,
   IndexerImplementation,
@@ -21,7 +22,7 @@ export const indexers = sqliteTable('indexers', {
   /** Explicit indexer proxy (no FK so the column could be added in place; cleared on proxy delete). */
   proxyId: integer('proxy_id'),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
-  settings: text('settings', { mode: 'json' }).$type<IndexerSettings>().notNull(),
+  settings: sealedJson('settings').$type<IndexerSettings>().notNull(),
   addedAt: text('added_at').notNull(),
 });
 
@@ -64,7 +65,7 @@ export const indexerProxies = sqliteTable('indexer_proxies', {
   host: text('host').notNull(),
   port: integer('port').notNull(),
   username: text('username'),
-  password: text('password'),
+  password: sealedText('password'),
   /** Seconds. */
   requestTimeout: integer('request_timeout'),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),

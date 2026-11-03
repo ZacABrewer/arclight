@@ -8597,5 +8597,11 @@
   "player.redesign.profiles.couldNotDelete": "Impossible de supprimer le profil",
   "player.redesign.pin.title": "Saisissez le code PIN de {name}",
   "player.redesign.pin.wrong": "Code PIN incorrect. Réessayez.",
-  "player.redesign.pin.locked": "Trop d’essais. Patientez une minute et réessayez."
+  "player.redesign.pin.locked": "Trop d’essais. Patientez une minute et réessayez.",
+  "system.backups.encrypted": "Chiffrée",
+  "system.backups.encryption": "Chiffrement",
+  "system.backups.passphrase": "Phrase secrète de sauvegarde",
+  "system.backups.passphraseTooShort": "Utilisez au moins {min} caractères, ou laissez vide pour ne pas chiffrer",
+  "system.backups.enterThePassphrase": "Cette sauvegarde est chiffrée. Saisissez sa phrase secrète.",
+  "system.backups.wrongPassphrase": "Phrase secrète incorrecte pour cette sauvegarde."
 }

@@ -8597,5 +8597,11 @@
   "player.redesign.profiles.couldNotDelete": "No se pudo eliminar el perfil",
   "player.redesign.pin.title": "Introduce el PIN de {name}",
   "player.redesign.pin.wrong": "PIN incorrecto. Inténtalo de nuevo.",
-  "player.redesign.pin.locked": "Demasiados intentos. Espera un minuto e inténtalo de nuevo."
+  "player.redesign.pin.locked": "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+  "system.backups.encrypted": "Cifrada",
+  "system.backups.encryption": "Cifrado",
+  "system.backups.passphrase": "Frase de contraseña de la copia",
+  "system.backups.passphraseTooShort": "Usa al menos {min} caracteres, o déjalo vacío para no cifrar",
+  "system.backups.enterThePassphrase": "Esta copia de seguridad está cifrada. Introduce su frase de contraseña.",
+  "system.backups.wrongPassphrase": "Frase de contraseña incorrecta para esta copia."
 }
