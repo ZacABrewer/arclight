@@ -260,7 +260,7 @@ const playerRoute = createRoute({
 const playerHomeRoute = createRoute({
   getParentRoute: () => playerRoute,
   path: '/',
-  // The redesign Home (features/player/redesign); ui/player-home.js stays for the app's TV home.
+  // The redesign Home (features/player/redesign).
   component: lazyRouteComponent(() => import('./features/player/redesign/pages/home.js'), 'RdHomePage'),
 });
 const playerNowPlayingRoute = createRoute({
