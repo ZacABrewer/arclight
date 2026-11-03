@@ -407,8 +407,9 @@ export type NativeVideoString =
 export interface VideoPickItemEvent { itemKey: string; fromItemKey: string; positionMs: number }
 
 /**
- * The user changed a track in the native panel; JS saves it to the profile's per-item prefs and,
- * when `rememberLanguage`, to ProfileSettings.audioLanguage / subtitleLanguage.
+ * The user changed a track in the native panel; JS keeps it for the item and saves its language
+ * to ProfileSettings.audioLanguage / subtitleLanguage. `audioTrack` is always the JS-side ordinal
+ * (PlayVideoOptions.audioTracks[].index), null when native could not match the file's track to one.
  */
 export interface VideoTracksChangedEvent { itemKey: string; audioTrack: number | null; subtitle: string | null }
 
@@ -453,9 +454,10 @@ export interface PlayVideoOptions {
   /**
    * The item's audio tracks (ordinal = VideoAudioTrack.index). In direct play native lists the
    * file's own tracks and picks `selectedAudio` among them; otherwise picking another one fires
-   * `videoSeekRequest` with `audioTrack`.
+   * `videoSeekRequest` with `audioTrack`. Language, codec, channels and title let native match
+   * the file's own tracks to these in direct play (so it reports `index`, not its own position).
    */
-  audioTracks: { index: number; label: string }[];
+  audioTracks: { index: number; label: string; language?: string | null; codec?: string; channels?: number | null; title?: string | null }[];
   selectedAudio?: number;
   /** Chapter marks on the seek bar (media time). */
   chapters?: { title: string; startMs: number }[];

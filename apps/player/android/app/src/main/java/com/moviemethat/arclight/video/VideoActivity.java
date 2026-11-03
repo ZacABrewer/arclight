@@ -771,7 +771,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         // Audio: in direct play pick the wanted ordinal among the file's tracks.
         if (r.seekable && r.selectedAudio != null) {
             List<Tracks.Group> audio = groups(tracks, C.TRACK_TYPE_AUDIO);
-            int i = r.selectedAudio;
+            int i = TrackMatch.groupFor(r.audioTracks, fileTracks(audio), r.selectedAudio);
             if (i >= 0 && i < audio.size() && audio.get(i).isSupported()) {
                 p.setOverrideForType(new TrackSelectionOverride(audio.get(i).getMediaTrackGroup(), 0));
             }
@@ -1186,6 +1186,24 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         return groups(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO);
     }
 
+    /** The file's audio groups as TrackMatch sees them. */
+    private static List<TrackMatch.FileTrack> fileTracks(List<Tracks.Group> groups) {
+        List<TrackMatch.FileTrack> out = new ArrayList<>();
+        for (Tracks.Group g : groups) {
+            Format f = g.getTrackFormat(0);
+            out.add(new TrackMatch.FileTrack(f.language, f.label, f.sampleMimeType, f.channelCount));
+        }
+        return out;
+    }
+
+    /** The request's audio track whose JS index is {@code index}, or null. */
+    @Nullable
+    private static VideoRequest.AudioTrack jsTrack(VideoRequest r, @Nullable Integer index) {
+        if (index == null) return null;
+        for (VideoRequest.AudioTrack a : r.audioTracks) if (a.index == index) return a;
+        return null;
+    }
+
     private void openTracks() {
         VideoRequest r = req;
         if (r == null || player == null) return;
@@ -1193,10 +1211,11 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         int audioSel = -1;
         List<Tracks.Group> file = fileAudio();
         if (r.seekable && !file.isEmpty()) {
-            // Direct play: the file's own tracks (labelled from JS when the lists line up).
-            boolean useJs = r.audioTracks.size() == file.size();
+            // Direct play: the file's own tracks, labelled from JS where one confidently matches.
+            List<TrackMatch.FileTrack> mapped = fileTracks(file);
             for (int i = 0; i < file.size(); i++) {
-                audio.add(useJs ? r.audioTracks.get(i).label : formatLabel(file.get(i).getTrackFormat(0), i));
+                VideoRequest.AudioTrack js = jsTrack(r, TrackMatch.jsIndexFor(r.audioTracks, mapped, i));
+                audio.add(js != null ? js.label : formatLabel(file.get(i).getTrackFormat(0), i));
                 if (file.get(i).isSelected()) audioSel = i;
             }
         } else if (!r.seekable) {
@@ -1223,12 +1242,14 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r.seekable) {
             List<Tracks.Group> file = fileAudio();
             if (which < 0 || which >= file.size()) return;
-            r.selectedAudio = which;
             player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
                     .setOverrideForType(new TrackSelectionOverride(file.get(which).getMediaTrackGroup(), 0))
                     .build());
-            boolean useJs = r.audioTracks.size() == file.size();
-            controller.tracksChanged(r.itemKey, useJs ? r.audioTracks.get(which).index : which, r.selectedSubtitle);
+            // JS knows tracks by its own ordinal, not ExoPlayer's group position: report the
+            // matching one, or nothing (and no remembered audio) when no track matches for sure.
+            Integer js = TrackMatch.jsIndexFor(r.audioTracks, fileTracks(file), which);
+            r.selectedAudio = js;
+            if (js != null) controller.tracksChanged(r.itemKey, js, r.selectedSubtitle);
             return;
         }
         if (which < 0 || which >= r.audioTracks.size()) return;

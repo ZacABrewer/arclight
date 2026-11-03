@@ -3,7 +3,7 @@ import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile
 import type { ArclightPlayerPlugin } from '../native/definitions';
 import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, startPosition } from './native-video';
 import { ProfileSettings, type PlayerSeriesDetails } from '@arclight/shared';
-import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf } from './native-extras';
+import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf, videoStrings } from './native-extras';
 
 const profile = { containers: ['mp4', 'mkv'], videoCodecs: ['h264', 'hevc'] } as unknown as VideoDeviceProfile;
 
@@ -178,6 +178,8 @@ describe('NativeVideoLauncher', () => {
     });
     expect(opts.backdropUrl).toBeUndefined(); // only http(s) URLs reach the native side
     expect((opts.audioTracks as unknown[]).length).toBe(2);
+    // Enough for native to match the file's own tracks to these in direct play.
+    expect((opts.audioTracks as unknown[])[1]).toMatchObject({ index: 1, language: 'eng', codec: 'eac3', channels: 6, title: null });
     expect((opts.subtitles as Array<{ id: string }>)[0]!.id).toBe('e0');
     expect(reports.map((r) => r.report.event)).toEqual(['start']);
     expect(reports[0]!.report).toMatchObject({ deviceId: 'device-1', playMethod: 'Transcode', clientTime: '2026-11-02T10:00:00.000Z' });
@@ -413,10 +415,17 @@ describe('NativeVideoLauncher', () => {
     expect(save).toHaveBeenLastCalledWith({ audioLanguage: 'en', subtitleLanguage: null });
     await emit('videoTracksChanged', { itemKey: 'other:1', audioTrack: 1, subtitle: null });
     expect(save).toHaveBeenCalledTimes(2);
+    // An audio index the item does not have: no audio language is saved from it.
+    await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 7, subtitle: null });
+    expect(save).toHaveBeenLastCalledWith({ subtitleLanguage: null });
   });
 });
 
 describe('native extras', () => {
+  it('the countdown string keeps its unit, like the native default (strings.xml)', () => {
+    expect(videoStrings().nextIn).toBe('Next episode in {s}s');
+  });
+
   it('builds the episode line and skips pause info without data', () => {
     expect(episodeLine({ seasonNumber: 2, episodeNumber: 5, episodeTitle: 'The Long Meridian' })).toBe('S2 · E5 · The Long Meridian');
     expect(episodeLine({ seasonNumber: null, episodeNumber: null, episodeTitle: null })).toBeNull();

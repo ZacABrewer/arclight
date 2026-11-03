@@ -38,10 +38,25 @@ public final class VideoRequest {
     public static final class AudioTrack {
         public final int index;
         public final String label;
+        /** As tagged in the file (ISO 639-2, "eng"); null when untagged or not sent. */
+        @Nullable public final String language;
+        /** ffprobe codec name ("eac3"); null when not sent. */
+        @Nullable public final String codec;
+        @Nullable public final Integer channels;
+        /** The stream's own title tag. */
+        @Nullable public final String title;
 
         AudioTrack(int index, String label) {
+            this(index, label, null, null, null, null);
+        }
+
+        AudioTrack(int index, String label, @Nullable String language, @Nullable String codec, @Nullable Integer channels, @Nullable String title) {
             this.index = index;
             this.label = label;
+            this.language = language;
+            this.codec = codec;
+            this.channels = channels;
+            this.title = title;
         }
     }
 
@@ -425,7 +440,9 @@ public final class VideoRequest {
             if (a == null || !a.has("index")) continue;
             int index = a.optInt("index", i);
             String label = optString(a, "label");
-            out.add(new AudioTrack(index, label == null ? "#" + (index + 1) : label));
+            Integer channels = a.has("channels") && !a.isNull("channels") ? a.optInt("channels") : null;
+            out.add(new AudioTrack(index, label == null ? "#" + (index + 1) : label,
+                    optString(a, "language"), optString(a, "codec"), channels, optString(a, "title")));
         }
         return out;
     }
