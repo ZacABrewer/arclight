@@ -7,7 +7,7 @@ import { watchPaths } from '../../video/paths.js';
 import { RdIcon } from '../icons.js';
 import { useSections } from '../shell.js';
 import { WideTile } from '../tiles.js';
-import { onePerSeries, RdLoading, RdPage, useCardActions, useListen } from './common.js';
+import { onePerSeries, RdError, RdLoading, RdPage, useCardActions, useListen } from './common.js';
 
 // Search (the template's Search screen, spec §4.4 / §4.5): the input on top with the system
 // keyboard, then "Popular right now" or the results: movies and shows, plus albums and
@@ -70,7 +70,7 @@ export function RdSearchPage() {
 
   const heading = !query
     ? t('player.redesign.search.popular')
-    : search.isPending
+    : search.isPending || search.isError
       ? null
       : results.length
         ? t('player.redesign.search.results', { query })
@@ -104,6 +104,8 @@ export function RdSearchPage() {
       <section className="rd-search__results" aria-live="polite" aria-busy={Boolean(query) && search.isPending}>
         {heading ? <h1 className="rd-search__heading">{heading}</h1> : null}
         {query && search.isPending ? <RdLoading /> : null}
+        {/* A failed search is not "no matches". */}
+        {query && search.isError ? <RdError title={t('player.browse.search.failed')} error={search.error} onRetry={() => void search.refetch()} /> : null}
         {results.length ? (
           <ul className="rd-grid rd-grid--search">
             {results.map((r) => (

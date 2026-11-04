@@ -19,6 +19,7 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { listSearchCondition } from '../../db/list-search.js';
+import { prefiltered } from '../search/prefilter.js';
 import { commonLabel, formatLabel, isLossless, type FormatFields } from './format.js';
 import { artworkUrl, playableItem } from './items.js';
 import type { PlaybackOwner, ProgressStore } from './progress.js';
@@ -525,12 +526,6 @@ export function audiobookHome(ctx: BrowseContext, user: BrowseUser): AudiobookHo
 const SEARCH_SCAN = 400;
 const SEARCH_TAKE = 20;
 
-/** `%w%o%r%d%` on the longest word: what the matcher's loose step can still accept. */
-function loosePattern(words: readonly string[]): string {
-  const word = words.reduce((a, b) => (b.length > a.length ? b : a));
-  return `%${[...word].join('%')}%`;
-}
-
 function ranked<T>(q: string, rows: readonly T[], text: (r: T) => string, keywords?: (r: T) => string[]): T[] {
   return rankMatches(q, rows, text, keywords)
     .slice(0, SEARCH_TAKE)
@@ -541,24 +536,22 @@ export function playerSearch(ctx: BrowseContext, user: BrowseUser, q: string, se
   const words = searchWords(q);
   const out: PlayerSearchResponse = { tracks: [], albums: [], artists: [], audiobooks: [], movies: [], series: [] };
   if (words.length === 0) return out;
-  const like = loosePattern(words);
-  const match = (...cols: SQL[]) => sql`(${sql.join(
-    cols.map((c) => sql`lower(${c}) LIKE ${like}`),
-    sql` OR `,
-  )})`;
+  // Whole-word hits first, then loose ones while there is room (search/prefilter.ts): a big
+  // library has more loose candidates than SEARCH_SCAN, and the exact title must not be cut.
+  const scan = <R>(cols: SQL[], read: (where: SQL, limit: number) => R[]) => prefiltered(words, cols, SEARCH_SCAN, read);
   if (sections.music) {
-    const trackRows = ctx.db.all<TrackRow>(sql`${TRACK_FROM} WHERE ${match(sql`t.title`)} LIMIT ${SEARCH_SCAN}`);
+    const trackRows = scan([sql`t.title`], (where, n) => ctx.db.all<TrackRow>(sql`${TRACK_FROM} WHERE ${where} LIMIT ${n}`));
     out.tracks = ranked(q, trackRows, (r) => r.title, (r) => [r.artistCredit || r.artistName, r.albumTitle]).map((r) => toTrack(ctx, r));
-    const albumRows = ctx.db.all<AlbumRow>(sql`${ALBUM_FROM} WHERE ${match(sql`al.title`)} GROUP BY al.id LIMIT ${SEARCH_SCAN}`);
+    const albumRows = scan([sql`al.title`], (where, n) => ctx.db.all<AlbumRow>(sql`${ALBUM_FROM} WHERE ${where} GROUP BY al.id LIMIT ${n}`));
     out.albums = toAlbums(
       ctx,
       ranked(q, albumRows, (r) => r.title, (r) => [r.artistName]),
     );
-    const artistRows = ctx.db.all<ArtistRow>(sql`${ARTIST_FROM} WHERE ${match(sql`ar.name`)} GROUP BY ar.id LIMIT ${SEARCH_SCAN}`);
+    const artistRows = scan([sql`ar.name`], (where, n) => ctx.db.all<ArtistRow>(sql`${ARTIST_FROM} WHERE ${where} GROUP BY ar.id LIMIT ${n}`));
     out.artists = ranked(q, artistRows, (r) => r.name).map((r) => toArtist(ctx, r));
   }
   if (sections.audiobooks) {
-    const bookRows = ctx.db.all<BookRow>(sql`${BOOK_FROM} WHERE ${BOOK_HAS_FILES} AND ${match(sql`b.title`, sql`b.author_credits`, sql`au.name`)} LIMIT ${SEARCH_SCAN}`);
+    const bookRows = scan([sql`b.title`, sql`b.author_credits`, sql`au.name`], (where, n) => ctx.db.all<BookRow>(sql`${BOOK_FROM} WHERE ${BOOK_HAS_FILES} AND ${where} LIMIT ${n}`));
     out.audiobooks = toBooks(
       ctx,
       user,

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, ne, not, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   hasAnyPermission,
@@ -15,6 +15,7 @@ import {
   type UniversalSearchResponse,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { allWordsFilter, looseFilter } from './prefilter.js';
 import {
   albums,
   artists,
@@ -42,14 +43,17 @@ import {
 //
 // Per kind the caller may see, candidates are read with a cheap SQL prefilter on the longest
 // query word, then ranked in JS with the shared matcher (`rankMatches`), so the browser and the
-// server agree on the order. The prefilter runs in two passes, each capped so that at most
-// UNIVERSAL_SEARCH_SCAN rows are read per kind:
-//   1. strict: the column contains the word (`LIKE %word%`): exact, prefix and substring hits;
-//   2. loose, only while pass 1 left room: the word's characters in order (`LIKE %w%o%r%d%`),
-//      minus the pass 1 rows, which is what the matcher's loose (subsequence) step needs.
-// SQLite LIKE folds ASCII case only and the titles are not accent-folded, so a query without
-// accents can miss an accented title ("amelie" vs "Amélie"); other query words are not
-// prefiltered, the matcher requires them.
+// server agree on the order. The prefilter (search/prefilter.ts) compares against the column
+// with its spaces and punctuation squashed out, and runs in two passes, each capped so that at
+// most UNIVERSAL_SEARCH_SCAN rows are read per kind:
+//   1. strict: the column contains every query word: exact, prefix, substring and run-together
+//      hits ("spiderman" for "Spider-Man");
+//   2. loose, only while pass 1 left room: the longest word's characters in order
+//      (`LIKE %w%o%r%d%`), minus the pass 1 rows, which is what the matcher's loose
+//      (subsequence) step needs.
+// Requiring every word in pass 1 keeps a common word ("the", "picture") from filling the cap
+// with rows the other words rule out. SQLite LIKE folds ASCII case only and the titles are not
+// accent-folded, so a query without accents can still miss an accented title in a big table.
 
 /** Who is searching; built from `req.auth` (searchScopeOf) or by tests. */
 export interface SearchScope {
@@ -390,15 +394,12 @@ const SOURCES: Record<UniversalSearchKind, Source<unknown>> = {
   }),
 };
 
-/** Strict and loose prefilters on the longest query word (see the header comment). */
+/** The two prefilter passes (search/prefilter.ts and the header comment). */
 function prefilters(words: readonly string[]): { strict: Filter; loose: Filter | null } {
-  const word = words.reduce((a, b) => (b.length > a.length ? b : a));
-  // Normalized words hold only letters and digits, so no LIKE wildcard needs escaping.
-  const strict: Filter = (cols) => or(...cols.map((c) => like(c, `%${word}%`)))!;
-  if (word.length < 2) return { strict, loose: null };
-  const pattern = `%${[...word].join('%')}%`;
-  const loose: Filter = (cols) => and(or(...cols.map((c) => like(c, pattern))), not(strict(cols)))!;
-  return { strict, loose };
+  const strict: Filter = (cols) => allWordsFilter(words, cols);
+  // looseFilter is null exactly when the longest word has one letter.
+  const longest = Math.max(...words.map((w) => w.length));
+  return { strict, loose: longest < 2 ? null : (cols) => looseFilter(words, cols)! };
 }
 
 function searchKind(db: Db, scope: SearchScope, kind: UniversalSearchKind, src: Source<unknown>, query: UniversalSearchQuery, filters: ReturnType<typeof prefilters>): UniversalSearchKindResult | null {
