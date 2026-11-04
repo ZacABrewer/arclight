@@ -2846,6 +2846,22 @@ sessions are capped at `remoteVideoMaxBitrateKbps` and the height follows the ca
 | GET | `/playback/video/session/:sessionId/health` | `VideoHlsHealth` `{encodeSpeed, aheadSec, maxSustainableRung, hwaccel}` |
 | DELETE | `/playback/video/session/:sessionId` | End the session now: stops the encoder and frees the slot (`204`; `404` when unknown or another user's) |
 
+### Active streams (Activity -> Now playing)
+
+Module `apps/api/src/modules/playback/active-streams.ts` (+ `active-streams-routes.ts`); contract
+`packages/shared/src/active-streams.ts`. An in-memory list, no table: a restart starts empty. It is
+fed by `POST /playback/video/session`, `/stream/audio`, `/stream/video` and HLS playlist/segment
+requests (not `HEAD` or `?download=1`) and by progress reports (`PUT /playback/progress/:itemKey`,
+the beacon, batch entries less than 2 minutes old). A playing stream with nothing heard for 90 s is
+gone; a paused one (players stop reporting while paused) after 10 minutes; `stop` and
+`DELETE /playback/video/session/:id` end it at once. The address is Fastify's `req.ip`
+(`X-Forwarded-For` only from `ARCLIGHT_TRUSTED_PROXIES`). Rows never carry stream URLs, link
+signatures or tokens.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/activity/streams` | Admin (app tokens of admins too; non-owner profiles get 403). `ActiveStreamsResponse` `{streams, idleSec, pausedIdleSec}`, newest first. `ActiveStream` `{id, state (playing/paused), startedAt, lastSeenAt, user {id, username}, profile {id, name, color, initial, isOwner} \| null, item {itemKey, kind, title, seriesTitle, seasonNumber, episodeNumber, artist, album, chapter, year, artworkUrl}, positionMs (extrapolated while playing), durationMs, client {kind (web/app/tv/other), deviceName, platform, appVersion}, address {ip, remote}, playback {method (direct/remux/transcode) \| null, delivery (progressive/hls) \| null, backend (arclight/jellyfin), reasons, rung {id, height, videoKbps, codec} \| null, hwaccel, encodeSpeed, audioFormat, bitrateKbps}}`. `Cache-Control: no-store` |
+
 Encoders pause when they are 180 s ahead of the player and resume at 90 s; an encoder idle for
 2 minutes stops, and a session idle for 15 minutes is removed with its segments. The segment
 cache (`videoCacheGb`, at `videoCachePath` or `<config>/cache/player/hls`) drops the segments

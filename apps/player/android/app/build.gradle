@@ -108,3 +108,22 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// Release builds must carry the web bundle of the same version: Gradle packages whatever is in
+// assets/public, so a skipped or failed `pnpm --filter ./apps/player build` + `cap sync` would
+// ship the previous release's screens inside the new app (it happened once, in 0.24.0).
+tasks.register('checkWebBundleVersion') {
+    def assetsDir = file('src/main/assets/public/assets')
+    inputs.dir(assetsDir).optional()
+    doLast {
+        def version = arclightVersionName()
+        def scripts = assetsDir.exists() ? assetsDir.listFiles().findAll { it.name.endsWith('.js') } : []
+        if (scripts.isEmpty()) {
+            throw new GradleException("No web bundle in ${assetsDir}: run `pnpm --filter ./apps/player build` from the repo root, then `npx cap sync android`")
+        }
+        if (!scripts.any { it.getText('UTF-8').contains("\"${version}\"") }) {
+            throw new GradleException("The web bundle in ${assetsDir} is not version ${version}: run `pnpm --filter ./apps/player build` from the repo root, then `npx cap sync android`")
+        }
+    }
+}
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach { dependsOn 'checkWebBundleVersion' }

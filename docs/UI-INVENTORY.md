@@ -90,6 +90,7 @@ Status at the time: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not 
 
 ## 7. Activity
 - **Queue** ✅: live table (title, item, quality, protocol, client, progress bar, ETA, size, status + status messages popover, tracked state), filters, remove dialog (remove from client / blocklist / skip redownload), bulk remove, manual import button for stuck items, "import blocked" reasons; kill-switch / VPN-down banner; per-row speed, peers (seeds) and a state-reason chip (why it is not moving); expandable row with live stats, pieces bar, engine peer list and the download timeline
+- **Now playing** ✅ (`/activity/streams`, admins): live list of the player's streams (who and which profile, item and artwork, client and device, IP and local/remote, direct/remux/transcode with rung, bitrate, encoder and speed, progress, playing/paused, start time); view only
 - **History** ✅: paged table, event type filter, date range, per-item details drawer (release data, indexer, client, scores), "mark as failed", "redownload"
 - **Blocklist** ✅: table, remove, clear all, add manually
 - **Watch history** ✅ (`/activity/watchhistory`): timeline of plays from Jellyfin/Emby, filter by user, paged; non-admins see their own. Also a **Watch history** pane on the Profile page

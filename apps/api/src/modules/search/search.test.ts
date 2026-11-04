@@ -126,6 +126,22 @@ describe('universalSearch (service)', () => {
     expect(search(db, ADMIN, 'zzz').results).toEqual([]);
   });
 
+  it('finds titles typed without their punctuation', () => {
+    addMovie(db, 'Spider-Man: No Way Home');
+    addSeries(db, "Grey's Anatomy");
+    addSeries(db, "Marvel's Agents of S.H.I.E.L.D.");
+    expect(titlesOf(search(db, ADMIN, 'spiderman'), 'movie')).toEqual(['Spider-Man: No Way Home']);
+    expect(titlesOf(search(db, ADMIN, 'greys anatomy'), 'series')).toEqual(["Grey's Anatomy"]);
+    expect(titlesOf(search(db, ADMIN, 'agents of shield'), 'series')).toEqual(["Marvel's Agents of S.H.I.E.L.D."]);
+  });
+
+  it('a common longest word does not crowd the title out of a big library', () => {
+    // 0.24 read the first UNIVERSAL_SEARCH_SCAN rows containing the longest word ("picture"),
+    // by sort title, so "… Number 5" (after 0-4xx) never reached the matcher.
+    for (let i = 0; i < 450; i++) addMovie(db, `Filler Picture Number ${i}`);
+    expect(titlesOf(search(db, ADMIN, 'filler picture number 5'), 'movie')[0]).toBe('Filler Picture Number 5');
+  });
+
   it('caps hits per kind and reports the total', () => {
     for (let i = 1; i <= 5; i++) addSeries(db, `Gamma ${i}`);
     const res = search(db, ADMIN, 'gamma', 2);

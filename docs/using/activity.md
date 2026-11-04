@@ -2,7 +2,7 @@
 
 Activity is where you watch Arclight work: what is downloading right now, what happened to past grabs, which releases are blocked, and what is waiting to be imported. You will mostly use it when a download looks stuck or a title has not shown up in your library yet. Activity is visible to administrators only (except **Playback stats**, see below). Find it in the left menu under **Activity**.
 
-The sub-pages are **Queue**, **History**, **Blocklist**, **Pending**, **Cross-seeds**, **Transcode jobs**, **Manual import** and **Playback stats**.
+The sub-pages are **Queue**, **Now playing**, **History**, **Blocklist**, **Pending**, **Cross-seeds**, **Transcode jobs**, **Manual import** and **Playback stats**.
 
 ### Searching a list
 
@@ -152,6 +152,22 @@ To do this by hand, use **Try another release** on the row. It removes the downl
 ### Disk-space guard
 
 With **Disk-space guard** on (Settings > Media Management, on by default, off while "Skip free space check" is on), a grab that would leave its download volume below **Minimum free space** (default 100 MB) is held in the queue as "Waiting to send" and sent when there is room. Downloads already running on a volume that falls below the minimum are paused, and resume when the volume has the minimum plus 1 GiB free again. Use **Send now** to send a held grab anyway. A banner above the queue shows the free space of the affected volume.
+
+## Now playing
+
+**Activity > Now playing** (`/activity/streams`) shows what Arclight's own player is streaming right now: movies and episodes, music and audiobooks, from the web player, the Arclight app on a phone and the app on a TV. The page refreshes itself every few seconds. When nothing plays it says "Nothing is playing".
+
+| Column | What it shows |
+| --- | --- |
+| Title | The artwork and title. Episodes show the series with `S01E02` and the episode title; music the artist and album; audiobooks the chapter at the current position and the author. |
+| User | The household profile playing (with its avatar) and the account it belongs to. |
+| Client | The device: Web player, Arclight app or TV, with the device name, platform and app version when the app reports them. |
+| Address | The client's IP address and whether it is **Local** or **Remote**. Behind a reverse proxy this is the real client address only when the proxy is trusted (see [trusted proxies](users-and-security.md#trusted-proxies)). |
+| Playback | **Direct play**, **Remux** or **Transcode**, then the details: the HLS quality (for example `1080p`), the bitrate, the hardware encoder in use (or software), the encode speed, the audio format when audio is converted, and **via Jellyfin/Emby** when that server sends the bytes. |
+| Progress | **Playing** or **Paused**, a progress bar and the position out of the length. |
+| Started | When the stream started. |
+
+A stream leaves the list when the player stops, when the TV or app closes the video, or when nothing has been heard from it for 90 seconds. Players do not report while paused, so a paused stream stays for 10 minutes. The list is kept in memory, so it starts empty after a restart and fills again as players report. Plays through Jellyfin, Emby or Plex apps are not listed here; see the **Now playing** card on the dashboard ([watch-history sync](media-servers.md#watch-history-sync)). The page only shows streams; it cannot stop them.
 
 ## History
 

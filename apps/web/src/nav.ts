@@ -119,6 +119,7 @@ export const FULL_NAV: readonly NavSection[] = [
     rail: 'AC',
     children: [
       { get label() { return t('common.queue'); }, to: '/activity/queue' },
+      { get label() { return t('nav.nowPlaying'); }, to: '/activity/streams' },
       { get label() { return t('common.history'); }, to: '/activity/history' },
       { get label() { return t('common.blocklist'); }, to: '/activity/blocklist' },
       { get label() { return t('common.pending'); }, to: '/activity/pending' },

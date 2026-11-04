@@ -81,7 +81,14 @@ clipboard, on the [player address](address.md) when an admin set one (for exampl
 ## Search
 
 Type to search movies and shows, plus albums and audiobooks when those sections are on. Before
-you type, the page shows what is popular.
+you type, the page shows what is popular. The phone and TV apps use the same search.
+
+Matching is forgiving: case, accents and punctuation do not matter ("spiderman" finds
+*Spider-Man*, "greys anatomy" finds *Grey's Anatomy*, "shield" finds *S.H.I.E.L.D.*), words can be
+shortened or in any order ("star wa"), and "the", "a", "an", "and" and "of" may be left out or
+added. Movies also match their original title and year, shows their year and network, and a show
+is found by the title of an episode you have ("good news about hell"). Only what the profile may
+watch is searched.
 
 ## Music and Audiobooks
 

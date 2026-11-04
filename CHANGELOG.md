@@ -9,6 +9,18 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-03
+
+### Added
+- Activity > **Now playing**: every stream that is playing right now, refreshed every 5 seconds. It shows who is watching (user and profile), what (title, episode, track or chapter), the device and app (web, phone or TV), the IP address and whether it is local or remote, how it plays (direct, remux or transcode, the HLS quality, bitrate and encoder) and the position, playing or paused. View only, for admins. The list is kept in memory, so it starts empty after a restart.
+- The Android and TV app gives up on a video that will not start instead of spinning forever. With no picture after 25 seconds (60 for a converted stream), or 60 seconds stuck buffering, it asks once for a safe converted stream (H.264 with stereo AAC, up to 1080p) at the same position; if that fails too it closes and says the video could not load.
+
+### Fixed
+- Search found nothing when the words did not match the title's punctuation, for example `spiderman` for *Spider-Man*, `schindlers` for *Schindler's List* or `shield` for *Agents of S.H.I.E.L.D.* The TV keyboard has no apostrophe or hyphen, so on TVs these titles could not be found at all. Search now ignores case, accents and punctuation, lets a word run across the title's word breaks, finds partial last words (`star wa`) and does not need "the", "a" or "and". Shows can also be found by an episode title, and movies by original title or year.
+- Admin search on a large library could miss a title that sorted past the first 200 rows; music and audiobook search had the same limit. Every word of the search now narrows the database query.
+- The web player's search page says the search failed, with a Retry button, instead of "No matches" when the server could not be reached.
+- The Arclight Android/TV app for 0.24.0 was first published with the 0.23 screens inside (Settings showed app version 0.23.0). It was replaced the same day; release builds now refuse to build when the bundled screens are not the app's version.
+
 ## [0.24.0] - 2026-11-03
 
 ### Added
@@ -548,6 +560,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.25.0]: https://github.com/ZacABrewer/arclight/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/ZacABrewer/arclight/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/ZacABrewer/arclight/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/ZacABrewer/arclight/compare/v0.21.0...v0.22.0

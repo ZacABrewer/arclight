@@ -198,6 +198,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** HLS: the largest height adaptive playback may pick (the server's advice); MAX_VALUE = none. */
     private int hlsCapHeight = Integer.MAX_VALUE;
     private long lastHealthAt;
+    /** No picture / stuck buffering / no answer from JS: falls back once, then fails (never spins forever). */
+    private final StartWatchdog watchdog = new StartWatchdog();
+    /** Between onStart and onStop. */
+    private boolean foreground;
     private boolean healthPending;
     /** The down time of a key press already handled (its repeats and up are swallowed). */
     private long swallowDownTime = -1;
@@ -308,6 +312,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             public void onRenderedFirstFrame() {
                 boolean first = stats.startupMs() < 0;
                 stats.firstFrame(SystemClock.elapsedRealtime());
+                watchdog.firstFrame();
                 VideoRequest r = req;
                 if (first && stats.startupMs() >= 0) {
                     SafeLog.i(TAG, "Startup " + stats.startupMs() + " ms (" + (r != null && r.isHls() ? "hls" : "progressive") + ")");
@@ -341,6 +346,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Override
     protected void onStart() {
         super.onStart();
+        foreground = true;
         // The app's page stays running behind this screen (events and progress reach JS).
         ArclightWebView.holdVisible(true);
     }
@@ -348,6 +354,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Override
     protected void onStop() {
         super.onStop();
+        foreground = false;
         ArclightWebView.holdVisible(false);
         if (closed || isInPip()) return;
         // Home on a TV / app switch on a phone without PiP: pause and report.
@@ -621,6 +628,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         introAutoSkipped = false;
         lastProgressAt = SystemClock.elapsedRealtime();
         stats.open(SystemClock.elapsedRealtime());
+        watchdog.open();
         shownSkip = null;
         handler.removeCallbacks(sendSeek);
         synchronized (rawVtt) {
@@ -670,6 +678,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         final int gen = ++generation;
         // A new stream's first buffering is not a stall; its session has its own advice.
         stats.seek();
+        watchdog.stream(r.directPlay());
         hlsCapHeight = Integer.MAX_VALUE;
         lastHealthAt = SystemClock.elapsedRealtime();
         healthPending = false;
@@ -951,7 +960,41 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         }
         String code = PlaybackMapping.errorCode(error.errorCode, http, false);
         SafeLog.w(TAG, "Playback failed (" + code + ")", error);
+        VideoRequest r = req;
+        // Not decodable here, or the server's conversion broke: one safe converted stream first.
+        if (r != null && StartWatchdog.retryable(code, http, r.isHls()) && fallBack("Playback failed (" + code + ")")) return;
         finishWithClose(false, code);
+    }
+
+    /**
+     * Asks JS once per item for a safe converted stream at the current point (the stream failed,
+     * showed no picture in time or stayed buffering); the spinner shows until replaceVideoStream.
+     * False when the fallback was used already or JS does not listen.
+     */
+    private boolean fallBack(String why) {
+        VideoRequest r = req;
+        if (r == null || closed || player == null || !watchdog.takeFallback(controller.listens("videoSeekRequest"))) return false;
+        long pos = currentMediaMs();
+        SafeLog.w(TAG, why + ": asking for a safe converted stream at " + pos / 1000 + " s (" + (r.isHls() ? "hls" : r.directPlay() ? "direct" : "progressive") + ")");
+        handler.removeCallbacks(sendSeek);
+        player.stop();
+        pendingSeekMs = pos;
+        awaitingJs = true;
+        updateLoading();
+        controller.seekRequest(r.itemKey, pos, r.selectedAudio, r.selectedSubtitle, true, true);
+        return true;
+    }
+
+    /** The watchdog's verdict for this tick: fall back once, else close with an error. */
+    private void checkWatchdog(long now) {
+        boolean canFallback = controller.listens("videoSeekRequest");
+        StartWatchdog.Action a = watchdog.check(now, player.getPlayWhenReady() && foreground,
+                player.getPlaybackState() == Player.STATE_BUFFERING, awaitingJs, foreground, canFallback);
+        if (a == StartWatchdog.Action.NONE) return;
+        String why = awaitingJs ? "No answer from the app" : watchdog.started() ? "Stuck buffering" : "No picture in time";
+        if (a == StartWatchdog.Action.FALLBACK && fallBack(why)) return;
+        SafeLog.w(TAG, why + ": closing");
+        finishWithClose(false, "timeout");
     }
 
     private void applyInitialTracks(Tracks tracks) {
@@ -1119,6 +1162,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (player.getPlaybackState() == Player.STATE_READY) noteResumed();
         if (r.isHls()) maybePollHealth(r, now);
         else maybeLeaveDirectPlay(r, now);
+        checkWatchdog(now);
+        if (closed) return;
         if (player.isPlaying() && now - lastProgressAt >= PROGRESS_INTERVAL_MS) emitProgress(false);
     }
 

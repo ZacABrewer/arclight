@@ -253,15 +253,15 @@ function addMovie(db: Db, opts: { title: string; tmdbId: number; certification?:
   return { movie, files };
 }
 
-function addSeries(db: Db, opts: { certification?: string | null; info?: MediaInfo } = {}) {
+function addSeries(db: Db, opts: { certification?: string | null; info?: MediaInfo; title?: string; episodeTitles?: string[] } = {}) {
   const dir = join(tmp, `series-${Math.random().toString(36).slice(2, 8)}`);
   const show = db
     .insert(schema.series)
     .values({
       tmdbId: Math.floor(Math.random() * 1e6),
-      title: 'Test Show',
-      sortTitle: 'test show',
-      cleanTitle: 'testshow',
+      title: opts.title ?? 'Test Show',
+      sortTitle: (opts.title ?? 'Test Show').toLowerCase(),
+      cleanTitle: (opts.title ?? 'Test Show').toLowerCase().replace(/\W/g, ''),
       year: 2020,
       status: 'continuing',
       genres: ['Comedy'],
@@ -291,7 +291,7 @@ function addSeries(db: Db, opts: { certification?: string | null; info?: MediaIn
     }
     return db
       .insert(schema.episodes)
-      .values({ seriesId: show.id, seasonNumber: 1, episodeNumber: n, title: `Episode ${n}`, airDate: `2020-01-0${n}`, hasFile, episodeFileId: fileId })
+      .values({ seriesId: show.id, seasonNumber: 1, episodeNumber: n, title: opts.episodeTitles?.[n - 1] ?? `Episode ${n}`, airDate: `2020-01-0${n}`, hasFile, episodeFileId: fileId })
       .returning()
       .get();
   });
@@ -751,6 +751,37 @@ describe('browse, watched and search', () => {
     await report(`episode:${episodes[1]!.id}`, '2026-05-01T11:00:00.000Z');
     const row = (await get(h, '/api/v1/playback/video/home', user.cookie)).json().continueWatching.map((c: { itemKey: string }) => c.itemKey);
     expect(row).toEqual([`episode:${episodes[1]!.id}`, `movie:${movie.id}`]);
+  });
+
+  it('search finds titles typed without their punctuation, through the real route and schema', async () => {
+    // The 0.24 bug: "Search does not work" — a query word spanning a title's punctuation
+    // ("spiderman", "greys", "shield") matched no single title word, so the whole search came
+    // back empty on every client (web, phone and TV share this route).
+    const h = await harness();
+    const spidey = addMovie(h.db, { title: 'Spider-Man: No Way Home', tmdbId: 20, files: [{ name: 'a.mp4', info: H264_AAC }] }).movie;
+    addMovie(h.db, { title: "Schindler's List", tmdbId: 21, certification: 'R', files: [{ name: 'a.mp4', info: H264_AAC }] });
+    const greys = addSeries(h.db, { title: "Grey's Anatomy" }).show;
+    const shield = addSeries(h.db, { title: "Marvel's Agents of S.H.I.E.L.D.", episodeTitles: ['Pilot', 'Good News About Hell'] }).show;
+    const user = await signIn(h);
+    const titles = async (q: string, cookie = user.cookie) => {
+      const res = await get(h, `/api/v1/playback/search?q=${encodeURIComponent(q)}`, cookie);
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      return { movies: body.movies.map((m: { id: number }) => m.id), series: body.series.map((s: { id: number }) => s.id) };
+    };
+    expect((await titles('spiderman')).movies).toEqual([spidey.id]);
+    expect((await titles('SPIDER MAN')).movies).toEqual([spidey.id]);
+    expect((await titles('schindlers list')).movies).toHaveLength(1);
+    expect((await titles('greys anatomy')).series).toEqual([greys.id]);
+    expect((await titles('agents of shield')).series).toEqual([shield.id]);
+    expect((await titles('the spiderman')).movies).toEqual([spidey.id]);
+    // A show is found by one of its episode titles (episodes with files only), never loosely.
+    expect((await titles('good news about')).series).toEqual([shield.id]);
+    expect((await titles('gdnws')).series).toEqual([]);
+    expect((await titles('episode')).series).toEqual([]);
+    // Restrictions still apply.
+    const kid = await signIn(h, { restrictions: { maxCertification: { movie: 'PG', tv: null } } });
+    expect((await titles('schindlers', kid.cookie)).movies).toEqual([]);
   });
 
   it('restrictions apply to lists and search', async () => {
