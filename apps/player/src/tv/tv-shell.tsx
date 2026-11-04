@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useT } from '@web/i18n/index';
 import { usePlayer } from '@web/features/player/player-context';
@@ -7,6 +7,7 @@ import { Lockup } from '@web/arclight/lockup';
 import { ProfileAvatar } from '@web/features/player/redesign/profile-avatar';
 import { artBackground } from '@web/features/player/redesign/placeholder';
 import { TvStage } from './stage';
+import { SCROLLED_ATTR } from './stage-scroll';
 import { HOME_PATH, PROFILES_PATH } from './tv-runtime';
 import './tv.css';
 
@@ -70,6 +71,10 @@ export function TvHeader() {
   const { profile } = useActiveProfile();
   const active = activeTab(pathname);
   const onListen = norm(pathname) === '/player/now-playing';
+  // A new page starts at its top; the one left behind may have been scrolled (stage-scroll.ts).
+  useEffect(() => {
+    document.querySelector('[data-tv-stage]')?.removeAttribute(SCROLLED_ATTR);
+  }, [pathname]);
   const tabs: TabDef[] = [
     { id: 'home', to: HOME_PATH, label: t('app.tv.tab.home') },
     { id: 'shows', to: '/player/watch/shows', label: t('app.tv.tab.shows') },
@@ -84,6 +89,7 @@ export function TvHeader() {
   return (
     <>
       <div className="tv-hfade" aria-hidden="true" />
+      <div className="tv-hsolid" aria-hidden="true" />
       <header className="tv-header" data-tv-row="" data-tv-fixed="">
         <Lockup height={22} />
         <nav className="tv-tabs" aria-label={t('app.nav.label')}>

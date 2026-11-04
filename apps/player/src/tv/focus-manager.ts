@@ -17,7 +17,9 @@ import { ensureVisible, stageScale } from './stage-scroll';
 //
 // On the redesign's TV stage ([data-tv-stage]) the design's own rules apply instead (spatial.ts
 // `stageScore`, stage-scroll.ts): rows ([data-tv-row]) bound left / right, the fixed header
-// ([data-tv-fixed]) is reached up from the top of a page, and the stage scrollers move.
+// ([data-tv-fixed]) is reached up from the top of a page, and the stage scrollers move. Moving
+// into a [data-tv-enter] block from outside lands on its first item ("first") or on its
+// aria-current one ("current", else the first), not on whichever is level with the origin.
 
 export const FOCUSABLE = [
   'a[href]',
@@ -162,6 +164,13 @@ export class FocusManager {
         ? candidates.findIndex((c) => !c.inHeader && stageScore(origin, c, dir, headerBottom) < Infinity)
         : pickStage(origin, candidates, dir, headerBottom);
     if (i < 0) return false;
+    const block = els[i]!.closest<HTMLElement>('[data-tv-enter]');
+    if (block && !block.contains(from)) {
+      const inside = els.filter((el) => block.contains(el));
+      const current = block.getAttribute('data-tv-enter') === 'current' ? inside.find((el) => el.getAttribute('aria-current') === 'true') : undefined;
+      const k = els.indexOf(current ?? inside[0]!);
+      if (k >= 0) i = k;
+    }
     // Up from the page into the header lands on the active tab (aria-current), not on whichever
     // tab is nearest; with none shown (a title page), the nearest as before.
     if (dir === 'up' && !origin.inHeader && candidates[i]!.inHeader) {

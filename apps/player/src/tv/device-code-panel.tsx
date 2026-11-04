@@ -10,7 +10,7 @@ import { isTvMode } from './tv-mode';
 // "Sign in with a code" (TV first, works on phones too): shows the code, the address to confirm it
 // at and a QR code that opens that address with the code filled in; polls until it is confirmed.
 
-function Qr({ value, label }: { value: string; label: string }) {
+export function Qr({ value, label }: { value: string; label: string }) {
   const { path, dim } = useMemo(() => {
     const m = encodeQr(value, 'M');
     return { path: qrPath(m, 2), dim: m.size + 4 };

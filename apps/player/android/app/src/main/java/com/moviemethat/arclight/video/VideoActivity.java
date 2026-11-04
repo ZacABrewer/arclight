@@ -25,7 +25,6 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.ProgressBar;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -68,12 +67,14 @@ import com.moviemethat.arclight.ArclightWebView;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.SafeLog;
 import com.moviemethat.arclight.player.PlaybackMapping;
+import com.moviemethat.arclight.video.ui.BufferingView;
 import com.moviemethat.arclight.video.ui.ControlsView;
 import com.moviemethat.arclight.video.ui.EpisodesPanel;
 import com.moviemethat.arclight.video.ui.ImageLoader;
 import com.moviemethat.arclight.video.ui.Overlay;
 import com.moviemethat.arclight.video.ui.PauseGlyphView;
 import com.moviemethat.arclight.video.ui.PauseInfoView;
+import com.moviemethat.arclight.video.ui.PromptView;
 import com.moviemethat.arclight.video.ui.SheetCache;
 import com.moviemethat.arclight.video.ui.SidePanel;
 import com.moviemethat.arclight.video.ui.SkipButton;
@@ -152,7 +153,6 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Nullable private DefaultBandwidthMeter bandwidth;
     @Nullable private MediaSession session;
     private PlayerView playerView;
-    private ProgressBar loading;
     private Overlay overlay;
 
     // The overlay, rebuilt when the window size (stage scale) or the request's style changes.
@@ -165,7 +165,32 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     private PauseInfoView pauseInfo;
     private EpisodesPanel episodes;
     private TracksPanel tracks;
+    private BufferingView buffering;
+    /** The can't-play screen (S18) and "Are you still watching?" (S19). */
+    private PromptView prompt;
     private boolean controlsShown;
+    /** Loading or buffering; the ring shows once that lasted BUFFERING_DELAY_MS. */
+    private boolean busy;
+    private static final long BUFFERING_DELAY_MS = 400;
+    private final Runnable showBuffering = this::updateBufferingView;
+
+    private static final int PROMPT_NONE = 0;
+    private static final int PROMPT_ERROR = 1;
+    private static final int PROMPT_STILL = 2;
+    private int promptKind = PROMPT_NONE;
+    /** PROMPT_ERROR: the close code, where it stopped and when; PROMPT_STILL: the autoplays counted. */
+    @Nullable private String promptCode;
+    private long promptPosMs;
+    private long promptAt;
+    private int promptAutoplays;
+    /** Autoplayed items in a row, untouched, that led into this one (S19). */
+    private int autoplays;
+    /** The coming load() is an autoplay: it continues the count with {@link #nextAutoplays}. */
+    private boolean nextLoadIsAutoplay;
+    private int nextAutoplays;
+    private long itemLoadedAt;
+    /** The caption size in use (the panel can change it during the play). */
+    private String subtitleSize = "medium";
 
     @Nullable private VideoRequest req;
     private boolean tv;
@@ -236,7 +261,6 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         setContentView(R.layout.activity_video);
         enterImmersive();
         playerView = findViewById(R.id.video_view);
-        loading = findViewById(R.id.video_loading);
         overlay = findViewById(R.id.video_overlay);
         overlay.setListener(this);
         createPlayer(request);
@@ -448,6 +472,28 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         m.put("episodes", getString(R.string.video_episodes));
         m.put("nextEpisode", getString(R.string.video_next_episode));
         m.put("nowPlaying", getString(R.string.video_now_playing));
+        m.put("upNextIn", getString(R.string.video_up_next_in));
+        m.put("watchCredits", getString(R.string.video_watch_credits));
+        m.put("buffering", getString(R.string.video_buffering));
+        m.put("errorTitle", getString(R.string.video_error_title));
+        m.put("errorNetwork", getString(R.string.video_error_network));
+        m.put("errorUnsupported", getString(R.string.video_error_unsupported));
+        m.put("errorForbidden", getString(R.string.video_error_forbidden));
+        m.put("errorBusy", getString(R.string.video_error_busy));
+        m.put("errorLoad", getString(R.string.video_error_load));
+        m.put("errorTimeout", getString(R.string.video_error_timeout));
+        m.put("errorDetail", getString(R.string.video_error_detail));
+        m.put("tryAgain", getString(R.string.video_try_again));
+        m.put("back", getString(R.string.video_back));
+        m.put("stillWatching", getString(R.string.video_still_watching));
+        m.put("stillWatchingBody", getString(R.string.video_still_watching_body));
+        m.put("keepWatching", getString(R.string.video_keep_watching));
+        m.put("backToHome", getString(R.string.video_back_to_home));
+        m.put("subtitleSize", getString(R.string.video_subtitle_size));
+        m.put("sizeSmall", getString(R.string.video_size_small));
+        m.put("sizeMedium", getString(R.string.video_size_medium));
+        m.put("sizeLarge", getString(R.string.video_size_large));
+        m.put("needsConversion", getString(R.string.video_needs_conversion));
         return m;
     }
 
@@ -455,9 +501,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         return Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled();
     }
 
-    private static String styleKey(VideoRequest r, float k) {
+    private String styleKey(VideoRequest r, float k) {
         return k + "|" + r.theme + "|" + r.strings + "|" + r.prefs.reduceMotion + "|" + r.prefs.focusStyle + "|"
-                + r.prefs.subtitleSize;
+                + subtitleSize;
     }
 
     /**
@@ -470,6 +516,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         uiStyleKey = key;
         boolean wasShown = controls == null || controlsShown;
         boolean pauseShowing = pauseInfo != null && pauseInfo.isShowing();
+        handler.removeCallbacks(showBuffering);
         overlay.removeAllViews();
         OverlayStrings strings = new OverlayStrings(r.strings, fallbackStrings());
         Ui u = new Ui(this, k, new OverlayTheme(r.theme), strings, r.prefs.reduceMotion || systemReducedMotion(),
@@ -480,6 +527,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         glyph = new PauseGlyphView(this, u);
         glyph.setVisibility(View.GONE);
         overlay.addView(glyph, u.frame(u.px(96), u.px(96), Gravity.CENTER));
+
+        buffering = new BufferingView(this, u);
+        overlay.addView(buffering, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
 
         controls = new ControlsView(this, u, sheets);
         overlay.addView(controls, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
@@ -528,7 +578,16 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             public void onSubtitlePicked(int position) {
                 pickSubtitle(position);
             }
+
+            @Override
+            public void onSubtitleSizePicked(String size) {
+                pickSubtitleSize(size);
+            }
         });
+
+        prompt = new PromptView(this, u);
+        overlay.addView(prompt, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
+        prompt.setListener(this::onPromptButton);
 
         applyCaptionStyle(r, u);
         bindOverlay(r);
@@ -542,6 +601,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             upNext.setControlsShown(controlsShown);
         }
         if (pauseShowing) showPauseInfo();
+        if (promptKind != PROMPT_NONE) showPrompt();
+        updateBufferingView();
         updatePlayPause();
         onTick();
         return true;
@@ -550,6 +611,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** Per-item content of the overlay. */
     private void bindOverlay(VideoRequest r) {
         controls.setTitles(r.title, r.subtitle);
+        updateInfo();
         controls.bar.setChapters(r.chapters);
         controls.preview.bind(r.trickplay);
         controls.next.setVisibility(r.next == null ? View.GONE : View.VISIBLE);
@@ -574,7 +636,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
                 CaptionStyleCompat.EDGE_TYPE_NONE, Color.TRANSPARENT, Ui.font(600)));
         subs.setApplyEmbeddedStyles(false);
         subs.setApplyEmbeddedFontSizes(false);
-        subs.setFixedTextSize(TypedValue.COMPLEX_UNIT_PX, u.pxf(VideoTimeline.captionSize(r.prefs.subtitleSize)));
+        subs.setFixedTextSize(TypedValue.COMPLEX_UNIT_PX, u.pxf(VideoTimeline.captionSize(subtitleSize)));
         liftSubtitles(controlsShown);
     }
 
@@ -615,6 +677,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             controller.progress(old.itemKey, currentMediaMs(), durationMs(), true);
         }
         req = request;
+        subtitleSize = request.prefs.subtitleSize;
+        autoplays = nextLoadIsAutoplay ? nextAutoplays : 0;
+        nextLoadIsAutoplay = false;
+        itemLoadedAt = SystemClock.elapsedRealtime();
+        promptKind = PROMPT_NONE;
+        if (prompt != null) prompt.hide();
         tracksApplied = false;
         everReady = false;
         awaitingJs = false;
@@ -663,6 +731,12 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         boolean play = player.getPlayWhenReady() || awaitingJs;
         r.apply(stream);
         awaitingJs = false;
+        // A stream after the can't-play screen (Try again, or a late answer): play on.
+        if (promptKind == PROMPT_ERROR) {
+            hidePrompt();
+            play = true;
+        }
+        if (controls != null) updateInfo();
         pendingSeekMs = -1;
         tracksApplied = false;
         startStream(stream.positionMs, play);
@@ -682,7 +756,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         hlsCapHeight = Integer.MAX_VALUE;
         lastHealthAt = SystemClock.elapsedRealtime();
         healthPending = false;
-        loading.setVisibility(View.VISIBLE);
+        setBusy(true);
         if (r.streamStartMs <= 0 || r.subtitles.isEmpty()) {
             List<MediaItem.SubtitleConfiguration> subs = new ArrayList<>();
             for (VideoRequest.Subtitle s : r.subtitles) subs.add(subtitleConfig(s, Uri.parse(s.url)));
@@ -927,9 +1001,27 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     }
 
     private void updateLoading() {
-        boolean busy = awaitingJs || player == null || player.getPlaybackState() == Player.STATE_BUFFERING
-                || (player.getPlaybackState() == Player.STATE_IDLE && !closed);
-        loading.setVisibility(busy ? View.VISIBLE : View.GONE);
+        boolean b = promptKind != PROMPT_ERROR && (awaitingJs || player == null || player.getPlaybackState() == Player.STATE_BUFFERING
+                || (player.getPlaybackState() == Player.STATE_IDLE && !closed));
+        setBusy(b);
+    }
+
+    /** Busy now: the ring follows after BUFFERING_DELAY_MS (a short stall shows nothing, S17). */
+    private void setBusy(boolean b) {
+        if (b != busy) {
+            busy = b;
+            handler.removeCallbacks(showBuffering);
+            if (b) handler.postDelayed(showBuffering, BUFFERING_DELAY_MS);
+            else updateBufferingView();
+        }
+        updateGlyph();
+    }
+
+    private void updateBufferingView() {
+        if (buffering == null) return;
+        boolean show = busy && promptKind == PROMPT_NONE && !isInPip();
+        if (show) buffering.setRate(bandwidthKbps());
+        buffering.setVisibility(show ? View.VISIBLE : View.GONE);
         updateGlyph();
     }
 
@@ -948,7 +1040,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r == null || awaitingJs || closed) return;
         VideoTimeline.EndAction a = VideoTimeline.endAction(r.next != null, upNextCancelled, r.prefs.autoplayNext);
-        if (a == VideoTimeline.EndAction.NEXT) fireNext(true);
+        if (a == VideoTimeline.EndAction.NEXT) autoplayNext();
         else finishWithClose(true, null);
     }
 
@@ -963,7 +1055,26 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         // Not decodable here, or the server's conversion broke: one safe converted stream first.
         if (r != null && StartWatchdog.retryable(code, http, r.isHls()) && fallBack("Playback failed (" + code + ")")) return;
-        finishWithClose(false, code);
+        fail(code);
+    }
+
+    /** The end of a failed play: the can't-play screen when it can show, else close with the code. */
+    private void fail(String code) {
+        if (controls == null || closed || !foreground || isInPip()) {
+            finishWithClose(false, code);
+            return;
+        }
+        promptKind = PROMPT_ERROR;
+        promptCode = code;
+        promptPosMs = currentMediaMs();
+        promptAt = System.currentTimeMillis();
+        awaitingJs = false;
+        handler.removeCallbacks(sendSeek);
+        pendingSeekMs = -1;
+        // The last frame stays under the dim.
+        if (player != null) player.stop();
+        setBusy(false);
+        showPrompt();
     }
 
     /**
@@ -994,7 +1105,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         String why = awaitingJs ? "No answer from the app" : watchdog.started() ? "Stuck buffering" : "No picture in time";
         if (a == StartWatchdog.Action.FALLBACK && fallBack(why)) return;
         SafeLog.w(TAG, why + ": closing");
-        finishWithClose(false, "timeout");
+        fail("timeout");
     }
 
     private void applyInitialTracks(Tracks tracks) {
@@ -1139,6 +1250,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         // Closed: finish() is pending; nothing may fire (an up-next countdown would reopen the screen).
         if (r == null || player == null || closed || controls == null) return;
+        controls.setClock(DateFormat.getTimeFormat(this).format(new java.util.Date()));
+        if (buffering.isShowing()) buffering.setRate(bandwidthKbps());
+        // The can't-play screen or the question: nothing runs under them.
+        if (promptKind != PROMPT_NONE) return;
         long pos = currentMediaMs();
         long dur = durationMs();
         controls.bar.setPosition(pos, dur);
@@ -1314,7 +1429,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** The 96 px centred pause glyph, while paused and the pause screen is not up. */
     private void updateGlyph() {
         if (glyph == null) return;
-        boolean show = userPaused() && !pauseInfo.isShowing() && !isInPip() && loading.getVisibility() != View.VISIBLE;
+        boolean show = userPaused() && !pauseInfo.isShowing() && !isInPip() && !busy && promptKind == PROMPT_NONE;
         glyph.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
@@ -1354,7 +1469,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     // =====================================================================================
 
     private void updateSkip(VideoRequest r, long pos) {
-        boolean blocked = isInPip() || pauseInfo.isShowing() || awaitingJs;
+        // Under a side panel too: the panel covers the picture's bottom-right corner (S20).
+        boolean blocked = isInPip() || pauseInfo.isShowing() || awaitingJs || openPanel() != null;
         VideoRequest.Segment s = blocked ? null : VideoTimeline.activeSkip(r.segments, pos, r.next != null);
         if (s == shownSkip) return;
         shownSkip = s;
@@ -1416,7 +1532,101 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         long elapsed = (upNextHeldAt >= 0 ? upNextHeldAt : now) - upNextStartedAt;
         long left = VideoTimeline.UP_NEXT_COUNTDOWN_MS - elapsed;
         upNext.setCountdown(left, VideoTimeline.UP_NEXT_COUNTDOWN_MS, running);
-        if (left <= 0) fireNext(true);
+        if (left <= 0) autoplayNext();
+    }
+
+    /**
+     * Up next on its own (the countdown ran out, or the stream ended): plays it, unless this is
+     * the STILL_WATCHING_AFTER-th autoplay in a row without any input, which asks first (S19).
+     */
+    private void autoplayNext() {
+        VideoRequest r = req;
+        if (r == null || r.next == null || closed || promptKind != PROMPT_NONE) return;
+        int run = lastInputAt <= itemLoadedAt ? autoplays : 0;
+        if (PlayerChrome.askStillWatching(run)) {
+            promptKind = PROMPT_STILL;
+            promptAutoplays = run;
+            if (player != null) player.pause();
+            hideUpNext();
+            skip.setVisibility(View.GONE);
+            shownSkip = null;
+            closePanels();
+            showPrompt();
+            return;
+        }
+        nextLoadIsAutoplay = true;
+        nextAutoplays = run + 1;
+        fireNext(true);
+    }
+
+    // =====================================================================================
+    // The can't-play screen and "Are you still watching?"
+    // =====================================================================================
+
+    /** Fills and shows the prompt for {@link #promptKind} (again after a rebuild). */
+    private void showPrompt() {
+        VideoRequest r = req;
+        if (r == null || prompt == null || ui == null) return;
+        OverlayStrings st = ui.strings;
+        List<String> labels = new ArrayList<>();
+        if (promptKind == PROMPT_ERROR) {
+            labels.add(st.get("tryAgain"));
+            labels.add(st.get("back"));
+            String time = DateFormat.getTimeFormat(this).format(new java.util.Date(promptAt));
+            String detail = st.errorDetail(promptCode == null ? "unknown" : promptCode, time, VideoTimeline.clock(promptPosMs));
+            prompt.bind(0.82f, r.title, r.subtitle, true, 34, st.get("errorTitle"), st.get(PlayerChrome.errorMessageKey(promptCode)),
+                    detail, labels);
+        } else {
+            labels.add(st.get("keepWatching"));
+            labels.add(st.get("backToHome"));
+            prompt.bind(0.8f, null, null, false, 30, st.get("stillWatching"), st.stillWatchingBody(r.subtitle != null && !r.subtitle.isEmpty() ? r.subtitle : r.title, promptAutoplays), null,
+                    labels);
+        }
+        hidePauseInfo();
+        hideControlsImmediately();
+        if (upNext != null) upNext.setVisibility(View.GONE);
+        upNextShown = false;
+        skip.setVisibility(View.GONE);
+        shownSkip = null;
+        updateBufferingView();
+        prompt.show();
+    }
+
+    private void hidePrompt() {
+        promptKind = PROMPT_NONE;
+        if (prompt != null) prompt.hide();
+        updateBufferingView();
+    }
+
+    private void onPromptButton(int index) {
+        VideoRequest r = req;
+        if (r == null || closed) return;
+        noteInput();
+        if (promptKind == PROMPT_STILL) {
+            hidePrompt();
+            if (index == 0) fireNext(true);
+            else finishWithClose(true, null);
+            return;
+        }
+        if (promptKind != PROMPT_ERROR) return;
+        if (index != 0) {
+            // Seen on screen already: no second message from the app.
+            finishWithClose(false, null);
+            return;
+        }
+        long pos = promptPosMs;
+        hidePrompt();
+        showControls(true);
+        watchdog.open();
+        if (controller.listens("videoSeekRequest")) {
+            // A fresh, safe stream from JS at the same point (as the automatic fallback asks).
+            pendingSeekMs = pos;
+            awaitingJs = true;
+            updateLoading();
+            controller.seekRequest(r.itemKey, pos, r.selectedAudio, r.selectedSubtitle, false, true);
+        } else {
+            startStream(pos, true);
+        }
     }
 
     private void hideUpNext() {
@@ -1468,16 +1678,39 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         noteInput();
         closePanels();
         hidePauseInfo();
-        handler.removeCallbacks(hideControls);
         p.open();
+        hideControlsForPanel();
     }
 
     private void closePanel(SidePanel p) {
         p.close();
+        // The controls come back with the focus on the button that opened the panel.
+        showControlsNow(false);
         View back = p == episodes ? controls.episodes : controls.tracks;
-        if (controlsShown && back.getVisibility() == View.VISIBLE) back.requestFocus();
-        else if (controlsShown) controls.toggle.requestFocus();
-        scheduleHide();
+        if (back.getVisibility() == View.VISIBLE) back.requestFocus();
+        else controls.toggle.requestFocus();
+    }
+
+    /** A side panel over the picture alone (S20): the controls fade out under it. */
+    private void hideControlsForPanel() {
+        handler.removeCallbacks(hideControls);
+        if (!controlsShown || controls == null) return;
+        controls.bar.cancelScrub();
+        controlsShown = false;
+        controls.animate().cancel();
+        Runnable done = () -> {
+            skip.setControlsShown(false);
+            upNext.setControlsShown(false);
+            liftSubtitles(false);
+            controls.setVisibility(View.INVISIBLE);
+        };
+        long d = ui.anim(150);
+        if (d == 0) {
+            controls.setAlpha(0f);
+            done.run();
+        } else {
+            controls.animate().alpha(0f).setDuration(d).setUpdateListener(a -> overlay.invalidate()).withEndAction(done).start();
+        }
     }
 
     private void closePanels() {
@@ -1535,6 +1768,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         VideoRequest r = req;
         if (r == null || player == null) return;
         List<String> audio = new ArrayList<>();
+        List<String> notes = new ArrayList<>();
         int audioSel = -1;
         List<Tracks.Group> file = fileAudio();
         if (r.directPlay() && !file.isEmpty()) {
@@ -1543,6 +1777,8 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             for (int i = 0; i < file.size(); i++) {
                 VideoRequest.AudioTrack js = jsTrack(r, TrackMatch.jsIndexFor(r.audioTracks, mapped, i));
                 audio.add(js != null ? js.label : formatLabel(file.get(i).getTrackFormat(0), i));
+                // S20's note: this device can't decode it, so picking it asks for a converted stream.
+                notes.add(file.get(i).isTrackSupported(0) ? null : ui.strings.get("needsConversion"));
                 if (file.get(i).isSelected()) audioSel = i;
             }
         } else if (!r.directPlay()) {
@@ -1558,7 +1794,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             subs.add(r.subtitles.get(i).label);
             if (r.subtitles.get(i).id.equals(r.selectedSubtitle)) subSel = i + 1;
         }
-        tracks.bind(audio, audioSel, subs, subSel);
+        tracks.bind(audio, notes, audioSel, subs, subSel, subtitleSize);
         openPanel(tracks);
     }
 
@@ -1569,6 +1805,16 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (r.directPlay()) {
             List<Tracks.Group> file = fileAudio();
             if (which < 0 || which >= file.size()) return;
+            Integer jsAudio = TrackMatch.jsIndexFor(r.audioTracks, fileTracks(file), which);
+            if (!file.get(which).isTrackSupported(0) && jsAudio != null && controller.listens("videoSeekRequest")) {
+                long pos = currentMediaMs();
+                r.selectedAudio = jsAudio;
+                awaitingJs = true;
+                updateLoading();
+                controller.seekRequest(r.itemKey, pos, jsAudio, r.selectedSubtitle, true);
+                controller.tracksChanged(r.itemKey, jsAudio, r.selectedSubtitle);
+                return;
+            }
             player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
                     .setOverrideForType(new TrackSelectionOverride(file.get(which).getMediaTrackGroup(), 0))
                     .build());
@@ -1577,6 +1823,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             Integer js = TrackMatch.jsIndexFor(r.audioTracks, fileTracks(file), which);
             r.selectedAudio = js;
             if (js != null) controller.tracksChanged(r.itemKey, js, r.selectedSubtitle);
+            updateInfo();
             return;
         }
         if (which < 0 || which >= r.audioTracks.size()) return;
@@ -1602,6 +1849,38 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         controller.tracksChanged(r.itemKey, r.selectedAudio, r.selectedSubtitle);
     }
 
+    /** The panel's Subtitle size row: applied now, and saved to the profile by JS. */
+    private void pickSubtitleSize(String size) {
+        VideoRequest r = req;
+        if (r == null || ui == null) return;
+        noteInput();
+        subtitleSize = size;
+        applyCaptionStyle(r, ui);
+        uiStyleKey = styleKey(r, ui.k);
+        controller.prefsChanged(r.itemKey, size);
+    }
+
+    /** The controls' top-right line (S16): the stream's badges and delivery, and the audio's channels. */
+    private void updateInfo() {
+        VideoRequest r = req;
+        if (r == null || controls == null) return;
+        controls.setInfo(PlayerChrome.info(r.streamInfo, playingChannels(r)));
+    }
+
+    @Nullable
+    private Integer playingChannels(VideoRequest r) {
+        if (player != null) {
+            for (Tracks.Group g : groups(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO)) {
+                if (!g.isSelected()) continue;
+                for (int i = 0; i < g.length; i++) {
+                    if (g.isTrackSelected(i) && g.getTrackFormat(i).channelCount != Format.NO_VALUE) return g.getTrackFormat(i).channelCount;
+                }
+            }
+        }
+        VideoRequest.AudioTrack a = jsTrack(r, r.selectedAudio);
+        return a == null ? null : a.channels;
+    }
+
     private String formatLabel(Format f, int index) {
         StringBuilder sb = new StringBuilder();
         if (f.label != null) sb.append(f.label);
@@ -1618,12 +1897,14 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     // =====================================================================================
 
     private void showControls(boolean focusPlay) {
-        if (isInPip() || controls == null) return;
+        if (isInPip() || controls == null || promptKind != PROMPT_NONE) return;
         hidePauseInfo();
         showControlsNow(focusPlay);
     }
 
     private void showControlsNow(boolean focusPlay) {
+        // Under an open panel the controls stay away (play / pause keys still work).
+        if (openPanel() != null) return;
         boolean wasHidden = !controlsShown;
         controlsShown = true;
         liftSubtitles(true);
@@ -1727,6 +2008,10 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** Back: the pause screen, then a scrub preview, then a panel, then the player (§5.1, §5.3). */
     private void onBack() {
         noteInput();
+        if (promptKind != PROMPT_NONE) {
+            finishWithClose(promptKind == PROMPT_STILL, null);
+            return;
+        }
         if (controls != null) {
             if (pauseInfo.isShowing()) {
                 hidePauseInfo();
@@ -1769,6 +2054,19 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             return true;
         }
 
+        // The prompt: its buttons only (Stop leaves as Back does).
+        if (promptKind != PROMPT_NONE && code != KeyEvent.KEYCODE_BACK) {
+            if (code == KeyEvent.KEYCODE_MEDIA_STOP) {
+                if (down) onBack();
+                return true;
+            }
+            if (isDirection(code)) {
+                if (down) prompt.moveFocus(code);
+                return true;
+            }
+            if (isEnter(code)) return super.dispatchKeyEvent(event);
+            return true;
+        }
         if (handleMediaKey(code, event)) return true;
         if (code == KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event);
 

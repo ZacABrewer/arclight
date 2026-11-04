@@ -34,6 +34,21 @@ public final class OverlayStrings {
         return get("nextIn").replace("{s}", String.valueOf(Math.max(0, seconds)));
     }
 
+    /** "Up next in 12" (the card's label). */
+    public String upNextIn(long seconds) {
+        return get("upNextIn").replace("{s}", String.valueOf(Math.max(0, seconds)));
+    }
+
+    /** "Ember County · 3 episodes played in a row." */
+    public String stillWatchingBody(String title, int episodes) {
+        return get("stillWatchingBody").replace("{title}", title).replace("{n}", String.valueOf(episodes));
+    }
+
+    /** "Error network · 21:14:07 · stopped at 19:12". */
+    public String errorDetail(String code, String time, String position) {
+        return get("errorDetail").replace("{code}", code).replace("{time}", time).replace("{position}", position);
+    }
+
     /** "Ends at 9:42 PM". */
     public String endsAt(String time) {
         return get("endsAt").replace("{time}", time);

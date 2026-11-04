@@ -173,6 +173,26 @@ describe('FocusManager', () => {
     expect(active()).toBe('tab-home');
   });
 
+  it('into a data-tv-enter block lands on its first (or current) item, not the level one', () => {
+    render(`<div data-tv-stage="" data-tv-scale="1" data-box="0,0,1280,720">
+      <header data-tv-row="" data-tv-fixed=""><a id="tab" href="#/t" data-box="1000,20,80,32">Settings</a></header>
+      <main data-tv-group="main"><div data-tv-row="">
+      <div data-tv-enter="current"><button id="cat-a" data-box="60,120,160,40">A</button>
+      <button id="cat-b" data-box="60,170,160,40" aria-current="true">B</button>
+      <button id="cat-c" data-box="60,220,160,40">C</button></div>
+      <div data-tv-enter="first"><button id="opt-1" data-box="300,120,400,50">1</button>
+      <button id="opt-2" data-box="300,180,400,50">2</button></div></div></main></div>`);
+    document.getElementById('cat-b')!.focus();
+    key('ArrowRight'); // opt-2 is level with B, but the pane starts at its top
+    expect(active()).toBe('opt-1');
+    key('ArrowRight'); // the end of the row is an end (not the header tab)
+    expect(active()).toBe('opt-1');
+    key('ArrowDown');
+    expect(active()).toBe('opt-2');
+    key('ArrowLeft'); // back to the selected category, not the one level with the row
+    expect(active()).toBe('cat-b');
+  });
+
   it('up / down at the ends of the rail stays in the rail', () => {
     render(`<nav data-tv-group="rail"><a id="r1" href="#/1" data-box="0,100,60,50">R1</a><a id="r2" href="#/2" data-box="0,160,60,50">R2</a></nav>
       <main data-tv-group="main"><a id="top" href="#/t" data-box="100,0,100,60">T</a><a id="low" href="#/l" data-box="100,300,100,60">L</a></main>`);

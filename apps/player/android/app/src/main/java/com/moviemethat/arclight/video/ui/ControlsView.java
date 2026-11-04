@@ -11,13 +11,15 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import com.moviemethat.arclight.R;
 import com.moviemethat.arclight.video.OverlayMetrics;
+import com.moviemethat.arclight.video.PlayerChrome;
 import com.moviemethat.arclight.video.VideoSeekBar;
 
 /**
  * The playback controls (§5.1), laid out from the template's player screen in stage px:
  * <ul>
  *   <li>top: a 180 px gradient (black .7 to 0), the title 28/800 and the sub line 16 (text2) at
- *       left 56, top 40, 6 apart;</li>
+ *       left 56, top 40, 6 apart; at the right (top 44, 14 apart, 14 text3) the picture and
+ *       audio badges (12/700 on white .14, radius 4), the delivery and the clock;</li>
  *   <li>bottom: a 260 px gradient (black .82 to 0) under a column at left / right 56, bottom 40,
  *       18 apart: the scrub bar with the time "m:ss / m:ss" (15, text2, tabular figures), then
  *       the row of play / pause, −10, +10, "Next episode", "Episodes", and "Audio &amp;
@@ -30,6 +32,9 @@ public final class ControlsView extends FrameLayout {
 
     public final TextView title;
     public final TextView subtitle;
+    /** Top right: the badges, the delivery, "·" and the clock. */
+    private final LinearLayout info;
+    private final TextView clock;
     public final VideoSeekBar bar;
     public final TextView time;
     public final PlayToggleView toggle;
@@ -66,9 +71,22 @@ public final class ControlsView extends FrameLayout {
         titles.addView(subtitle, sp);
         FrameLayout.LayoutParams tp = ui.frame(Ui.MATCH, Ui.WRAP, Gravity.TOP | Gravity.START);
         tp.leftMargin = ui.px(OverlayMetrics.SIDE);
-        tp.rightMargin = ui.px(OverlayMetrics.SIDE);
+        // Clear of the top-right line (badges, delivery, clock): a long title ends in "…" first.
+        tp.rightMargin = ui.px(OverlayMetrics.SIDE + 380);
         tp.topMargin = ui.px(40);
         addView(titles, tp);
+
+        info = new LinearLayout(context);
+        info.setOrientation(LinearLayout.HORIZONTAL);
+        info.setGravity(Gravity.CENTER_VERTICAL);
+        clock = ui.text(14, 400, ui.theme.text3);
+        Ui.tabular(clock);
+        clock.setSingleLine(true);
+        FrameLayout.LayoutParams ip = ui.frame(Ui.WRAP, ui.px(24), Gravity.TOP | Gravity.END);
+        ip.rightMargin = ui.px(OverlayMetrics.SIDE);
+        ip.topMargin = ui.px(44);
+        addView(info, ip);
+        setInfo(null);
 
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
@@ -136,6 +154,44 @@ public final class ControlsView extends FrameLayout {
         title.setText(t);
         subtitle.setText(sub == null ? "" : sub);
         subtitle.setVisibility(sub == null || sub.isEmpty() ? GONE : VISIBLE);
+    }
+
+    /** The top-right line; null: the clock alone. */
+    public void setInfo(@Nullable PlayerChrome.Info i) {
+        info.removeAllViews();
+        if (i != null) {
+            for (String b : i.badges) {
+                TextView v = ui.text(12, 700, ui.theme.text);
+                v.setText(b);
+                v.setSingleLine(true);
+                v.setPadding(ui.px(6), ui.px(2), ui.px(6), ui.px(2));
+                v.setBackground(ui.round(ui.theme.fill, 4));
+                info.addView(v, infoGap(ui.lin(Ui.WRAP, Ui.WRAP)));
+            }
+            if (i.method != null) {
+                info.addView(infoText(i.method), infoGap(ui.lin(Ui.WRAP, Ui.WRAP)));
+                info.addView(infoText("·"), infoGap(ui.lin(Ui.WRAP, Ui.WRAP)));
+            }
+        }
+        if (clock.getParent() != null) ((android.view.ViewGroup) clock.getParent()).removeView(clock);
+        info.addView(clock, infoGap(ui.lin(Ui.WRAP, Ui.WRAP)));
+    }
+
+    private TextView infoText(String t) {
+        TextView v = ui.text(14, 400, ui.theme.text3);
+        v.setText(t);
+        v.setSingleLine(true);
+        return v;
+    }
+
+    private LinearLayout.LayoutParams infoGap(LinearLayout.LayoutParams p) {
+        if (info.getChildCount() > 0) p.leftMargin = ui.px(14);
+        return p;
+    }
+
+    /** "9:41 PM" (the system's 12 / 24 hour format). */
+    public void setClock(String time) {
+        if (!time.contentEquals(clock.getText())) clock.setText(time);
     }
 
     /** Places the preview centred over the bar's knob for {@code ms}, inside the 56 px margins. */

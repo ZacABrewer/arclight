@@ -174,7 +174,7 @@ describe('NativeVideoLauncher', () => {
   it('asks for a session with the native profile and hands everything to playVideo', async () => {
     const { launcher, plugin, deps, requests, reports } = setup({ 'episode:1': episode(1, { next: 'episode:2' }), 'episode:2': episode(2) });
     await launcher.start();
-    expect(plugin.addListener).toHaveBeenCalledTimes(6);
+    expect(plugin.addListener).toHaveBeenCalledTimes(7);
     await launcher.launch('episode:1');
     expect(deps.pauseAudio).toHaveBeenCalled();
     expect(requests[0]).toMatchObject({ itemKey: 'episode:1', profile, audioTrack: 1, quality: 'auto' });
@@ -365,7 +365,7 @@ describe('NativeVideoLauncher', () => {
   it('stop() removes the listeners', async () => {
     const { launcher, handlers } = setup({});
     await launcher.start();
-    expect(handlers.size).toBe(6);
+    expect(handlers.size).toBe(7);
     await launcher.stop();
     expect(handlers.size).toBe(0);
   });
@@ -449,6 +449,19 @@ describe('NativeVideoLauncher', () => {
     // An audio index the item does not have: no audio language is saved from it.
     await emit('videoTracksChanged', { itemKey: 'episode:1', audioTrack: 7, subtitle: null });
     expect(save).toHaveBeenLastCalledWith({ subtitleLanguage: null });
+  });
+
+  it('videoPrefsChanged saves the caption size to the profile', async () => {
+    const save = vi.fn(async (_p: unknown) => undefined);
+    const { launcher, emit } = setup({ 'episode:1': episode(1) }, null, { saveProfileSettings: save });
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoPrefsChanged', { itemKey: 'episode:1', subtitleSize: 'large' });
+    expect(save).toHaveBeenLastCalledWith({ subtitleSize: 'large' });
+    // Another item, or a size that is not one of the three: nothing saved.
+    await emit('videoPrefsChanged', { itemKey: 'other:1', subtitleSize: 'small' });
+    await emit('videoPrefsChanged', { itemKey: 'episode:1', subtitleSize: 'huge' });
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });
 

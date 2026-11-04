@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import { ThemeCatalog, type ProfileSettings, type ProfileSettingsPatch, type VideoQuality } from '@arclight/shared';
 import { useLocale, useT } from '@web/i18n/index';
 import { useAccounts } from '../../app/context';
@@ -21,7 +22,7 @@ import type { Translate } from '../format';
 // screen, info rows only show a value. Profile settings save to the active profile; Streaming
 // quality and Play intro on launch stay on this device (§4.3, §6, §9 Q16, Q18, Q19).
 
-export const SETTINGS_CATEGORIES = ['library', 'playback', 'subtitles', 'display', 'profiles', 'about'] as const;
+export const SETTINGS_CATEGORIES = ['library', 'playback', 'subtitles', 'display', 'network', 'profiles', 'about'] as const;
 export type SettingsCategory = (typeof SETTINGS_CATEGORIES)[number];
 
 /** Subtitle languages offered (null: off). Names come from Intl in the UI language. */
@@ -105,6 +106,18 @@ function OptionRow({ o }: { o: SettingsOption }) {
   );
 }
 
+const Ping = z.object({ status: z.string() }).passthrough();
+
+/** "Test connection": the server's ping, timed. */
+export type ConnectionTest = { state: 'idle' } | { state: 'testing' } | { state: 'ok'; ms: number } | { state: 'failed' };
+
+export function connectionLabel(c: ConnectionTest, t: Translate): string {
+  if (c.state === 'testing') return t('app.tv.settings.testing');
+  if (c.state === 'ok') return t('app.tv.settings.connectionOk', { ms: c.ms });
+  if (c.state === 'failed') return t('app.tv.settings.connectionFailed');
+  return '';
+}
+
 export function TvSettingsScreen() {
   const t = useT();
   const { locale } = useLocale();
@@ -117,6 +130,16 @@ export function TvSettingsScreen() {
   const [cat, setCat] = useState<SettingsCategory>('library');
   const [quality, setQuality] = useState<VideoQuality>(() => readVideoQuality(profile?.id));
   const [intro, setIntro] = useState(playIntroOnLaunch);
+  const [conn, setConn] = useState<ConnectionTest>({ state: 'idle' });
+  const testConnection = () => {
+    if (conn.state === 'testing') return;
+    setConn({ state: 'testing' });
+    const t0 = performance.now();
+    request('/system/ping', Ping).then(
+      () => setConn({ state: 'ok', ms: Math.max(1, Math.round(performance.now() - t0)) }),
+      () => setConn({ state: 'failed' }),
+    );
+  };
   const themes = useQuery({ queryKey: ['theme', 'catalog'], queryFn: () => request('/theme', ThemeCatalog), staleTime: 5 * 60_000, retry: false, meta: { silent: true } });
 
   // The quality shown follows the account and profile once they are known.
@@ -222,9 +245,17 @@ export function TvSettingsScreen() {
         if (canAdd) out.push({ kind: 'action', key: 'addProfile', label: t('app.tv.addProfile'), value: '', run: () => void navigate({ href: ADD_PROFILE_HREF }) });
         return out;
       }
-      case 'about': {
+      case 'network': {
         const out: SettingsOption[] = [
           { kind: 'info', key: 'server', label: t('app.tv.settings.server'), value: active ? `${active.serverName} · ${hostOf(active.serverUrl)}` : '' },
+          { kind: 'action', key: 'testConnection', label: t('app.tv.settings.testConnection'), value: connectionLabel(conn, t), run: testConnection },
+        ];
+        // Downloads, streaming and the account: the phone's "This device" page (owner only, as below).
+        if (ownsAccount(profile)) out.push({ kind: 'action', key: 'downloads', label: t('app.tv.settings.downloads'), value: '', run: () => void navigate({ to: DEVICE_SETTINGS_PATH }) });
+        return out;
+      }
+      case 'about': {
+        const out: SettingsOption[] = [
           { kind: 'info', key: 'version', label: t('app.tv.settings.appVersion'), value: APP_VERSION },
           { kind: 'info', key: 'account', label: t('app.tv.settings.signedInAs'), value: [active?.displayName || active?.username, profile?.name].filter(Boolean).join(' · ') },
         ];
@@ -237,16 +268,17 @@ export function TvSettingsScreen() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, settings, quality, intro, themes.data, profile, canManage, canAdd, active, locale, t, profileId]);
+  }, [cat, settings, quality, intro, themes.data, profile, canManage, canAdd, active, locale, t, profileId, conn]);
 
   const intros: Partial<Record<SettingsCategory, string>> = {
     library: t('app.tv.settings.libraryIntro'),
     playback: t('app.tv.settings.playbackIntro'),
+    network: t('app.tv.settings.networkIntro'),
   };
 
   return (
-    <div className="tv-settings">
-      <div className="tv-settings__cats">
+    <div className="tv-settings" data-tv-row="">
+      <div className="tv-settings__cats" data-tv-enter="current">
         <h1 className="tv-h1">{t('app.tv.tab.settings')}</h1>
         {SETTINGS_CATEGORIES.map((c, i) => (
           <button
@@ -264,7 +296,7 @@ export function TvSettingsScreen() {
           </button>
         ))}
       </div>
-      <div className="tv-settings__pane">
+      <div className="tv-settings__pane" data-tv-enter="first">
         <h2 className="tv-settings__title">{t(`app.tv.settings.cat.${cat}`)}</h2>
         {intros[cat] ? <p className="tv-settings__intro">{intros[cat]}</p> : null}
         {options.map((o) => (

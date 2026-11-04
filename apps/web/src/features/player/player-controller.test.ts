@@ -49,6 +49,28 @@ describe('PlayerController', () => {
     expect(events).toEqual(['track:1 start', 'track:1 stop', 'track:2 start']);
   });
 
+  it('sets the item aside when a video takes over, until audio plays again', async () => {
+    const h = makeController([track(1)]);
+    await h.controller.playItem('track:1');
+    h.controller.setAsideForVideo();
+    let s = h.controller.getState();
+    expect(s.playing).toBe(false);
+    expect(s.setAside).toBe(true);
+    expect(s.current?.itemKey).toBe('track:1');
+    h.controller.play();
+    s = h.controller.getState();
+    expect(s.playing).toBe(true);
+    expect(s.setAside).toBe(false);
+  });
+
+  it('sets the item aside when the queue runs out', async () => {
+    const h = makeController([track(1)]);
+    await h.controller.playItem('track:1');
+    h.active().at(175);
+    h.active().fire('ended');
+    expect(h.controller.getState().setAside).toBe(true);
+  });
+
   it('restarts the item on previous after three seconds, else goes back', async () => {
     const h = makeController([track(1), track(2)]);
     await h.controller.playItems(['track:1', 'track:2'], { startIndex: 1 });

@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlayerSearchResponse, PlayerTrack, VideoCard } from '@arclight/shared';
 import { newEpisodes, recentAlbums } from './home';
-import { searchTiles, SEARCH_MAX } from './search';
+import { nearMisses, requestUrl, searchTiles, SEARCH_MAX } from './search';
 import { cycle, languageName, ownsAccount, SUBTITLE_LANGUAGES } from './settings';
 import { chapterRows, listenProgress } from './listen';
 import { initialOf } from './manage-profiles';
+import { titleStep } from '../tiles';
+import { cardMeta } from '../actions';
+import { listFilter, SORTS } from './browse';
 
 const t = (key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(',')}` : key);
 
@@ -98,5 +101,49 @@ describe('Manage profiles', () => {
   it('the initial is the first letter, upper case', () => {
     expect(initialOf('  sam')).toBe('S');
     expect(initialOf('')).toBe('?');
+  });
+});
+
+describe('TV tiles (clipping fixes)', () => {
+  it('a long hero title steps down in size', () => {
+    expect(titleStep('Dune')).toBe('l');
+    expect(titleStep('The Lord of the Rings')).toBe('m');
+    expect(titleStep('Everything Everywhere All at Once')).toBe('s');
+  });
+
+  it('the dwell strip: the episode, else year · network · badges', () => {
+    const c = (x: Partial<VideoCard>) => ({ kind: 'movie', year: null, subtitle: null, badges: [], ...x }) as VideoCard;
+    expect(cardMeta(c({ kind: 'episode', subtitle: 'S1:E2 · Pilot' }))).toBe('S1:E2 · Pilot');
+    expect(cardMeta(c({ kind: 'series', year: 2019, subtitle: 'HBO', badges: ['4K'] }))).toBe('2019 · HBO · 4K');
+    expect(cardMeta(c({}))).toBeNull();
+  });
+});
+
+describe('Browse', () => {
+  const c = (kind: VideoCard['kind'], played: boolean | null) =>
+    ({ kind, progress: played == null ? null : { positionMs: 1, durationMs: 2, played } }) as unknown as VideoCard;
+  const list = [c('movie', true), c('series', null), c('movie', false)];
+
+  it('My List type chips', () => {
+    expect(listFilter(list, 'all')).toHaveLength(3);
+    expect(listFilter(list, 'movies')).toHaveLength(2);
+    expect(listFilter(list, 'series')).toHaveLength(1);
+    expect(listFilter(list, 'unwatched')).toEqual([list[1], list[2]]);
+  });
+
+  it('Movies sort starts at recently added', () => {
+    expect(SORTS[0]).toEqual({ sort: 'added', order: 'desc' });
+  });
+});
+
+describe('Search no matches', () => {
+  const c = (id: number, title: string, kind: VideoCard['kind'] = 'movie') => ({ id, title, kind }) as unknown as VideoCard;
+  it('Did you mean: close titles first, nothing unrelated', () => {
+    const cards = [c(1, 'Saltwater Kings'), c(2, 'Northern Glass'), c(3, 'Salt Flats'), c(1, 'Saltwater Kings')];
+    expect(nearMisses('saltwatr', cards).map((x) => x.id)).toEqual([1, 3]);
+    expect(nearMisses('zzz', cards)).toEqual([]);
+  });
+  it('the request link opens Discover search', () => {
+    expect(requestUrl('https://arc.example.com/', 'dune 2')).toBe('https://arc.example.com/discover/search?q=dune%202');
   });
 });

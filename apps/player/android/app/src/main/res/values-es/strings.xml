@@ -23,4 +23,26 @@
     <string name="video_now_playing">Reproduciendo</string>
     <string name="video_next_in">Siguiente episodio en {s} s</string>
     <string name="video_ends_at_time">Termina a las {time}</string>
+    <string name="video_up_next_in">A continuación en {s}</string>
+    <string name="video_watch_credits">Ver créditos</string>
+    <string name="video_buffering">Cargando</string>
+    <string name="video_error_title">Reproducción detenida</string>
+    <string name="video_error_network">El servidor dejó de enviar el vídeo. Comprueba la conexión e inténtalo de nuevo.</string>
+    <string name="video_error_unsupported">Este dispositivo no puede reproducir el vídeo tal cual. Vuelve a intentarlo para obtener una versión convertida.</string>
+    <string name="video_error_forbidden">Este perfil ya no tiene acceso a este vídeo. Vuelve a iniciar sesión o pregunta al dueño del servidor.</string>
+    <string name="video_error_busy">El servidor está ocupado con otras transmisiones. Espera un momento e inténtalo de nuevo.</string>
+    <string name="video_error_load">Algo falló al reproducir este vídeo. Inténtalo de nuevo o vuelve atrás y elígelo otra vez.</string>
+    <string name="video_error_timeout">El vídeo tardó demasiado en empezar. Vuelve a intentarlo para obtener una versión convertida.</string>
+    <string name="video_error_detail">Error {code} · {time} · detenido en {position}</string>
+    <string name="video_try_again">Reintentar</string>
+    <string name="video_back">Atrás</string>
+    <string name="video_still_watching">¿Sigues viendo?</string>
+    <string name="video_still_watching_body">{title} · {n} episodios seguidos.</string>
+    <string name="video_keep_watching">Seguir viendo</string>
+    <string name="video_back_to_home">Volver al inicio</string>
+    <string name="video_subtitle_size">Tamaño de subtítulos</string>
+    <string name="video_size_small">Pequeño</string>
+    <string name="video_size_medium">Mediano</string>
+    <string name="video_size_large">Grande</string>
+    <string name="video_needs_conversion">Necesita una versión convertida — puede pausar un momento</string>
 </resources>

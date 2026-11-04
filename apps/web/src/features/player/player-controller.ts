@@ -66,6 +66,11 @@ export interface PlayerState {
   /** How the current file is streamed (format badge). */
   stream: StreamInfo | null;
   error: PlayerErrorCode | null;
+  /**
+   * The loaded item was set aside: a video took over, or the queue ran out. The mini player and
+   * the now-playing pill hide until audio plays again (the queue itself is kept).
+   */
+  setAside: boolean;
 }
 
 export interface PlayItemsOptions {
@@ -164,6 +169,7 @@ export class PlayerController {
       chapterIndex: -1,
       stream: null,
       error: null,
+      setAside: false,
     };
     this.reporter = new ProgressReporter({
       read: () => this.reportSnapshot(),
@@ -187,6 +193,8 @@ export class PlayerController {
   getState = (): PlayerState => this.s;
 
   private set(patch: Partial<PlayerState>): void {
+    // Playing again brings the mini player back.
+    if (patch.playing === true && this.s.setAside && patch.setAside === undefined) patch = { ...patch, setAside: false };
     this.s = { ...this.s, ...patch };
     for (const l of this.listeners) l();
   }
@@ -324,6 +332,7 @@ export class PlayerController {
       this.reporter.stop({ itemKey: item.itemKey, positionMs: item.durationMs, durationMs: item.durationMs, speed: this.engine.playbackSpeed, playing: false, playMethod: 'DirectPlay' });
     }
     this.scheduleQueueSave();
+    if (item) this.set({ setAside: true });
   }
 
   // ------------------------------------------------------------------ loading
@@ -459,6 +468,12 @@ export class PlayerController {
     this.pausedAt = this.now();
     this.reporter.report('pause');
     this.scheduleQueueSave();
+  };
+
+  /** Something else takes over (a video): pause, and hide the mini player until audio plays again. */
+  setAsideForVideo = (): void => {
+    this.pause();
+    if (this.s.current && !this.s.setAside) this.set({ setAside: true });
   };
 
   toggle = (): void => {
@@ -669,7 +684,7 @@ export class PlayerController {
     this.queue = { ...EMPTY_QUEUE, repeat: this.queue.repeat };
     this.sleep = null;
     this.queueChanged();
-    this.set({ current: null, sleepTimer: null });
+    this.set({ current: null, sleepTimer: null, setAside: false });
   };
 
   /**
@@ -699,7 +714,7 @@ export class PlayerController {
     this.pausedAt = null;
     this.touched = false;
     this.restoreStarted = false;
-    this.set({ ...this.queueState(), current: null, sleepTimer: null, loading: false, error: null });
+    this.set({ ...this.queueState(), current: null, sleepTimer: null, loading: false, error: null, setAside: false });
     void this.restore();
     return res;
   }
