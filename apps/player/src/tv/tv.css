@@ -72,8 +72,8 @@
   z-index: 60;
   pointer-events: none;
   opacity: 0;
-  border: 3px solid var(--al-pl-focus-color, #fff);
-  box-shadow: inset 0 0 0 3px var(--al-pl-focus-inset, rgba(17, 19, 22, 0.85));
+  border: 2px solid var(--al-pl-focus-color, #fff);
+  box-shadow: inset 0 0 0 2px var(--al-pl-focus-inset, rgba(17, 19, 22, 0.85));
 }
 
 .tv-ring--cyan-glow {
@@ -91,6 +91,13 @@
 
 .tv-scroll-x {
   overflow: hidden;
+}
+
+/* What a scroller moves (a translate3d from stage-scroll.ts): its own compositor layer, so a
+   tween never re-lays out or repaints the page. */
+.tv-scroll-y > *,
+.tv-scroll-x > * {
+  will-change: transform;
 }
 
 .tv-page {
@@ -156,14 +163,15 @@
   color: var(--tv-hi);
 }
 
+/* The current tab: an 18×3 bar under it, with the accent's glow. */
 .tv-tab__dot {
   position: absolute;
   left: 50%;
   top: 100%;
-  margin: 2px 0 0 -3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  margin: 2px 0 0 -9px;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--tv-accent);
   box-shadow: var(--tv-glow);
 }
@@ -245,6 +253,22 @@
   line-height: 1;
   letter-spacing: -0.02em;
   margin: 0;
+  /* Two lines at most, and a step down for long titles (titleStep): never under the header. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-bottom: 0.06em;
+}
+
+.tv-title--m {
+  font-size: 48px;
+  line-height: 1.04;
+}
+
+.tv-title--s {
+  font-size: 40px;
+  line-height: 1.08;
 }
 
 .tv-logo {
@@ -404,14 +428,24 @@
   height: 446px;
 }
 
+/* On the hero's bottom edge, growing upward: a long title or blurb can't run into the rows,
+   and Hero() takes blurb lines off until the top clears the header. */
 .tv-hero__content {
   position: absolute;
   left: 56px;
-  top: 112px;
+  bottom: 40px;
   width: 540px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.tv-hero__content[data-fit='1'] .tv-blurb {
+  -webkit-line-clamp: 2;
+}
+
+.tv-hero__content[data-fit='2'] .tv-blurb {
+  -webkit-line-clamp: 1;
 }
 
 .tv-hero__dots {
@@ -466,6 +500,86 @@
   padding: 24px 56px;
 }
 
+/* Home's own states (design S06–S08): loading skeleton, rows failed, empty library. */
+.tv-skel {
+  display: block;
+  border-radius: var(--tv-radius);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.11) 50%, rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: tv-shimmer 1.4s linear infinite;
+}
+
+.tv-tile--wide .tv-art.tv-skel {
+  height: 133px;
+}
+
+.tv-skel--title {
+  width: 200px;
+  height: 22px;
+  margin: 0 56px;
+  border-radius: 6px;
+}
+
+.tv-skel--sub {
+  width: 60%;
+  height: 14px;
+  border-radius: 4px;
+}
+
+@keyframes tv-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.tv-motion-off .tv-skel {
+  animation: none;
+}
+
+.tv-state {
+  margin: 0 56px;
+  padding: 28px 32px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.tv-state__title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.tv-state__text {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--tv-t3);
+}
+
+.tv-state__note {
+  align-self: center;
+  font-size: 14px;
+  color: var(--tv-t3);
+}
+
+.tv-state__ghosts {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.tv-state__ghost {
+  width: 150px;
+  height: 84px;
+  border-radius: var(--tv-radius);
+  border: 2px dashed rgba(255, 255, 255, 0.14);
+}
+
 .tv-row {
   display: flex;
   flex-direction: column;
@@ -498,6 +612,10 @@
 .tv-tile__sub {
   font-size: 14px;
   color: var(--tv-t3);
+  transition: color 0.18s;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .tv-tile:focus-within .tv-tile__sub {
@@ -514,10 +632,55 @@
   background-position: center;
 }
 
+/* Focus v2: the focused tile lifts (the ring sizes itself to the lifted box, stage.tsx), and
+   the rest of its row steps back to 80 %. Buttons, chips and rows get the ring only. */
+.tv-tile .tv-art {
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s,
+    opacity 0.24s;
+}
+
+.tv-tile .tv-art:focus {
+  transform: scale(1.06);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.tv-row:focus-within .tv-tile .tv-art {
+  opacity: 0.8;
+}
+
+.tv-row:focus-within .tv-tile .tv-art:focus {
+  opacity: 1;
+}
+
+/* Touch and mouse: hover lifts without the ring, a press sinks. */
+@media (hover: hover) {
+  .tv-tile .tv-art:hover {
+    transform: scale(1.06);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+    z-index: 2;
+  }
+}
+
+.tv-tile .tv-art:active {
+  transform: scale(0.97);
+}
+
+.tv-motion-off .tv-tile .tv-art,
+.tv-motion-off .tv-art__meta,
+.tv-motion-off .tv-tile__sub {
+  transition: none;
+}
+
 /* The title inside the tile over a bottom fade (§9 Q11). */
 .tv-art--text {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  text-align: left;
   font-weight: 800;
   line-height: 1.1;
   color: #fff;
@@ -527,11 +690,57 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 60%);
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 60%);
 }
 
+/* Two lines at most: a long title used to run out of the tile (the Home clipping). */
 .tv-art__text {
   position: relative;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding-bottom: 0.08em;
+}
+
+/* Dwell: after 650 ms on a tile, one line of meta fades in under the title, pushing it up;
+   it stays clear of the progress bar. */
+.tv-art__meta {
+  position: relative;
+  display: block;
+  height: 0;
+  margin-top: 4px;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 600;
+  color: var(--tv-t2);
+  transition:
+    opacity 0.2s,
+    height 0.2s;
+}
+
+[data-tv-dwell] .tv-art__meta {
+  height: 15px;
+  opacity: 1;
+}
+
+.tv-art__badge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(17, 19, 22, 0.7);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  color: var(--tv-t2);
 }
 
 .tv-art__bar {
@@ -553,6 +762,7 @@
 
 .tv-tile--wide {
   width: 236px;
+  flex: none;
 }
 
 .tv-tile--wide .tv-art {
@@ -563,6 +773,7 @@
 
 .tv-tile--square {
   width: 168px;
+  flex: none;
 }
 
 .tv-tile--square .tv-art {

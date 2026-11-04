@@ -5,6 +5,8 @@ import { searchTiles, SEARCH_MAX } from './search';
 import { cycle, languageName, ownsAccount, SUBTITLE_LANGUAGES } from './settings';
 import { chapterRows, listenProgress } from './listen';
 import { initialOf } from './manage-profiles';
+import { titleStep } from '../tiles';
+import { cardMeta } from '../actions';
 
 const t = (key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(',')}` : key);
 
@@ -98,5 +100,20 @@ describe('Manage profiles', () => {
   it('the initial is the first letter, upper case', () => {
     expect(initialOf('  sam')).toBe('S');
     expect(initialOf('')).toBe('?');
+  });
+});
+
+describe('TV tiles (clipping fixes)', () => {
+  it('a long hero title steps down in size', () => {
+    expect(titleStep('Dune')).toBe('l');
+    expect(titleStep('The Lord of the Rings')).toBe('m');
+    expect(titleStep('Everything Everywhere All at Once')).toBe('s');
+  });
+
+  it('the dwell strip: the episode, else year · network · badges', () => {
+    const c = (x: Partial<VideoCard>) => ({ kind: 'movie', year: null, subtitle: null, badges: [], ...x }) as VideoCard;
+    expect(cardMeta(c({ kind: 'episode', subtitle: 'S1:E2 · Pilot' }))).toBe('S1:E2 · Pilot');
+    expect(cardMeta(c({ kind: 'series', year: 2019, subtitle: 'HBO', badges: ['4K'] }))).toBe('2019 · HBO · 4K');
+    expect(cardMeta(c({}))).toBeNull();
   });
 });

@@ -1,4 +1,9 @@
 {
+  "app.tv.home.checkAgain": "Opnieuw controleren",
+  "app.tv.home.emptyText": "Voeg films en series toe in de Arclight-webapp. Ze verschijnen hier zodra ze klaar zijn.",
+  "app.tv.home.emptyTitle": "Je bibliotheek is leeg",
+  "app.tv.home.failed": "Je rijen konden niet worden geladen",
+  "app.tv.home.retrying": "Automatisch opnieuw proberen · {n} van {total}",
   "app.tv.movies": "Films",
   "app.tv.shows": "Series",
   "app.tv.code.open": "Open op je telefoon of computer",
@@ -136,6 +141,7 @@
   "app.tv.tab.search": "Zoeken",
   "app.tv.tab.settings": "Instellingen",
   "app.tv.tab.shows": "Series",
+  "app.tv.tryAgain": "Opnieuw proberen",
   "app.tv.whoIsWatching": "Wie kijkt er?",
   "app.video.audio": "Audio",
   "app.video.audioSubtitles": "Audio en ondertiteling",

@@ -8,7 +8,12 @@ import { onStageScroll, setStageMotion, stageScrolling } from './stage-scroll';
 
 export const STAGE_W = 1280;
 export const STAGE_H = 720;
-const RING_OUTSET = 6;
+const RING_OUTSET = 4;
+/** Focus v2: a focused tile's art lifts by this much (tv.css `.tv-tile .tv-art:focus`). */
+const LIFT = 1.06;
+const LIFTED = '.tv-tile .tv-art, [data-tv-lift]';
+/** Focus v2's dwell: after this long at rest the focused tile shows its meta strip. */
+const DWELL_MS = 650;
 
 export function stageScaleFor(w: number, h: number): number {
   const s = Math.min(w / STAGE_W, h / STAGE_H);
@@ -72,10 +77,13 @@ function FocusRing({ stage, scale, focusStyle, reduceMotion }: { stage: RefObjec
       const s = scaleRef.current || 1;
       const sr = st.getBoundingClientRect();
       const b = el.getBoundingClientRect();
-      const x = (b.left - sr.left) / s;
-      const y = (b.top - sr.top) / s;
-      const w = b.width / s;
-      const h = b.height / s;
+      // Size from the layout box and centre from the screen box, so the ring lands where a lifting
+      // tile ends up rather than chasing its 180 ms scale.
+      const k = el.matches(LIFTED) ? LIFT : 1;
+      const w = (el.offsetWidth || b.width / s) * k;
+      const h = (el.offsetHeight || b.height / s) * k;
+      const x = ((b.left + b.right) / 2 - sr.left) / s - w / 2;
+      const y = ((b.top + b.bottom) / 2 - sr.top) / s - h / 2;
       let rad: number;
       const explicit = el.getAttribute('data-tv-r');
       if (explicit != null) rad = Number(explicit) || 0;
@@ -96,9 +104,22 @@ function FocusRing({ stage, scale, focusStyle, reduceMotion }: { stage: RefObjec
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(update);
     };
+    let dwellT = 0;
+    let dwelt: Element | null = null;
     const onFocus = () => {
       update();
       soon(); // and once more after the render the focus caused (a season switch, a category)
+      window.clearTimeout(dwellT);
+      dwelt?.removeAttribute('data-tv-dwell');
+      dwelt = null;
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el.querySelector('.tv-art__meta')) {
+        dwellT = window.setTimeout(() => {
+          if (document.activeElement !== el) return;
+          el.setAttribute('data-tv-dwell', '');
+          dwelt = el;
+        }, DWELL_MS);
+      }
     };
     document.addEventListener('focusin', onFocus);
     document.addEventListener('focusout', soon);
@@ -110,6 +131,7 @@ function FocusRing({ stage, scale, focusStyle, reduceMotion }: { stage: RefObjec
     update();
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(dwellT);
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('focusout', soon);
       window.removeEventListener('resize', soon);

@@ -33,15 +33,21 @@ interface TileProps {
   fraction?: number | null | undefined;
   onOpen: () => void;
   label?: string;
+  /** Focus v2's dwell strip: one line shown inside the art after 650 ms on the tile. */
+  meta?: string | null | undefined;
+  /** A small kind badge at the art's top left (My List: MOVIE / SERIES). */
+  badge?: string | null | undefined;
 }
 
 /** Wide 16:9 tile, title inside the art over a bottom fade (§9 Q11). Also the browse / search grid
  *  tile. As in the template the art is what takes focus; the sub under it lights up with it. */
-export function WideTile({ id, title, sub, art, fraction, onOpen, label }: TileProps) {
+export function WideTile({ id, title, sub, art, fraction, onOpen, label, meta, badge, poster }: TileProps & { poster?: boolean }) {
   return (
-    <div className="tv-tile tv-tile--wide">
+    <div className={`tv-tile tv-tile--wide${poster ? ' tv-tile--poster' : ''}`}>
       <button type="button" className="tv-art tv-art--text" data-tv-key={id} style={{ background: artBackground(art, title) }} onClick={onOpen} aria-label={label ?? (sub ? `${title}, ${sub}` : title)}>
+        {badge ? <span className="tv-art__badge">{badge}</span> : null}
         <span className="tv-art__text">{title}</span>
+        {meta ? <span className="tv-art__meta">{meta}</span> : null}
         <Bar fraction={fraction} />
       </button>
       {sub ? <span className="tv-tile__sub">{sub}</span> : null}
@@ -114,8 +120,34 @@ export function PlayIcon() {
   );
 }
 
+/** The hero title's size step: 60 px for a short title, 48 / 40 for longer ones, so a long
+ *  title takes two lines at most instead of pushing the hero off the top of the screen. */
+export function titleStep(title: string): 'l' | 'm' | 's' {
+  const n = [...title].length;
+  return n <= 16 ? 'l' : n <= 30 ? 'm' : 's';
+}
+
 /** Title as text in the design's style, or the logo image when there is one (§9 Q10). */
 export function HeroTitle({ title, logoUrl }: { title: string; logoUrl: string | null | undefined }) {
   if (logoUrl) return <img className="tv-logo" src={logoUrl} alt={title} />;
-  return <h1 className="tv-title">{title}</h1>;
+  return <h1 className={`tv-title tv-title--${titleStep(title)}`}>{title}</h1>;
+}
+
+/** A row's skeleton in its final geometry (Home loading). */
+export function SkeletonRow({ count = 5, square }: { count?: number; square?: boolean }) {
+  return (
+    <section className="tv-row" aria-hidden="true">
+      <span className="tv-skel tv-skel--title" />
+      <div className="tv-scroll-x">
+        <div className="tv-row__track">
+          {Array.from({ length: count }, (_, i) => (
+            <div key={i} className={`tv-tile ${square ? 'tv-tile--square' : 'tv-tile--wide'}`}>
+              <span className="tv-art tv-skel" />
+              <span className="tv-skel tv-skel--sub" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }

@@ -1,4 +1,9 @@
 {
+  "app.tv.home.checkAgain": "Vérifier à nouveau",
+  "app.tv.home.emptyText": "Ajoutez des films et des séries dans l’application web Arclight. Ils apparaîtront ici dès qu’ils seront prêts.",
+  "app.tv.home.emptyTitle": "Votre bibliothèque est vide",
+  "app.tv.home.failed": "Impossible de charger vos rangées",
+  "app.tv.home.retrying": "Nouvel essai automatique · {n} sur {total}",
   "app.tv.movies": "Films",
   "app.tv.shows": "Séries",
   "app.tv.code.open": "Sur votre téléphone ou ordinateur, ouvrez",
@@ -136,6 +141,7 @@
   "app.tv.tab.search": "Recherche",
   "app.tv.tab.settings": "Réglages",
   "app.tv.tab.shows": "Séries",
+  "app.tv.tryAgain": "Réessayer",
   "app.tv.whoIsWatching": "Qui regarde ?",
   "app.video.audio": "Audio",
   "app.video.audioSubtitles": "Audio et sous-titres",

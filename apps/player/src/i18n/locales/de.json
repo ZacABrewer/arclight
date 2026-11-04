@@ -1,4 +1,9 @@
 {
+  "app.tv.home.checkAgain": "Erneut prüfen",
+  "app.tv.home.emptyText": "Füge Filme und Serien in der Arclight-Web-App hinzu. Sie erscheinen hier, sobald sie bereit sind.",
+  "app.tv.home.emptyTitle": "Deine Mediathek ist leer",
+  "app.tv.home.failed": "Deine Reihen konnten nicht geladen werden",
+  "app.tv.home.retrying": "Automatischer neuer Versuch · {n} von {total}",
   "app.tv.movies": "Filme",
   "app.tv.shows": "Serien",
   "app.tv.code.open": "Öffne auf deinem Handy oder Computer",
@@ -136,6 +141,7 @@
   "app.tv.tab.search": "Suche",
   "app.tv.tab.settings": "Einstellungen",
   "app.tv.tab.shows": "Serien",
+  "app.tv.tryAgain": "Erneut versuchen",
   "app.tv.whoIsWatching": "Wer schaut?",
   "app.video.audio": "Audio",
   "app.video.audioSubtitles": "Audio und Untertitel",

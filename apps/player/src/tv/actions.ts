@@ -99,6 +99,13 @@ export function continueSub(card: VideoCard, t: Translate): string | null {
   return l;
 }
 
+/** Focus v2's dwell strip: the episode ("S1:E2 · Pilot"), else year · network · badges. */
+export function cardMeta(card: VideoCard): string | null {
+  if (card.kind === 'episode') return card.subtitle;
+  const parts = [card.year ? String(card.year) : null, card.subtitle, ...card.badges].filter((x): x is string => !!x);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 export function cardArt(card: VideoCard): string | null {
   return card.kind === 'episode' ? (card.thumbUrl ?? card.backdropUrl ?? card.posterUrl) : (card.backdropUrl ?? card.thumbUrl ?? card.posterUrl);
 }
