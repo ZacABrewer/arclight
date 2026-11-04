@@ -884,6 +884,89 @@
   font-size: 19px;
 }
 
+/* Movies (S09b): 6-up 2:3 posters. */
+.tv-grid--posters {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.tv-grid--posters .tv-art {
+  aspect-ratio: 2 / 3;
+  font-size: 18px;
+}
+
+.tv-sort {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--tv-t3);
+}
+
+.tv-sort__btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--tv-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* S10: a filter with no matches, and My List with nothing in it. */
+.tv-noresults {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+.tv-noresults__title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.tv-noresults__text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tv-t3);
+  text-wrap: pretty;
+}
+
+.tv-listempty {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.tv-listempty__plus {
+  flex: none;
+  width: 236px;
+  height: 133px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  font-weight: 300;
+  color: var(--tv-t4);
+}
+
+.tv-listempty__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 600px;
+}
+
+.tv-listempty__body .tv-noresults {
+  padding: 0;
+}
+
+.tv-listempty__body .tv-btns {
+  margin-top: 6px;
+}
+
 /* ---- Detail ----------------------------------------------------------------------------- */
 
 .tv-detail {

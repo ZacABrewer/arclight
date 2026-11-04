@@ -7,6 +7,7 @@ import { chapterRows, listenProgress } from './listen';
 import { initialOf } from './manage-profiles';
 import { titleStep } from '../tiles';
 import { cardMeta } from '../actions';
+import { listFilter, SORTS } from './browse';
 
 const t = (key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(',')}` : key);
 
@@ -115,5 +116,22 @@ describe('TV tiles (clipping fixes)', () => {
     expect(cardMeta(c({ kind: 'episode', subtitle: 'S1:E2 · Pilot' }))).toBe('S1:E2 · Pilot');
     expect(cardMeta(c({ kind: 'series', year: 2019, subtitle: 'HBO', badges: ['4K'] }))).toBe('2019 · HBO · 4K');
     expect(cardMeta(c({}))).toBeNull();
+  });
+});
+
+describe('Browse', () => {
+  const c = (kind: VideoCard['kind'], played: boolean | null) =>
+    ({ kind, progress: played == null ? null : { positionMs: 1, durationMs: 2, played } }) as unknown as VideoCard;
+  const list = [c('movie', true), c('series', null), c('movie', false)];
+
+  it('My List type chips', () => {
+    expect(listFilter(list, 'all')).toHaveLength(3);
+    expect(listFilter(list, 'movies')).toHaveLength(2);
+    expect(listFilter(list, 'series')).toHaveLength(1);
+    expect(listFilter(list, 'unwatched')).toEqual([list[1], list[2]]);
+  });
+
+  it('Movies sort starts at recently added', () => {
+    expect(SORTS[0]).toEqual({ sort: 'added', order: 'desc' });
   });
 });
