@@ -3,6 +3,16 @@
 Release notes for Arclight for Jellyfin. The section for a version is copied into the plugin
 repository manifest, which Jellyfin shows in Dashboard > Plugins.
 
+## 1.4.0
+
+Security fixes. Nothing to change in your setup.
+
+- Links and images built from title data (TMDB, JustWatch, trailers) only open http(s) addresses. A `javascript:` or `data:` link in bad metadata is dropped instead of being clickable.
+- Test connection never sends the saved API key to a different address. To test a new Arclight URL, type the API key as well.
+- On Linux and macOS the API key file is created readable only by the Jellyfin user, before the key is written.
+- Theme packs: only packs Arclight lists as installed are fetched, and only the fonts a pack's stylesheet uses. Stylesheets and fonts are always served as CSS and fonts, never with whatever type the upstream answered. Misses and failures are cached briefly, and the last good copy is served while Arclight is down.
+- Responses from Arclight have a size limit: an oversized answer is refused instead of being read into memory.
+
 ## 1.3.0
 
 - My stats: your own watch history for the last 7, 30, 90 or 365 days, or all time:
