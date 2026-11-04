@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   itemKey,
+  normalizeSearch,
   parseItemKey,
   rankMatches,
   RESUME_MIN,
@@ -576,6 +577,16 @@ export function videoHome(ctx: VideoBrowseContext, user: BrowseUser): VideoHome 
 
 const SEARCH_TAKE = 20;
 
+/** Episode titles count only for queries this long (normalized), and only as word prefixes. */
+const EPISODE_SEARCH_MIN = 3;
+/** "TBA", "Episode 4" and the like say nothing about the episode and would match every show. */
+const PLACEHOLDER_EPISODE_TITLE = /^(tba|tbd|episode\s*\d*|ep\.?\s*\d+|\d*)$/i;
+
+/**
+ * Movies by title, original title or year; shows by title, year or network, then shows one of
+ * whose episodes (with a file) is titled like the query ("good news about hell" → Severance).
+ * Episode titles need every query word as a word prefix or better, so they never add loose noise.
+ */
 export function videoSearch(ctx: VideoBrowseContext, user: BrowseUser, q: string): { movies: PlayerMovie[]; series: PlayerSeries[] } {
   if (!q.trim()) return { movies: [], series: [] };
   const movieHits = rankMatches(
@@ -586,14 +597,35 @@ export function videoSearch(ctx: VideoBrowseContext, user: BrowseUser, q: string
   )
     .slice(0, SEARCH_TAKE)
     .map((h) => h.item);
+  const shows = playableSeries(ctx, user);
   const seriesHits = rankMatches(
     q,
-    playableSeries(ctx, user),
+    shows,
     (s) => s.row.title,
     (s) => [String(s.row.year), s.row.network ?? ''],
   )
     .slice(0, SEARCH_TAKE)
     .map((h) => h.item);
+  if (seriesHits.length < SEARCH_TAKE && normalizeSearch(q).length >= EPISODE_SEARCH_MIN) {
+    const taken = new Set(seriesHits.map((s) => s.row.id));
+    const byId = new Map(shows.filter((s) => !taken.has(s.row.id)).map((s) => [s.row.id, s]));
+    if (byId.size > 0) {
+      const titled = ctx.db
+        .select({ seriesId: episodes.seriesId, title: episodes.title })
+        .from(episodes)
+        .where(and(eq(episodes.hasFile, true), isNotNull(episodes.episodeFileId)))
+        .all()
+        .filter((e) => byId.has(e.seriesId) && !PLACEHOLDER_EPISODE_TITLE.test(e.title.trim()));
+      // Best first; a show appears once, at its best episode.
+      for (const { item } of rankMatches(q, titled, (e) => e.title, undefined, { minWordScore: 3 })) {
+        const show = byId.get(item.seriesId);
+        if (!show) continue;
+        seriesHits.push(show);
+        byId.delete(item.seriesId);
+        if (seriesHits.length >= SEARCH_TAKE) break;
+      }
+    }
+  }
   const progress = progressFor(ctx, user, [...movieHits.map((m) => itemKey('movie', m.row.id)), ...seriesHits.flatMap((s) => s.episodeKeys)]);
   return {
     movies: movieHits.map((m) => toPlayerMovie(ctx, m, progress.get(itemKey('movie', m.row.id)))),

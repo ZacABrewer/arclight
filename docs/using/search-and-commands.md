@@ -5,7 +5,7 @@ Two boxes let you reach anything in Arclight from any page:
 - the **search bar** at the top (press **/**) finds things: titles, settings, downloads, requests;
 - the **command palette** (press **Ctrl+K**, or **Cmd+K** on a Mac) does things: search for upgrades, refresh, approve requests, switch theme.
 
-Both use the same forgiving matching: case, accents and punctuation do not matter, and you can shorten words ("upg" for "upgrades", "dn prt" for "Dune: Part Two"). Exact and prefix matches are listed first.
+Both use the same forgiving matching: case, accents and punctuation do not matter, and you can shorten words ("upg" for "upgrades", "dn prt" for "Dune: Part Two"). A word may also run across the title's punctuation ("spiderman" for "Spider-Man", "greys" for "Grey's Anatomy"), and "the", "a", "an", "and" and "of" may be left out. Exact and prefix matches are listed first. In a very large library a query without accents can still miss an accented title ("amelie" for "Amélie") here; the player's search does not have that limit.
 
 On a phone, the top bar has a search icon and a keyboard icon. Each opens its box full screen.
 
