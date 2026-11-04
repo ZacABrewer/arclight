@@ -541,6 +541,11 @@ export interface VideoSeekRequestEvent {
   subtitle?: string | null;
   /** Direct play keeps stalling (Auto quality): wanted is a converted stream at `positionMs`. */
   avoidDirect?: boolean;
+  /**
+   * The current stream failed, showed no picture in time or stayed buffering: wanted is a safe
+   * converted stream (any quality; HLS falls back to progressive). Unanswered, the player closes.
+   */
+  failed?: boolean;
 }
 
 /**

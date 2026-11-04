@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlaybackProgress, ProgressReport, VideoDeviceProfile, VideoSession, VideoSessionRequest } from '@arclight/shared';
 import type { ArclightPlayerPlugin } from '../native/definitions';
-import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, itemTitles, startPosition } from './native-video';
+import { NativeVideoLauncher, defaultSubtitle, itemSubtitle, itemTitles, safeProfile, startPosition } from './native-video';
 import { readBandwidth, writeBandwidth } from './bandwidth';
 import { ProfileSettings, type PlayerSeriesDetails } from '@arclight/shared';
 import { episodeLine, normLanguage, pauseInfo, preferredSubtitle, seasonsOf, themeFrom, toHex, trickplayOf, videoStrings } from './native-extras';
@@ -572,6 +572,47 @@ describe('NativeVideoLauncher: HLS (0.24)', () => {
     expect(plugin.playVideo.mock.calls[0]![0]).toMatchObject({ quality: '1080p' });
   });
 
+  it('a failed direct stream: a safe converted stream, also on a pinned quality', async () => {
+    const { launcher, plugin, deps, emit } = hlsSetup({ quality: () => '1080p' });
+    deps.requestSession.mockImplementationOnce(async (req: VideoSessionRequest) => session(req, { method: 'direct', seekable: true, streamStartMs: 0 }));
+    await launcher.start();
+    await launcher.launch('episode:1');
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 5_000, avoidDirect: true, failed: true });
+    await flush();
+    const req = deps.requestSession.mock.calls.at(-1)![0] as VideoSessionRequest;
+    expect(req).toMatchObject({ avoidDirect: true, startMs: 5_000, quality: '1080p', deliveries: ['hls', 'progressive'] });
+    expect(req.profile).toMatchObject({ containers: ['mp4'], videoCodecs: ['h264'], audioCodecs: ['aac'], hdr: [], hevc10bit: false, maxAudioChannels: 2 });
+    expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ delivery: 'hls', positionMs: 5_000 });
+  });
+
+  it('a failed HLS stream falls back to progressive and ends the HLS session', async () => {
+    const { launcher, plugin, deps, emit, ended } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    deps.requestSession.mockImplementationOnce(async (req: VideoSessionRequest) => session(req));
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 30_000, avoidDirect: true, failed: true });
+    await flush();
+    const req = deps.requestSession.mock.calls.at(-1)![0] as VideoSessionRequest;
+    expect(req.deliveries).toEqual(['progressive']);
+    expect(req.deviceKey).toBeUndefined();
+    expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ seekable: false, streamStartMs: 30_000 });
+    expect(ended).toEqual(['s1']);
+  });
+
+  it('a failed stream whose new session cannot be had closes the player with the reason', async () => {
+    const { launcher, plugin, deps, emit } = hlsSetup();
+    await launcher.start();
+    await launcher.launch('episode:1');
+    deps.requestSession.mockImplementationOnce(async () => {
+      throw new Error('busy');
+    });
+    await emit('videoSeekRequest', { itemKey: 'episode:1', positionMs: 30_000, avoidDirect: true, failed: true });
+    await flush();
+    expect(plugin.closeVideo).toHaveBeenCalled();
+    expect(deps.onError).toHaveBeenCalledWith('busy');
+    expect(plugin.replaceVideoStream).not.toHaveBeenCalled();
+  });
+
   it('an audio change under HLS replaces the session and ends the old one', async () => {
     const { launcher, plugin, emit, ended } = hlsSetup();
     await launcher.start();
@@ -580,6 +621,32 @@ describe('NativeVideoLauncher: HLS (0.24)', () => {
     await flush();
     expect(plugin.replaceVideoStream.mock.calls[0]![0]).toMatchObject({ sessionId: 's2', selectedAudio: 0 });
     expect(ended).toEqual(['s1']);
+  });
+});
+
+describe('safeProfile', () => {
+  it('keeps what every player decodes and caps the rest', () => {
+    const full: VideoDeviceProfile = {
+      containers: ['mp4', 'mkv'],
+      videoCodecs: ['h264', 'hevc', 'av1'],
+      hevc10bit: true,
+      hdr: ['hdr10', 'dv'],
+      audioCodecs: ['aac', 'eac3', 'dts'],
+      maxAudioChannels: 8,
+      maxHeight: 2160,
+      maxBitrateKbps: 80_000,
+    };
+    expect(safeProfile(full)).toEqual({
+      containers: ['mp4'],
+      videoCodecs: ['h264'],
+      hevc10bit: false,
+      hdr: [],
+      audioCodecs: ['aac'],
+      maxAudioChannels: 2,
+      maxHeight: 1080,
+      maxBitrateKbps: 80_000,
+    });
+    expect(safeProfile({ ...full, maxAudioChannels: 1, maxHeight: 720 })).toMatchObject({ maxAudioChannels: 1, maxHeight: 720 });
   });
 });
 

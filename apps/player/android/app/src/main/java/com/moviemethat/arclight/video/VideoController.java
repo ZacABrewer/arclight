@@ -137,12 +137,22 @@ public final class VideoController {
      * all when the quality is pinned. The player keeps playing meanwhile.
      */
     void seekRequest(String itemKey, long positionMs, @Nullable Integer audioTrack, @Nullable String subtitle, boolean avoidDirect) {
+        seekRequest(itemKey, positionMs, audioTrack, subtitle, avoidDirect, false);
+    }
+
+    /**
+     * {@code failed}: the current stream failed, showed no picture in time or stayed buffering
+     * (StartWatchdog); JS answers with a safe converted stream whatever the quality, or the
+     * player closes with an error when no answer comes.
+     */
+    void seekRequest(String itemKey, long positionMs, @Nullable Integer audioTrack, @Nullable String subtitle, boolean avoidDirect, boolean failed) {
         JSONObject o = new JSONObject();
         put(o, "itemKey", itemKey);
         put(o, "positionMs", positionMs);
         if (audioTrack != null) put(o, "audioTrack", audioTrack);
         put(o, "subtitle", subtitle == null ? JSONObject.NULL : subtitle);
         if (avoidDirect) put(o, "avoidDirect", true);
+        if (failed) put(o, "failed", true);
         emit("videoSeekRequest", o, false);
     }
 

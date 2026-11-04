@@ -236,9 +236,9 @@ export class NativeVideoLauncher {
     profile: VideoDeviceProfile,
     startMs: number,
     avoidDirect = false,
+    deliveries = this.deps.deliveries,
   ): VideoSessionRequest {
     const sub = c.subtitle ? c.item.video?.subtitleTracks.find((s) => s.id === c.subtitle) : undefined;
-    const deliveries = this.deps.deliveries;
     const hint = this.deps.bandwidth?.get() ?? null;
     return {
       itemKey: c.item.itemKey as VideoSessionRequest['itemKey'],
@@ -412,15 +412,22 @@ export class NativeVideoLauncher {
     const c = this.matches(e.itemKey);
     if (!c) return;
     // Direct play keeps stalling: switch to a converted stream only on Auto (a pinned quality is
-    // the viewer's choice; native asks only on Auto too).
-    if (e.avoidDirect && (this.deps.quality?.() ?? 'auto') !== 'auto') return;
+    // the viewer's choice; native asks only on Auto too). A failed stream is answered always.
+    const failed = e.failed === true;
+    if (e.avoidDirect && !failed && (this.deps.quality?.() ?? 'auto') !== 'auto') return;
     const token = ++this.seekToken;
     c.positionMs = e.positionMs;
     if (e.audioTrack !== undefined) c.audioTrack = e.audioTrack;
     if (e.subtitle !== undefined) c.subtitle = e.subtitle;
     let session: VideoSession;
     try {
-      session = await this.deps.requestSession(this.request(c, await this.profile(), e.positionMs, e.avoidDirect === true));
+      const profile = await this.profile();
+      session = await this.deps.requestSession(
+        failed
+          ? // What every player decodes (H.264 + AAC stereo in MP4); a failed HLS stream comes back progressive.
+            this.request(c, safeProfile(profile), e.positionMs, true, c.session.delivery === 'hls' ? ['progressive'] : this.deps.deliveries)
+          : this.request(c, profile, e.positionMs, e.avoidDirect === true),
+      );
     } catch (err) {
       if (token !== this.seekToken || this.current !== c) return;
       // The native screen waits (spinner) for an answer that will not come: close it rather than
@@ -543,6 +550,24 @@ export class NativeVideoLauncher {
     if (e.error) this.deps.onError?.(t(`player.video.error.${errorKey(e.error)}`));
     this.deps.refresh();
   }
+}
+
+/**
+ * The fallback profile after a stream failed on the device: H.264 (8-bit SDR, up to 1080p) with
+ * AAC stereo in MP4, so the server converts anything else (audio passthrough and HEVC/HDR decode
+ * are the usual TV failures).
+ */
+export function safeProfile(profile: VideoDeviceProfile): VideoDeviceProfile {
+  return {
+    ...profile,
+    containers: ['mp4'],
+    videoCodecs: ['h264'],
+    hevc10bit: false,
+    hdr: [],
+    audioCodecs: ['aac'],
+    maxAudioChannels: Math.min(profile.maxAudioChannels || 2, 2),
+    maxHeight: Math.min(profile.maxHeight || 1080, 1080),
+  };
 }
 
 /** Native error code → the web player's message keys. */
