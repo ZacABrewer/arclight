@@ -9,6 +9,27 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-04
+
+### Added
+- A redesigned TV app. Home has a loading placeholder, a Try again card when rows fail (it also reloads the featured title) and an empty-library screen. Movies and TV shows are a 6-across poster grid with sorting, and My List has type chips and badges. Show pages lift the current episode and mark watched ones, and show the season count; the More panel follows the new design. Search with no matches offers "Did you mean" and a QR code to request the title from your phone.
+- TV Settings > **Network & server**: the server address, a timed connection test and Downloads.
+- A restyled video player on Android phones and TVs: an info line with the stream badges, how it plays and the clock; a buffering ring with the stream rate after a short stall; and a redesigned Up Next card.
+- "Are you still watching?" after 3 episodes in a row that played by themselves, with Keep watching and Back to Home.
+- When a video can't play, the player shows why, with **Try again** and **Back**, instead of closing.
+- The Audio & Subtitles panel slides in from the side, notes tracks that need a converted stream, and has a **Subtitle size** setting (Small, Medium, Large) that is saved to your profile.
+- The new player text is translated into German, Spanish, French and Dutch.
+
+### Changed
+- TV scrolling is smoother, and the focus ring is thinner and follows the lifted tile. Tile titles wrap to two lines.
+- On TV, moving into a Settings section lands on its first option, and Left goes back to the section list.
+
+### Fixed
+- On phones, the music mini player and the now-playing pill stayed on screen after a video started or the queue ended, with nothing playing. They now hide until audio plays again; the queue is kept.
+- TV: the featured title's text showed through the header after scrolling down Home.
+- TV: text and focus rings were cut off at the edges of rows and tiles.
+- Prompt buttons in the player no longer cut off their labels; on a narrow screen they stack.
+
 ## [0.25.0] - 2026-11-03
 
 ### Added
@@ -560,6 +581,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.26.0]: https://github.com/ZacABrewer/arclight/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/ZacABrewer/arclight/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/ZacABrewer/arclight/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/ZacABrewer/arclight/compare/v0.22.0...v0.23.0
