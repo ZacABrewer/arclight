@@ -82,3 +82,4 @@ export * from './video-hls.js';
 export * from './households.js';
 export * from './safe-regex.js';
 export * from './script-env.js';
+export * from './active-streams.js';

@@ -94,6 +94,7 @@ import { videoItem, type ChapterReader } from './video-items.js';
 import { restrictionsFor } from '../requests/certification.js';
 import { householdsFor } from '../households/service.js';
 import type { EngineTarget, JellyfinEngine } from './jellyfin.js';
+import { originOf, viewerOfLink, viewerOfRequest, type StreamFeed } from './active-streams-routes.js';
 import { artworkLinkQuery, hasLinkParams, linkKey, linkQuery, verifyArtworkLink, verifyLink } from './links.js';
 import type { PlaybackOwner, ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
@@ -117,6 +118,8 @@ export interface PlaybackDeps {
   engine?: JellyfinEngine | undefined;
   /** Chapter reader for movie/episode items (ffprobe, cached). */
   chapters: ChapterReader;
+  /** Activity -> Now playing: heartbeats and audio streams feed it (absent: nothing is tracked). */
+  streams?: StreamFeed | undefined;
   now?: () => number;
 }
 
@@ -221,7 +224,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   const linkUserStillActive = (userId: number, profileId: number | null) => linkUserStillActiveIn(db, userId, now(), profileId);
 
   /** The decision for a stream request: the signed-in caller, or the user of a valid link. */
-  function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): { decision: PlayerDecision; userId: number | null } | PlayerHttpError {
+  function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): { decision: PlayerDecision; userId: number | null; linkProfileId?: number | null } | PlayerHttpError {
     const settings = playerSettings(db);
     const remote = isRemoteRequest(req);
     if (req.auth) return { decision: decide(settings, subjectOf(req), remote), userId: req.auth.user?.id ?? null };
@@ -229,7 +232,13 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     if (!check.ok) return new PlayerHttpError(403, `LINK_${check.reason}`, check.reason === 'EXPIRED' ? 'this stream link has expired' : 'this stream link is not valid');
     const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
     if (!row || !linkUserStillActive(row.id, check.profileId)) return new PlayerHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
-    return { decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote), userId: row.id };
+    return { decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote), userId: row.id, linkProfileId: check.profileId };
+  }
+
+  /** Activity -> Now playing: a progress report of a signed-in player. */
+  function feedHeartbeat(req: FastifyRequest, itemKey: string, report: ProgressReport): void {
+    const viewer = deps.streams ? viewerOfRequest(req) : null;
+    if (viewer) deps.streams?.streams.heartbeat(viewer, itemKey, report, originOf(db, req, report.deviceName));
   }
 
   /** Where streams go now: the Jellyfin/Emby target, or null for Arclight's own engine. */
@@ -424,6 +433,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         const { decision, userId } = decided;
         if (decision.denial) return denialReply(reply, decision.denial);
         const file = db.select().from(audioFiles).where(eq(audioFiles.id, fileId)).get();
+        const download = req.query.download === '1' || req.query.download === 'true';
         // A file of a section turned off in Settings → Features reads as missing.
         if (!file || !sectionEnabled(file.mediaType)) return reply.code(404).send({ error: `audio file ${fileId} not found`, code: 'NOT_FOUND' });
         let info;
@@ -443,13 +453,30 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         }
         reply.header('cache-control', 'private, no-cache');
         // ?download=1: save as a file (the transcode's extension when converting).
-        if (req.query.download === '1' || req.query.download === 'true') reply.header('content-disposition', downloadDisposition(file.path, format === 'original' ? null : format));
+        if (download) reply.header('content-disposition', downloadDisposition(file.path, format === 'original' ? null : format));
+        // Activity -> Now playing: a played (not downloaded) stream keeps its row while it flows.
+        const feedViewer = userId === null ? null : decided.linkProfileId !== undefined ? viewerOfLink(userId, decided.linkProfileId) : viewerOfRequest(req);
+        const feedItem = deps.streams && !head && !download && feedViewer ? deps.streams.items.audio(file.id) : null;
+        const feed = (backend: 'arclight' | 'jellyfin', kbps: number | undefined) => {
+          if (!feedItem || !feedViewer || !deps.streams) return;
+          const done = deps.streams.streams.streamOpened(
+            feedViewer,
+            feedItem,
+            { method: format === 'original' ? 'direct' : 'transcode', delivery: 'progressive', backend, reasons: [], hwaccel: null, hlsSessionId: null, audioFormat: format === 'original' ? null : format, bitrateKbps: format === 'original' ? (file.bitrateKbps ?? null) : (kbps ?? null) },
+            originOf(db, req),
+          );
+          if (reply.raw.closed || reply.raw.destroyed) done();
+          else reply.raw.on('close', done);
+        };
         // The Jellyfin engine, when chosen: same format and cap, bytes from the server.
         const target = engineTarget();
         if (target) {
           const kbps = format === 'original' ? undefined : Math.min(bitrate ?? DEFAULT_BITRATE_KBPS[format], cap > 0 ? cap : Number.MAX_SAFE_INTEGER);
           const proxied = await viaJellyfin(req, reply, target, file, { format, bitrateKbps: kbps, startMs: req.query.startMs });
-          if (proxied) return proxied;
+          if (proxied) {
+            feed('jellyfin', kbps);
+            return proxied;
+          }
         }
         reply.header('x-arclight-backend', 'arclight');
         if (format !== 'original') {
@@ -467,9 +494,11 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
           }
           reply.raw.on('close', () => proc.kill());
           proc.stdout.on('error', () => proc.kill());
+          feed('arclight', kbps);
           return reply.code(200).send(proc.stdout);
         }
 
+        feed('arclight', undefined);
         const etag = etagOf(info);
         reply.header('accept-ranges', 'bytes').header('etag', etag).header('last-modified', info.mtime.toUTCString()).header('content-type', mimeOf(file.path));
         const rangeHeader = req.headers.range;
@@ -519,9 +548,11 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     );
 
     // ---- progress -----------------------------------------------------------------------------
-    app.put('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressReport, response: { 200: PlaybackProgress, ...errors } } }, async (req) =>
-      deps.progress.report(ownerOf(req), req.params.itemKey, req.body, now()).progress,
-    );
+    app.put('/playback/progress/:itemKey', { ...playerUser, schema: { params: KeyParams, body: ProgressReport, response: { 200: PlaybackProgress, ...errors } } }, async (req) => {
+      const progress = deps.progress.report(ownerOf(req), req.params.itemKey, req.body, now()).progress;
+      feedHeartbeat(req, req.params.itemKey, req.body);
+      return progress;
+    });
 
     // navigator.sendBeacon posts text/plain; the parser is scoped to this one route.
     await app.register(async (beacon) => {
@@ -535,6 +566,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       beacon.withTypeProvider<ZodTypeProvider>().post('/playback/progress/beacon', { ...playerUser, schema: { body: ProgressBeacon, response: { 204: z.null(), ...errors } } }, async (req, reply) => {
         const { itemKey: key, ...report } = req.body;
         deps.progress.report(ownerOf(req), key, report, now());
+        feedHeartbeat(req, key, report);
         return reply.code(204).send(null);
       });
     });
@@ -552,6 +584,8 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         const { itemKey: key, ...report } = r;
         const outcome = deps.progress.report(owner, key, report, now());
         results[i] = { itemKey: key, accepted: outcome.accepted, progress: outcome.progress };
+        // Old offline reports are ignored by the list (they say nothing about now).
+        feedHeartbeat(req, key, report);
       }
       return { results };
     });

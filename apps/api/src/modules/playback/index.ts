@@ -22,6 +22,8 @@ import { CapacityModel } from './hls/capacity.js';
 import { HlsSessions, hlsCacheRoot, type HlsSessionsOptions } from './hls/jobs.js';
 import { KeyframeIndexer, type KeyframeIndexerOptions } from './hls/keyframes.js';
 import { hlsRoutes, type HlsDeps } from './hls-routes.js';
+import { ActiveStreams, type ActiveStreamsOptions } from './active-streams.js';
+import { activeStreamsRoutes, StreamItemResolver, type StreamFeed } from './active-streams-routes.js';
 
 export { playbackProgress, playbackPlays, playbackQueue, playbackBookmarks, userPlaylists, userPlaylistTracks } from './schema.js';
 export { decide, capabilitiesOf, type PlayerDecision } from './access.js';
@@ -172,6 +174,18 @@ export function hlsPartsFor(ctx: AppContext, opts: { sessions?: Partial<HlsSessi
   return h;
 }
 
+const streamFeeds = new WeakMap<AppContext, StreamFeed>();
+
+/** Activity -> Now playing: the context's list of live streams (0.25); `opts` apply only on creation (tests). */
+export function activeStreamsFor(ctx: AppContext, opts: ActiveStreamsOptions = {}): StreamFeed {
+  let f = streamFeeds.get(ctx);
+  if (!f) {
+    f = { streams: new ActiveStreams(opts), items: new StreamItemResolver(ctx.db) };
+    streamFeeds.set(ctx, f);
+  }
+  return f;
+}
+
 export const playbackModule: AppModule = (ctx) => async (app) => {
   const auth = authServiceFor(ctx);
   const servers = mediaServersServiceFor(ctx);
@@ -185,7 +199,9 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
   const basePath = ctx.config.basePath ?? '';
   const background = backgroundServicesFor(ctx);
   const hlsParts = hlsPartsFor(ctx);
+  const feed = activeStreamsFor(ctx);
   const hls: HlsDeps = {
+    streams: feed,
     db: ctx.db,
     apiKey: () => auth.apiKey(),
     sessions: hlsParts.sessions,
@@ -209,9 +225,11 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
       cache: parts.cache,
       trickplay: background.trickplay,
       hls,
+      streams: feed,
     }),
   );
   await app.register(hlsRoutes(hls));
+  await app.register(activeStreamsRoutes({ db: ctx.db, basePath, streams: feed.streams, hls: hlsParts.sessions }));
   // My List (per household profile).
   await app.register(myListRoutes({ db: ctx.db, basePath, progress }));
   await app.register(trickplayRoutes({ db: ctx.db, basePath, apiKey: () => auth.apiKey(), service: background.trickplay }));
@@ -257,6 +275,7 @@ export const playbackModule: AppModule = (ctx) => async (app) => {
       apiKey: () => auth.apiKey(),
       engine,
       chapters: parts.chapters,
+      streams: feed,
     }),
   );
 };
