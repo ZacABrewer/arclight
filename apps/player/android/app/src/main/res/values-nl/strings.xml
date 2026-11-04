@@ -23,4 +23,26 @@
     <string name="video_now_playing">Speelt nu</string>
     <string name="video_next_in">Volgende aflevering over {s} s</string>
     <string name="video_ends_at_time">Eindigt om {time}</string>
+    <string name="video_up_next_in">Hierna over {s}</string>
+    <string name="video_watch_credits">Aftiteling kijken</string>
+    <string name="video_buffering">Bufferen</string>
+    <string name="video_error_title">Afspelen gestopt</string>
+    <string name="video_error_network">De server stuurt de video niet meer. Controleer de verbinding en probeer het opnieuw.</string>
+    <string name="video_error_unsupported">Dit apparaat kan deze video niet zo afspelen. Probeer het opnieuw voor een omgezette stream.</string>
+    <string name="video_error_forbidden">Dit profiel heeft geen toegang meer tot deze video. Log opnieuw in of vraag het de eigenaar van de server.</string>
+    <string name="video_error_busy">De server is bezig met andere streams. Wacht even en probeer het opnieuw.</string>
+    <string name="video_error_load">Er ging iets mis bij het afspelen. Probeer het opnieuw, of ga terug en kies de video nog eens.</string>
+    <string name="video_error_timeout">Het duurde te lang voordat de video begon. Probeer het opnieuw voor een omgezette stream.</string>
+    <string name="video_error_detail">Fout {code} · {time} · gestopt bij {position}</string>
+    <string name="video_try_again">Opnieuw proberen</string>
+    <string name="video_back">Terug</string>
+    <string name="video_still_watching">Kijk je nog?</string>
+    <string name="video_still_watching_body">{title} · {n} afleveringen achter elkaar.</string>
+    <string name="video_keep_watching">Verder kijken</string>
+    <string name="video_back_to_home">Terug naar home</string>
+    <string name="video_subtitle_size">Ondertitelgrootte</string>
+    <string name="video_size_small">Klein</string>
+    <string name="video_size_medium">Normaal</string>
+    <string name="video_size_large">Groot</string>
+    <string name="video_needs_conversion">Heeft een omgezette stream nodig — kan even pauzeren</string>
 </resources>

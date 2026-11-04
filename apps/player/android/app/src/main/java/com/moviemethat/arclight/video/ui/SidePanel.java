@@ -5,6 +5,7 @@ import android.view.FocusFinder;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import androidx.annotation.Nullable;
 
@@ -41,12 +42,28 @@ public abstract class SidePanel extends FrameLayout {
 
     /** Opens the panel with the focus on {@link #initialFocus}. */
     public void open() {
+        animate().cancel();
         setVisibility(VISIBLE);
+        long d = ui.anim(200);
+        if (d > 0) {
+            // In from the right edge: 40 stage px and a fade.
+            setTranslationX(ui.pxf(40));
+            setAlpha(0f);
+            animate().translationX(0f).alpha(1f).setDuration(d).setInterpolator(new DecelerateInterpolator())
+                    // The overlay draws the focus ring: it follows the sliding row.
+                    .setUpdateListener(a -> { if (getParent() instanceof View) ((View) getParent()).invalidate(); }).start();
+        } else {
+            setTranslationX(0f);
+            setAlpha(1f);
+        }
         View f = initialFocus();
         if (f != null) f.requestFocus();
     }
 
     public void close() {
+        animate().cancel();
+        setTranslationX(0f);
+        setAlpha(1f);
         setVisibility(GONE);
     }
 

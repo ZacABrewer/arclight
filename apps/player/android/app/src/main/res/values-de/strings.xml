@@ -23,4 +23,26 @@
     <string name="video_now_playing">Läuft gerade</string>
     <string name="video_next_in">Nächste Folge in {s} s</string>
     <string name="video_ends_at_time">Endet um {time}</string>
+    <string name="video_up_next_in">Als Nächstes in {s}</string>
+    <string name="video_watch_credits">Abspann ansehen</string>
+    <string name="video_buffering">Puffern</string>
+    <string name="video_error_title">Wiedergabe angehalten</string>
+    <string name="video_error_network">Der Server sendet das Video nicht mehr. Prüfe die Verbindung und versuche es erneut.</string>
+    <string name="video_error_unsupported">Dieses Gerät kann das Video so nicht abspielen. Versuche es erneut für einen umgewandelten Stream.</string>
+    <string name="video_error_forbidden">Dieses Profil hat keinen Zugriff mehr auf das Video. Melde dich erneut an oder frage den Serverbetreiber.</string>
+    <string name="video_error_busy">Der Server ist mit anderen Streams ausgelastet. Warte kurz und versuche es erneut.</string>
+    <string name="video_error_load">Beim Abspielen ist etwas schiefgelaufen. Versuche es erneut oder gehe zurück und wähle das Video noch einmal.</string>
+    <string name="video_error_timeout">Das Video brauchte zu lange zum Starten. Versuche es erneut für einen umgewandelten Stream.</string>
+    <string name="video_error_detail">Fehler {code} · {time} · angehalten bei {position}</string>
+    <string name="video_try_again">Erneut versuchen</string>
+    <string name="video_back">Zurück</string>
+    <string name="video_still_watching">Schaust du noch?</string>
+    <string name="video_still_watching_body">{title} · {n} Folgen am Stück gespielt.</string>
+    <string name="video_keep_watching">Weiterschauen</string>
+    <string name="video_back_to_home">Zur Startseite</string>
+    <string name="video_subtitle_size">Untertitelgröße</string>
+    <string name="video_size_small">Klein</string>
+    <string name="video_size_medium">Mittel</string>
+    <string name="video_size_large">Groß</string>
+    <string name="video_needs_conversion">Braucht einen umgewandelten Stream — kurze Pause möglich</string>
 </resources>

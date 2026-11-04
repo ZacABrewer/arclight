@@ -23,15 +23,6 @@
         app:shutter_background_color="#FF000000"
         app:keep_content_on_player_reset="true" />
 
-    <ProgressBar
-        android:id="@+id/video_loading"
-        style="?android:attr/progressBarStyleLarge"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_gravity="center"
-        android:indeterminateTint="#FF6EF6FF"
-        android:visibility="gone" />
-
     <com.moviemethat.arclight.video.ui.Overlay
         android:id="@+id/video_overlay"
         android:layout_width="match_parent"

@@ -206,6 +206,14 @@ public final class VideoController {
         emit("videoTracksChanged", o, false);
     }
 
+    /** The caption size picked in the Audio & Subtitles panel (JS saves it to the profile). */
+    void prefsChanged(String itemKey, String subtitleSize) {
+        JSONObject o = new JSONObject();
+        put(o, "itemKey", itemKey);
+        put(o, "subtitleSize", subtitleSize);
+        emit("videoPrefsChanged", o, false);
+    }
+
     /** Whether JS listens for {@code event} (seek requests are pointless without an answer). */
     boolean listens(String event) {
         EventSink s = sink;

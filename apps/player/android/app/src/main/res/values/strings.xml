@@ -30,4 +30,26 @@
     <string name="video_ends_at_time">Ends at {time}</string>
     <string name="video_minus_10" translatable="false">−10</string>
     <string name="video_plus_10" translatable="false">+10</string>
+    <string name="video_up_next_in">Up next in {s}</string>
+    <string name="video_watch_credits">Watch credits</string>
+    <string name="video_buffering">Buffering</string>
+    <string name="video_error_title">Playback stopped</string>
+    <string name="video_error_network">The server stopped sending the video. Check the connection, then try again.</string>
+    <string name="video_error_unsupported">This device can\'t play this video as it is. Try again for a converted stream.</string>
+    <string name="video_error_forbidden">This profile no longer has access to this video. Sign in again or ask the server owner.</string>
+    <string name="video_error_busy">The server is busy with other streams. Wait a moment, then try again.</string>
+    <string name="video_error_load">Something went wrong while playing this video. Try again, or go back and pick it once more.</string>
+    <string name="video_error_timeout">The video took too long to start. Try again for a converted stream.</string>
+    <string name="video_error_detail">Error {code} · {time} · stopped at {position}</string>
+    <string name="video_try_again">Try again</string>
+    <string name="video_back">Back</string>
+    <string name="video_still_watching">Are you still watching?</string>
+    <string name="video_still_watching_body">{title} · {n} episodes played in a row.</string>
+    <string name="video_keep_watching">Keep watching</string>
+    <string name="video_back_to_home">Back to Home</string>
+    <string name="video_subtitle_size">Subtitle size</string>
+    <string name="video_size_small">Small</string>
+    <string name="video_size_medium">Medium</string>
+    <string name="video_size_large">Large</string>
+    <string name="video_needs_conversion">Needs a converted stream — may pause briefly</string>
 </resources>

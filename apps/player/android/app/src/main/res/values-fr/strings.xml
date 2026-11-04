@@ -23,4 +23,26 @@
     <string name="video_now_playing">En cours de lecture</string>
     <string name="video_next_in">Épisode suivant dans {s} s</string>
     <string name="video_ends_at_time">Se termine à {time}</string>
+    <string name="video_up_next_in">À suivre dans {s}</string>
+    <string name="video_watch_credits">Voir le générique</string>
+    <string name="video_buffering">Chargement</string>
+    <string name="video_error_title">Lecture interrompue</string>
+    <string name="video_error_network">Le serveur n\'envoie plus la vidéo. Vérifiez la connexion, puis réessayez.</string>
+    <string name="video_error_unsupported">Cet appareil ne peut pas lire cette vidéo telle quelle. Réessayez pour obtenir un flux converti.</string>
+    <string name="video_error_forbidden">Ce profil n\'a plus accès à cette vidéo. Reconnectez-vous ou demandez au propriétaire du serveur.</string>
+    <string name="video_error_busy">Le serveur est occupé par d\'autres flux. Patientez un instant, puis réessayez.</string>
+    <string name="video_error_load">Un problème est survenu pendant la lecture. Réessayez, ou revenez en arrière et relancez la vidéo.</string>
+    <string name="video_error_timeout">La vidéo a mis trop de temps à démarrer. Réessayez pour obtenir un flux converti.</string>
+    <string name="video_error_detail">Erreur {code} · {time} · arrêté à {position}</string>
+    <string name="video_try_again">Réessayer</string>
+    <string name="video_back">Retour</string>
+    <string name="video_still_watching">Vous regardez toujours ?</string>
+    <string name="video_still_watching_body">{title} · {n} épisodes d\'affilée.</string>
+    <string name="video_keep_watching">Continuer</string>
+    <string name="video_back_to_home">Retour à l\'accueil</string>
+    <string name="video_subtitle_size">Taille des sous-titres</string>
+    <string name="video_size_small">Petite</string>
+    <string name="video_size_medium">Moyenne</string>
+    <string name="video_size_large">Grande</string>
+    <string name="video_needs_conversion">Nécessite un flux converti — courte pause possible</string>
 </resources>

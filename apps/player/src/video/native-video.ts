@@ -24,6 +24,7 @@ import type {
   VideoProgressEvent,
   VideoPickItemEvent,
   VideoSeekRequestEvent,
+  VideoPrefsChangedEvent,
   VideoTracksChangedEvent,
   NativeVideoTheme,
 } from '../native/definitions';
@@ -41,6 +42,7 @@ import { normLanguage, pauseInfo, preferredAudio, preferredSubtitle, prefsOf, se
 //   videoClosed       → the final report, "played" when it reached the end, refresh the pages
 //   videoPickItem     → an episode from the native episodes panel: stop this one, open that one
 //   videoTracksChanged → the profile's audio / subtitle language follows the choice
+//   videoPrefsChanged  → the caption size picked in the panel is saved to the profile
 //
 // With the redesign's extras (spec §5.9): the pause screen, scrub thumbnails, the episodes panel,
 // the active profile's prefs and languages, the theme's colours and the overlay strings.
@@ -58,7 +60,7 @@ export interface NativeVideoDeps {
   sendProgress: (itemKey: string, report: ProgressReport) => Promise<unknown>;
   /** POST /playback/watched for one item. */
   markPlayed: (itemKey: string) => Promise<unknown>;
-  /** Pause the music / audiobook player. */
+  /** Pause the music / audiobook player and set it aside (its mini player hides until it plays again). */
   pauseAudio: () => void;
   /** After the player closed or moved on: refresh continue watching, next up, watched marks. */
   refresh: () => void;
@@ -197,6 +199,7 @@ export class NativeVideoLauncher {
       p.addListener('videoClosed', (e) => void this.onClosed(e)),
       p.addListener('videoPickItem', (e) => void this.onPickItem(e)),
       p.addListener('videoTracksChanged', (e) => void this.onTracksChanged(e)),
+      p.addListener('videoPrefsChanged', (e) => void this.onPrefsChanged(e)),
     ]);
   }
 
@@ -529,6 +532,12 @@ export class NativeVideoLauncher {
       if (subLang) patch.subtitleLanguage = subLang;
     }
     if (Object.keys(patch).length) await this.deps.saveProfileSettings(patch).catch(() => undefined);
+  }
+
+  private async onPrefsChanged(e: VideoPrefsChangedEvent): Promise<void> {
+    if (!this.matches(e.itemKey) || !this.deps.saveProfileSettings) return;
+    if (e.subtitleSize !== 'small' && e.subtitleSize !== 'medium' && e.subtitleSize !== 'large') return;
+    await this.deps.saveProfileSettings({ subtitleSize: e.subtitleSize }).catch(() => undefined);
   }
 
   private async onClosed(e: VideoClosedEvent): Promise<void> {

@@ -403,7 +403,11 @@ export interface NativeVideoTheme {
 export type NativeVideoString =
   | 'upNext' | 'playNow' | 'cancel' | 'nextIn' /* "Next episode in {s}s" */ | 'skipIntro' | 'skipRecap' | 'skipCredits'
   | 'endsAt' /* "Ends at {time}" */ | 'audioSubtitles' | 'audio' | 'subtitles' | 'off' | 'episodes' | 'nextEpisode'
-  | 'nowPlaying';
+  | 'nowPlaying' | 'upNextIn' /* "Up next in {s}" */ | 'watchCredits' | 'buffering' | 'errorTitle' | 'errorNetwork'
+  | 'errorUnsupported' | 'errorForbidden' | 'errorBusy' | 'errorLoad' | 'errorTimeout'
+  | 'errorDetail' /* "Error {code} · {time} · stopped at {position}" */ | 'tryAgain' | 'back' | 'stillWatching'
+  | 'stillWatchingBody' /* "{title} · {n} episodes played in a row." */ | 'keepWatching' | 'backToHome' | 'subtitleSize'
+  | 'sizeSmall' | 'sizeMedium' | 'sizeLarge' | 'needsConversion';
 
 /** The user picked another episode in the native episodes panel. JS answers with playVideo (or closeVideo). */
 export interface VideoPickItemEvent { itemKey: string; fromItemKey: string; positionMs: number }
@@ -413,6 +417,9 @@ export interface VideoPickItemEvent { itemKey: string; fromItemKey: string; posi
  * to ProfileSettings.audioLanguage / subtitleLanguage. `audioTrack` is always the JS-side ordinal
  * (PlayVideoOptions.audioTracks[].index), null when native could not match the file's track to one.
  */
+/** The caption size picked in the native Audio & Subtitles panel; JS saves it to the profile. */
+export interface VideoPrefsChangedEvent { itemKey: string; subtitleSize: 'small' | 'medium' | 'large' }
+
 export interface VideoTracksChangedEvent { itemKey: string; audioTrack: number | null; subtitle: string | null }
 
 /** Cold-launch info for the launch intro (§6). Consumed once per process. */
@@ -687,6 +694,7 @@ export interface ArclightPlayerPlugin {
   addListener(eventName: 'videoClosed', listener: (e: VideoClosedEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'videoPickItem', listener: (e: VideoPickItemEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'videoTracksChanged', listener: (e: VideoTracksChangedEvent) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'videoPrefsChanged', listener: (e: VideoPrefsChangedEvent) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }
 
@@ -711,6 +719,7 @@ export interface PlayerEvents {
   videoClosed: VideoClosedEvent;
   videoPickItem: VideoPickItemEvent;
   videoTracksChanged: VideoTracksChangedEvent;
+  videoPrefsChanged: VideoPrefsChangedEvent;
 }
 
 export type PlayerEventName = keyof PlayerEvents;
