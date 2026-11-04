@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayableItem, PlayerSearchResponse, PlayerTrack, VideoCard } from '@arclight/shared';
 import { newEpisodes, recentAlbums } from './home';
-import { searchTiles, SEARCH_MAX } from './search';
+import { nearMisses, requestUrl, searchTiles, SEARCH_MAX } from './search';
 import { cycle, languageName, ownsAccount, SUBTITLE_LANGUAGES } from './settings';
 import { chapterRows, listenProgress } from './listen';
 import { initialOf } from './manage-profiles';
@@ -133,5 +133,17 @@ describe('Browse', () => {
 
   it('Movies sort starts at recently added', () => {
     expect(SORTS[0]).toEqual({ sort: 'added', order: 'desc' });
+  });
+});
+
+describe('Search no matches', () => {
+  const c = (id: number, title: string, kind: VideoCard['kind'] = 'movie') => ({ id, title, kind }) as unknown as VideoCard;
+  it('Did you mean: close titles first, nothing unrelated', () => {
+    const cards = [c(1, 'Saltwater Kings'), c(2, 'Northern Glass'), c(3, 'Salt Flats'), c(1, 'Saltwater Kings')];
+    expect(nearMisses('saltwatr', cards).map((x) => x.id)).toEqual([1, 3]);
+    expect(nearMisses('zzz', cards)).toEqual([]);
+  });
+  it('the request link opens Discover search', () => {
+    expect(requestUrl('https://arc.example.com/', 'dune 2')).toBe('https://arc.example.com/discover/search?q=dune%202');
   });
 });

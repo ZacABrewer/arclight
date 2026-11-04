@@ -91,6 +91,9 @@ function MoreButton({
                 <span className="tv-opt__text">
                   <span className="tv-opt__label">{played ? t('player.video.markUnwatched') : t('player.video.markWatched')}</span>
                 </span>
+                <span className="tv-chev" aria-hidden="true">
+                  ›
+                </span>
               </button>
               {versions.length > 1 ? (
                 <>
@@ -115,16 +118,19 @@ function MoreButton({
                           {v.description ? <span className="tv-opt__desc">{v.description}</span> : null}
                         </span>
                         {on ? (
-                          <span className="tv-opt__choice" aria-hidden="true">
-                            ✓
+                          <span className="tv-opt__choice">{t('app.tv.versionDefault')}</span>
+                        ) : (
+                          <span className="tv-chev" aria-hidden="true">
+                            ›
                           </span>
-                        ) : null}
+                        )}
                       </button>
                     );
                   })}
                 </>
               ) : null}
             </div>
+            <p className="tv-more-menu__hint">{t('app.tv.backCloses')}</p>
           </div>
         </TvPanel>
       ) : null}
@@ -298,12 +304,13 @@ export function TvShowScreen() {
                   {x.seasonNumber === 0 ? t('app.video.specials') : t('app.video.season', { n: x.seasonNumber })}
                 </button>
               ))}
+              {current.episodeCount ? <span className="tv-seasons__count">{t('app.tv.seasonWatched', { n: current.playedCount, total: current.episodeCount })}</span> : null}
             </div>
             <div data-tv-row="">
               <div className="tv-scroll-x" data-tv-scroll="x">
                 <div className="tv-eps">
                   {current.episodes.map((e) => {
-                    const f = e.played ? 1 : fraction(e.progress);
+                    const f = e.played ? null : fraction(e.progress);
                     return (
                       <div key={e.itemKey} className="tv-ep">
                         <button
@@ -315,6 +322,11 @@ export function TvShowScreen() {
                           aria-label={`${e.episodeNumber}. ${e.title ?? ''}`}
                         >
                           <span className="tv-ep__badge">E{e.episodeNumber}</span>
+                          {e.played ? (
+                            <span className="tv-ep__check" aria-hidden="true">
+                              ✓
+                            </span>
+                          ) : null}
                           {f ? (
                             <span className="tv-art__bar">
                               <span style={{ width: pct(f) }} />

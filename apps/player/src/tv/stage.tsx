@@ -11,7 +11,7 @@ export const STAGE_H = 720;
 const RING_OUTSET = 4;
 /** Focus v2: a focused tile's art lifts by this much (tv.css `.tv-tile .tv-art:focus`). */
 const LIFT = 1.06;
-const LIFTED = '.tv-tile .tv-art, [data-tv-lift]';
+const LIFTED = '.tv-tile .tv-art, .tv-ep .tv-art, [data-tv-lift]';
 /** Focus v2's dwell: after this long at rest the focused tile shows its meta strip. */
 const DWELL_MS = 650;
 
