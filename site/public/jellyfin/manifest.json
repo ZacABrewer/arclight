@@ -9,6 +9,22 @@
     "imageUrl": "https://arclight.moviemethat.com/jellyfin/icon.png",
     "versions": [
       {
+        "version": "1.4.0.12",
+        "changelog": "Security fixes. Nothing to change in your setup.\n\n- Links and images built from title data (TMDB, JustWatch, trailers) only open http(s) addresses. A `javascript:` or `data:` link in bad metadata is dropped instead of being clickable.\n- Test connection never sends the saved API key to a different address. To test a new Arclight URL, type the API key as well.\n- On Linux and macOS the API key file is created readable only by the Jellyfin user, before the key is written.\n- Theme packs: only packs Arclight lists as installed are fetched, and only the fonts a pack's stylesheet uses. Stylesheets and fonts are always served as CSS and fonts, never with whatever type the upstream answered. Misses and failures are cached briefly, and the last good copy is served while Arclight is down.\n- Responses from Arclight have a size limit: an oversized answer is refused instead of being read into memory.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.4.0/arclight-jellyfin_1.4.0.12.zip",
+        "checksum": "904458a2b117e1631d80e3669a197d04",
+        "timestamp": "2026-11-04T16:34:12Z"
+      },
+      {
+        "version": "1.4.0.11",
+        "changelog": "Security fixes. Nothing to change in your setup.\n\n- Links and images built from title data (TMDB, JustWatch, trailers) only open http(s) addresses. A `javascript:` or `data:` link in bad metadata is dropped instead of being clickable.\n- Test connection never sends the saved API key to a different address. To test a new Arclight URL, type the API key as well.\n- On Linux and macOS the API key file is created readable only by the Jellyfin user, before the key is written.\n- Theme packs: only packs Arclight lists as installed are fetched, and only the fonts a pack's stylesheet uses. Stylesheets and fonts are always served as CSS and fonts, never with whatever type the upstream answered. Misses and failures are cached briefly, and the last good copy is served while Arclight is down.\n- Responses from Arclight have a size limit: an oversized answer is refused instead of being read into memory.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.4.0/arclight-jellyfin_1.4.0.11.zip",
+        "checksum": "50a64bd30eba08d1d94cf013e3d4de21",
+        "timestamp": "2026-11-04T16:34:12Z"
+      },
+      {
         "version": "1.3.0.12",
         "changelog": "- My stats: your own watch history for the last 7, 30, 90 or 365 days, or all time:\n  - plays, watch time, titles, movies and episodes;\n  - how things played (direct play, direct stream, transcode);\n  - your top movies, series and genres, your devices and apps;\n  - watch time per day, and a weekday-by-hour chart of when you watch.\n- Year in review: your year in numbers (watch time, busiest month, favourite day and hour, longest day, first play, top titles and genres), with a year picker.\n  - The Year in review card is shown as an image you can download.\n  - \"Create share link\" makes an expiring link to your card, when Arclight allows share links.\n- Server stats: the same view for the whole server, with the most active users, for the people Arclight allows to see it.\n- A \"Leaving Soon\" row on the Discover page shows titles Arclight's clean-up rules will remove soon, with the date each one leaves. Titles in your library open Jellyfin's own page.\n- The pages are under \"Stats\" in the menu. Four new settings (all on) can hide each of them. Who may see what is set in Arclight under Settings > Stats & collections.\n- Needs an Arclight release newer than 0.19.0. With older Arclight versions the new pages and the Leaving Soon row stay hidden, and everything else keeps working.",
         "targetAbi": "12.0.0.0",
