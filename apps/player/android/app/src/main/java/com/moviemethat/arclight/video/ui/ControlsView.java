@@ -25,7 +25,8 @@ import com.moviemethat.arclight.video.VideoSeekBar;
  *       the row of play / pause, −10, +10, "Next episode", "Episodes", and "Audio &amp;
  *       Subtitles" at the right (12 apart).</li>
  * </ul>
- * The scrub preview ({@link TrickplayPreview}) floats above the knob.
+ * The scrub preview ({@link TrickplayPreview}) floats above the knob. On a touch screen (a phone)
+ * −10, play / pause and +10 sit in the middle of the picture instead, bigger and easy to reach.
  */
 @SuppressLint("ViewConstructor")
 public final class ControlsView extends FrameLayout {
@@ -49,7 +50,11 @@ public final class ControlsView extends FrameLayout {
     public final LinearLayout buttonRow;
     private final Ui ui;
 
-    public ControlsView(Context context, Ui ui, SheetCache sheets) {
+    /** Phone layout: the play / pause, −10 and +10 in the middle of the picture. */
+    public static final int CENTER_TOGGLE = 104;
+    public static final int CENTER_SKIP = 72;
+
+    public ControlsView(Context context, Ui ui, SheetCache sheets, boolean touch) {
         super(context);
         this.ui = ui;
         setClipChildren(false);
@@ -113,15 +118,31 @@ public final class ControlsView extends FrameLayout {
         int b = ui.px(52);
         toggle = new PlayToggleView(context, ui);
         toggle.setContentDescription(context.getString(R.string.video_play));
-        buttonRow.addView(toggle, ui.lin(b, b));
         back10 = ui.circle(context.getString(R.string.video_minus_10));
         back10.setContentDescription(context.getString(R.string.video_back_10));
-        buttonRow.addView(back10, gap(ui.lin(b, b)));
         fwd10 = ui.circle(context.getString(R.string.video_plus_10));
         fwd10.setContentDescription(context.getString(R.string.video_forward_10));
-        buttonRow.addView(fwd10, gap(ui.lin(b, b)));
+        if (touch) {
+            LinearLayout center = new LinearLayout(context);
+            center.setOrientation(LinearLayout.HORIZONTAL);
+            center.setGravity(Gravity.CENTER);
+            center.setClipChildren(false);
+            int s = ui.px(CENTER_SKIP);
+            for (TextView v : new TextView[] {back10, fwd10}) v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.pxf(20));
+            center.addView(back10, ui.lin(s, s));
+            LinearLayout.LayoutParams tl = ui.lin(ui.px(CENTER_TOGGLE), ui.px(CENTER_TOGGLE));
+            tl.leftMargin = ui.px(56);
+            tl.rightMargin = ui.px(56);
+            center.addView(toggle, tl);
+            center.addView(fwd10, ui.lin(s, s));
+            addView(center, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER));
+        } else {
+            buttonRow.addView(toggle, ui.lin(b, b));
+            buttonRow.addView(back10, gap(ui.lin(b, b)));
+            buttonRow.addView(fwd10, gap(ui.lin(b, b)));
+        }
         next = ui.pill(ui.strings.get("nextEpisode"));
-        buttonRow.addView(next, gap(ui.lin(Ui.WRAP, b)));
+        buttonRow.addView(next, buttonRow.getChildCount() == 0 ? ui.lin(Ui.WRAP, b) : gap(ui.lin(Ui.WRAP, b)));
         episodes = ui.pill(ui.strings.get("episodes"));
         buttonRow.addView(episodes, gap(ui.lin(Ui.WRAP, b)));
         View spacer = new View(context);

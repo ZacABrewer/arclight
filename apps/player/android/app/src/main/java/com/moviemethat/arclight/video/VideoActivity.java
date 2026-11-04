@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,6 +26,8 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -159,6 +162,14 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     @Nullable private Ui ui;
     @Nullable private String uiStyleKey;
     private ControlsView controls;
+    /** Phones: "−10" / "+10" on the side that was double-tapped, adding up over a run of taps. */
+    @Nullable private TextView seekFlash;
+    private long seekFlashMs;
+    private boolean seekFlashForward;
+    private final Runnable hideSeekFlash = () -> {
+        seekFlashMs = 0;
+        if (seekFlash != null) seekFlash.animate().alpha(0f).setDuration(ui == null ? 0 : ui.anim(200)).start();
+    };
     private PauseGlyphView glyph;
     private SkipButton skip;
     private UpNextCard upNext;
@@ -531,8 +542,25 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         buffering = new BufferingView(this, u);
         overlay.addView(buffering, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
 
-        controls = new ControlsView(this, u, sheets);
+        controls = new ControlsView(this, u, sheets, !tv);
         overlay.addView(controls, u.frame(Ui.MATCH, Ui.MATCH, Gravity.TOP));
+        overlay.setDoubleTaps(!tv);
+        seekFlash = null;
+        seekFlashMs = 0;
+        handler.removeCallbacks(hideSeekFlash);
+        if (!tv) {
+            TextView f = u.text(26, 800, u.theme.text);
+            f.setGravity(Gravity.CENTER);
+            Ui.tabular(f);
+            GradientDrawable fd = new GradientDrawable();
+            fd.setShape(GradientDrawable.OVAL);
+            fd.setColor(OverlayTheme.alpha(u.theme.bg, 0.55f));
+            f.setBackground(fd);
+            f.setAlpha(0f);
+            f.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            seekFlash = f;
+            overlay.addView(f, u.frame(u.px(140), u.px(140), Gravity.CENTER_VERTICAL | Gravity.START));
+        }
         controls.bar.setListener(this);
         controls.toggle.setOnClickListener(v -> {
             togglePlayPause();
@@ -663,6 +691,33 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         }
         if (controlsShown) hideControlsNow();
         else showControls(false);
+    }
+
+    /** Phones: a double tap on the left half goes back 10 s, on the right half forward 10 s. */
+    @Override
+    public void onBackgroundDoubleTap(boolean forward) {
+        noteInput();
+        if (promptKind != PROMPT_NONE || openPanel() != null || pauseInfo.isShowing() || isInPip()) return;
+        seekBy(forward ? 10_000 : -10_000);
+        if (controlsShown) scheduleHide();
+        TextView f = seekFlash;
+        if (f == null || ui == null) return;
+        if (seekFlashMs == 0 || seekFlashForward != forward) seekFlashMs = 0;
+        seekFlashForward = forward;
+        seekFlashMs += 10_000;
+        f.setText((forward ? "+" : "\u2212") + (seekFlashMs / 1000));
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) f.getLayoutParams();
+        int gravity = Gravity.CENTER_VERTICAL | (forward ? Gravity.END : Gravity.START);
+        if (lp.gravity != gravity) {
+            lp.gravity = gravity;
+            lp.leftMargin = ui.px(OverlayMetrics.SIDE + 80);
+            lp.rightMargin = ui.px(OverlayMetrics.SIDE + 80);
+            f.setLayoutParams(lp);
+        }
+        f.animate().cancel();
+        f.setAlpha(1f);
+        handler.removeCallbacks(hideSeekFlash);
+        handler.postDelayed(hideSeekFlash, 700);
     }
 
     // =====================================================================================
@@ -1429,7 +1484,9 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
     /** The 96 px centred pause glyph, while paused and the pause screen is not up. */
     private void updateGlyph() {
         if (glyph == null) return;
-        boolean show = userPaused() && !pauseInfo.isShowing() && !isInPip() && !busy && promptKind == PROMPT_NONE;
+        // Phones: the centred play button takes its place while the controls show.
+        boolean show = userPaused() && !pauseInfo.isShowing() && !isInPip() && !busy && promptKind == PROMPT_NONE
+                && (tv || !controlsShown);
         glyph.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
@@ -1703,6 +1760,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             upNext.setControlsShown(false);
             liftSubtitles(false);
             controls.setVisibility(View.INVISIBLE);
+            updateGlyph();
         };
         long d = ui.anim(150);
         if (d == 0) {
@@ -1907,6 +1965,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         if (openPanel() != null) return;
         boolean wasHidden = !controlsShown;
         controlsShown = true;
+        updateGlyph();
         liftSubtitles(true);
         skip.setControlsShown(true);
         upNext.setControlsShown(true);
@@ -1951,6 +2010,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
             upNext.setControlsShown(false);
             liftSubtitles(false);
             controls.setVisibility(View.INVISIBLE);
+            updateGlyph();
             if (skip.getVisibility() == View.VISIBLE) skip.requestFocus();
             else if (upNext.getVisibility() == View.VISIBLE) upNext.playNow.requestFocus();
         };
@@ -1971,6 +2031,7 @@ public final class VideoActivity extends AppCompatActivity implements VideoSeekB
         controls.setAlpha(0f);
         controls.setVisibility(View.INVISIBLE);
         controlsShown = false;
+        updateGlyph();
         skip.setControlsShown(false);
         upNext.setControlsShown(false);
         liftSubtitles(false);

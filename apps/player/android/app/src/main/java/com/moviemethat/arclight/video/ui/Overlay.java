@@ -30,6 +30,9 @@ public final class Overlay extends FrameLayout {
     public interface Listener {
         void onBackgroundTap();
 
+        /** A double tap (and each further quick tap) on the right half ({@code forward}) or the left half. */
+        void onBackgroundDoubleTap(boolean forward);
+
         void onOverlaySizeChanged(int w, int h);
     }
 
@@ -52,6 +55,17 @@ public final class Overlay extends FrameLayout {
     private float downX;
     private float downY;
     private boolean tapCandidate;
+    /** Phones: a tap waits for the double-tap timeout before it counts as a single tap. */
+    private boolean doubleTaps;
+    private long lastTapAt;
+    private float lastTapX;
+    private float lastTapY;
+    /** After a double tap, further taps on the same side until then seek again. */
+    private long streakUntil;
+    private boolean streakForward;
+    private final Runnable singleTap = () -> {
+        if (listener != null) listener.onBackgroundTap();
+    };
 
     private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (oldFocus, newFocus) -> onFocusMoved(newFocus);
     private final ViewTreeObserver.OnScrollChangedListener scrollListener = this::invalidate;
@@ -101,6 +115,7 @@ public final class Overlay extends FrameLayout {
         o.removeOnGlobalLayoutListener(layoutListener);
         o.removeOnTouchModeChangeListener(touchListener);
         if (anim != null) anim.cancel();
+        removeCallbacks(singleTap);
         super.onDetachedFromWindow();
     }
 
@@ -263,7 +278,7 @@ public final class Overlay extends FrameLayout {
             case MotionEvent.ACTION_UP:
                 if (tapCandidate && listener != null) {
                     performClick();
-                    listener.onBackgroundTap();
+                    onTap(e);
                 }
                 tapCandidate = false;
                 return true;
@@ -273,6 +288,46 @@ public final class Overlay extends FrameLayout {
             default:
                 return super.onTouchEvent(e);
         }
+    }
+
+    /** Double taps on (true) or off; off, every tap is a single tap at once. */
+    public void setDoubleTaps(boolean on) {
+        doubleTaps = on;
+        if (!on) {
+            removeCallbacks(singleTap);
+            streakUntil = 0;
+        }
+    }
+
+    private void onTap(MotionEvent e) {
+        if (!doubleTaps) {
+            listener.onBackgroundTap();
+            return;
+        }
+        long now = e.getEventTime();
+        boolean forward = e.getX() > getWidth() / 2f;
+        int timeout = ViewConfiguration.getDoubleTapTimeout();
+        if (now < streakUntil && forward == streakForward) {
+            streakUntil = now + timeout * 2L;
+            listener.onBackgroundDoubleTap(forward);
+            return;
+        }
+        int slop = ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
+        boolean pending = now - lastTapAt <= timeout && Math.hypot(e.getX() - lastTapX, e.getY() - lastTapY) <= slop;
+        if (pending) {
+            removeCallbacks(singleTap);
+            lastTapAt = 0;
+            streakForward = forward;
+            streakUntil = now + timeout * 2L;
+            listener.onBackgroundDoubleTap(forward);
+            return;
+        }
+        streakUntil = 0;
+        lastTapAt = now;
+        lastTapX = e.getX();
+        lastTapY = e.getY();
+        removeCallbacks(singleTap);
+        postDelayed(singleTap, timeout);
     }
 
     @Override

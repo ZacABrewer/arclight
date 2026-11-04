@@ -18,6 +18,7 @@ at the end of this file.
 - "Are you still watching?" after 3 episodes in a row that played by themselves, with Keep watching and Back to Home.
 - When a video can't play, the player shows why, with **Try again** and **Back**, instead of closing.
 - The Audio & Subtitles panel slides in from the side, notes tracks that need a converted stream, and has a **Subtitle size** setting (Small, Medium, Large) that is saved to your profile.
+- **Phone video player:** play / pause, −10 and +10 now sit large in the middle of the screen, and a double tap on the left or right half skips back or forward 10 seconds (keep tapping to skip further).
 - The new player text is translated into German, Spanish, French and Dutch.
 
 ### Changed

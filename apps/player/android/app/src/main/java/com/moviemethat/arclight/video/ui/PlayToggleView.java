@@ -41,20 +41,22 @@ public final class PlayToggleView extends View {
         float cx = getWidth() / 2f;
         float cy = getHeight() / 2f;
         c.drawCircle(cx, cy, Math.min(cx, cy), bg);
+        // Drawn for 52 px; a bigger circle (the phone's centred one) scales the glyph with it.
+        float s = Math.max(1f, Math.min(getWidth(), getHeight()) / ui.pxf(52));
         if (playing) {
-            float w = ui.pxf(5);
-            float h = ui.pxf(18);
-            float gap = ui.pxf(5);
-            float r = ui.pxf(1);
+            float w = ui.pxf(5) * s;
+            float h = ui.pxf(18) * s;
+            float gap = ui.pxf(5) * s;
+            float r = ui.pxf(1) * s;
             rect.set(cx - gap / 2 - w, cy - h / 2, cx - gap / 2, cy + h / 2);
             c.drawRoundRect(rect, r, r, glyph);
             rect.set(cx + gap / 2, cy - h / 2, cx + gap / 2 + w, cy + h / 2);
             c.drawRoundRect(rect, r, r, glyph);
         } else {
             // The template's path "M1 1l14 8-14 8z" in a 16x18 box drawn 18x20, margin-left 3.
-            float bw = ui.pxf(18);
-            float bh = ui.pxf(20);
-            float left = cx - bw / 2 + ui.pxf(1.5f);
+            float bw = ui.pxf(18) * s;
+            float bh = ui.pxf(20) * s;
+            float left = cx - bw / 2 + ui.pxf(1.5f) * s;
             float top = cy - bh / 2;
             float sx = bw / 16f;
             float sy = bh / 18f;
