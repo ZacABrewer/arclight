@@ -186,7 +186,7 @@ function NowPlayingPill() {
   const t = useT();
   const { state } = usePlayer();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const item = state.current;
+  const item = state.setAside ? null : state.current;
   if (!item || path.startsWith('/player/now-playing')) return null;
   const label = item.subtitle ? `${item.title} · ${item.kind === 'audiobook' ? (item.context ?? item.subtitle) : item.subtitle}` : item.title;
   return (
@@ -254,7 +254,7 @@ export function PortraitMiniPlayer() {
   const t = useT();
   const { state, toggle } = usePlayer();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const item = state.current;
+  const item = state.setAside ? null : state.current;
   if (!item || path.startsWith('/player/now-playing')) return null;
   const label = item.subtitle ? `${item.title} · ${item.subtitle}` : item.title;
   const pct = state.durationMs > 0 ? Math.min(100, (state.positionMs / state.durationMs) * 100) : 0;

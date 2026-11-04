@@ -179,9 +179,7 @@ export async function createServices(): Promise<AppServices> {
       requestSession: (body) => videoApi.session(body),
       sendProgress,
       markPlayed: (key) => videoApi.watched({ itemKeys: [key as never], played: true }),
-      pauseAudio: () => {
-        if (player?.controller.getState().playing) player.controller.pause();
-      },
+      pauseAudio: () => player?.controller.setAsideForVideo(),
       refresh: () => {
         void qc.invalidateQueries({ queryKey: browseKeys.all });
         void qc.invalidateQueries({ queryKey: ['playback', 'progress'] });

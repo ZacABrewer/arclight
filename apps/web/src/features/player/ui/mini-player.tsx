@@ -12,7 +12,7 @@ import { PlayerIcon } from './player-icons.js';
  */
 export function MiniPlayer() {
   const { state, toggle, next, skip } = usePlayer();
-  const item = state.current;
+  const item = state.setAside ? null : state.current;
   if (!item) return null;
   const book = item.kind === 'audiobook';
   const chapter = book && state.chapterIndex >= 0 ? item.chapters[state.chapterIndex]?.title : null;
