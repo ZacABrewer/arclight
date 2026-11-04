@@ -29,6 +29,7 @@ import type { PipelineCaps } from './hls/pipeline.js';
 import { segmentAt, segmentPlan } from './hls/plan.js';
 import { masterPlaylist, mediaPlaylist } from './hls/playlist.js';
 import { mediaFileAllowed, type MediaFileRow } from './video-items.js';
+import type { StreamFeed } from './active-streams-routes.js';
 
 // HLS delivery for Movies & TV (0.24): the session route builds a ladder and an HlsSession
 // (openHlsSession); these routes serve its playlists, init and media segments, health, and end
@@ -43,6 +44,8 @@ export interface HlsDeps {
   /** The pipeline caps of this box (tested once per process). */
   caps: () => Promise<PipelineCaps>;
   now?: () => number;
+  /** Activity -> Now playing (playlist and segment requests keep a stream alive). */
+  streams?: StreamFeed;
 }
 
 export interface HlsOpenInput {
@@ -204,6 +207,7 @@ export function hlsRoutes(deps: HlsDeps): FastifyPluginAsync<Record<never, never
       if (accessCache.size > 5000) accessCache.clear();
       accessCache.set(key, now());
     }
+    deps.streams?.streams.hlsTouched(session.id);
     return session;
   }
 
@@ -283,6 +287,7 @@ export function hlsRoutes(deps: HlsDeps): FastifyPluginAsync<Record<never, never
       const userId = req.auth?.user?.id;
       if (!session || userId === undefined || session.userId !== userId) return reply.code(404).send({ error: 'this playback session has ended', code: 'SESSION_GONE' });
       await deps.sessions.delete(session.id);
+      deps.streams?.streams.hlsEnded(session.id);
       return reply.code(204).send(null);
     });
   };

@@ -27,6 +27,7 @@ import {
   type VideoReason,
   type VideoSessionSubtitle,
   type VideoSubtitleTrack,
+  type TranscodeHwaccel,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../auth/schema.js';
@@ -51,6 +52,8 @@ import { firstOutput, MediaCacheError, type EncoderDetector, type MediaCache } f
 import { openHlsSession, type HlsDeps } from './hls-routes.js';
 import { copySeekTarget, keyframeAtOrBefore } from './hls/keyframes.js';
 import { planBitrates, segmentPlan } from './hls/plan.js';
+import { originOf, viewerOfLink, viewerOfRequest, type StreamFeed } from './active-streams-routes.js';
+import type { StreamDelivery } from './active-streams.js';
 
 // Movies & TV routes of the player: the playback session (direct play / remux / transcode with
 // reason codes), GET|HEAD /stream/video/:mediaFileId (ranges for direct play; fragmented MP4 from
@@ -74,6 +77,8 @@ export interface VideoDeps {
   now?: () => number;
   /** HLS delivery (0.24); absent: progressive only. */
   hls?: HlsDeps;
+  /** Activity -> Now playing (sessions and stream requests feed it). */
+  streams?: StreamFeed;
 }
 
 const user = { access: { portal: true } } as const;
@@ -174,6 +179,8 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
   interface StreamAccess {
     decision: PlayerDecision;
     userId: number | null;
+    /** A signed link's profile (null: the owner); cookie and bearer callers carry theirs on req.auth. */
+    linkProfileId?: number | null;
     restrictions: ContentRestrictions | null;
   }
 
@@ -196,6 +203,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
     return {
       decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remoteReq),
       userId: row.id,
+      linkProfileId: check.profileId,
       restrictions,
     };
   }
@@ -342,6 +350,13 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
       const subtitles: VideoSessionSubtitle[] = chosen.info.subtitleTracks.flatMap((t, i) =>
         t.text ? [{ id: t.id, label: subtitleLabel(t, i), language: t.language, forced: t.forced, default: t.default, url: `${origin}/stream/subtitle/${fileId}/${t.id}.vtt?${sig}` }] : [],
       );
+      /** Activity -> Now playing: this device is about to play this item, like this. */
+      const feedSession = (delivery: Partial<StreamDelivery>) => {
+        const viewer = viewerOfRequest(req);
+        if (!deps.streams || !viewer) return;
+        deps.streams.items.remember('video', fileId, body.itemKey);
+        deps.streams.streams.videoSession(viewer, { deviceKey: body.deviceKey ?? null, itemKey: body.itemKey, startMs: body.startMs ?? 0, durationMs, delivery }, originOf(db, req));
+      };
       const trickplay = async () => (deps.trickplay ? await signedTrickplay({ db, apiKey: deps.apiKey, service: deps.trickplay, now }, fileId, { userId, profileId: linkProfileOf(req) }, origin) : null);
 
       // HLS for clients that play it (0.24), unless Settings -> Player keeps progressive streams.
@@ -391,6 +406,15 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
           }
           const start = opened.ladder.rungs.find((r) => r.id === opened.ladder.startRung);
           const burned = opened.ladder.burn?.id ?? null;
+          feedSession({
+            method: start?.mode === 'copy' ? 'remux' : 'transcode',
+            delivery: 'hls',
+            reasons: burned && !reasons.includes('burn-subtitle') ? [...reasons, 'burn-subtitle'] : reasons,
+            hlsSessionId: opened.session.id,
+            hwaccel: null,
+            audioFormat: null,
+            bitrateKbps: start ? Math.round(start.videoKbps) : null,
+          });
           return {
             itemKey: body.itemKey,
             mediaFileId: fileId,
@@ -431,6 +455,15 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         if (plan.videoCodec) params.set('vc', plan.videoCodec);
         if (plan.burn) params.set('b', plan.burn);
       }
+      feedSession({
+        method: plan.method,
+        delivery: 'progressive',
+        reasons: plan.reasons,
+        hlsSessionId: null,
+        hwaccel: null,
+        audioFormat: null,
+        bitrateKbps: plan.method === 'transcode' ? (plan.videoKbps ?? null) : (chosen.info.bitrateKbps ?? null),
+      });
       return {
         itemKey: body.itemKey,
         mediaFileId: fileId,
@@ -475,8 +508,18 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         // The cap is enforced here too: a stream over it is transcoded at the cap whatever the link says.
         if (method !== 'transcode' && cap > 0 && (vinfo.bitrateKbps ?? 0) > cap) method = 'transcode';
         reply.header('cache-control', 'private, no-cache');
+        // Activity -> Now playing: alive while the response flows (HEAD probes are not playing).
+        const feedItem = deps.streams && !head && access.userId !== null ? deps.streams.items.video(file.id) : null;
+        const feedViewer = req.auth ? viewerOfRequest(req) : access.userId !== null ? viewerOfLink(access.userId, access.linkProfileId ?? null) : null;
+        const feed = (delivery: Partial<StreamDelivery>) => {
+          if (!deps.streams || !feedItem || !feedViewer) return;
+          const done = deps.streams.streams.streamOpened(feedViewer, feedItem, { ...delivery, delivery: 'progressive', hlsSessionId: null, backend: 'arclight', audioFormat: null }, originOf(db, req));
+          if (reply.raw.closed || reply.raw.destroyed) done();
+          else reply.raw.on('close', done);
+        };
 
         if (method === 'direct') {
+          feed({ method: 'direct', hwaccel: null, bitrateKbps: vinfo.bitrateKbps ?? null });
           const etag = etagOf(info);
           reply.header('accept-ranges', 'bytes').header('etag', etag).header('last-modified', info.mtime.toUTCString()).header('content-type', videoMimeOf(videoContainerOf(file.path, file.mediaInfo?.container)));
           const rangeHeader = req.headers.range;
@@ -551,6 +594,7 @@ export function videoRoutes(deps: VideoDeps): FastifyPluginAsync<Record<never, n
         }
         started.proc.stdout.on('error', () => started.proc.kill());
         reply.header('x-arclight-video', `${method}/${started.hwaccel}`);
+        feed({ method, hwaccel: method === 'transcode' ? (started.hwaccel as TranscodeHwaccel) : null, bitrateKbps: method === 'transcode' ? (spec.videoKbps ?? null) : (vinfo.bitrateKbps ?? null) });
         return reply.code(200).send(started.proc.stdout);
       },
     });

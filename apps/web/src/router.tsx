@@ -97,6 +97,7 @@ import { CrossSeedSettingsPage } from './pages/settings/cross-seed/cross-seed-se
 import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
+import { StreamsPage } from './pages/activity/streams-page.js';
 import { WatchHistoryPage } from './features/watch-history/watch-history.js';
 import { PlaybackStatsPage } from './features/watch-stats/playback-stats.js';
 import { PodcastIndexPage } from './pages/podcasts/podcast-index.js';
@@ -382,6 +383,7 @@ export const routeTree = rootRoute.addChildren([
   sectionRedirect('/activity', '/activity/queue'),
   // Activity (pages/activity).
   page('/activity/queue', QueuePage),
+  page('/activity/streams', StreamsPage),
   historyRoute,
   page('/activity/blocklist', BlocklistPage),
   page('/activity/pending', PendingReleasesPage),
