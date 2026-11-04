@@ -1291,6 +1291,11 @@
   background: var(--tv-accent);
 }
 
+/* The focused option steps up from the surface (S21), under the ring. */
+.tv-stage .tv-opt:focus {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .tv-settings__pane {
   display: flex;
   flex-direction: column;
