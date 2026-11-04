@@ -64,9 +64,19 @@ export function stageOffset(p: HTMLElement, axis: Axis): number {
   return c ? (offsets.get(c)?.[axis] ?? 0) : 0;
 }
 
+/** Whether the stage's page has scrolled off its top (tv.css backs the header solid then). */
+export const SCROLLED_ATTR = 'data-tv-scrolled';
+
 function apply(c: HTMLElement, o: { x: number; y: number }): void {
   offsets.set(c, o);
   c.style.transform = o.x || o.y ? `translate3d(${-o.x}px, ${-o.y}px, 0)` : '';
+  // The page scroller only (not rows or panes); set on a change, not every frame.
+  const p = c.parentElement;
+  if (p?.classList.contains('tv-scroll-y')) {
+    const stage = p.closest('[data-tv-stage]');
+    const scrolled = o.y > 0.5;
+    if (stage && stage.hasAttribute(SCROLLED_ATTR) !== scrolled) stage.toggleAttribute(SCROLLED_ATTR, scrolled);
+  }
 }
 
 function tween(p: HTMLElement, axis: Axis, target: number, instant: boolean): void {

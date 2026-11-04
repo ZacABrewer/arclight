@@ -156,7 +156,7 @@ export function TvHomeScreen() {
               message={home.error instanceof Error && home.error.message ? home.error.message : null}
               retrying={home.isFetching}
               attempt={home.failureCount}
-              onRetry={() => void home.refetch()}
+              onRetry={() => void Promise.all([home.refetch(), featured.refetch()])}
             />
           ) : null}
           {h && empty ? <LibraryEmpty onCheck={() => void Promise.all([home.refetch(), featured.refetch()])} /> : null}

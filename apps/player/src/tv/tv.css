@@ -124,6 +124,30 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--tv-bg) 94%, transparent) 0%, color-mix(in srgb, var(--tv-bg) 60%, transparent) 55%, transparent 100%);
 }
 
+/* Once the page scrolls off its top, what passes under the header is hidden: the hero's art
+   reaches behind the tabs at the top of Home, its text and the rows never do (an opacity
+   change on a fixed layer, so the scroll stays on the compositor). */
+.tv-hsolid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 112px;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+  background: linear-gradient(180deg, var(--tv-bg) 0%, var(--tv-bg) 66px, color-mix(in srgb, var(--tv-bg) 70%, transparent) 86px, transparent 100%);
+}
+
+.tv-stage[data-tv-scrolled] .tv-hsolid {
+  opacity: 1;
+}
+
+.tv-motion-off .tv-hsolid {
+  transition: none;
+}
+
 .tv-header {
   position: absolute;
   left: 0;
