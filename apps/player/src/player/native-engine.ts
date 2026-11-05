@@ -85,6 +85,8 @@ export class NativeEngine {
   /** Mirror of the native queue. */
   private queue: NativeTrack[] = [];
   private trackGen = new Map<string, number>();
+  /** Transcoded streams opened part-way in (`?startMs=`): native positions count from there. */
+  private streamStart = new Map<string, number>();
   private nativeIndex = -1;
   private gen = 0;
   private loadToken = 0;
@@ -314,7 +316,8 @@ export class NativeEngine {
     const trackId = index >= 0 ? this.queue[index]!.id : null;
     this.setPosition(trackId, at.localMs, target);
     this.emit();
-    if (!loaded || index < 0) {
+    if (!loaded || index < 0 || this.reopensToSeek(this.queue[index]!)) {
+      // A transcode has no byte ranges, so native cannot seek in it: open it again from there.
       void this.loadNative(item, target, this.wantPlay, {});
       return;
     }
@@ -411,6 +414,12 @@ export class NativeEngine {
     this.pos = { trackId, localMs, globalMs, at: this.now() };
   }
 
+  /** A streamed transcode: seeking means asking the server for a new stream from that place. */
+  private reopensToSeek(t: NativeTrack): boolean {
+    const stream = this.trackGen.get(t.id) === this.nextLoaded?.gen ? this.nextLoaded?.stream : this.loaded?.stream;
+    return Boolean(stream?.transcoded) && /^https?:/i.test(t.url);
+  }
+
   private withIds(resolved: ResolvedItem, gen: number): NativeTrack[] {
     return resolved.tracks.map((t) => {
       const id = `${t.itemKey}#${t.partIndex}~${gen}`;
@@ -426,10 +435,19 @@ export class NativeEngine {
       if (token !== this.loadToken || this.item !== item) return;
       const gen = ++this.gen;
       this.trackGen.clear();
+      this.streamStart.clear();
       const current = this.withIds(resolved, gen);
       this.loaded = { item, gen, stream: resolved.stream, retriedAuth: retry?.retriedAuth ?? false, forcedTranscode: retry?.forcedTranscode ?? Boolean(opts.forceTranscode) };
       const at = locate(item, globalMs);
       const startIndex = Math.max(0, current.findIndex((t) => t.partIndex === at.partIndex));
+      let nativeStartMs = at.localMs;
+      const first = current[startIndex];
+      if (first && at.localMs > 0 && this.reopensToSeek(first)) {
+        const startMs = Math.round(at.localMs);
+        current[startIndex] = { ...first, url: withStartMs(first.url, startMs) };
+        this.streamStart.set(first.id, startMs);
+        nativeStartMs = 0;
+      }
       const next = await this.resolveNext(token);
       if (token !== this.loadToken) return;
       this.queue = [...current, ...next];
@@ -438,7 +456,7 @@ export class NativeEngine {
       await this.ready;
       // `load` also answers a pending lock-screen next / previous natively.
       this.settleRemote();
-      await this.plugin.load({ tracks: this.queue, startIndex, startMs: Math.round(at.localMs), autoplay: autoplay && this.wantPlay, rate: this.speed });
+      await this.plugin.load({ tracks: this.queue, startIndex, startMs: Math.round(nativeStartMs), autoplay: autoplay && this.wantPlay, rate: this.speed });
       if (token !== this.loadToken) return;
       await this.plugin.setVolume({ volume: this.level() });
       await this.plugin.configureRemote(this.remoteConfig(item));
@@ -501,13 +519,14 @@ export class NativeEngine {
     const t = this.trackOf(e.trackId);
     const loaded = this.loaded;
     if (!t || !loaded || this.trackGen.get(t.id) !== loaded.gen) return;
-    const globalMs = t.itemOffsetMs + e.positionMs;
+    const localMs = (this.streamStart.get(t.id) ?? 0) + e.positionMs;
+    const globalMs = t.itemOffsetMs + localMs;
     // A jump JS did not ask for: native moved the place (a car / watch / lock-screen seek).
     const now = this.now();
     const jumped =
       this.pos.trackId !== null && now - this.lastCommandAt > COMMAND_GRACE_MS && now >= this.jumpQuietUntil && Math.abs(globalMs - this.positionMs) > POSITION_JUMP_MS;
     this.nativeIndex = e.index;
-    this.setPosition(t.id, e.positionMs, globalMs);
+    this.setPosition(t.id, localMs, globalMs);
     this.emit();
     if (jumped) this.external?.('seek');
   }
@@ -626,12 +645,19 @@ export class NativeEngine {
       return;
     }
     let localMs: number;
-    if (e.command === 'seekTo') localMs = e.positionMs ?? this.positionMs - t.itemOffsetMs;
+    // Native's positions count from where a transcode was opened.
+    if (e.command === 'seekTo') localMs = e.positionMs !== undefined ? (this.streamStart.get(t.id) ?? 0) + e.positionMs : this.positionMs - t.itemOffsetMs;
     else {
       const by = e.intervalMs ?? (e.command === 'skipForward' ? (this.deps.skipMs?.forward ?? 30_000) : (this.deps.skipMs?.back ?? 30_000));
       localMs = this.positionMs - t.itemOffsetMs + (e.command === 'skipForward' ? by : -by);
     }
     localMs = Math.max(0, t.durationMs > 0 ? Math.min(localMs, t.durationMs) : localMs);
+    if (this.reopensToSeek(t)) {
+      // Native could not seek in the transcode; open it again from there.
+      this.seek(t.itemOffsetMs + localMs);
+      this.external?.('seek');
+      return;
+    }
     this.setPosition(t.id, localMs, t.itemOffsetMs + localMs);
     // Native's own position event follows; this seek is reported already.
     this.jumpQuietUntil = this.now() + COMMAND_GRACE_MS;
@@ -709,4 +735,11 @@ function errorCode(err: unknown): PlayerErrorCode {
   const known: PlayerErrorCode[] = ['auth', 'network', 'busy', 'unsupported', 'file', 'invalid', 'unknown'];
   if (code && (known as string[]).includes(code)) return code as PlayerErrorCode;
   return 'network';
+}
+
+/** The stream link, starting `startMs` into the file (the server transcodes from there). */
+function withStartMs(url: string, startMs: number): string {
+  const u = new URL(url);
+  u.searchParams.set('startMs', String(startMs));
+  return u.toString();
 }
