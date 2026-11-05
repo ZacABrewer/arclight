@@ -10,15 +10,20 @@ import { Qr } from '../device-code-panel';
 import { typeInto, type Translate } from '../format';
 import { TvPanel } from '../profile-parts';
 import { WideTile } from '../tiles';
+import { useCanRequest, useDiscoverSearch, useOpenDiscover } from '../requests';
+import { DiscoverTile } from './discover';
 
 // Search (template "search"): the input and the 6-column on-screen keyboard on the left; on the
 // right "Popular right now" (Home's Trending), or the mixed results for the query (movies, shows,
 // and, when those sections are on, albums and audiobooks; §9 Q25), at most 12. No matches (S15)
 // is never a blank pane: request it from the web app (a QR code), search music and audiobooks
-// too when they are hidden, and "Did you mean" from the titles Home knows.
+// too when they are hidden, and "Did you mean" from the titles Home knows. Accounts that may
+// request also get "Request it": the Discover matches, each opening its title page to request.
 
 export const SEARCH_MAX = 12;
 const NEAR_MAX = 3;
+/** Discover matches offered when the library has none (one row beside "Did you mean"). */
+export const REQUEST_MAX = 4;
 const KEYS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'];
 
 export interface SearchTile {
@@ -161,6 +166,10 @@ export function TvSearchScreen() {
     return nearMisses(debounced, cards);
   }, [none, debounced, home.data]);
   const hidden = !everything && (!settings.showMusic || !settings.showAudiobooks);
+  const mayRequest = useCanRequest();
+  const openDiscover = useOpenDiscover();
+  const discover = useDiscoverSearch(debounced, none && mayRequest);
+  const toRequest = none && mayRequest ? (discover.data?.results ?? []).slice(0, REQUEST_MAX) : [];
 
   return (
     <div className="tv-search">
@@ -199,47 +208,60 @@ export function TvSearchScreen() {
       <div className="tv-search__right">
         <h2 className="tv-search__heading">{heading}</h2>
         {none ? (
-          <div className="tv-search__none">
-            <div className="tv-more-menu__list">
-              {active ? (
-                <button type="button" className="tv-opt" data-tv-key="sr-request" onClick={() => setQr(true)}>
-                  <span className="tv-opt__text">
-                    <span className="tv-opt__label">{t('app.tv.requestFromWeb', { q: debounced })}</span>
-                    <span className="tv-opt__desc">{t('app.tv.requestFromWebText')}</span>
-                  </span>
-                  <span className="tv-chev" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
+          // Scrolls when "Request it" and "Did you mean" together run past the screen.
+          <div className="tv-search__scroll" data-tv-scroll="y" data-tv-mtop="6">
+            <div className="tv-search__none">
+              <div className="tv-more-menu__list">
+                {active ? (
+                  <button type="button" className="tv-opt" data-tv-key="sr-request" onClick={() => setQr(true)}>
+                    <span className="tv-opt__text">
+                      <span className="tv-opt__label">{t('app.tv.requestFromWeb', { q: debounced })}</span>
+                      <span className="tv-opt__desc">{t('app.tv.requestFromWebText')}</span>
+                    </span>
+                    <span className="tv-chev" aria-hidden="true">
+                      ›
+                    </span>
+                  </button>
+                ) : null}
+                {hidden ? (
+                  <button type="button" className="tv-opt" data-tv-key="sr-everything" onClick={() => setEverything(true)}>
+                    <span className="tv-opt__text">
+                      <span className="tv-opt__label">{t('app.tv.searchEverything')}</span>
+                    </span>
+                    <span className="tv-chev" aria-hidden="true">
+                      ›
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+              {toRequest.length ? (
+                <>
+                  <p className="tv-search__near">{t('app.tv.requestIt')}</p>
+                  <div className="tv-search__nearrow tv-search__reqrow" data-tv-row="">
+                    {toRequest.map((it) => (
+                      <DiscoverTile key={`${it.mediaType}:${it.tmdbId}`} item={it} prefix="sr-req" onOpen={openDiscover} />
+                    ))}
+                  </div>
+                </>
               ) : null}
-              {hidden ? (
-                <button type="button" className="tv-opt" data-tv-key="sr-everything" onClick={() => setEverything(true)}>
-                  <span className="tv-opt__text">
-                    <span className="tv-opt__label">{t('app.tv.searchEverything')}</span>
-                  </span>
-                  <span className="tv-chev" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
+              {near.length ? (
+                <>
+                  <p className="tv-search__near">{t('app.tv.didYouMean')}</p>
+                  <div className="tv-search__nearrow" data-tv-row="">
+                    {near.map((c) => (
+                      <WideTile
+                        key={`${c.kind}:${c.id}`}
+                        id={`near-${c.kind}:${c.id}`}
+                        title={c.title}
+                        sub={[t(c.kind === 'movie' ? 'app.tv.movie' : 'app.tv.series'), c.year].filter(Boolean).join(' · ')}
+                        art={cardArt(c)}
+                        onOpen={() => openCard(c)}
+                      />
+                    ))}
+                  </div>
+                </>
               ) : null}
             </div>
-            {near.length ? (
-              <>
-                <p className="tv-search__near">{t('app.tv.didYouMean')}</p>
-                <div className="tv-search__nearrow" data-tv-row="">
-                  {near.map((c) => (
-                    <WideTile
-                      key={`${c.kind}:${c.id}`}
-                      id={`near-${c.kind}:${c.id}`}
-                      title={c.title}
-                      sub={[t(c.kind === 'movie' ? 'app.tv.movie' : 'app.tv.series'), c.year].filter(Boolean).join(' · ')}
-                      art={cardArt(c)}
-                      onOpen={() => openCard(c)}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : null}
           </div>
         ) : (
           <div className="tv-search__scroll" data-tv-scroll="y" data-tv-mtop="6">

@@ -59,10 +59,11 @@
   cursor: pointer;
 }
 
-/* The ring is the only focus indicator on the stage. */
+/* The ring is the only focus indicator on the stage (the web's :focus-visible shadow included). */
 .tv-stage :focus,
 .tv-stage :focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 .tv-ring {
@@ -2098,4 +2099,206 @@ html.tv-mode .app-onboarding__main {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ---- Discover and requests (Discover tab, discover title page, My requests, search's
+   "Request it" row) --------------------------------------------------------------------- */
+
+.tv-stage {
+  --tv-ok: var(--al-pl-accent, #6ef6ff);
+  --tv-warn: var(--al-pl-warn, #f2c46d);
+  --tv-danger: var(--al-pl-danger, #ff7a7a);
+}
+
+/* The headline: the title and a line about requesting, My requests at the right. */
+.tv-dsc__head {
+  padding: 108px 56px 26px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.tv-dsc__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tv-dsc__intro {
+  margin: 0;
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--tv-t3);
+  white-space: normal;
+}
+
+/* Discover rows: 2:3 posters, the title inside the art as on the movie grid. */
+.tv-dsc__row .tv-tile--poster {
+  width: 150px;
+}
+
+.tv-dsc__row .tv-tile--poster .tv-art {
+  height: 225px;
+  padding: 10px 10px 16px;
+  font-size: 16px;
+}
+
+/* Search's "Request it" row: the same posters, smaller, to fit the results pane. */
+.tv-search__reqrow .tv-tile--poster {
+  width: 110px;
+}
+
+.tv-search__reqrow .tv-tile--poster .tv-art {
+  height: 165px;
+  padding: 8px 8px 12px;
+  font-size: 14px;
+}
+
+.tv-search__reqrow .tv-tile--poster .tv-art__badge {
+  left: 6px;
+  top: 6px;
+  font-size: 9px;
+}
+
+/* Status badges: in the library, on its way or requested, declined. */
+.tv-art__badge--accent {
+  color: var(--tv-ok);
+}
+
+.tv-art__badge--warn {
+  color: var(--tv-warn);
+}
+
+.tv-art__badge--danger {
+  color: var(--tv-danger);
+}
+
+/* The title page: the request status under the buttons, and an error from the server. */
+.tv-dsc__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  color: var(--tv-t2);
+  white-space: normal;
+}
+
+.tv-dsc__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tv-t4);
+}
+
+.tv-dsc__note--accent .tv-dsc__dot {
+  background: var(--tv-ok);
+}
+
+.tv-dsc__note--warn .tv-dsc__dot {
+  background: var(--tv-warn);
+}
+
+.tv-dsc__note--danger .tv-dsc__dot {
+  background: var(--tv-danger);
+}
+
+.tv-dsc__error {
+  margin: 0;
+  max-width: 560px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--tv-danger);
+  white-space: normal;
+}
+
+/* My requests: one row per request, Cancel beside a pending one. */
+.tv-rq__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tv-rq {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tv-rq__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 22px 10px 10px;
+  border-radius: var(--tv-radius-lg);
+  background: var(--tv-surface);
+  color: var(--tv-text);
+  text-align: left;
+}
+
+.tv-rq__art {
+  flex: none;
+  width: 60px;
+  height: 90px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+}
+
+.tv-rq__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tv-rq__title {
+  font-size: 19px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-rq__sub,
+.tv-rq__when {
+  font-size: 14px;
+  color: var(--tv-t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-rq__why {
+  font-size: 14px;
+  color: var(--tv-t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-rq__status {
+  flex: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tv-rq__status--accent {
+  color: var(--tv-ok);
+}
+
+.tv-rq__status--warn {
+  color: var(--tv-warn);
+}
+
+.tv-rq__status--danger {
+  color: var(--tv-danger);
+}
+
+/* The list failed: the message at the page's own inset (tv-state brings the rows' margin). */
+.tv-rq__state {
+  margin: 0;
 }

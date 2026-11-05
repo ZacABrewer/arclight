@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { z } from 'zod';
 import {
   AppDeviceCode,
@@ -284,13 +285,25 @@ function hasArtwork(data: unknown, depth = 0): boolean {
   return Object.values(data as Record<string, unknown>).some((v) => hasArtwork(v, depth + 1));
 }
 
+/** Same-origin path the Android app answers by fetching `src` itself (MainActivity's ArtworkProxy). */
+export const APP_ARTWORK_PROXY = '/_arclight/art';
+
+/**
+ * Android's WebView blocks http images on the app's https://localhost page as mixed content (fetch
+ * gets through, so lists load and only the artwork goes missing on a LAN http address). There the
+ * app fetches them natively instead.
+ */
+export function appArtworkUrl(url: string, platform: string = Capacitor.getPlatform()): string {
+  return platform === 'android' && url.startsWith('http:') ? `${APP_ARTWORK_PROXY}?src=${encodeURIComponent(url)}` : url;
+}
+
 /** Every artwork path in `data` made absolute (and signed, when there is a query). Other values are untouched. */
 export function rewriteArtwork<T>(data: T, serverUrl: string, query: string | null): T {
   const walk = (v: unknown, depth: number): unknown => {
     if (typeof v === 'string') {
       if (!isArtworkPath(v)) return v;
       const abs = absoluteUrl(v, serverUrl);
-      return query ? `${abs}${abs.includes('?') ? '&' : '?'}${query}` : abs;
+      return appArtworkUrl(query ? `${abs}${abs.includes('?') ? '&' : '?'}${query}` : abs);
     }
     if (depth > 12 || v === null || typeof v !== 'object') return v;
     if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1));

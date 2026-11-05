@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
                     intent.getStringExtra(LaunchInfo.EXTRA_SOURCE), savedInstanceState != null));
         }
         super.onCreate(savedInstanceState);
+        if (getBridge() != null) getBridge().setWebViewClient(new ArtworkProxy(getBridge()));
         if (VideoProfile.isTv(this)) prepareForRemote();
     }
 

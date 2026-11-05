@@ -9,11 +9,12 @@ import { artBackground } from '@web/features/player/redesign/placeholder';
 import { TvStage } from './stage';
 import { SCROLLED_ATTR } from './stage-scroll';
 import { HOME_PATH, PROFILES_PATH } from './tv-runtime';
+import { DISCOVER_PATH, REQUESTS_PATH, useCanRequest } from './requests';
 import './tv.css';
 
 // The 10-foot frame (spec §4.3): the design's 72 px top header over a 100 px fade, and the page
 // under it on the 1280×720 stage. Left: the lockup and the tabs Home, TV Shows, Movies, My List,
-// Search. Right: the now-playing pill (while audio plays), Music and Audiobooks (each per the
+// Search and, for accounts that may request, Discover. Right: the now-playing pill (while audio plays), Music and Audiobooks (each per the
 // profile's toggles), a divider, Settings and the profile avatar, which opens the picker.
 
 interface TabDef {
@@ -32,6 +33,8 @@ export function activeTab(pathname: string): string | null {
     '/player/watch/movies': 'movies',
     '/player/watch/my-list': 'my-list',
     '/player/search': 'search',
+    [DISCOVER_PATH]: 'discover',
+    [REQUESTS_PATH]: 'discover',
     '/player/music': 'music',
     '/player/books': 'books',
     '/player/settings': 'settings',
@@ -69,6 +72,7 @@ export function TvHeader() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const settings = useProfileSettings();
   const { profile } = useActiveProfile();
+  const mayRequest = useCanRequest();
   const active = activeTab(pathname);
   const onListen = norm(pathname) === '/player/now-playing';
   // A new page starts at its top; the one left behind may have been scrolled (stage-scroll.ts).
@@ -81,6 +85,7 @@ export function TvHeader() {
     { id: 'movies', to: '/player/watch/movies', label: t('app.tv.tab.movies') },
     { id: 'my-list', to: '/player/watch/my-list', label: t('app.tv.tab.myList') },
     { id: 'search', to: '/player/search', label: t('app.tv.tab.search') },
+    ...(mayRequest ? [{ id: 'discover', to: DISCOVER_PATH, label: t('app.tv.tab.discover') }] : []),
   ];
   const side: TabDef[] = [
     ...(settings.showMusic ? [{ id: 'music', to: '/player/music', label: t('app.tv.tab.music') }] : []),

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ApiError, buildApiUrl, isNetworkError, isTimeoutError, request, resetArtworkLink, retryUnlessUnreachable, rewriteArtwork, setFetch, setUnauthorizedHandler } from './api';
+import { ApiError, appArtworkUrl, buildApiUrl, isNetworkError, isTimeoutError, request, resetArtworkLink, retryUnlessUnreachable, rewriteArtwork, setFetch, setUnauthorizedHandler } from './api';
 import { CONNECT_TIMEOUT_MS } from '../config';
 import { setSession } from './session';
 import { fakeFetch } from '../test/fetch';
@@ -110,5 +110,13 @@ describe('artwork', () => {
   it('rewrites nested values and leaves the rest alone', () => {
     const out = rewriteArtwork({ list: [{ art: '/api/v1/playback/artwork/book/3' }], n: 1 }, 'http://10.0.0.2:7878', null);
     expect(out).toEqual({ list: [{ art: 'http://10.0.0.2:7878/api/v1/playback/artwork/book/3' }], n: 1 });
+  });
+
+  it('sends http artwork through the app on Android only', () => {
+    const http = 'http://10.0.0.2:7878/api/v1/playback/artwork/movie/3?u=1&exp=99&sig=abc';
+    expect(appArtworkUrl(http, 'android')).toBe(`/_arclight/art?src=${encodeURIComponent(http)}`);
+    expect(appArtworkUrl('https://music.example.com/api/v1/playback/artwork/movie/3', 'android')).toBe('https://music.example.com/api/v1/playback/artwork/movie/3');
+    expect(appArtworkUrl(http, 'ios')).toBe(http);
+    expect(appArtworkUrl(http, 'web')).toBe(http);
   });
 });
