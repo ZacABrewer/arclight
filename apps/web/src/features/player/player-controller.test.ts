@@ -219,6 +219,34 @@ describe('PlayerController', () => {
     expect(late.controller.getState().current?.itemKey).toBe('track:3');
   });
 
+  it('does not bring back a queue that played to its end', async () => {
+    const ended = { items: ['track:1', 'track:2'] as never, index: 1, positionMs: 179_500, shuffle: false, order: null, repeat: 'off' as const, source: 'album:1' };
+    const h = makeController([track(1), track(2)], { queue: ended });
+    await h.controller.restore();
+    expect(h.controller.getState().current).toBeNull();
+    expect(h.controller.getState().queue).toEqual([]);
+
+    // Ending part-way through a queue still restores.
+    const mid = makeController([track(1), track(2)], { queue: { ...ended, index: 0 } });
+    await mid.controller.restore();
+    expect(mid.controller.getState().current?.itemKey).toBe('track:1');
+  });
+
+  it('saves the place with the queue on each heartbeat and when hidden', async () => {
+    vi.useFakeTimers();
+    const h = makeController([track(1), track(2)]);
+    await h.controller.playItems(['track:1', 'track:2']);
+    await vi.advanceTimersByTimeAsync(2_000);
+    h.deps.saveQueue.mockClear();
+    h.active().at(90);
+    await vi.advanceTimersByTimeAsync(15_000 + 1_500);
+    expect(h.deps.saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 0, positionMs: 90_000 }));
+
+    h.active().at(120);
+    h.controller.onHidden();
+    expect(h.deps.saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ positionMs: 120_000 }));
+  });
+
   it('hands the player over on a profile switch: saves for the old profile, then loads the new queue', async () => {
     const h = makeController([track(1), track(2), book()]);
     await h.controller.playItems(['track:1', 'track:2']);

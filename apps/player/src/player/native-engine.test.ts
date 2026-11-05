@@ -48,10 +48,12 @@ function fakePlugin() {
   };
 }
 
-function resolver() {
+/** `transcodeAll`: every link is a transcode, as on mobile data. */
+function resolver(transcodeAll = false) {
   const seen: Array<{ key: string; opts: ResolveOptions }> = [];
   const resolve = vi.fn(async (item: PlayableItem, opts: ResolveOptions): Promise<ResolvedItem> => {
     seen.push({ key: item.itemKey, opts });
+    const transcoded = transcodeAll || Boolean(opts.forceTranscode);
     return {
       tracks: item.parts.map((p, i) => ({
         itemKey: item.itemKey,
@@ -60,10 +62,10 @@ function resolver() {
         itemOffsetMs: p.startMs,
         durationMs: p.durationMs,
         title: item.title,
-        url: `https://music.example.com/stream/${p.fileId}${opts.forceTranscode ? '?format=aac' : ''}`,
+        url: `https://music.example.com/stream/${p.fileId}${transcoded ? '?format=aac' : ''}`,
         mimeType: p.mimeType,
       })),
-      stream: { format: opts.forceTranscode ? 'aac' : 'original', transcoded: Boolean(opts.forceTranscode), bitrateKbps: null, sourceLabel: 'FLAC' },
+      stream: { format: transcoded ? 'aac' : 'original', transcoded, bitrateKbps: null, sourceLabel: 'FLAC' },
     };
   });
   return { resolve, seen };
@@ -77,9 +79,9 @@ afterEach(() => {
   engine = null;
 });
 
-async function setup(remoteAnswerMs = 10_000) {
+async function setup(remoteAnswerMs = 10_000, transcodeAll = false) {
   const fake = fakePlugin();
-  const { resolve, seen } = resolver();
+  const { resolve, seen } = resolver(transcodeAll);
   let now = 1_000_000;
   engine = new NativeEngine({ plugin: fake.plugin, resolve, now: () => now, externalPauseDelayMs: 0, remoteAnswerMs });
   await engine.whenReady();
@@ -148,6 +150,43 @@ describe('NativeEngine', () => {
     engine.seek(1_900_000);
     await settle();
     expect(fake.named('skipTo').at(-1)).toEqual({ index: 1, positionMs: 100_000 });
+  });
+
+  it('reopens a transcode at the new place to seek (transcodes cannot range-seek)', async () => {
+    const { fake, engine } = await setup(10_000, true);
+    engine.load(track(1), 0);
+    await settle();
+    await settle();
+    expect((fake.named('load')[0] as LoadOptions).tracks[0]!.url).not.toContain('startMs');
+    engine.seek(90_000);
+    await settle();
+    await settle();
+    expect(fake.named('seek')).toEqual([]);
+    const load = fake.named('load').at(-1) as LoadOptions;
+    expect(new URL(load.tracks[0]!.url).searchParams.get('startMs')).toBe('90000');
+    expect(load.startMs).toBe(0);
+    expect(engine.positionMs).toBe(90_000);
+    // Native counts from the start of the reopened stream.
+    fake.emit('position', { trackId: load.tracks[0]!.id, index: 0, positionMs: 5_000, durationMs: 90_000, bufferedMs: 0 });
+    expect(engine.positionMs).toBe(95_000);
+  });
+
+  it('resumes a transcode part-way in by opening it there', async () => {
+    const { fake, engine } = await setup(10_000, true);
+    engine.load(track(1), 60_000);
+    await settle();
+    await settle();
+    const load = fake.named('load')[0] as LoadOptions;
+    expect(new URL(load.tracks[0]!.url).searchParams.get('startMs')).toBe('60000');
+    expect(load.startMs).toBe(0);
+    expect(engine.positionMs).toBe(60_000);
+    // A lock-screen seek is in the reopened stream's terms, and reopens again.
+    fake.emit('remoteCommand', { command: 'seekTo', handled: true, positionMs: 10_000 });
+    await settle();
+    await settle();
+    const again = fake.named('load').at(-1) as LoadOptions;
+    expect(new URL(again.tracks[0]!.url).searchParams.get('startMs')).toBe('70000');
+    expect(engine.positionMs).toBe(70_000);
   });
 
   it('refetches links once when native says they were refused', async () => {

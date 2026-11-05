@@ -9,6 +9,12 @@ at the end of this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Music picks up where you left off:** reopening the phone app resumes the song at the place it stopped. The place is now saved with the queue as you listen and when the app goes to the background, not only when the queue changes.
+- **Seeking after a reopen:** on mobile data (or any transcoding quality) the slider, lock screen and car controls can seek again. Transcoded streams cannot jump inside the file, so the app reopens the stream at the new place.
+- **No leftover player card:** a queue that played to its end no longer comes back as a paused card after the app is closed and reopened.
+- **iOS release guide:** Background Modes is set in the app, not on the App ID page; added what to do when the App Store name is taken.
+
 ## [0.27.0] - 2026-11-04
 
 ### Added
