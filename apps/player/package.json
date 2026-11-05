@@ -1,6 +1,6 @@
 {
   "name": "@arclight/player-app",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "private": true,
   "license": "GPL-3.0",
   "description": "Arclight for iOS and Android: plays music and audiobooks from your own Arclight server, with downloads for offline listening.",

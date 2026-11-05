@@ -9,6 +9,8 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-05
+
 ### Added
 - **Two server addresses:** in the player app's Settings, an account can have a second address for its server (for example its home-network address and its internet address). Pick which one is tried first; each time the app opens or comes back, it tries that one and uses the other when it doesn't answer within 3 seconds. A second address is only kept when it reaches the same server and accepts the same account.
 
@@ -603,6 +605,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.28.0]: https://github.com/ZacABrewer/arclight/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/ZacABrewer/arclight/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/ZacABrewer/arclight/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/ZacABrewer/arclight/compare/v0.24.0...v0.25.0
