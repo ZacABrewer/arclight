@@ -7,6 +7,7 @@ import { AccountStore, type Account } from '../core/accounts';
 import { onArtworkLinkRenewed, resetArtworkLink, retryUnlessUnreachable, setUnauthorizedHandler } from '../core/api';
 import { preferencesStore } from '../core/kv';
 import { netState, onNetChange, startNetworkWatch } from '../core/network';
+import { reachesAccount, routeAccount } from '../core/server-route';
 import { getSession } from '../core/session';
 import { SettingsStore } from '../core/settings';
 import { transportPolicy } from '../core/transport';
@@ -81,6 +82,7 @@ export async function createServices(): Promise<AppServices> {
   const index = new DownloadIndex();
   const progressQueue = new ProgressQueue();
   await Promise.all([accounts.load(), settings.load(), index.load(), transportPolicy.load(preferencesStore), startNetworkWatch()]);
+  await routeActive(accounts);
   await accounts.activate();
 
   const backend = await playerBackend();
@@ -151,6 +153,7 @@ export async function createServices(): Promise<AppServices> {
       caps = undefined;
       // The profile belonged to the old account; the hooks set the new one once it is loaded.
       setActiveProfileId(null);
+      await routeActive(accounts);
       await accounts.activate();
       qc.clear();
       for (const l of [...playerListeners]) l();
@@ -159,6 +162,14 @@ export async function createServices(): Promise<AppServices> {
     resumed() {
       player?.onResume();
       void flushProgress();
+      // Opening the app again: an account with two addresses goes back to the one tried first
+      // when it answers. Not while something plays (its stream is on the address in use).
+      if (!player?.controller.getState().playing) {
+        const before = accounts.active()?.serverUrl;
+        void routeActive(accounts).then(() => {
+          if (accounts.active()?.serverUrl !== before) void services.switchAccount(null);
+        });
+      }
     },
     subscribePlayer(listener) {
       playerListeners.add(listener);
@@ -240,6 +251,16 @@ export async function createServices(): Promise<AppServices> {
     void accounts.expire(s.accountId).then(() => services.switchAccount(s.accountId));
   });
   return services;
+}
+
+/** Points the active account at the first of its two addresses that answers (no-op with one). */
+async function routeActive(accounts: AccountStore): Promise<void> {
+  const account = accounts.active();
+  if (!account?.addresses || account.addresses.length < 2 || !netState().online) return;
+  const token = await accounts.token(account.id);
+  if (!token) return;
+  const url = await routeAccount(account, reachesAccount(account, token));
+  if (url) await accounts.setServerUrl(account.id, url);
 }
 
 export function activeAccount(services: AppServices): Account | null {

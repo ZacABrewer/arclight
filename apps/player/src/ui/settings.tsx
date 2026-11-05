@@ -8,6 +8,7 @@ import { STREAM_QUALITIES, type AppSettings, type StreamQuality } from '../core/
 import { signOut } from '../core/sign-in';
 import { APP_VERSION } from '../config';
 import { hostOf } from './onboarding';
+import { ServerAddresses } from './server-addresses';
 import { isTvMode } from '../tv/tv-mode';
 
 // Settings: accounts (switch, add, sign out), streaming and download quality, storage, language,
@@ -38,6 +39,7 @@ function AccountRow({ account, active }: { account: Account; active: boolean }) 
   const navigate = useNavigate();
   const [hasToken, setHasToken] = useState(true);
   const [confirm, setConfirm] = useState(false);
+  const [addresses, setAddresses] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -78,10 +80,16 @@ function AccountRow({ account, active }: { account: Account; active: boolean }) 
             {t('app.settings.switch')}
           </Button>
         ) : null}
+        {hasToken ? (
+          <Button variant="ghost" aria-expanded={addresses} onClick={() => setAddresses((v) => !v)}>
+            {t('app.addresses.title')}
+          </Button>
+        ) : null}
         <Button variant="ghost" data-tv-not-first="" onClick={() => setConfirm(true)}>
           {t('app.settings.signOut')}
         </Button>
       </div>
+      {addresses && hasToken ? <ServerAddresses account={account} active={active} /> : null}
       {confirm ? (
         <Banner
           tone="danger"
