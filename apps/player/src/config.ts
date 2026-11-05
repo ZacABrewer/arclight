@@ -7,6 +7,9 @@ export const DEFAULT_PORT = 7878;
 /** How long one address probe may take before it counts as "no answer". */
 export const PROBE_TIMEOUT_MS = 6_000;
 
+/** How long the first of an account's two addresses may take at app start before the other is used. */
+export const ROUTE_TIMEOUT_MS = 3_000;
+
 /**
  * How long an API request waits for the server to start answering before it counts as "server
  * unreachable" (offline mode). A server that is off or on another network otherwise hangs until

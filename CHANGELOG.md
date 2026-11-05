@@ -9,6 +9,9 @@ at the end of this file.
 
 ## [Unreleased]
 
+### Added
+- **Two server addresses:** in the player app's Settings, an account can have a second address for its server (for example its home-network address and its internet address). Pick which one is tried first; each time the app opens or comes back, it tries that one and uses the other when it doesn't answer within 3 seconds. A second address is only kept when it reaches the same server and accepts the same account.
+
 ### Fixed
 - **Music picks up where you left off:** reopening the phone app resumes the song at the place it stopped. The place is now saved with the queue as you listen and when the app goes to the background, not only when the queue changes.
 - **Seeking after a reopen:** on mobile data (or any transcoding quality) the slider, lock screen and car controls can seek again. Transcoded streams cannot jump inside the file, so the app reopens the stream at the new place.

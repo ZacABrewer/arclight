@@ -15,7 +15,13 @@ import { setSession, type Session } from './session';
 export interface Account {
   /** Local id ("a_<random>"). */
   id: string;
+  /** The address in use now: one of `addresses` when the account has two. */
   serverUrl: string;
+  /**
+   * Two addresses for the same server (home network and internet), in the order they are tried
+   * each time the app opens (core/server-route.ts). Absent: `serverUrl` only.
+   */
+  addresses?: string[];
   /** Server name from sign-in ("Arclight" unless the admin renamed it). */
   serverName: string;
   serverVersion: string;
@@ -217,10 +223,13 @@ export class AccountStore {
    */
   async add(signed: SignedIn): Promise<Account> {
     this.ensureLoaded();
-    const existing = this.accounts.find((a) => a.serverUrl === signed.serverUrl && a.userId === signed.user.id);
+    const existing = this.accounts.find(
+      (a) => (a.serverUrl === signed.serverUrl || a.addresses?.includes(signed.serverUrl)) && a.userId === signed.user.id,
+    );
     const account: Account = {
       id: existing?.id ?? newId(),
       serverUrl: signed.serverUrl,
+      ...(existing?.addresses ? { addresses: existing.addresses } : {}),
       serverName: signed.server.name,
       serverVersion: signed.server.version,
       userId: signed.user.id,
@@ -255,7 +264,34 @@ export class AccountStore {
   async moveServer(from: string, to: string): Promise<void> {
     this.ensureLoaded();
     if (from === to || !this.accounts.some((a) => a.serverUrl === from)) return;
-    this.accounts = this.accounts.map((a) => (a.serverUrl === from ? { ...a, serverUrl: to } : a));
+    this.accounts = this.accounts.map((a) =>
+      a.serverUrl === from ? { ...a, serverUrl: to, ...(a.addresses ? { addresses: a.addresses.map((u) => (u === from ? to : u)) } : {}) } : a,
+    );
+    await this.save();
+  }
+
+  /**
+   * The account's addresses in the order to try them, at most two; one (or none) goes back to a
+   * single address. The address in use stays when it is still listed, else the first is used.
+   */
+  async setAddresses(accountId: string, addresses: string[]): Promise<void> {
+    this.ensureLoaded();
+    const list = [...new Set(addresses)].slice(0, 2);
+    this.accounts = this.accounts.map((a) => {
+      if (a.id !== accountId) return a;
+      const { addresses: _old, ...rest } = a;
+      const serverUrl = list.length && !list.includes(a.serverUrl) ? list[0]! : a.serverUrl;
+      return list.length > 1 ? { ...rest, serverUrl, addresses: list } : { ...rest, serverUrl };
+    });
+    await this.save();
+  }
+
+  /** Uses another of the account's addresses (the caller re-activates the session). */
+  async setServerUrl(accountId: string, url: string): Promise<void> {
+    this.ensureLoaded();
+    const a = this.accounts.find((x) => x.id === accountId);
+    if (!a || a.serverUrl === url || !a.addresses?.includes(url)) return;
+    this.accounts = this.accounts.map((x) => (x.id === accountId ? { ...x, serverUrl: url } : x));
     await this.save();
   }
 

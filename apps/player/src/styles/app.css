@@ -112,6 +112,12 @@ body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 .app-account__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-account__name { display: flex; align-items: center; gap: 8px; color: var(--al-text-1); font-size: 15px; }
 .app-account__server { color: var(--al-text-4); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-addresses { display: flex; flex-direction: column; gap: 10px; }
+.app-addresses .app-setting__hint { margin: 0; }
+.app-addresses__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.app-addresses__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.app-addresses__host { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--al-text-2); font-size: 14px; overflow-wrap: anywhere; }
+.app-addresses__add { display: flex; flex-direction: column; gap: 8px; }
 .app-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--al-cyan); color: var(--al-cyan); }
 .app-chip--warn { border-color: var(--al-warn, #e8a33d); color: var(--al-warn-text, #f2c37a); }
 .app-about p { margin: 0 0 6px; color: var(--al-text-3); }
