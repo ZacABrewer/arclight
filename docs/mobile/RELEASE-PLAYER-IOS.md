@@ -79,11 +79,12 @@ Caveats for the first upload:
 ## 3. Identifiers, capabilities and the app record
 
 - [ ] **App ID** registered (Certificates, Identifiers & Profiles > Identifiers) with the bundle ID `com.moviemethat.arclight`. Capabilities to enable:
-  - **Background Modes:** *Audio, AirPlay, and Picture in Picture*. This is the one Apple capability behind both background audio and AirPlay; there is no separate AirPlay entry. `Info.plist` declares `UIBackgroundModes` **`audio` only**. Downloads use background `URLSession`s, which need no background mode; the app has no background fetch and registers no `BGTaskScheduler` task, so `fetch`, `processing` and `BGTaskSchedulerPermittedIdentifiers` were removed in 0.24. Add them back only together with code that uses them.
+  - **Background audio needs nothing here.** Background Modes is not an App ID capability, so it is not in the portal list. It lives in the app: `Info.plist` declares `UIBackgroundModes` **`audio` only**. Downloads use background `URLSession`s, which need no background mode; the app has no background fetch and registers no `BGTaskScheduler` task, so `fetch`, `processing` and `BGTaskSchedulerPermittedIdentifiers` were removed in 0.24. Add them back only together with code that uses them.
   - **CarPlay audio** (`com.apple.developer.carplay-audio`): see below. Not available until Apple grants it.
   - No Push Notifications (the player does not use push), no Sign in with Apple.
 - [ ] **App Store Connect API key** (Users and Access > Integrations) for CI uploads; Issuer ID, Key ID and the `.p8` stored as GitHub secrets (section 2).
 - [ ] **App Store Connect app record** created: platform iOS, name **Arclight**, primary language, bundle ID, SKU (any internal string, for example `arclight-player-ios`), full access. This reserves the name. Do this first.
+  - Store names are unique across the whole App Store. If **Arclight** is taken, use a longer listing name such as **Arclight Player** or **Arclight: Music & Audiobooks** (30 characters at most). Only the listing changes: the name under the icon comes from `CFBundleDisplayName` in `Info.plist` and stays **Arclight**, and the bundle ID is unaffected.
 
 ### CarPlay audio: Apple has to grant it first
 

@@ -109,6 +109,8 @@ export const LONG_TRACK_MS = 15 * 60_000;
 export const RESTART_THRESHOLD_MS = 3_000;
 const SEEK_REPORT_DELAY_MS = 800;
 const PREFS_SAVE_DELAY_MS = 1_000;
+/** A saved place this close to the end of the queue's last item means the queue finished. */
+const FINISHED_SLACK_MS = 2_000;
 
 /** Where to start an item from its effective progress (0 when nothing to resume). */
 export function resumePosition(item: Pick<PlayableItem, 'kind' | 'durationMs'>, progress: PlaybackProgress | null): number {
@@ -173,7 +175,11 @@ export class PlayerController {
     };
     this.reporter = new ProgressReporter({
       read: () => this.reportSnapshot(),
-      send: deps.sendProgress,
+      send: (key, report) => {
+        // The saved queue carries the place too, so the next start resumes there.
+        if (report.event === 'progress' || report.event === 'pause' || report.event === 'seek') this.scheduleQueueSave();
+        return deps.sendProgress(key, report);
+      },
       beacon: deps.beacon,
       deviceId: deps.deviceId,
       ...(deps.deviceName ? { deviceName: deps.deviceName } : {}),
@@ -371,6 +377,12 @@ export class PlayerController {
       return;
     }
     if (token !== this.loadToken || (opts.restoring && this.touched)) return;
+    if (opts.restoring && item.durationMs > 0 && nextPos(this.queue, true) === null && (opts.startMs ?? 0) >= item.durationMs - FINISHED_SLACK_MS) {
+      // The saved queue played to its end: nothing to pick up, so no player to show.
+      this.queue = EMPTY_QUEUE;
+      this.set({ ...this.queueState(), current: null, loading: false });
+      return;
+    }
     let startMs = opts.startMs;
     let speed = 1;
     if (item.kind === 'audiobook' || startMs === undefined) {
@@ -724,6 +736,7 @@ export class PlayerController {
   /** Tab hidden: send the place with sendBeacon. */
   onHidden(): void {
     if (!this.engine.current) return;
+    this.saveQueueNow();
     this.reporter.beacon(this.engine.isPlaying ? 'progress' : 'pause');
   }
 
