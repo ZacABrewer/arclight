@@ -189,6 +189,7 @@ jobs:
       # Signing is cloud-managed (-allowProvisioningUpdates with the API key): no certificates or
       # profiles to store. The key needs the Admin role (or App Manager with access to
       # cloud-managed distribution certificates). CarPlay stays off until Apple grants it.
+      # The archive is signed for distribution: a development profile needs a registered device.
       - name: App Store Connect API key
         if: env.HAS_ASC == 'true'
         run: |
@@ -210,7 +211,7 @@ jobs:
           mkdir -p build
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/ArclightPlayer.xcarchive \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CARPLAY_ENABLED=NO \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Distribution" CARPLAY_ENABLED=NO \
             -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
             archive | tail -n 50
