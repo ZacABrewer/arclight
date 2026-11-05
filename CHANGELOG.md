@@ -9,6 +9,18 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-04
+
+### Added
+- **Discover on TV:** rows of trending, popular and upcoming movies and shows. Each title shows whether it's in your library, partly there, on its way or already requested, and you can request it (all seasons or just the missing ones) with the remote. The tab appears for users who may request.
+- **My requests on TV:** each request with its status (waiting for approval, on its way, ready to watch, declined) and the date, and you can cancel one that's still pending.
+
+### Changed
+- TV shows one focus ring around the selected item instead of a doubled outline.
+
+### Fixed
+- In the Android app, artwork from a server on a plain `http://` address (for example a home network IP) didn't load, so lists showed blank posters. Artwork now loads on any server address.
+
 ## [0.26.0] - 2026-11-04
 
 ### Added
@@ -582,6 +594,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.27.0]: https://github.com/ZacABrewer/arclight/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/ZacABrewer/arclight/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/ZacABrewer/arclight/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/ZacABrewer/arclight/compare/v0.23.0...v0.24.0
