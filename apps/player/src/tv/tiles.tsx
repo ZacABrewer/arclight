@@ -37,15 +37,17 @@ interface TileProps {
   meta?: string | null | undefined;
   /** A small kind badge at the art's top left (My List: MOVIE / SERIES). */
   badge?: string | null | undefined;
+  /** The badge's colour (Discover's status badges); none: the plain dark badge. */
+  badgeTone?: 'accent' | 'warn' | 'danger' | null | undefined;
 }
 
 /** Wide 16:9 tile, title inside the art over a bottom fade (§9 Q11). Also the browse / search grid
  *  tile. As in the template the art is what takes focus; the sub under it lights up with it. */
-export function WideTile({ id, title, sub, art, fraction, onOpen, label, meta, badge, poster }: TileProps & { poster?: boolean }) {
+export function WideTile({ id, title, sub, art, fraction, onOpen, label, meta, badge, badgeTone, poster }: TileProps & { poster?: boolean }) {
   return (
     <div className={`tv-tile tv-tile--wide${poster ? ' tv-tile--poster' : ''}`}>
       <button type="button" className="tv-art tv-art--text" data-tv-key={id} style={{ background: artBackground(art, title) }} onClick={onOpen} aria-label={label ?? (sub ? `${title}, ${sub}` : title)}>
-        {badge ? <span className="tv-art__badge">{badge}</span> : null}
+        {badge ? <span className={`tv-art__badge${badgeTone ? ` tv-art__badge--${badgeTone}` : ''}`}>{badge}</span> : null}
         <span className="tv-art__text">{title}</span>
         {meta ? <span className="tv-art__meta">{meta}</span> : null}
         <Bar fraction={fraction} />

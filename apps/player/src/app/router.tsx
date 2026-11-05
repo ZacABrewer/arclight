@@ -25,6 +25,8 @@ import { TvManageProfilesScreen } from '../tv/screens/manage-profiles';
 import { TvBooksScreen, TvMusicScreen } from '../tv/screens/music';
 import { TvProfilesScreen } from '../tv/screens/profiles';
 import { TvSearchScreen } from '../tv/screens/search';
+import { TvDiscoverScreen, TvDiscoverTitleScreen } from '../tv/screens/discover';
+import { TvRequestsScreen } from '../tv/screens/requests';
 import { MANAGE_PROFILES_PATH, ownsAccount, TvSettingsScreen } from '../tv/screens/settings';
 import { useServices } from './context';
 import type { AppServices } from './services';
@@ -207,6 +209,11 @@ function byDevice(Tv: FC, Phone: FC): FC {
   };
 }
 
+/** TV-only screens (Discover, My requests): phones request in the portal, so they go Home. */
+function PhoneHome() {
+  return <Navigate to="/player" replace />;
+}
+
 const playerChildren = [
   createRoute({ getParentRoute: () => playerRoute, path: '/', component: byDevice(TvHomeScreen, AppHome) }),
   createRoute({ getParentRoute: () => playerRoute, path: 'now-playing', component: byDevice(TvListenScreen, NowPlayingPage) }),
@@ -215,6 +222,9 @@ const playerChildren = [
   createRoute({ getParentRoute: () => playerRoute, path: 'settings', component: byDevice(TvSettingsScreen, PhoneSettingsPage) }),
   createRoute({ getParentRoute: () => playerRoute, path: childPath(DEVICE_SETTINGS_PATH), component: byDevice(TvDeviceSettings, SettingsPage) }),
   createRoute({ getParentRoute: () => playerRoute, path: childPath(MANAGE_PROFILES_PATH), component: byDevice(TvManageProfilesScreen, PhoneManageProfiles) }),
+  createRoute({ getParentRoute: () => playerRoute, path: 'discover', component: byDevice(TvDiscoverScreen, PhoneHome) }),
+  createRoute({ getParentRoute: () => playerRoute, path: 'discover/$kind/$tmdbId', component: byDevice(TvDiscoverTitleScreen, PhoneHome) }),
+  createRoute({ getParentRoute: () => playerRoute, path: 'requests', component: byDevice(TvRequestsScreen, PhoneHome) }),
   ...browseRoutes.map((r) => {
     const path = childPath(r.path);
     const web = lazyPage(r.component);

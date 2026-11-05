@@ -28,7 +28,7 @@ let runtime: TvRuntime | null = null;
 
 export const HOME_PATH = '/player';
 /** The header's tabs: their Back goes to Home (the design's tab()). */
-export const TAB_PATHS = ['/player/watch/shows', '/player/watch/movies', '/player/watch/my-list', '/player/search', '/player/music', '/player/books', '/player/settings'];
+export const TAB_PATHS = ['/player/watch/shows', '/player/watch/movies', '/player/watch/my-list', '/player/search', '/player/discover', '/player/music', '/player/books', '/player/settings'];
 export const PROFILES_PATH = '/profiles';
 
 const norm = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
