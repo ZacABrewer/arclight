@@ -116,7 +116,7 @@ jobs:
       - name: Check the bundle is signed
         if: env.HAS_KEYSTORE == 'true'
         run: jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab > /dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.HAS_KEYSTORE == 'true'
         with:
           name: arclight-player-android-release-aab
