@@ -9,6 +9,9 @@ at the end of this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Season packs refused as "not aired":** shows added in Arclight get their episode dates from TMDB, which has a date but no air time, and the season-pack check only read the air time. Every season pack for those shows was refused with "Full season pack contains episodes that have not aired", even for seasons that ended years ago. Both air checks now use the date when there is no time, so single episodes that haven't aired are refused again too.
+
 ## [0.28.0] - 2026-11-05
 
 ### Added

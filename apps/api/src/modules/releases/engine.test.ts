@@ -174,6 +174,17 @@ describe('series-specific specs', () => {
     expect(reasons(makeContext(), tv('Show.Name.S01.1080p.WEB-DL-GRP', { size: 4 * GB }))).not.toContain('fullSeasonNotAired');
   });
 
+  it('reads an air date without a UTC time (TMDB episodes) for both air checks', () => {
+    const dated = (n: number, airDate: string | null) => makeEpisode(show.id, 3, n, { airDate, airDateUtc: null });
+    const aired = snapshot([show], [dated(1, '2025-01-01'), dated(2, '2025-01-08')]);
+    expect(reasons(makeContext(), tv('Show.Name.S03.1080p.WEB-DL-GRP', { size: 10 * GB }, aired))).not.toContain('fullSeasonNotAired');
+    const upcoming = snapshot([show], [dated(1, '2025-01-01'), dated(2, '2026-04-01')]);
+    expect(reasons(makeContext(), tv('Show.Name.S03.1080p.WEB-DL-GRP', { size: 10 * GB }, upcoming))).toContain('fullSeasonNotAired');
+    expect(reasons(makeContext(), tv('Show.Name.S03E02.1080p.WEB-DL-GRP', {}, upcoming))).toContain('beforeAirDate');
+    const undated = snapshot([show], [dated(1, '2025-01-01'), dated(2, null)]);
+    expect(reasons(makeContext(), tv('Show.Name.S03.1080p.WEB-DL-GRP', { size: 10 * GB }, undated))).toContain('fullSeasonNotAired');
+  });
+
   it('rejects multi-season packs only when they are turned off', () => {
     const l = snapshot([show], [...s1, makeEpisode(show.id, 2, 1)]);
     const c = tv('Show.Name.S01-S02.1080p.BluRay-GRP', { size: 0 }, l);

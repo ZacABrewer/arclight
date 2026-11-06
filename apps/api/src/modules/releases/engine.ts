@@ -16,6 +16,7 @@ import {
 } from '@arclight/profiles-engine';
 import { seriesPackKind, type ParsedAudiobookInfo, type ParsedMusicInfo, type ParsedRelease } from '@arclight/parser';
 import {
+  episodeReleaseMs,
   indexerFlagsFromVolumeFactors,
   type AnyMediaType,
   type EvaluationMediaType,
@@ -504,8 +505,11 @@ export function runtimeMinutes(c: Candidate, now: Date): number {
   if (total > 0) return total;
   if (seriesRuntime === 0 && c.match.seasonNumber === 1) {
     const pilot = c.match.episodes.find((e) => e.episodeNumber === 1);
-    const anchor = pilot?.airDateUtc ? Date.parse(pilot.airDateUtc) : Date.parse(c.release.publishDate);
-    const allClose = c.match.episodes.every((e) => !e.airDateUtc || Math.abs(Date.parse(e.airDateUtc) - anchor) <= DAY);
+    const anchor = (pilot && episodeReleaseMs(pilot)) ?? Date.parse(c.release.publishDate);
+    const allClose = c.match.episodes.every((e) => {
+      const at = episodeReleaseMs(e);
+      return at === null || Math.abs(at - anchor) <= DAY;
+    });
     if (allClose && Number.isFinite(anchor) && anchor <= now.getTime() + DAY) return 45 * c.match.episodes.length;
   }
   return 0;
@@ -822,9 +826,10 @@ export const specifications: readonly Specification[] = [
     evaluate: (ctx, c) => {
       if (c.match.mediaType !== 'series' || c.match.fullSeason || ctx.settings.allowUnairedEpisodes) return null;
       const limit = ctx.now.getTime() + ctx.settings.unairedToleranceMinutes * MINUTE;
-      const unaired = c.match.episodes.filter((e) => e.airDateUtc && Date.parse(e.airDateUtc) > limit);
+      // Episodes from TMDB carry only a date (no UTC time): it counts from the start of that day.
+      const unaired = c.match.episodes.filter((e) => (episodeReleaseMs(e) ?? -Infinity) > limit);
       if (unaired.length === 0) return null;
-      return { reason: 'beforeAirDate', message: `Episode has not aired yet (airs ${unaired[0]!.airDateUtc})` };
+      return { reason: 'beforeAirDate', message: `Episode has not aired yet (airs ${unaired[0]!.airDateUtc ?? unaired[0]!.airDate})` };
     },
   },
   {
@@ -837,7 +842,11 @@ export const specifications: readonly Specification[] = [
       // Part/Vol packs hold only the aired part of a season; the import maps their files.
       if (c.parsed.series?.isPartialSeason) return null;
       const limit = ctx.now.getTime() + DAY;
-      const aired = (e: { airDateUtc?: string | null | undefined }) => !!e.airDateUtc && Date.parse(e.airDateUtc) <= limit;
+      // An air date alone counts (TMDB has no air time); an episode with no date at all has not aired.
+      const aired = (e: { airDate?: string | null | undefined; airDateUtc?: string | null | undefined }) => {
+        const at = episodeReleaseMs(e);
+        return at !== null && at <= limit;
+      };
       let episodes = c.match.episodes;
       if (c.parsed.series?.isMultiSeason) {
         // Multi-season / complete series packs: seasons that have not started airing (a
