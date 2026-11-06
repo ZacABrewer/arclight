@@ -9,6 +9,8 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-11-05
+
 ### Fixed
 - **Season packs refused as "not aired":** shows added in Arclight get their episode dates from TMDB, which has a date but no air time, and the season-pack check only read the air time. Every season pack for those shows was refused with "Full season pack contains episodes that have not aired", even for seasons that ended years ago. Both air checks now use the date when there is no time, so single episodes that haven't aired are refused again too.
 
@@ -608,6 +610,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.28.1]: https://github.com/ZacABrewer/arclight/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/ZacABrewer/arclight/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/ZacABrewer/arclight/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/ZacABrewer/arclight/compare/v0.25.0...v0.26.0
