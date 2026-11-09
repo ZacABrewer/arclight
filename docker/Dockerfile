@@ -30,7 +30,7 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
 
 # 7-Zip (7zz) for archive unpacking: the official static Linux build, which reads RAR/RAR5 (the
 # Debian 7zip package has no RAR codec). Both archives are pinned by checksum; TARGETARCH picks one.
-FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS sevenzip
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS sevenzip
 ARG TARGETARCH
 ADD --checksum=sha256:dc99eff5008f1ab79bd7084c68513701547a808a89502bf4133683535ab3c695 \
     https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-x64.tar.xz /dl/7z-amd64.tar.xz
@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends xz-utils && rm 
 # Runtime: the node:24-bookworm-slim userland minus npm/corepack/yarn. Starting from
 # debian:bookworm-slim and copying just the node binary avoids inheriting those layers
 # (deleting files in a later layer would not shrink the image).
-FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=sevenzip /out/7zz /usr/local/bin/7zz
 ARG VERSION=0.1.0-dev
