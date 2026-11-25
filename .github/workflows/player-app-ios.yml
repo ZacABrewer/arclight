@@ -79,7 +79,7 @@ jobs:
         run: |
           test -f build/xcodebuild.log || exit 0
           grep -E '/ios/App/App/[A-Za-z]+\.swift:[0-9]+:[0-9]+: (error|warning)' build/xcodebuild.log | sort -u | head -n 200 || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: player-ios-xcodebuild-log
