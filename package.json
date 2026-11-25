@@ -15,6 +15,6 @@
     "db:generate": "pnpm --filter @arclight/api db:generate"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }
