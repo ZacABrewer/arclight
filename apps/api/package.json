@@ -32,7 +32,7 @@
     "@fastify/static": "^10.1.12",
     "@fastify/websocket": "^11.3.7",
     "@simplewebauthn/server": "^14.1.0",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.2.0",
     "croner": "^9.1.0",
     "drizzle-orm": "^0.45.4",
     "fast-xml-parser": "^5.12.1",
