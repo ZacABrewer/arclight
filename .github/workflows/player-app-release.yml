@@ -128,7 +128,7 @@ jobs:
         run: echo "::notice::PLAYER_PLAY_SERVICE_ACCOUNT_JSON is not set; the signed bundle is an artifact of this run but was not uploaded."
       - name: Upload to Google Play
         if: env.HAS_KEYSTORE == 'true' && env.HAS_PLAY == 'true'
-        uses: r0adkll/upload-google-play@v1.1.3
+        uses: r0adkll/upload-google-play@v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAYER_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.moviemethat.arclight
