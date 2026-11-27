@@ -9,6 +9,8 @@ at the end of this file.
 
 ## [Unreleased]
 
+## [0.28.2] - 2026-11-26
+
 ### Added
 - **Filter the library by audio language:** the Library filter bar has an **Any audio language** dropdown listing the audio languages in your files, with a count for each. Pick Spanish to see only the movies or shows you can play in Spanish.
 
@@ -613,6 +615,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.28.2]: https://github.com/ZacABrewer/arclight/compare/v0.28.1...v0.28.2
 [0.28.1]: https://github.com/ZacABrewer/arclight/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/ZacABrewer/arclight/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/ZacABrewer/arclight/compare/v0.26.0...v0.27.0
