@@ -50,6 +50,7 @@ import { LibraryError } from './errors.js';
 import { rewriteTagReferences } from '../tag-rules/references.js';
 import { albums, artists, audioFiles, authors, books, qualityProfiles, tracks } from '../../db/schema.js';
 import * as t from './schema.js';
+import { fileAudioLanguages } from '../additional-languages/audio.js';
 import { enabledVersions, isVersioned, primaryOf, sameTag, slotOf } from './versions.js';
 
 // Business logic for the library. Every function is a plain function over a database handle
@@ -386,6 +387,8 @@ interface StatEpisode {
 interface StatFile {
   seasonNumber: number | null;
   sizeBytes: number;
+  mediaInfo?: MediaInfo | null;
+  languages?: readonly string[];
 }
 
 export function computeSeasonStatistics(
@@ -437,7 +440,24 @@ export function computeSeriesStatistics(
   return {
     ...computeSeasonStatistics(episodes, files, now),
     seasonCount: seasons.filter((s) => s.seasonNumber > 0).length,
+    ...languagesField(files),
   };
+}
+
+/**
+ * Audio languages across an item's files as sorted base tags (the library's Language filter).
+ * Probed track languages win; a file not analysed yet falls back to its release-name languages.
+ */
+export function audioLanguagesOfFiles(files: ReadonlyArray<{ mediaInfo?: MediaInfo | null; languages?: readonly string[] }>): string[] {
+  const out = new Set<string>();
+  for (const f of files) for (const l of fileAudioLanguages(f, { fallback: true }) ?? []) out.add(l);
+  return [...out].sort();
+}
+
+/** `{ audioLanguages }` for statistics; left out when no file has a known language. */
+function languagesField(files: Parameters<typeof audioLanguagesOfFiles>[0]): { audioLanguages?: string[] } {
+  const langs = audioLanguagesOfFiles(files);
+  return langs.length > 0 ? { audioLanguages: langs } : {};
 }
 
 // ---------------------------------------------------------------------------------------
@@ -983,7 +1003,7 @@ function toMovie(row: MovieRow, files: MediaFileRow[] | undefined, now: string):
     ...(files ? { files: fileVersionsOf(files, row.versions) } : {}),
     isAvailable: isMovieAvailable(row, now),
     statistics: files
-      ? { sizeOnDisk: files.reduce((sum, f) => sum + f.sizeBytes, 0), movieFileCount: files.length }
+      ? { sizeOnDisk: files.reduce((sum, f) => sum + f.sizeBytes, 0), movieFileCount: files.length, ...languagesField(files) }
       : null,
   };
 }

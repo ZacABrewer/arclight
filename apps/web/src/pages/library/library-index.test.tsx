@@ -21,6 +21,9 @@ const initialSeries = [
   makeSeries({ id: 1, title: 'The Expanse', monitored: true, overview: 'Belters and Martians.', network: 'Prime Video' }),
   makeSeries({ id: 2, title: 'Andor', monitored: false }),
 ];
+// Audio languages (the Language filter): The Expanse has English and Spanish, Andor English only.
+initialSeries[0]!.statistics = { ...initialSeries[0]!.statistics!, audioLanguages: ['en', 'es'] };
+initialSeries[1]!.statistics = { ...initialSeries[1]!.statistics!, audioLanguages: ['en'] };
 const series = [...initialSeries];
 
 let puts: Array<{ url: string; body: unknown }> = [];
@@ -143,6 +146,18 @@ describe('library index', () => {
     // The filter bar shows Clear once a filter is active.
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(within(screen.getByRole('table')).getByRole('link', { name: 'The Expanse' })).toBeTruthy();
+  });
+
+  it('filters by audio language, listing the languages the library has', async () => {
+    renderAt('/library/tv');
+    const grid = await screen.findByTestId('library-grid');
+    const select = screen.getByLabelText<HTMLSelectElement>('Audio language filter');
+    expect([...select.options].map((o) => o.text)).toEqual(['Any audio language', 'English (2)', 'Spanish (1)']);
+    fireEvent.change(select, { target: { value: 'es' } });
+    expect(within(grid).getByRole('link', { name: 'The Expanse' })).toBeTruthy();
+    expect(within(grid).queryByRole('link', { name: 'Andor' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(within(screen.getByTestId('library-grid')).getByRole('link', { name: 'Andor' })).toBeTruthy();
   });
 
   it('toggles monitoring optimistically and rolls back on failure', async () => {

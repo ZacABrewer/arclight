@@ -149,6 +149,8 @@ export type SeasonStatistics = z.infer<typeof SeasonStatistics>;
 
 export const SeriesStatistics = SeasonStatistics.extend({
   seasonCount: z.number().int(),
+  /** Base language tags of the audio in the series' files (`en`, `es` ...), sorted. */
+  audioLanguages: z.array(z.string()).optional(),
 });
 export type SeriesStatistics = z.infer<typeof SeriesStatistics>;
 
@@ -394,6 +396,8 @@ export type MinimumAvailability = z.infer<typeof MinimumAvailability>;
 export const MovieStatistics = z.object({
   sizeOnDisk: z.number().int(),
   movieFileCount: z.number().int(),
+  /** Base language tags of the audio in the movie's files (`en`, `es` ...), sorted. */
+  audioLanguages: z.array(z.string()).optional(),
 });
 export type MovieStatistics = z.infer<typeof MovieStatistics>;
 

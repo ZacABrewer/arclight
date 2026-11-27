@@ -11,7 +11,8 @@ In the left menu the **Library** group has **TV**, **Movies**, **Collections**, 
 - **View**: **Posters** (a grid, with a **Poster size** slider), **Table** or **Overview**. Your choice is remembered in your browser.
 - **Sort by**: Title, Date added, Year, Size on disk or Progress. Click again to flip the direction.
 - **Filter by title**: type to narrow the list.
-- **Filters**: Monitored and unmonitored / Monitored / Unmonitored, **Any profile** (a quality profile), **Any tag**, **Any status**, and **Missing files**. **Clear filters** resets them.
+- **Filters**: Monitored and unmonitored / Monitored / Unmonitored, **Any profile** (a quality profile), **Any tag**, **Any status**, **Any audio language**, and **Missing files**. **Clear filters** resets them.
+- **Any audio language** lists the audio languages found in your files, with how many titles have each. Pick one, for example Spanish, to see only titles you can play in Spanish. Languages come from each file's media analysis; a file not analysed yet uses the languages in its release name.
   - Series statuses are Continuing, Ended and Upcoming. Movie statuses are TBA, Announced, In cinemas and Released.
 - **Progress**: for a series, the number of episodes on disk out of the number that exist so far.
 
