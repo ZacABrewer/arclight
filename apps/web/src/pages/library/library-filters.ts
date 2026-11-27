@@ -31,6 +31,8 @@ export interface LibraryRow {
   overview: string;
   /** TMDB collection (movies only). */
   collection: { tmdbId: number; title: string } | null;
+  /** Audio languages in the item's files (base tags such as `en`, `es`). */
+  audioLanguages: readonly string[];
   searchText: string;
 }
 
@@ -67,6 +69,7 @@ export function seriesRow(s: Series): LibraryRow {
     subtitle: s.network ?? null,
     overview: s.overview,
     collection: null,
+    audioLanguages: s.statistics?.audioLanguages ?? [],
     searchText: normaliseSearch(`${s.title} ${s.sortTitle} ${s.year}`),
   };
 }
@@ -93,6 +96,7 @@ export function movieRow(m: Movie): LibraryRow {
     subtitle: m.studio ?? null,
     overview: m.overview,
     collection: m.collection ?? null,
+    audioLanguages: m.statistics?.audioLanguages ?? [],
     searchText: normaliseSearch(`${m.title} ${m.originalTitle} ${m.sortTitle} ${m.year}`),
   };
 }
@@ -114,6 +118,8 @@ export interface LibraryFilters {
   qualityProfileId: number | null;
   tagId: number | null;
   status: string | null;
+  /** Only items with audio in this language (a base tag such as `es`). */
+  language: string | null;
 }
 
 export const DEFAULT_FILTERS: LibraryFilters = {
@@ -123,6 +129,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   qualityProfileId: null,
   tagId: null,
   status: null,
+  language: null,
 };
 
 export function filterRows(rows: readonly LibraryRow[], f: LibraryFilters): LibraryRow[] {
@@ -134,6 +141,7 @@ export function filterRows(rows: readonly LibraryRow[], f: LibraryFilters): Libr
     if (f.qualityProfileId !== null && r.qualityProfileId !== f.qualityProfileId) return false;
     if (f.tagId !== null && !r.tags.includes(f.tagId)) return false;
     if (f.status !== null && r.status !== f.status) return false;
+    if (f.language !== null && !r.audioLanguages.includes(f.language)) return false;
     return terms.every((item) => r.searchText.includes(item));
   });
 }
@@ -144,8 +152,16 @@ export function activeFilterCount(f: LibraryFilters): number {
     (f.missing ? 1 : 0) +
     (f.qualityProfileId !== null ? 1 : 0) +
     (f.tagId !== null ? 1 : 0) +
-    (f.status !== null ? 1 : 0)
+    (f.status !== null ? 1 : 0) +
+    (f.language !== null ? 1 : 0)
   );
+}
+
+/** Audio languages found across the rows, with how many items have each; most common first. */
+export function audioLanguageCounts(rows: readonly Pick<LibraryRow, 'audioLanguages'>[]): { language: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) for (const l of r.audioLanguages) counts.set(l, (counts.get(l) ?? 0) + 1);
+  return [...counts].map(([language, count]) => ({ language, count })).sort((a, b) => b.count - a.count || a.language.localeCompare(b.language));
 }
 
 export type LibrarySortKey = 'title' | 'added' | 'year' | 'size' | 'progress';

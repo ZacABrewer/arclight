@@ -9,6 +9,9 @@ at the end of this file.
 
 ## [Unreleased]
 
+### Added
+- **Filter the library by audio language:** the Library filter bar has an **Any audio language** dropdown listing the audio languages in your files, with a count for each. Pick Spanish to see only the movies or shows you can play in Spanish.
+
 ## [0.28.1] - 2026-11-05
 
 ### Fixed

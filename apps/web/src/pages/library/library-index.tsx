@@ -34,6 +34,7 @@ import { useToast } from '../../components/toast.js';
 import { useProfileItemStatuses } from '../../hooks/profile-migration.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
+import { languageNames } from '../../lib/format.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError, TagChips } from '../../components/media/media-kit.js';
 import {
@@ -56,6 +57,7 @@ import {
   SORT_LABELS,
   STATUS_LABELS,
   activeFilterCount,
+  audioLanguageCounts,
   filterRows,
   groupCollections,
   movieRow,
@@ -175,6 +177,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
     [kind, seriesQ.data, moviesQ.data],
   );
   const rows = useMemo(() => sortLibraryRows(filterRows(allRows, filters), sort), [allRows, filters, sort]);
+  const languages = useMemo(() => audioLanguageCounts(allRows), [allRows]);
   const totalSize = useMemo(() => allRows.reduce((sum, r) => sum + r.sizeOnDisk, 0), [allRows]);
 
   const toggleSelected = (id: number) =>
@@ -280,7 +283,9 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
         ) : null}
       </PageHeader>
 
-      {showFilters ? <LibraryFilterBar kind={kind} filters={filters} onChange={setFilters} profiles={profiles.data} tags={tags.data} /> : null}
+      {showFilters ? (
+        <LibraryFilterBar kind={kind} filters={filters} onChange={setFilters} profiles={profiles.data} tags={tags.data} languages={languages} />
+      ) : null}
 
       {query.isPending ? (
         view === 'posters' ? <PosterSkeletons /> : <Loading />
@@ -652,12 +657,15 @@ function LibraryFilterBar({
   onChange,
   profiles,
   tags,
+  languages,
 }: {
   kind: LibraryKind;
   filters: LibraryFilters;
   onChange: (f: LibraryFilters) => void;
   profiles: QualityProfile[] | undefined;
   tags: Tag[] | undefined;
+  /** Audio languages in this library, most common first. */
+  languages: readonly { language: string; count: number }[];
 }) {
   const statuses = kind === 'series' ? SERIES_STATUSES : MOVIE_STATUSES;
   const num = (v: string) => (v === '' ? null : Number(v));
@@ -698,6 +706,19 @@ function LibraryFilterBar({
         value={filters.status ?? ''}
         onChange={(e) => onChange({ ...filters, status: e.target.value || null })}
         options={[{ value: '', label: t('library.anyStatus') }, ...statuses.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s }))]}
+      />
+      <Select
+        aria-label={t('library.languageFilter')}
+        value={filters.language ?? ''}
+        onChange={(e) => onChange({ ...filters, language: e.target.value || null })}
+        options={[
+          { value: '', label: t('library.anyLanguage') },
+          // A chosen language the other library kind lacks stays listed (0) so the filter can be seen and cleared.
+          ...(filters.language && !languages.some((l) => l.language === filters.language) ? [...languages, { language: filters.language, count: 0 }] : languages).map((l) => ({
+            value: l.language,
+            label: `${languageNames([l.language])} (${l.count})`,
+          })),
+        ]}
       />
       <Checkbox label={t('library.missingFiles')} checked={filters.missing} onChange={(e) => onChange({ ...filters, missing: e.target.checked })} />
     </FilterBar>

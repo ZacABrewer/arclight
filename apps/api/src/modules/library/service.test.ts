@@ -833,3 +833,18 @@ describe('wanted', () => {
     expect(unmet('example').totalRecords).toBe(0);
   });
 });
+
+describe('audioLanguagesOfFiles', () => {
+  it('unions probed audio across files as sorted base tags', () => {
+    const files = [
+      { mediaInfo: { audioStreams: [{ language: 'spa' }, { language: 'eng' }] }, languages: ['English'] },
+      { mediaInfo: { audioLanguages: ['pt-BR'] }, languages: [] },
+    ] as unknown as Parameters<typeof svc.audioLanguagesOfFiles>[0];
+    expect(svc.audioLanguagesOfFiles(files)).toEqual(['en', 'es', 'pt']);
+  });
+
+  it('falls back to release-name languages for files not analysed yet', () => {
+    expect(svc.audioLanguagesOfFiles([{ mediaInfo: null, languages: ['French'] }])).toEqual(['fr']);
+    expect(svc.audioLanguagesOfFiles([{ mediaInfo: null, languages: ['Unknown'] }])).toEqual([]);
+  });
+});

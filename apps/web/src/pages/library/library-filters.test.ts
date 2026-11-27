@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_FILTERS,
   activeFilterCount,
+  audioLanguageCounts,
   filterRows,
   movieRow,
   normaliseSearch,
@@ -103,5 +104,27 @@ describe('sortLibraryRows', () => {
     const before = ids(rows);
     sortLibraryRows(rows, { key: 'size', direction: 'desc' });
     expect(ids(rows)).toEqual(before);
+  });
+});
+
+describe('audio language filter', () => {
+  const movies = [
+    makeMovie({ id: 1, title: 'Roma', statistics: { sizeOnDisk: 1, movieFileCount: 1, audioLanguages: ['es'] } }),
+    makeMovie({ id: 2, title: 'Coco', statistics: { sizeOnDisk: 1, movieFileCount: 1, audioLanguages: ['en', 'es'] } }),
+    makeMovie({ id: 3, title: 'Heat', statistics: { sizeOnDisk: 1, movieFileCount: 1, audioLanguages: ['en'] } }),
+    makeMovie({ id: 4, title: 'Unprobed', statistics: null }),
+  ].map(movieRow);
+
+  it('keeps only items with audio in the chosen language', () => {
+    expect(ids(filterRows(movies, f({ language: 'es' })))).toEqual([1, 2]);
+    expect(ids(filterRows(movies, f({ language: 'fr' })))).toEqual([]);
+    expect(activeFilterCount(f({ language: 'es' }))).toBe(1);
+  });
+
+  it('lists the languages found, most common first', () => {
+    expect(audioLanguageCounts(movies)).toEqual([
+      { language: 'en', count: 2 },
+      { language: 'es', count: 2 },
+    ]);
   });
 });
